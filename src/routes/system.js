@@ -60,7 +60,6 @@ router.get('/tasks', authenticate, (req, res) => {
     query += ' ORDER BY created_at DESC'
 
     const tasks = db.prepare(query).all(...params)
-    db.close()
 
     res.json(
       tasks.map((t) => ({
@@ -151,7 +150,6 @@ router.post('/tasks', authenticate, async (req, res) => {
       creator,
     )
 
-    db.close()
 
     res.status(201).json({
       success: true,
@@ -252,7 +250,6 @@ router.put('/tasks/:id', authenticate, async (req, res) => {
     params.push(id)
 
     db.prepare(`UPDATE tasks SET ${updates.join(', ')} WHERE id = ?`).run(...params)
-    db.close()
 
     res.json({
       success: true,
@@ -285,7 +282,6 @@ router.delete('/tasks/:id', authenticate, async (req, res) => {
     `,
     ).run(id)
 
-    db.close()
 
     res.json({
       success: true,
@@ -323,7 +319,6 @@ router.get('/notifications', authenticate, (req, res) => {
       )
       .all(req.user.id)
 
-    db.close()
 
     res.json(
       notifications.map((n) => ({
@@ -371,7 +366,6 @@ router.post('/notifications', authenticate, async (req, res) => {
       JSON.stringify(data || {}),
     )
 
-    db.close()
 
     res.status(201).json({
       success: true,
@@ -396,7 +390,6 @@ router.patch('/notifications/:id/read', authenticate, async (req, res) => {
     const db = getDatabase()
 
     db.prepare(`UPDATE notifications SET is_read = 1 WHERE id = ?`).run(id)
-    db.close()
 
     res.json({
       success: true,
@@ -423,7 +416,6 @@ router.get('/inventory', authenticate, (req, res) => {
     const db = getDatabase()
 
     const items = db.prepare(`SELECT * FROM inventory_items ORDER BY name`).all()
-    db.close()
 
     res.json(
       items.map((i) => ({
@@ -466,7 +458,6 @@ router.post('/inventory', authenticate, async (req, res) => {
     `,
     ).run(id, name, category, unit, unitsPerBox || 1, currentQuantity || 0, minQuantity || 0, location, notes)
 
-    db.close()
 
     res.status(201).json({
       success: true,
@@ -501,7 +492,6 @@ router.put('/inventory/:id', authenticate, async (req, res) => {
     `,
     ).run(name, category, unit, unitsPerBox, currentQuantity, minQuantity, location, notes, id)
 
-    db.close()
 
     res.json({
       success: true,
@@ -526,7 +516,6 @@ router.delete('/inventory/:id', authenticate, async (req, res) => {
     const db = getDatabase()
 
     db.prepare('DELETE FROM inventory_items WHERE id = ?').run(id)
-    db.close()
 
     res.json({
       success: true,
@@ -574,7 +563,6 @@ router.get('/inventory/purchases', authenticate, (req, res) => {
     query += ` ORDER BY p.purchase_date DESC, p.created_at DESC`
 
     const purchases = db.prepare(query).all(...params)
-    db.close()
 
     res.json(
       purchases.map((p) => ({
@@ -640,7 +628,6 @@ router.post('/inventory/purchases', authenticate, async (req, res) => {
     // If monthly count is logic-based, then current_quantity might be cache or result of count.
     // Let's just record the purchase for now as per "Purchase Records" feature.
 
-    db.close()
 
     res.status(201).json({
       success: true,
@@ -696,7 +683,6 @@ router.put('/inventory/purchases/:id', authenticate, async (req, res) => {
     params.push(id)
 
     db.prepare(`UPDATE inventory_purchases SET ${updates.join(', ')} WHERE id = ?`).run(...params)
-    db.close()
 
     res.json({
       success: true,
@@ -720,7 +706,6 @@ router.delete('/inventory/purchases/:id', authenticate, async (req, res) => {
     const db = getDatabase()
 
     db.prepare('DELETE FROM inventory_purchases WHERE id = ?').run(id)
-    db.close()
 
     res.json({
       success: true,
@@ -846,7 +831,6 @@ router.get('/inventory/monthly/calculation', authenticate, (req, res) => {
       })
     })
 
-    db.close()
     res.json(result)
 
   } catch (error) {
@@ -907,7 +891,6 @@ router.post('/inventory/monthly/count', authenticate, async (req, res) => {
     })
     
     transaction()
-    db.close()
 
     res.json({
       success: true,
@@ -987,7 +970,6 @@ router.get('/inventory/weekly/data', authenticate, (req, res) => {
       } catch (e) { }
     })
 
-    db.close()
 
     res.json({
       weeklyCounts,
@@ -1053,7 +1035,6 @@ router.post('/inventory/weekly/count', authenticate, async (req, res) => {
     })
     
     transaction()
-    db.close()
 
     res.json({
       success: true,
@@ -1089,7 +1070,6 @@ router.post('/inventory/consumables/upload', authenticate, async (req, res) => {
     `,
     ).run(id, reportDate, JSON.stringify(reportData), createdBy)
 
-    db.close()
 
     res.status(201).json({
       success: true,
@@ -1124,7 +1104,6 @@ router.get('/inventory/consumables/query', authenticate, (req, res) => {
       )
       .all(month)
 
-    db.close()
 
     let aggregatedData = []
 
@@ -1187,7 +1166,6 @@ router.get('/inventory/consumption/monthly-summary', authenticate, (req, res) =>
       )
       .all(month)
 
-    db.close()
 
     const summary = {
       artificialKidney: {},
@@ -1257,7 +1235,6 @@ router.get('/site-config/:id', authenticate, (req, res) => {
     const db = getDatabase()
 
     const config = db.prepare(`SELECT * FROM site_config WHERE id = ?`).get(id)
-    db.close()
 
     if (!config) {
       return res.json({
@@ -1302,7 +1279,6 @@ router.put('/site-config/:id', authenticate, async (req, res) => {
     `,
     ).run(id, JSON.stringify(configData))
 
-    db.close()
 
     res.json({
       success: true,
@@ -1357,7 +1333,6 @@ router.get('/audit-logs', ...isAdmin, (req, res) => {
     params.push(parseInt(limit))
 
     const logs = db.prepare(query).all(...params)
-    db.close()
 
     res.json(
       logs.map((l) => ({
@@ -1416,7 +1391,6 @@ router.get('/physicians', authenticate, (req, res) => {
       console.log(`  - ${p.name}: defaultSchedules=${p.default_schedules}`)
     })
 
-    db.close()
 
     res.json(
       physicians.map((p) => ({
@@ -1460,7 +1434,6 @@ router.post('/physicians', ...isAdmin, async (req, res) => {
     `,
     ).run(id, name, specialty)
 
-    db.close()
 
     res.status(201).json({
       success: true,
@@ -1501,7 +1474,6 @@ router.get('/physician-schedules/:date', authenticate, (req, res) => {
     const count = db.prepare(`SELECT COUNT(*) as count FROM physician_schedules`).get()
     console.log(`[PhysicianSchedule] 資料表共有 ${count.count} 筆資料`)
 
-    db.close()
 
     if (!schedule) {
       console.log(`[PhysicianSchedule] 找不到 id=${date} 的資料，回傳空班表`)
@@ -1560,7 +1532,6 @@ router.put('/physician-schedules/:date', ...isEditor, async (req, res) => {
       )
       .get(date)
 
-    db.close()
 
     await logAudit(
       'PHYSICIAN_SCHEDULE_UPDATE',
@@ -1615,7 +1586,6 @@ router.get('/scheduled-updates', authenticate, (req, res) => {
     query += ' ORDER BY effective_date ASC, created_at DESC'
 
     const updates = db.prepare(query).all(...params)
-    db.close()
 
     res.json(
       updates.map((u) => ({
@@ -1675,7 +1645,6 @@ router.post('/scheduled-updates', ...isContributor, async (req, res) => {
       createdBy,
     )
 
-    db.close()
 
     await logAudit(
       'SCHEDULED_UPDATE_CREATE',
@@ -1724,7 +1693,6 @@ router.put('/scheduled-updates/:id', ...isEditor, async (req, res) => {
       )
       .run(JSON.stringify(changeData || {}), effectiveDate, notes || '', id)
 
-    db.close()
 
     if (result.changes === 0) {
       return res.status(404).json({
@@ -1771,7 +1739,6 @@ router.delete('/scheduled-updates/:id', ...isEditor, async (req, res) => {
       )
       .run(id)
 
-    db.close()
 
     if (result.changes === 0) {
       return res.status(404).json({
@@ -1847,7 +1814,6 @@ router.get('/backups', ...isAdmin, (req, res) => {
       )
       .all()
 
-    db.close()
 
     res.json(
       backups.map((b) => ({

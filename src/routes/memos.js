@@ -29,7 +29,7 @@ router.get('/', authenticate, (req, res) => {
     query += ' ORDER BY date DESC, created_at DESC'
 
     const memos = db.prepare(query).all(...params)
-    db.close()
+
 
     res.json(memos.map(m => ({
       id: m.id,
@@ -74,7 +74,7 @@ router.post('/', authenticate, async (req, res) => {
     `).run(id, date, content, req.user.id, req.user.name)
 
     const created = db.prepare(`SELECT * FROM memos WHERE id = ?`).get(id)
-    db.close()
+
 
     res.status(201).json({
       id: created.id,
@@ -108,7 +108,7 @@ router.put('/:id', authenticate, async (req, res) => {
     const existing = db.prepare(`SELECT * FROM memos WHERE id = ?`).get(id)
 
     if (!existing) {
-      db.close()
+  
       return res.status(404).json({
         error: true,
         message: '備忘錄不存在'
@@ -122,7 +122,7 @@ router.put('/:id', authenticate, async (req, res) => {
     `).run(content, id)
 
     const updated = db.prepare(`SELECT * FROM memos WHERE id = ?`).get(id)
-    db.close()
+
 
     res.json({
       id: updated.id,
@@ -152,7 +152,7 @@ router.delete('/:id', authenticate, async (req, res) => {
     const db = getDatabase()
 
     const result = db.prepare(`DELETE FROM memos WHERE id = ?`).run(id)
-    db.close()
+
 
     if (result.changes === 0) {
       return res.status(404).json({

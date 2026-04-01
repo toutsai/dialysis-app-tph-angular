@@ -3,6 +3,8 @@ import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isContributor, isEditor, logAudit } from '../middleware/auth.js'
+import { getTaipeiTodayString } from '../utils/dateUtils.js'
+import { validate } from '../middleware/validate.js'
 
 const router = Router()
 
@@ -11,18 +13,6 @@ const STATUS_MAP = {
   opd: '門診',
   ipd: '住院',
   er: '急診',
-}
-
-/**
- * 取得台北時區的今天日期字串 (YYYY-MM-DD)
- */
-function getTaipeiTodayString() {
-  return new Date().toLocaleDateString('zh-TW', {
-    timeZone: 'Asia/Taipei',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).replace(/\//g, '-')
 }
 
 /**
@@ -250,7 +240,7 @@ router.get('/', authenticate, (req, res) => {
     query += ' ORDER BY name'
 
     const patients = db.prepare(query).all()
-    db.close()
+
 
     res.json(patients.map(formatPatient))
 
@@ -281,7 +271,7 @@ router.get('/with-rules', authenticate, (req, res) => {
       SELECT schedule FROM base_schedules WHERE id = 'MASTER_SCHEDULE'
     `).get()
 
-    db.close()
+
 
     const masterRules = masterSchedule ? JSON.parse(masterSchedule.schedule || '{}') : {}
 
@@ -318,7 +308,7 @@ router.get('/history', authenticate, (req, res) => {
       LIMIT 100
     `).all()
 
-    db.close()
+
 
     res.json(history.map(h => ({
       id: h.id,
@@ -354,7 +344,7 @@ router.get('/history/:patientId', authenticate, (req, res) => {
       ORDER BY timestamp DESC
     `).all(patientId)
 
-    db.close()
+
 
     res.json(history.map(h => ({
       id: h.id,
@@ -415,7 +405,7 @@ router.post('/history', ...isContributor, async (req, res) => {
       now
     )
 
-    db.close()
+
 
     res.json({
       success: true,
@@ -442,7 +432,7 @@ router.get('/:id', authenticate, (req, res) => {
     const db = getDatabase()
 
     const patient = db.prepare(`SELECT * FROM patients WHERE id = ?`).get(id)
-    db.close()
+
 
     if (!patient) {
       return res.status(404).json({
@@ -466,17 +456,13 @@ router.get('/:id', authenticate, (req, res) => {
  * POST /api/patients
  * 新增病人
  */
-router.post('/', ...isContributor, async (req, res) => {
+router.post('/', ...isContributor, validate({
+  medicalRecordNumber: { required: true, type: 'string' },
+  name: { required: true, type: 'string', maxLength: 50 },
+  status: { enum: ['opd', 'ipd', 'er'] },
+}), async (req, res) => {
   try {
     const data = req.body
-
-    // 驗證必填欄位
-    if (!data.medicalRecordNumber || !data.name) {
-      return res.status(400).json({
-        error: true,
-        message: '病歷號和姓名為必填'
-      })
-    }
 
     const db = getDatabase()
 
@@ -486,7 +472,7 @@ router.post('/', ...isContributor, async (req, res) => {
     `).get(data.medicalRecordNumber)
 
     if (existing) {
-      db.close()
+  
       return res.status(409).json({
         error: true,
         message: '此病歷號已存在'
@@ -525,7 +511,7 @@ router.post('/', ...isContributor, async (req, res) => {
       remarks: `新增至「${STATUS_MAP[data.status] || STATUS_MAP.opd}」`,
     })
 
-    db.close()
+
 
     await logAudit('PATIENT_CREATE', req.user.id, req.user.name, 'patients', id, {
       medicalRecordNumber: data.medicalRecordNumber,
@@ -558,7 +544,7 @@ router.put('/:id', ...isContributor, async (req, res) => {
     const existing = db.prepare(`SELECT * FROM patients WHERE id = ?`).get(id)
 
     if (!existing) {
-      db.close()
+  
       return res.status(404).json({
         error: true,
         message: '病人不存在'
@@ -672,7 +658,7 @@ router.put('/:id', ...isContributor, async (req, res) => {
       }
     }
 
-    db.close()
+
 
     await logAudit('PATIENT_UPDATE', req.user.id, req.user.name, 'patients', id, {
       updatedFields: Object.keys(data)
@@ -703,7 +689,7 @@ router.delete('/:id', ...isEditor, async (req, res) => {
     const existing = db.prepare(`SELECT * FROM patients WHERE id = ? AND is_deleted = 0`).get(id)
 
     if (!existing) {
-      db.close()
+  
       return res.status(404).json({
         error: true,
         message: '病人不存在'
@@ -741,7 +727,7 @@ router.delete('/:id', ...isEditor, async (req, res) => {
       remarks: `從「${STATUS_MAP[existing.status] || existing.status}」刪除`,
     })
 
-    db.close()
+
 
     await logAudit('PATIENT_DELETE', req.user.id, req.user.name, 'patients', id, {
       name: existing.name,
@@ -776,7 +762,7 @@ router.post('/:id/restore', ...isEditor, async (req, res) => {
     const existing = db.prepare(`SELECT * FROM patients WHERE id = ? AND is_deleted = 1`).get(id)
 
     if (!existing) {
-      db.close()
+  
       return res.status(404).json({
         error: true,
         message: '找不到已刪除的病人'
@@ -817,7 +803,7 @@ router.post('/:id/restore', ...isEditor, async (req, res) => {
       remarks: `復原至「${STATUS_MAP[restoreStatus]}」`,
     })
 
-    db.close()
+
 
     await logAudit('PATIENT_RESTORE', req.user.id, req.user.name, 'patients', id, {
       name: existing.name,

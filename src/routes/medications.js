@@ -70,7 +70,6 @@ router.post('/daily-injections', authenticate, async (req, res) => {
     `).all(...patientIds, targetMonth)
 
     if (injectionOrders.length === 0) {
-      db.close()
       return res.json([])
     }
 
@@ -121,7 +120,6 @@ router.post('/daily-injections', authenticate, async (req, res) => {
       }
     }
 
-    db.close()
     res.json(result)
 
   } catch (error) {
@@ -144,8 +142,6 @@ router.get('/patient/:patientId', authenticate, (req, res) => {
       WHERE patient_id = ?
       ORDER BY created_at DESC
     `).all(patientId)
-
-    db.close()
 
     res.json(orders.map(o => ({
       id: o.id,
@@ -192,7 +188,6 @@ router.post('/', ...isEditor, async (req, res) => {
     )
 
     const created = db.prepare(`SELECT * FROM medication_orders WHERE id = ?`).get(id)
-    db.close()
 
     await logAudit('MEDICATION_CREATE', req.user.id, req.user.name, 'medication_orders', id, {
       patientId: data.patientId
@@ -238,8 +233,6 @@ router.put('/:id', ...isEditor, async (req, res) => {
       id
     )
 
-    db.close()
-
     await logAudit('MEDICATION_UPDATE', req.user.id, req.user.name, 'medication_orders', id, {})
 
     res.json({ success: true })
@@ -263,7 +256,6 @@ router.delete('/:id', ...isEditor, async (req, res) => {
     const db = getDatabase()
 
     const result = db.prepare(`DELETE FROM medication_orders WHERE id = ?`).run(id)
-    db.close()
 
     if (result.changes === 0) {
       return res.status(404).json({

@@ -3,216 +3,12 @@ import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isEditor, logAudit } from '../middleware/auth.js'
-import { syncMasterScheduleToFuture, initializeFutureSchedules, mergeExceptionsIntoSchedules, generateDailyScheduleFromRules } from '../services/scheduleSync.js'
+import { syncMasterScheduleToFuture, initializeFutureSchedules, mergeExceptionsIntoSchedules, generateDailyScheduleFromRules, rebuildSingleDaySchedule } from '../services/scheduleSync.js'
 import { processScheduleException } from '../services/exceptionHandler.js'
+import { getTaipeiTodayString, formatDateToYYYYMMDD, getTaipeiDayIndex } from '../utils/dateUtils.js'
+import { SHIFTS, FREQ_MAP_TO_DAY_INDEX, getScheduleKey } from '../utils/scheduleUtils.js'
 
 const router = Router()
-
-// ========================================
-// 輔助函式
-// ========================================
-
-/**
- * 取得台北時區的今天日期字串 (YYYY-MM-DD)
- */
-function getTaipeiTodayString() {
-  return new Date().toLocaleDateString('zh-TW', {
-    timeZone: 'Asia/Taipei',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).replace(/\//g, '-')
-}
-
-/**
- * 格式化日期為 YYYY-MM-DD
- */
-function formatDateToYYYYMMDD(date) {
-  const year = date.getUTCFullYear()
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0')
-  const day = String(date.getUTCDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-/**
- * 根據日期取得台北時區的星期索引 (0=週一, 6=週日)
- */
-function getTaipeiDayIndex(date) {
-  const taipeiDateStr = date.toLocaleDateString('zh-TW', {
-    timeZone: 'Asia/Taipei',
-    weekday: 'short',
-  })
-  const dayMap = { '週一': 0, '週二': 1, '週三': 2, '週四': 3, '週五': 4, '週六': 5, '週日': 6 }
-  return dayMap[taipeiDateStr] ?? date.getDay()
-}
-
-const SHIFTS = ['early', 'noon', 'late']
-const FREQ_MAP_TO_DAY_INDEX = {
-  '一三五': [0, 2, 4],
-  '二四六': [1, 3, 5],
-  '一四': [0, 3],
-  '二五': [1, 4],
-  '三六': [2, 5],
-  '一五': [0, 4],
-  '二六': [1, 5],
-  '每日': [0, 1, 2, 3, 4, 5],
-  '每周一': [0],
-  '每周二': [1],
-  '每周三': [2],
-  '每周四': [3],
-  '每周五': [4],
-  '每周六': [5],
-}
-
-/**
- * 產生排程的 key
- */
-function getScheduleKey(bedNum, shiftCode) {
-  const prefix = String(bedNum).startsWith('peripheral') ? '' : 'bed-'
-  return `${prefix}${bedNum}-${shiftCode}`
-}
-
-// generateDailyScheduleFromRules 已從 scheduleSync.js 導入
-
-/**
- * 將單一調班應用到排程
- */
-function applySingleException(schedule, ex, dateStr) {
-  try {
-    switch (ex.type) {
-      case 'MOVE':
-      case 'ADD_SESSION': {
-        const targetDate = ex.to?.goalDate
-        if (targetDate !== dateStr) {
-          if (ex.type === 'MOVE' && ex.from?.sourceDate === dateStr) {
-            const sourceKey = getScheduleKey(ex.from.bedNum, ex.from.shiftCode)
-            if (schedule[sourceKey]?.patientId === ex.patientId) {
-              delete schedule[sourceKey]
-            }
-          }
-          return false
-        }
-
-        const targetKey = getScheduleKey(ex.to.bedNum, ex.to.shiftCode)
-        if (schedule[targetKey] && schedule[targetKey].patientId !== ex.patientId) {
-          return true // 衝突
-        }
-
-        if (ex.type === 'MOVE' && ex.from?.sourceDate === dateStr) {
-          const sourceKey = getScheduleKey(ex.from.bedNum, ex.from.shiftCode)
-          if (schedule[sourceKey]?.patientId === ex.patientId) {
-            delete schedule[sourceKey]
-          }
-        }
-
-        schedule[targetKey] = {
-          patientId: ex.patientId,
-          patientName: ex.patientName,
-          exceptionId: ex.id,
-          manualNote: ex.type === 'MOVE' ? '(換班)' : '(臨時加洗)',
-        }
-        return false
-      }
-
-      case 'SWAP': {
-        if (ex.date === dateStr) {
-          const key1 = getScheduleKey(ex.patient1.fromBedNum, ex.patient1.fromShiftCode)
-          const key2 = getScheduleKey(ex.patient2.fromBedNum, ex.patient2.fromShiftCode)
-
-          const slot1Data = schedule[key1]
-            ? { ...schedule[key1] }
-            : { patientId: ex.patient1.patientId, patientName: ex.patient1.patientName }
-          const slot2Data = schedule[key2]
-            ? { ...schedule[key2] }
-            : { patientId: ex.patient2.patientId, patientName: ex.patient2.patientName }
-
-          schedule[key1] = {
-            ...slot2Data,
-            exceptionId: ex.id,
-            manualNote: `(與${ex.patient1.patientName}互調)`,
-          }
-          schedule[key2] = {
-            ...slot1Data,
-            exceptionId: ex.id,
-            manualNote: `(與${ex.patient2.patientName}互調)`,
-          }
-        }
-        return false
-      }
-
-      case 'SUSPEND': {
-        const start = new Date(ex.startDate + 'T00:00:00Z')
-        const end = new Date(ex.endDate + 'T00:00:00Z')
-        const current = new Date(dateStr + 'T00:00:00Z')
-        if (current >= start && current <= end) {
-          Object.keys(schedule).forEach((key) => {
-            if (schedule[key].patientId === ex.patientId) {
-              delete schedule[key]
-            }
-          })
-        }
-        return false
-      }
-    }
-  } catch (error) {
-    console.error(`[Schedule] 套用調班 ${ex.id} 時錯誤:`, error)
-  }
-  return false
-}
-
-/**
- * 重建單一天的排程（含調班整合）
- */
-function rebuildSingleDaySchedule(dateStr, masterRules, patientsMap, db) {
-  // 取得所有已生效的調班申請
-  const allExceptions = db.prepare(`
-    SELECT * FROM schedule_exceptions
-    WHERE status IN ('applied', 'conflict_requires_resolution')
-  `).all()
-
-  const todaysExceptions = []
-  allExceptions.forEach((row) => {
-    const ex = {
-      id: row.id,
-      type: row.type,
-      status: row.status,
-      patientId: row.patient_id,
-      patientName: row.patient_name,
-      from: JSON.parse(row.from_data || '{}'),
-      to: JSON.parse(row.to_data || '{}'),
-      patient1: JSON.parse(row.patient1 || '{}'),
-      patient2: JSON.parse(row.patient2 || '{}'),
-      startDate: row.start_date,
-      endDate: row.end_date,
-      date: row.date,
-      createdAt: row.created_at,
-    }
-
-    // 判斷此調班是否影響這一天
-    if (ex.type === 'SUSPEND' && ex.startDate && ex.endDate) {
-      const start = new Date(ex.startDate + 'T00:00:00Z')
-      const end = new Date(ex.endDate + 'T00:00:00Z')
-      const current = new Date(dateStr + 'T00:00:00Z')
-      if (current >= start && current <= end) todaysExceptions.push(ex)
-    } else {
-      const exDates = [ex.date, ex.startDate, ex.from?.sourceDate, ex.to?.goalDate].filter(Boolean)
-      if (exDates.includes(dateStr)) todaysExceptions.push(ex)
-    }
-  })
-
-  // 按創建時間排序
-  todaysExceptions.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
-
-  // 產生基礎排程
-  let finalSchedule = generateDailyScheduleFromRules(masterRules, dateStr, patientsMap)
-
-  // 套用調班
-  for (const ex of todaysExceptions) {
-    applySingleException(finalSchedule, ex, dateStr)
-  }
-
-  return finalSchedule
-}
 
 // ========================================
 // 每日排程 API
@@ -244,7 +40,6 @@ router.get('/', authenticate, (req, res) => {
     query += ' ORDER BY date'
 
     const schedules = db.prepare(query).all(...params)
-    db.close()
 
     res.json(schedules.map(s => ({
       id: s.id,
@@ -283,7 +78,6 @@ router.get('/expired/:date', authenticate, (req, res) => {
     // 如果歸檔表沒有，嘗試從一般排程表取得
     if (!archived) {
       const schedule = db.prepare(`SELECT * FROM schedules WHERE date = ?`).get(date)
-      db.close()
 
       // 不管有沒有資料都回傳成功，避免 404 錯誤
       if (!schedule) {
@@ -307,7 +101,6 @@ router.get('/expired/:date', authenticate, (req, res) => {
       })
     }
 
-    db.close()
 
     res.json({
       id: archived.id,
@@ -386,7 +179,6 @@ router.get('/:date', authenticate, (req, res) => {
       }
     }
 
-    db.close()
 
     if (!schedule) {
       return res.json({
@@ -448,7 +240,6 @@ router.put('/:date', ...isEditor, async (req, res) => {
     }
 
     const updated = db.prepare(`SELECT * FROM schedules WHERE date = ?`).get(date)
-    db.close()
 
     await logAudit('SCHEDULE_UPDATE', req.user.id, req.user.name, 'schedules', date, {
       slotCount: Object.keys(schedule).length
@@ -487,7 +278,6 @@ router.get('/base/master', authenticate, (req, res) => {
       SELECT * FROM base_schedules WHERE id = 'MASTER_SCHEDULE'
     `).get()
 
-    db.close()
 
     if (!masterSchedule) {
       return res.json({
@@ -541,7 +331,6 @@ router.put('/base/master', ...isEditor, async (req, res) => {
       SELECT * FROM base_schedules WHERE id = 'MASTER_SCHEDULE'
     `).get()
 
-    db.close()
 
     await logAudit('BASE_SCHEDULE_UPDATE', req.user.id, req.user.name, 'base_schedules', 'MASTER_SCHEDULE', {
       patientCount: Object.keys(schedule).length
@@ -605,7 +394,6 @@ router.patch('/base/master/patient/:patientId', ...isEditor, async (req, res) =>
       WHERE id = 'MASTER_SCHEDULE'
     `).run(JSON.stringify(schedule))
 
-    db.close()
 
     await logAudit('PATIENT_SCHEDULE_RULE_UPDATE', req.user.id, req.user.name, 'base_schedules', patientId, rule)
 
@@ -704,7 +492,6 @@ router.get('/exceptions/list', authenticate, (req, res) => {
     query += ' ORDER BY created_at DESC'
 
     const exceptions = db.prepare(query).all(...params)
-    db.close()
 
     res.json(exceptions.map(e => ({
       id: e.id,
@@ -771,7 +558,6 @@ router.post('/exceptions', ...isEditor, async (req, res) => {
     )
 
     const created = db.prepare(`SELECT * FROM schedule_exceptions WHERE id = ?`).get(id)
-    db.close()
 
     await logAudit('EXCEPTION_CREATE', req.user.id, req.user.name, 'schedule_exceptions', id, {
       type: data.type,
@@ -835,7 +621,6 @@ router.patch('/exceptions/:id', ...isEditor, async (req, res) => {
     const existing = db.prepare(`SELECT * FROM schedule_exceptions WHERE id = ?`).get(id)
 
     if (!existing) {
-      db.close()
       return res.status(404).json({
         error: true,
         message: '調班申請不存在'
@@ -868,7 +653,6 @@ router.patch('/exceptions/:id', ...isEditor, async (req, res) => {
 
     db.prepare(`UPDATE schedule_exceptions SET ${updates.join(', ')} WHERE id = ?`).run(...params)
 
-    db.close()
 
     await logAudit('EXCEPTION_UPDATE', req.user.id, req.user.name, 'schedule_exceptions', id, {
       newStatus: status
@@ -901,7 +685,6 @@ router.delete('/exceptions/:id', ...isEditor, async (req, res) => {
     const exception = db.prepare(`SELECT * FROM schedule_exceptions WHERE id = ?`).get(id)
 
     if (!exception) {
-      db.close()
       return res.status(404).json({
         error: true,
         message: '調班申請不存在'
@@ -973,7 +756,7 @@ router.delete('/exceptions/:id', ...isEditor, async (req, res) => {
         // 重建每個受影響日期的排程
         for (const dateStr of datesToRebuild) {
           try {
-            const finalSchedule = rebuildSingleDaySchedule(dateStr, masterRules, patientsMap, db)
+            const finalSchedule = rebuildSingleDaySchedule(dateStr, masterRules, patientsMap)
 
             db.prepare(`
               UPDATE schedules
@@ -995,7 +778,6 @@ router.delete('/exceptions/:id', ...isEditor, async (req, res) => {
       }
     }
 
-    db.close()
 
     await logAudit('EXCEPTION_DELETE', req.user.id, req.user.name, 'schedule_exceptions', id, {
       type: exData.type,
@@ -1033,7 +815,6 @@ router.get('/nurse-assignments/:date', authenticate, (req, res) => {
       SELECT * FROM nurse_assignments WHERE date = ?
     `).get(date)
 
-    db.close()
 
     if (!assignment) {
       return res.json({
@@ -1093,7 +874,6 @@ router.put('/nurse-assignments/:date', ...isEditor, async (req, res) => {
         updated_at = datetime('now', 'localtime')
     `).run(date, date, JSON.stringify(dataToSave))
 
-    db.close()
 
     res.json({
       success: true,
@@ -1131,7 +911,6 @@ router.post('/admin/force-resync', ...isEditor, async (req, res) => {
     const masterRules = masterDoc ? JSON.parse(masterDoc.schedule || '{}') : {}
 
     if (Object.keys(masterRules).length === 0) {
-      db.close()
       return res.status(400).json({
         error: true,
         message: '總表沒有任何規則'
@@ -1154,7 +933,7 @@ router.post('/admin/force-resync', ...isEditor, async (req, res) => {
     let syncedCount = 0
 
     for (const dateStr of futureDates) {
-      const finalSchedule = rebuildSingleDaySchedule(dateStr, masterRules, patientsMap, db)
+      const finalSchedule = rebuildSingleDaySchedule(dateStr, masterRules, patientsMap)
 
       db.prepare(`
         INSERT INTO schedules (id, date, schedule, sync_method, last_modified_by, created_at, updated_at)
@@ -1173,7 +952,6 @@ router.post('/admin/force-resync', ...isEditor, async (req, res) => {
       syncedCount++
     }
 
-    db.close()
 
     console.log(`[Admin] ✅ 強制重新同步完成，共處理 ${syncedCount} 天`)
 
@@ -1216,7 +994,6 @@ router.post('/admin/migrate-to-archive', ...isEditor, async (req, res) => {
     `).all(targetDate)
 
     if (schedulesToMigrate.length === 0) {
-      db.close()
       return res.json({
         success: true,
         message: '沒有需要遷移的排程',
@@ -1284,7 +1061,6 @@ router.post('/admin/migrate-to-archive', ...isEditor, async (req, res) => {
       migratedCount++
     }
 
-    db.close()
 
     console.log(`[Admin] ✅ 遷移完成：${migratedCount} 份歸檔，${skippedCount} 份跳過`)
 

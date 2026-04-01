@@ -4,26 +4,13 @@ import { v4 as uuidv4 } from 'uuid'
 import XLSX from 'xlsx'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isContributor, isEditor, logAudit } from '../middleware/auth.js'
+import { getTaipeiMonthString } from '../utils/dateUtils.js'
 
 const router = Router()
 
 // ========================================
 // Excel 檔案處理工具函式
 // ========================================
-
-/**
- * 取得台北時間今天的 YYYY-MM 格式
- */
-function getTaipeiMonthString() {
-  const now = new Date()
-  return now
-    .toLocaleDateString('zh-TW', {
-      timeZone: 'Asia/Taipei',
-      year: 'numeric',
-      month: '2-digit',
-    })
-    .replace(/\//g, '-')
-}
 
 /**
  * 從檔名中解析民國年月，轉換為西元 YYYY-MM 格式
@@ -218,7 +205,6 @@ router.get('/history', authenticate, (req, res) => {
     }
 
     const history = db.prepare(query).all(...params)
-    db.close()
 
     res.json(
       history.map((h) => ({
@@ -288,7 +274,6 @@ router.post('/history/batch', authenticate, (req, res) => {
     query += `) WHERE rn = 1`
 
     const history = db.prepare(query).all(...params)
-    db.close()
 
     // 將結果轉換為以 patientId 為 key 的物件
     history.forEach((h) => {
@@ -354,7 +339,6 @@ router.post('/history', ...isContributor, async (req, res) => {
     `,
     ).run(JSON.stringify(orders || {}), patientId)
 
-    db.close()
 
     await logAudit(
       'DIALYSIS_ORDER_CREATE',
@@ -394,7 +378,6 @@ router.delete('/history/:id', ...isEditor, async (req, res) => {
     const db = getDatabase()
 
     const result = db.prepare(`DELETE FROM dialysis_orders_history WHERE id = ?`).run(id)
-    db.close()
 
     if (result.changes === 0) {
       return res.status(404).json({
@@ -454,7 +437,6 @@ router.get('/medications', authenticate, (req, res) => {
     query += ' ORDER BY created_at DESC'
 
     const orders = db.prepare(query).all(...params)
-    db.close()
 
     res.json(
       orders.map((o) => ({
@@ -503,7 +485,6 @@ router.post('/medications', ...isContributor, async (req, res) => {
       JSON.stringify({ uid: req.user.id, name: req.user.name }),
     )
 
-    db.close()
 
     res.status(201).json({
       success: true,
@@ -551,7 +532,6 @@ router.put('/medications/:id', ...isContributor, async (req, res) => {
 
     const query = `UPDATE medication_orders SET ${updates.join(', ')} WHERE id = ?`
     const result = db.prepare(query).run(...params)
-    db.close()
 
     if (result.changes === 0) {
       return res.status(404).json({
@@ -583,7 +563,6 @@ router.delete('/medications/:id', ...isEditor, async (req, res) => {
     const db = getDatabase()
 
     const result = db.prepare(`DELETE FROM medication_orders WHERE id = ?`).run(id)
-    db.close()
 
     if (result.changes === 0) {
       return res.status(404).json({
@@ -634,7 +613,6 @@ router.get('/medication-drafts', authenticate, (req, res) => {
     query += ' ORDER BY created_at DESC'
 
     const drafts = db.prepare(query).all(...params)
-    db.close()
 
     res.json(
       drafts.map((d) => ({
@@ -681,7 +659,6 @@ router.post('/medication-drafts', ...isContributor, async (req, res) => {
     `,
     ).run(id, req.user.id, patientId, JSON.stringify(draftData))
 
-    db.close()
 
     res.status(201).json({
       success: true,
@@ -707,7 +684,6 @@ router.delete('/medication-drafts/:id', ...isContributor, async (req, res) => {
     const db = getDatabase()
 
     const result = db.prepare(`DELETE FROM medication_drafts WHERE id = ?`).run(id)
-    db.close()
 
     if (result.changes === 0) {
       return res.status(404).json({
@@ -763,7 +739,6 @@ router.get('/lab-reports', authenticate, (req, res) => {
     query += ' ORDER BY report_date DESC'
 
     const reports = db.prepare(query).all(...params)
-    db.close()
 
     res.json(
       reports.map((r) => ({
@@ -812,7 +787,6 @@ router.post('/lab-reports', authenticate, async (req, res) => {
       JSON.stringify({ uid: req.user.id, name: req.user.name }),
     )
 
-    db.close()
 
     res.status(201).json({
       success: true,
@@ -856,7 +830,6 @@ router.get('/lab-alert-analyses', authenticate, (req, res) => {
     query += ' ORDER BY updated_at DESC'
 
     const analyses = db.prepare(query).all(...params)
-    db.close()
 
     res.json(
       analyses.map((a) => ({
@@ -908,7 +881,6 @@ router.put('/lab-alert-analyses/:id', authenticate, async (req, res) => {
       ).run(id, patientId, monthRange, abnormalityKey, analysis || '', suggestion || '')
     }
 
-    db.close()
     res.json({ success: true, id })
   } catch (error) {
     console.error('儲存檢驗警示分析錯誤:', error)
@@ -955,7 +927,6 @@ router.get('/condition-records', authenticate, (req, res) => {
     }
 
     const records = db.prepare(query).all(...params)
-    db.close()
 
     res.json(
       records.map((r) => {
@@ -1006,7 +977,6 @@ router.post('/condition-records', ...isContributor, async (req, res) => {
       JSON.stringify({ uid: req.user.id, name: req.user.name }),
     )
 
-    db.close()
 
     res.status(201).json({
       success: true,
@@ -1045,7 +1015,6 @@ router.put('/condition-records/:id', ...isContributor, async (req, res) => {
 
     const query = `UPDATE condition_records SET ${updates.join(', ')} WHERE id = ?`
     const result = db.prepare(query).run(...params)
-    db.close()
 
     if (result.changes === 0) {
       return res.status(404).json({
@@ -1077,7 +1046,6 @@ router.delete('/condition-records/:id', ...isEditor, async (req, res) => {
     const db = getDatabase()
 
     const result = db.prepare(`DELETE FROM condition_records WHERE id = ?`).run(id)
-    db.close()
 
     if (result.changes === 0) {
       return res.status(404).json({
@@ -1289,7 +1257,6 @@ router.post('/lab-reports/upload', ...isContributor, async (req, res) => {
       insertMany(Array.from(reports.values()))
     }
 
-    db.close()
 
     await logAudit('LAB_REPORT_UPLOAD', req.user.id, req.user.name, 'lab_reports', fileName, {
       processedCount: reports.size,
@@ -1501,7 +1468,6 @@ router.post('/consumables/upload', ...isContributor, async (req, res) => {
       upsertMany(Array.from(updatesMap.values()))
     }
 
-    db.close()
 
     await logAudit(
       'CONSUMABLES_UPLOAD',
@@ -1749,7 +1715,6 @@ router.post('/medications/upload', ...isContributor, async (req, res) => {
       insertMany(ordersToInsert)
     }
 
-    db.close()
 
     await logAudit(
       'MEDICATION_ORDERS_UPLOAD',
@@ -1813,7 +1778,6 @@ router.get('/consumables', authenticate, (req, res) => {
     query += ' ORDER BY report_date DESC'
 
     const reports = db.prepare(query).all(...params)
-    db.close()
 
     res.json(
       reports.map((r) => ({
@@ -1869,7 +1833,6 @@ router.get('/injection-orders', authenticate, (req, res) => {
     query += ' ORDER BY change_date DESC, created_at DESC'
 
     const orders = db.prepare(query).all(...params)
-    db.close()
 
     res.json(
       orders.map((o) => ({

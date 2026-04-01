@@ -8,68 +8,8 @@ import { getDatabase } from '../db/init.js'
 import { createBackup } from '../utils/backup.js'
 import { initializeFutureSchedules } from './scheduleSync.js'
 import { cleanupExpiredBlacklist, cleanupExpiredSessions } from '../middleware/auth.js'
-
-// ========================================
-// 工具函式
-// ========================================
-
-/**
- * 取得台北時區的今天日期字串 (YYYY-MM-DD)
- */
-function getTaipeiTodayString() {
-  return new Date()
-    .toLocaleDateString('zh-TW', {
-      timeZone: 'Asia/Taipei',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    })
-    .replace(/\//g, '-')
-}
-
-/**
- * 取得台北時區的昨天日期字串 (YYYY-MM-DD)
- */
-function getTaipeiYesterdayString() {
-  const today = new Date()
-  today.setDate(today.getDate() - 1)
-  return today
-    .toLocaleDateString('zh-TW', {
-      timeZone: 'Asia/Taipei',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    })
-    .replace(/\//g, '-')
-}
-
-/**
- * 格式化日期為 YYYY-MM-DD
- */
-function formatDateToYYYYMMDD(date) {
-  const year = date.getUTCFullYear()
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0')
-  const day = String(date.getUTCDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-// 頻率對應星期索引
-const FREQ_MAP_TO_DAY_INDEX = {
-  一三五: [0, 2, 4],
-  二四六: [1, 3, 5],
-  一四: [0, 3],
-  二五: [1, 4],
-  三六: [2, 5],
-  一五: [0, 4],
-  二六: [1, 5],
-  每日: [0, 1, 2, 3, 4, 5],
-  每周一: [0],
-  每周二: [1],
-  每周三: [2],
-  每周四: [3],
-  每周五: [4],
-  每周六: [5],
-}
+import { getTaipeiTodayString, getTaipeiYesterdayString, formatDateToYYYYMMDD } from '../utils/dateUtils.js'
+import { FREQ_MAP_TO_DAY_INDEX } from '../utils/scheduleUtils.js'
 
 // ========================================
 // 定時任務：檢查過期任務
@@ -97,7 +37,6 @@ async function checkExpiredTasks() {
 
     if (expiredTasks.length === 0) {
       console.log('[Scheduler] ✅ 沒有過期的任務需要處理')
-      db.close()
       return
     }
 
@@ -123,8 +62,6 @@ async function checkExpiredTasks() {
     console.log(`[Scheduler] ✅ 已將 ${expiredCount} 個任務標記為過期`)
   } catch (error) {
     console.error('[Scheduler] ❌ 檢查過期任務失敗:', error)
-  } finally {
-    db.close()
   }
 }
 
@@ -200,7 +137,6 @@ async function archiveDailySchedule() {
 
     if (!sourceSchedule) {
       console.log(`[Scheduler] ⚠️ 日期 ${dateStr} 的排程不存在，無需歸檔`)
-      db.close()
       return
     }
 
@@ -216,7 +152,6 @@ async function archiveDailySchedule() {
     if (existingArchive) {
       console.log(`[Scheduler] ⚠️ 日期 ${dateStr} 已有歸檔，刪除原始排程`)
       db.prepare(`DELETE FROM schedules WHERE date = ?`).run(dateStr)
-      db.close()
       return
     }
 
@@ -306,8 +241,6 @@ async function archiveDailySchedule() {
     console.log(`[Scheduler] ✅ 成功歸檔並刪除原始排程 ${dateStr}`)
   } catch (error) {
     console.error(`[Scheduler] ❌ 歸檔排程 ${dateStr} 失敗:`, error)
-  } finally {
-    db.close()
   }
 }
 
@@ -335,7 +268,6 @@ async function applyScheduledPatientUpdates() {
 
     if (pendingUpdates.length === 0) {
       console.log('[Scheduler] ✅ 今天沒有待處理的預約變更')
-      db.close()
       return
     }
 
@@ -697,8 +629,6 @@ async function applyScheduledPatientUpdates() {
     console.log('[Scheduler] ✅ 預約變更處理完成')
   } catch (error) {
     console.error('[Scheduler] ❌ 應用預約變更失敗:', error)
-  } finally {
-    db.close()
   }
 }
 

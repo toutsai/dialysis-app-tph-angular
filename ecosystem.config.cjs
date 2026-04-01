@@ -9,11 +9,14 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 3000,
-        JWT_SECRET: '112dc7ccad8d34510a2299e55a97e0c0764dea3c1e8b81f3043865673bded7e4',
         DB_PATH: 'D:\\dialysis-app\\data\\dialysis.db',
         BACKUP_DIR: 'D:\\dialysis-app\\data\\backups',
         STATIC_PATH: 'D:\\dialysis-app\\dist',
+        ALLOWED_ORIGINS: 'http://localhost:3000,http://192.168.x.x:3000',
+        // JWT_SECRET 改從 .env 檔案載入，不要寫在這裡
       },
+      // 使用 env_file 載入敏感資訊（如 JWT_SECRET）
+      env_file: 'D:\\dialysis-app\\.env',
       error_file: 'D:\\dialysis-app\\logs\\error.log',
       out_file: 'D:\\dialysis-app\\logs\\out.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss',

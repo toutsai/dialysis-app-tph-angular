@@ -16,8 +16,9 @@ import nursingRoutes from './routes/nursing.js'
 import systemRoutes from './routes/system.js'
 
 // 資料庫初始化
-import { initDatabase, getDatabase, ensureDefaultAdmin } from './db/init.js'
+import { initDatabase, getDatabase, ensureDefaultAdmin, closeDatabase } from './db/init.js'
 import { v4 as uuidv4 } from 'uuid'
+import { apiRateLimit } from './middleware/rateLimit.js'
 
 // 定時任務調度器
 import { startScheduler } from './services/scheduler.js'
@@ -38,9 +39,21 @@ const PORT = process.env.PORT || 3000
 // 中介軟體 (Middleware)
 // ========================================
 
-// CORS 設定 - 允許同一區域網路的所有連線
+// CORS 白名單設定
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim())
+  : [`http://localhost:${PORT}`]
+
 app.use(cors({
-  origin: true, // 允許所有來源 (內網使用)
+  origin: (origin, callback) => {
+    // 允許沒有 origin 的請求（同源、Postman、curl 等）
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+      callback(null, true)
+    } else {
+      console.warn(`[CORS] 拒絕來源: ${origin}`)
+      callback(new Error('Not allowed by CORS'))
+    }
+  },
   credentials: true
 }))
 
@@ -54,6 +67,9 @@ app.use(express.urlencoded({ extended: true }))
 // ========================================
 // API 路由
 // ========================================
+
+// 通用 API rate limit
+app.use('/api/', apiRateLimit)
 
 app.use('/api/auth', authRoutes)
 app.use('/api/patients', patientsRoutes)
@@ -115,8 +131,6 @@ app.use((err, req, res, next) => {
       req.user?.id || 'anonymous',
       JSON.stringify({ path: req.path, error: err.message })
     )
-
-    db.close()
   } catch (logError) {
     console.error('無法記錄錯誤日誌:', logError)
   }
@@ -127,6 +141,18 @@ app.use((err, req, res, next) => {
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
   })
 })
+
+// ========================================
+// Graceful shutdown
+// ========================================
+
+function gracefulShutdown(signal) {
+  console.log(`\n${signal} received. Shutting down gracefully...`)
+  closeDatabase()
+  process.exit(0)
+}
+process.on('SIGINT', () => gracefulShutdown('SIGINT'))
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
 
 // ========================================
 // 啟動伺服器

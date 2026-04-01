@@ -136,4 +136,9 @@ dist
 .pnp.*
 
 
+data/
+.claude/
+.env
 CLAUDE.md
+data/dialysis.db
+*.db

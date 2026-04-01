@@ -85,7 +85,6 @@ export async function blacklistToken(token, userId, reason = 'logout') {
     const decoded = decodeToken(token)
 
     if (!decoded || !decoded.exp) {
-      db.close()
       return false
     }
 
@@ -99,7 +98,6 @@ export async function blacklistToken(token, userId, reason = 'logout') {
     `,
     ).run(tokenHash, userId, reason, expiresAt)
 
-    db.close()
     return true
   } catch (error) {
     console.error('加入黑名單失敗:', error)
@@ -123,7 +121,6 @@ export function isTokenBlacklisted(token) {
       )
       .get(tokenHash)
 
-    db.close()
     return !!result
   } catch (error) {
     console.error('檢查黑名單失敗:', error)
@@ -151,7 +148,6 @@ export function cleanupExpiredBlacklist() {
       console.log(`🧹 已清理 ${result.changes} 筆過期的黑名單記錄`)
     }
 
-    db.close()
   } catch (error) {
     console.error('清理黑名單失敗:', error)
   }
@@ -177,7 +173,6 @@ export async function registerSession(userId, token, req) {
     const decoded = decodeToken(token)
 
     if (!decoded || !decoded.exp) {
-      db.close()
       return null
     }
 
@@ -225,7 +220,6 @@ export async function registerSession(userId, token, req) {
     `,
     ).run(uuidv4(), userId, tokenHash, ipAddress, userAgent, expiresAt)
 
-    db.close()
     return kickedSession
   } catch (error) {
     console.error('註冊 session 失敗:', error)
@@ -246,7 +240,6 @@ export function removeSession(userId) {
     `,
     ).run(userId)
 
-    db.close()
   } catch (error) {
     console.error('移除 session 失敗:', error)
   }
@@ -272,7 +265,6 @@ export function cleanupExpiredSessions() {
       console.log(`🧹 已清理 ${result.changes} 筆過期的 session 記錄`)
     }
 
-    db.close()
   } catch (error) {
     console.error('清理 session 失敗:', error)
   }
@@ -438,7 +430,6 @@ export async function logAudit(
       success ? 1 : 0,
     )
 
-    db.close()
   } catch (error) {
     console.error('稽核日誌記錄失敗:', error)
   }

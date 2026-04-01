@@ -13,6 +13,8 @@ import {
   blacklistToken,
   getClientIp,
 } from '../middleware/auth.js'
+import { loginRateLimit } from '../middleware/rateLimit.js'
+import { validate } from '../middleware/validate.js'
 
 const router = Router()
 
@@ -79,16 +81,12 @@ function getRemainingLockMinutes(user) {
  * POST /api/auth/login
  * 使用者登入
  */
-router.post('/login', async (req, res) => {
+router.post('/login', loginRateLimit, validate({
+  username: { required: true, type: 'string', maxLength: 50 },
+  password: { required: true, type: 'string', maxLength: 100 },
+}), async (req, res) => {
   try {
     const { username, password } = req.body
-
-    if (!username || !password) {
-      return res.status(400).json({
-        error: true,
-        message: '使用者名稱和密碼為必填',
-      })
-    }
 
     const db = getDatabase()
 
@@ -102,7 +100,6 @@ router.post('/login', async (req, res) => {
       .get(username)
 
     if (!user) {
-      db.close()
       await logAudit(
         'LOGIN_FAILED',
         username,
@@ -121,7 +118,6 @@ router.post('/login', async (req, res) => {
     // 檢查帳號是否被鎖定
     if (isAccountLocked(user)) {
       const remainingMinutes = getRemainingLockMinutes(user)
-      db.close()
       await logAudit(
         'LOGIN_BLOCKED',
         user.id,
@@ -171,7 +167,6 @@ router.post('/login', async (req, res) => {
         `,
         ).run(newFailedCount, lockUntilStr, user.id)
 
-        db.close()
         await logAudit(
           'ACCOUNT_LOCKED',
           user.id,
@@ -202,7 +197,6 @@ router.post('/login', async (req, res) => {
         `,
         ).run(newFailedCount, user.id)
 
-        db.close()
         const remainingAttempts = LOGIN_LOCKOUT_CONFIG.MAX_ATTEMPTS - newFailedCount
         await logAudit(
           'LOGIN_FAILED',
@@ -237,8 +231,6 @@ router.post('/login', async (req, res) => {
       WHERE id = ?
     `,
     ).run(user.id)
-
-    db.close()
 
     // 產生 JWT Token
     const token = generateToken(user)
@@ -364,8 +356,6 @@ router.get('/me', authenticate, (req, res) => {
     )
     .get(req.user.id)
 
-  db.close()
-
   if (!user) {
     return res.status(404).json({
       error: true,
@@ -413,7 +403,6 @@ router.post('/change-password', authenticate, async (req, res) => {
     const user = db.prepare(`SELECT password_hash FROM users WHERE id = ?`).get(req.user.id)
 
     if (!user) {
-      db.close()
       return res.status(404).json({
         error: true,
         message: '使用者不存在',
@@ -424,7 +413,6 @@ router.post('/change-password', authenticate, async (req, res) => {
     const isValidOldPassword = bcrypt.compareSync(oldPassword, user.password_hash)
 
     if (!isValidOldPassword) {
-      db.close()
       await logAudit(
         'PASSWORD_CHANGE_FAILED',
         req.user.id,
@@ -449,8 +437,6 @@ router.post('/change-password', authenticate, async (req, res) => {
       WHERE id = ?
     `,
     ).run(newPasswordHash, req.user.id)
-
-    db.close()
 
     await logAudit('PASSWORD_CHANGE_SUCCESS', req.user.id, req.user.name, 'users', req.user.id, {})
 
@@ -489,8 +475,6 @@ router.get('/users', ...isAdmin, (req, res) => {
   physicians.forEach((p) => {
     physicianMap[p.id] = p
   })
-
-  db.close()
 
   // 轉換為 camelCase 格式，並合併醫師資料
   res.json(
@@ -564,7 +548,6 @@ router.post('/users', ...isAdmin, async (req, res) => {
     const existing = db.prepare(`SELECT id FROM users WHERE username = ?`).get(username)
 
     if (existing) {
-      db.close()
       return res.status(409).json({
         error: true,
         message: '使用者名稱已存在',
@@ -609,8 +592,6 @@ router.post('/users', ...isAdmin, async (req, res) => {
       )
     }
 
-    db.close()
-
     await logAudit('USER_CREATE', req.user.id, req.user.name, 'users', id, { username, name, role })
 
     res.status(201).json({
@@ -654,7 +635,6 @@ router.put('/users/:id', ...isAdmin, async (req, res) => {
     const existing = db.prepare(`SELECT * FROM users WHERE id = ?`).get(id)
 
     if (!existing) {
-      db.close()
       return res.status(404).json({
         error: true,
         message: '使用者不存在',
@@ -676,7 +656,6 @@ router.put('/users/:id', ...isAdmin, async (req, res) => {
     if (role !== undefined) {
       const validRoles = ['admin', 'editor', 'contributor', 'viewer']
       if (!validRoles.includes(role)) {
-        db.close()
         return res.status(400).json({
           error: true,
           message: '無效的角色',
@@ -709,7 +688,6 @@ router.put('/users/:id', ...isAdmin, async (req, res) => {
 
     // 如果沒有 users 表欄位要更新，也沒有醫師欄位，才報錯
     if (updates.length === 0 && !hasPhysicianFields) {
-      db.close()
       return res.status(400).json({
         error: true,
         message: '沒有提供要更新的欄位',
@@ -797,8 +775,6 @@ router.put('/users/:id', ...isAdmin, async (req, res) => {
       ).run(id)
     }
 
-    db.close()
-
     await logAudit('USER_UPDATE', req.user.id, req.user.name, 'users', id, {
       updates: Object.keys(req.body),
     })
@@ -845,7 +821,6 @@ router.post('/users/:id/reset-password', ...isAdmin, async (req, res) => {
     const existing = db.prepare(`SELECT id, name FROM users WHERE id = ?`).get(id)
 
     if (!existing) {
-      db.close()
       return res.status(404).json({
         error: true,
         message: '使用者不存在',
@@ -861,8 +836,6 @@ router.post('/users/:id/reset-password', ...isAdmin, async (req, res) => {
       WHERE id = ?
     `,
     ).run(passwordHash, id)
-
-    db.close()
 
     await logAudit('PASSWORD_RESET_BY_ADMIN', req.user.id, req.user.name, 'users', id, {
       targetUser: existing.name,
@@ -900,8 +873,6 @@ router.delete('/users/:id', ...isAdmin, async (req, res) => {
     const db = getDatabase()
 
     const result = db.prepare(`DELETE FROM users WHERE id = ?`).run(id)
-
-    db.close()
 
     if (result.changes === 0) {
       return res.status(404).json({

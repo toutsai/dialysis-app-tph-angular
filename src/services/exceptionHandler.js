@@ -1,23 +1,6 @@
 // 調班申請處理器
 import { getDatabase } from '../db/init.js'
-
-/**
- * 取得排程鍵值
- */
-function getScheduleKey(bedNum, shiftCode) {
-  const bedNumStr = String(bedNum)
-  // 處理已經是 peripheral-X 格式的情況
-  if (bedNumStr.startsWith('peripheral-')) {
-    return `${bedNumStr}-${shiftCode}`
-  }
-  // 處理中文 外X 格式的情況
-  if (bedNumStr.startsWith('外')) {
-    const num = bedNumStr.replace('外', '')
-    return `peripheral-${num}-${shiftCode}`
-  }
-  // 一般床位
-  return `bed-${bedNumStr}-${shiftCode}`
-}
+import { getScheduleKey } from '../utils/scheduleUtils.js'
 
 /**
  * 格式化日期為 YYYY-MM-DD
@@ -45,7 +28,6 @@ export async function processScheduleException(exceptionId, exceptionData) {
     // 驗證狀態
     if (exceptionData.status !== 'pending') {
       console.log(`[ExceptionHandler] 調班 ${exceptionId} 狀態為 ${exceptionData.status}，跳過處理`)
-      db.close()
       return { success: false, message: '狀態不是 pending' }
     }
 
@@ -93,8 +75,6 @@ export async function processScheduleException(exceptionId, exceptionData) {
       WHERE id = ?
     `).run(exceptionId)
 
-    db.close()
-
     console.log(`✅ [ExceptionHandler] 調班 ${exceptionId} 已成功套用`)
     return {
       success: true,
@@ -118,7 +98,6 @@ export async function processScheduleException(exceptionId, exceptionData) {
       console.error('更新錯誤狀態失敗:', e)
     }
 
-    db.close()
     return { success: false, error: error.message }
   }
 }

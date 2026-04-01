@@ -28,7 +28,6 @@ export async function syncEventsToKiditLogbook(dateStr, dailyLogData) {
           updated_at = datetime('now', 'localtime')
       `).run(dateStr, dateStr)
 
-      db.close()
       return { success: true, message: '已清空事件' }
     }
 
@@ -104,7 +103,6 @@ export async function syncEventsToKiditLogbook(dateStr, dailyLogData) {
           updated_at = datetime('now', 'localtime')
       `).run(dateStr, dateStr)
 
-      db.close()
       return { success: true, message: '無事件需要同步' }
     }
 
@@ -155,7 +153,6 @@ export async function syncEventsToKiditLogbook(dateStr, dailyLogData) {
 
     console.log(`[KIDIT Sync] ✅ 成功同步 ${eventsToSave.length} 個事件到 kidit_logbook`)
 
-    db.close()
     return {
       success: true,
       message: `已同步 ${eventsToSave.length} 個事件`,
@@ -164,7 +161,6 @@ export async function syncEventsToKiditLogbook(dateStr, dailyLogData) {
 
   } catch (error) {
     console.error(`[KIDIT Sync] ❌ 同步失敗:`, error)
-    db.close()
     throw error
   }
 }
@@ -180,8 +176,6 @@ export function getKiditLogbook(dateStr) {
     const doc = db.prepare(`
       SELECT * FROM kidit_logbook WHERE id = ?
     `).get(dateStr)
-
-    db.close()
 
     if (!doc) {
       return {
@@ -201,7 +195,6 @@ export function getKiditLogbook(dateStr) {
 
   } catch (error) {
     console.error(`[KIDIT] 取得日誌本失敗:`, error)
-    db.close()
     throw error
   }
 }
@@ -221,7 +214,6 @@ export function updateKiditEvent(dateStr, eventId, updates) {
     `).get(dateStr)
 
     if (!doc) {
-      db.close()
       throw new Error(`日期 ${dateStr} 的 kidit_logbook 不存在`)
     }
 
@@ -229,7 +221,6 @@ export function updateKiditEvent(dateStr, eventId, updates) {
     const eventIndex = events.findIndex(e => e.id === eventId)
 
     if (eventIndex === -1) {
-      db.close()
       throw new Error(`事件 ${eventId} 不存在`)
     }
 
@@ -245,12 +236,10 @@ export function updateKiditEvent(dateStr, eventId, updates) {
       WHERE id = ?
     `).run(JSON.stringify(events), dateStr)
 
-    db.close()
     return { success: true }
 
   } catch (error) {
     console.error(`[KIDIT] 更新事件失敗:`, error)
-    db.close()
     throw error
   }
 }
@@ -271,11 +260,9 @@ export function updateKiditEvents(dateStr, events = []) {
     `,
     ).run(dateStr, dateStr, JSON.stringify(safeEvents))
 
-    db.close()
     return { success: true, count: safeEvents.length }
   } catch (error) {
     console.error(`[KIDIT] 更新事件列表失敗:`, error)
-    db.close()
     throw error
   }
 }
@@ -294,8 +281,6 @@ export function listKiditLogbooks({ startDate, endDate }) {
       )
       .all(startDate, endDate)
 
-    db.close()
-
     return rows.map(row => ({
       id: row.id,
       date: row.date,
@@ -305,7 +290,6 @@ export function listKiditLogbooks({ startDate, endDate }) {
     }))
   } catch (error) {
     console.error(`[KIDIT] 取得區間日誌本失敗:`, error)
-    db.close()
     throw error
   }
 }

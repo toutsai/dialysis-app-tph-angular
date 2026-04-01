@@ -4,26 +4,8 @@
  */
 
 import { getDatabase } from '../db/init.js'
-
-// 頻率對應星期索引 (0=週一, 5=週六)
-const FREQ_MAP_TO_DAY_INDEX = {
-  '一三五': [0, 2, 4],
-  '二四六': [1, 3, 5],
-  '一四': [0, 3],
-  '二五': [1, 4],
-  '三六': [2, 5],
-  '一五': [0, 4],
-  '二六': [1, 5],
-  '每日': [0, 1, 2, 3, 4, 5],
-  '每周一': [0],
-  '每周二': [1],
-  '每周三': [2],
-  '每周四': [3],
-  '每周五': [4],
-  '每周六': [5],
-}
-
-const SHIFTS = ['early', 'noon', 'late']
+import { getTaipeiTodayString, getTaipeiDayIndex, formatDateToYYYYMMDD } from '../utils/dateUtils.js'
+import { FREQ_MAP_TO_DAY_INDEX, SHIFTS, getScheduleKey } from '../utils/scheduleUtils.js'
 
 // 兩班頻率定義
 const BIWEEKLY_FREQUENCIES = ['一四', '二五', '三六', '一五', '二六']
@@ -33,48 +15,6 @@ const FREQ_NUMBER_MAP = {
   '三六': '36',
   '一五': '15',
   '二六': '26',
-}
-
-/**
- * 取得台北時區的日期字串 (YYYY-MM-DD)
- */
-function getTaipeiTodayString() {
-  return new Date().toLocaleDateString('zh-TW', {
-    timeZone: 'Asia/Taipei',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).replace(/\//g, '-')
-}
-
-/**
- * 根據日期取得台北時區的星期索引 (0=週一, 6=週日)
- */
-function getTaipeiDayIndex(date) {
-  const taipeiDateStr = date.toLocaleDateString('zh-TW', {
-    timeZone: 'Asia/Taipei',
-    weekday: 'short',
-  })
-  const dayMap = { '週一': 0, '週二': 1, '週三': 2, '週四': 3, '週五': 4, '週六': 5, '週日': 6 }
-  return dayMap[taipeiDateStr] ?? date.getDay() // fallback
-}
-
-/**
- * 格式化日期為 YYYY-MM-DD
- */
-function formatDateToYYYYMMDD(date) {
-  const year = date.getUTCFullYear()
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0')
-  const day = String(date.getUTCDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-/**
- * 產生排程的 key (例如: bed-1-early)
- */
-function getScheduleKey(bedNum, shiftCode) {
-  const prefix = String(bedNum).startsWith('peripheral') ? '' : 'bed-'
-  return `${prefix}${bedNum}-${shiftCode}`
 }
 
 /**
@@ -335,8 +275,6 @@ export async function syncMasterScheduleToFuture(beforeRules, afterRules, modifi
       }
     }
 
-    db.close()
-
     console.log(`✅ [ScheduleSync] 第一階段同步完成！創建 ${createdCount} 份，更新 ${updatedCount} 份排程`)
 
     // 🔥 第二階段：整合現有的調班申請到受影響的日期
@@ -353,7 +291,6 @@ export async function syncMasterScheduleToFuture(beforeRules, afterRules, modifi
 
   } catch (error) {
     console.error('❌ [ScheduleSync] 同步失敗:', error)
-    db.close()
     throw error
   }
 }
@@ -417,8 +354,6 @@ export async function initializeFutureSchedules(modifiedBy = {}) {
       }
     }
 
-    db.close()
-
     console.log(`✅ [ScheduleSync] 初始化完成！創建 ${createdCount} 份排程`)
 
     return {
@@ -429,7 +364,6 @@ export async function initializeFutureSchedules(modifiedBy = {}) {
 
   } catch (error) {
     console.error('❌ [ScheduleSync] 初始化失敗:', error)
-    db.close()
     throw error
   }
 }
@@ -560,10 +494,10 @@ function recalculateDailySchedule(dateStr, masterRules, todaysExceptions, patien
  * @param {string} dateStr - 目標日期
  * @param {object} masterRules - 總表規則
  * @param {Map} patientsMap - 病人資料
- * @param {object} db - 資料庫連線
  * @returns {object} - 最終排程
  */
-function rebuildSingleDaySchedule(dateStr, masterRules, patientsMap, db) {
+function rebuildSingleDaySchedule(dateStr, masterRules, patientsMap) {
+  const db = getDatabase()
   // 取得所有已生效的調班申請
   const allExceptions = db.prepare(`
     SELECT * FROM schedule_exceptions
@@ -652,7 +586,6 @@ export async function mergeExceptionsIntoSchedules(masterRules, futureDates, pat
 
     if (allExceptions.length === 0) {
       console.log('✅ [ScheduleSync] 沒有需要整合的調班申請')
-      db.close()
       return { success: true, mergedCount: 0 }
     }
 
@@ -693,7 +626,6 @@ export async function mergeExceptionsIntoSchedules(masterRules, futureDates, pat
 
     if (datesToMerge.size === 0) {
       console.log('✅ [ScheduleSync] 沒有需要重新整合的日期')
-      db.close()
       return { success: true, mergedCount: 0 }
     }
 
@@ -702,7 +634,7 @@ export async function mergeExceptionsIntoSchedules(masterRules, futureDates, pat
     // 對每個需要整合的日期重新計算排程
     let mergedCount = 0
     for (const dateStr of datesToMerge) {
-      const finalSchedule = rebuildSingleDaySchedule(dateStr, masterRules, patientsMap, db)
+      const finalSchedule = rebuildSingleDaySchedule(dateStr, masterRules, patientsMap)
 
       db.prepare(`
         UPDATE schedules
@@ -719,20 +651,18 @@ export async function mergeExceptionsIntoSchedules(masterRules, futureDates, pat
       mergedCount++
     }
 
-    db.close()
     console.log(`✅ [ScheduleSync] 整合完成！已重新整合 ${mergedCount} 天的調班申請`)
 
     return { success: true, mergedCount }
 
   } catch (error) {
     console.error('❌ [ScheduleSync] 整合調班申請失敗:', error)
-    db.close()
     throw error
   }
 }
 
 // 導出用於自動生成排程的輔助函數
-export { generateDailyScheduleFromRules, generateAutoNote }
+export { generateDailyScheduleFromRules, generateAutoNote, rebuildSingleDaySchedule }
 
 export default {
   syncMasterScheduleToFuture,
@@ -740,4 +670,5 @@ export default {
   mergeExceptionsIntoSchedules,
   generateDailyScheduleFromRules,
   generateAutoNote,
+  rebuildSingleDaySchedule,
 }

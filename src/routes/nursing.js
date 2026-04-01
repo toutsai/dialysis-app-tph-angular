@@ -27,7 +27,6 @@ router.get('/duties', authenticate, (req, res) => {
     const db = getDatabase()
 
     const duties = db.prepare(`SELECT * FROM nursing_duties WHERE id = 'main'`).get()
-    db.close()
 
     if (!duties) {
       return res.json({
@@ -70,7 +69,6 @@ router.put('/duties', ...isAdmin, async (req, res) => {
     `,
     ).run(JSON.stringify(data))
 
-    db.close()
 
     res.json({
       success: true,
@@ -100,7 +98,6 @@ router.get('/schedules', ...isEditor, (req, res) => {
 
     if (id) {
       const schedule = db.prepare(`SELECT * FROM nursing_schedules WHERE id = ?`).get(id)
-      db.close()
 
       if (!schedule) {
         // 返回 null 而不是 404，避免前端出現錯誤訊息
@@ -117,7 +114,6 @@ router.get('/schedules', ...isEditor, (req, res) => {
     }
 
     const schedules = db.prepare(`SELECT * FROM nursing_schedules ORDER BY id DESC`).all()
-    db.close()
 
     res.json(
       schedules.map((s) => {
@@ -206,7 +202,6 @@ router.put('/schedules/:id', ...isAdmin, async (req, res) => {
       )
     }
 
-    db.close()
 
     res.json({
       success: true,
@@ -439,7 +434,6 @@ router.post('/schedules/upload', ...isAdmin, async (req, res) => {
     }
 
     if (nurseStartRow === -1) {
-      db.close()
       return res.status(400).json({
         error: true,
         message: '找不到護理師資料，請確認 Excel 格式或確認資料庫中有護理師資料',
@@ -532,7 +526,6 @@ router.post('/schedules/upload', ...isAdmin, async (req, res) => {
     }
 
     if (processedNurses.size === 0) {
-      db.close()
       return res.status(400).json({
         error: true,
         message: '沒有找到任何可處理的護理師資料',
@@ -568,7 +561,6 @@ router.post('/schedules/upload', ...isAdmin, async (req, res) => {
       `✅ [NursingSync] 同步完成: 更新 ${syncResult.updatedCount} 天，創建 ${syncResult.createdCount} 天`,
     )
 
-    db.close()
 
     const nurseList = Object.values(scheduleByNurse)
       .sort((a, b) => a.orderIndex - b.orderIndex)
@@ -624,7 +616,6 @@ router.post('/schedules/sync-names', ...isAdmin, async (req, res) => {
     const schedules = db.prepare(`SELECT * FROM nursing_schedules`).all()
 
     if (schedules.length === 0) {
-      db.close()
       return res.json({
         success: true,
         message: '沒有護理班表需要同步',
@@ -646,7 +637,6 @@ router.post('/schedules/sync-names', ...isAdmin, async (req, res) => {
       }
     }
 
-    db.close()
 
     console.log(`✅ [NursingSync] 全部同步完成: 更新 ${totalUpdated} 天，創建 ${totalCreated} 天`)
 
@@ -692,7 +682,6 @@ router.get('/group-config', authenticate, (req, res) => {
     const db = getDatabase()
 
     const configs = db.prepare(`SELECT * FROM nursing_group_config`).all()
-    db.close()
 
     // 回傳格式：將 config 內容展開到頂層，保留 id 和時間戳記
     res.json(
@@ -738,7 +727,6 @@ router.put('/group-config/:id', ...isAdmin, async (req, res) => {
     `,
     ).run(id, JSON.stringify(config))
 
-    db.close()
 
     console.log(`✅ [GroupConfig] 已儲存配置: ${id}`)
 
@@ -774,7 +762,6 @@ router.get('/handover-logs', authenticate, (req, res) => {
     }
 
     const logs = db.prepare(query).all()
-    db.close()
 
     res.json(
       logs.map((l) => ({
@@ -840,7 +827,6 @@ router.post('/handover-logs', ...isEditor, async (req, res) => {
       )
     }
 
-    db.close()
 
     res.status(201).json({
       success: true,
@@ -863,7 +849,6 @@ router.get('/handover-logs/latest', authenticate, (req, res) => {
     const db = getDatabase()
 
     const log = db.prepare(`SELECT * FROM handover_logs WHERE id = 'latest'`).get()
-    db.close()
 
     if (!log) {
       return res.json({
@@ -918,7 +903,6 @@ router.put('/handover-logs/latest', ...isEditor, async (req, res) => {
       JSON.stringify(updatedBy || {}),
     )
 
-    db.close()
 
     res.json({
       success: true,
@@ -952,7 +936,6 @@ router.put('/handover-logs/:id', ...isEditor, async (req, res) => {
     `,
     ).run(content, JSON.stringify(items || []), id)
 
-    db.close()
 
     res.json({
       success: true,
@@ -981,7 +964,6 @@ router.get('/daily-logs/:date', authenticate, (req, res) => {
     const db = getDatabase()
 
     const log = db.prepare(`SELECT * FROM daily_logs WHERE date = ?`).get(date)
-    db.close()
 
     if (!log) {
       // 返回預設結構，標記為新建
@@ -1069,7 +1051,6 @@ router.put('/daily-logs/:date', ...isEditor, async (req, res) => {
       safeOtherNotes,
     )
 
-    db.close()
 
     // 同步到 Kidit 日誌本
     try {
@@ -1213,7 +1194,6 @@ router.post('/kidit-logbook/:date/sync', ...isEditor, async (req, res) => {
 
     const db = getDatabase()
     const log = db.prepare(`SELECT * FROM daily_logs WHERE date = ?`).get(date)
-    db.close()
 
     if (!log) {
       return res.status(404).json({

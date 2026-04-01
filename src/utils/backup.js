@@ -45,7 +45,6 @@ export async function createBackup(type = 'auto') {
     INSERT INTO backup_history (id, backup_file, backup_type, file_size, created_at)
     VALUES (?, ?, ?, ?, datetime('now', 'localtime'))
   `).run(uuidv4(), backupFileName, type, stats.size)
-  db.close()
 
   // 清理舊備份
   await cleanupOldBackups(type)
@@ -88,8 +87,6 @@ async function cleanupOldBackups(type) {
       console.log(`🗑️ 已刪除舊備份: ${backup.backup_file}`)
     }
   }
-
-  db.close()
 }
 
 /**
@@ -122,8 +119,6 @@ export function listBackups() {
     SELECT * FROM backup_history
     ORDER BY created_at DESC
   `).all()
-
-  db.close()
 
   return backups
 }
