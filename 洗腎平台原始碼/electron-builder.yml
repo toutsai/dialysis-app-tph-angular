@@ -1,0 +1,60 @@
+appId: com.dialysis.standalone
+productName: 透析排程管理系統
+copyright: Copyright © 2024
+
+directories:
+  output: release
+  buildResources: electron
+
+files:
+  - dist/**/*
+  - electron/**/*
+  - server/src/**/*
+  - server/data/.gitkeep
+  - server/package.json
+  - server/node_modules/**/*
+  - "!**/node_modules/.cache"
+  - "!**/.git"
+
+# 不使用 extraResources，所有檔案都放在 app 目錄下
+# 這樣 electron/main.cjs 和 server/、dist/ 的相對路徑保持一致
+
+asar: false
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: "${productName}-${version}-Setup.${ext}"
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 透析排程管理系統
+
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: electron/icon.icns
+  category: public.app-category.medical
+
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+  icon: electron/icon.png
+  category: Office
+
+# 自動更新配置 - 使用 generic provider 支援本地/網路更新
+# 更新檔案可以放在本地網路共享資料夾或 HTTP 伺服器
+publish:
+  - provider: generic
+    url: "file:///C:/Updates/dialysis-app"  # 預設本地更新路徑 (可在 app-update.yml 覆寫)
+    channel: latest

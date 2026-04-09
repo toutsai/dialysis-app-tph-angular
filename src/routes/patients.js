@@ -5,6 +5,7 @@ import { getDatabase } from '../db/init.js'
 import { authenticate, isContributor, isEditor, logAudit } from '../middleware/auth.js'
 import { getTaipeiTodayString } from '../utils/dateUtils.js'
 import { validate } from '../middleware/validate.js'
+import { syncEventsToKiditLogbook } from '../services/kiditSync.js'
 
 const router = Router()
 
@@ -89,6 +90,16 @@ function addMovementToDailyLog(db, movementData) {
     }
 
     console.log(`[DailyLog] 已記錄動態: ${movementData.type} - ${movementData.name}`)
+
+    // 同步到 Kidit 日誌本
+    const updatedLog = db.prepare(`SELECT * FROM daily_logs WHERE date = ?`).get(todayStr)
+    if (updatedLog) {
+      syncEventsToKiditLogbook(todayStr, {
+        patientMovements: JSON.parse(updatedLog.patient_movements || '[]'),
+        vascularAccessLog: JSON.parse(updatedLog.vascular_access_log || '[]'),
+        createdAt: updatedLog.created_at,
+      }).catch(err => console.error('[DailyLog] Kidit 同步失敗 (非致命):', err))
+    }
   } catch (error) {
     console.error('[DailyLog] 記錄失敗:', error)
   }

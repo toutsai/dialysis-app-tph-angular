@@ -1,0 +1,27 @@
+# 資料庫檔案
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# 備份檔案
+backups/
+
+# 遷移資料
+migrations/data/*.json
+
+# Node modules
+node_modules/
+
+# 環境變數
+.env
+.env.local
+
+# 日誌
+logs/
+*.log
+
+# 系統檔案
+.DS_Store
+Thumbs.db

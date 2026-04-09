@@ -1563,8 +1563,10 @@ router.post('/medications/upload', ...isContributor, async (req, res) => {
       })
     }
 
-    // upload_month 將從每筆記錄的 changeDate 中提取，不再使用檔案層級的 uploadMonth
-    console.log(`[ProcessOrders] 開始處理藥囑資料，upload_month 將依照每筆記錄的異動日期決定`)
+    // upload_month 統一使用當前月份，代表「這份 Excel 是哪個月上傳的藥囑單」
+    const now = new Date()
+    const batchUploadMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    console.log(`[ProcessOrders] 開始處理藥囑資料，整批歸入 upload_month = ${batchUploadMonth}`)
 
 
     const db = getDatabase()
@@ -1653,8 +1655,8 @@ router.post('/medications/upload', ...isContributor, async (req, res) => {
 
       // 判斷藥物類型
       let orderType = null
-      // 從 changeDate 提取 upload_month (取 YYYY-MM 部分)
-      const recordUploadMonth = changeDate.substring(0, 7)
+      // 整批使用同一個上傳月份
+      const recordUploadMonth = batchUploadMonth
       const orderPayload = {
         id: uuidv4(),
         patientId: patientData.id,

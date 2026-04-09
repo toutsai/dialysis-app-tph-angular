@@ -190,12 +190,13 @@ async function archiveDailySchedule() {
       if (slot?.patientId) {
         const patient = patientsMap.get(slot.patientId)
         if (patient) {
+          const dialysisOrders = JSON.parse(patient.dialysis_orders || '{}')
           slot.archivedPatientInfo = {
             status: patient.status || 'unknown',
-            mode: patient.mode || null,
+            mode: dialysisOrders.mode || null,
             wardNumber: patient.ward_number || null,
             medicalRecordNumber: patient.medical_record_number || null,
-            freq: patient.freq || null,
+            freq: dialysisOrders.freq || null,
           }
         } else {
           missingCount++

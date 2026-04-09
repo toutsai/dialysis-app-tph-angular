@@ -1,0 +1,8 @@
+透析排程管理系統 授權條款
+
+版權所有 (c) 2024
+
+本軟體僅供授權使用者使用。
+未經授權，禁止複製、修改或散佈本軟體。
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
