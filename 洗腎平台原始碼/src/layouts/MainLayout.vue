@@ -549,7 +549,7 @@ onUnmounted(() => {
   overflow: hidden;
 }
 .sidebar {
-  width: 210px;
+  width: 240px;
   background-color: #2c3e50;
   color: white;
   flex-shrink: 0;
