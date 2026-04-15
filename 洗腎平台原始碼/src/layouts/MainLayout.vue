@@ -7,36 +7,51 @@
           <span class="platform-title">部北透析管理平台</span>
           <span v-if="environmentTag" :class="['environment-tag', environmentTag.class]"> </span>
         </div>
+
+        <!-- 個人常用 -->
+        <h3 class="section-title nav-section-label">個人常用</h3>
         <ul class="sidebar-nav">
-          <!-- 共用功能 -->
-          <li>
-            <RouterLink to="/schedule" class="nav-link">
-              <div class="nav-item-content">
-                <span class="nav-title">每日排程</span>
-              </div>
-            </RouterLink>
-          </li>
-          <li>
-            <RouterLink to="/stats" class="nav-link">
-              <div class="nav-item-content">
-                <span class="nav-title">護理分組</span>
-              </div>
-            </RouterLink>
-          </li>
           <li>
             <RouterLink :to="{ name: 'MyPatients' }" class="nav-link">
               <div class="nav-item-content">
-                <span class="nav-title">我的今日病人</span>
+                <span class="nav-title">我的病人列表</span>
               </div>
             </RouterLink>
           </li>
+          <li>
+            <RouterLink to="/collaboration" class="nav-link">
+              <div class="nav-item-content">
+                <span class="nav-title">訊息中心</span>
+              </div>
+              <span v-if="notificationCount > 0" class="notification-badge">
+                {{ notificationCount }}
+              </span>
+            </RouterLink>
+          </li>
+        </ul>
 
-          <!-- 只有 Admin 和 Editor (護理師) 可見的功能 -->
-          <template v-if="isAdmin || isEditor">
+        <!-- 組長專用 -->
+        <template v-if="isAdmin || isEditor">
+          <h3 class="section-title nav-section-label">組長專用</h3>
+          <ul class="sidebar-nav">
+            <li>
+              <RouterLink to="/schedule" class="nav-link">
+                <div class="nav-item-content">
+                  <span class="nav-title">每日排程</span>
+                </div>
+              </RouterLink>
+            </li>
+            <li>
+              <RouterLink to="/stats" class="nav-link">
+                <div class="nav-item-content">
+                  <span class="nav-title">護理分組</span>
+                </div>
+              </RouterLink>
+            </li>
             <li class="desktop-only-nav-item">
               <RouterLink to="/weekly" class="nav-link">
                 <div class="nav-item-content">
-                  <span class="nav-title">週排班</span>
+                  <span class="nav-title">周排班</span>
                 </div>
               </RouterLink>
             </li>
@@ -44,6 +59,13 @@
               <RouterLink to="/base-schedule" class="nav-link">
                 <div class="nav-item-content">
                   <span class="nav-title">床位總表</span>
+                </div>
+              </RouterLink>
+            </li>
+            <li v-if="isAdmin || isEditor || isContributor">
+              <RouterLink to="/patients" class="nav-link">
+                <div class="nav-item-content">
+                  <span class="nav-title">病人清單</span>
                 </div>
               </RouterLink>
             </li>
@@ -70,28 +92,15 @@
                 </div>
               </RouterLink>
             </li>
-          </template>
-
-          <!-- 病人清單: Admin, Editor, Contributor 可見 (Viewer 不可見) -->
-          <li v-if="isAdmin || isEditor || isContributor">
-            <RouterLink to="/patients" class="nav-link">
-              <div class="nav-item-content">
-                <span class="nav-title">病人清單</span>
-              </div>
-            </RouterLink>
-          </li>
-
-          <li>
-            <RouterLink to="/collaboration" class="nav-link">
-              <div class="nav-item-content">
-                <span class="nav-title">訊息中心</span>
-              </div>
-              <span v-if="notificationCount > 0" class="notification-badge">
-                {{ notificationCount }}
-              </span>
-            </RouterLink>
-          </li>
-        </ul>
+            <li v-if="isAdmin || currentUser?.role === 'editor' || currentUser?.role === 'viewer'">
+              <RouterLink to="/daily-log" class="nav-link">
+                <div class="nav-item-content">
+                  <span class="nav-title">工作日誌</span>
+                </div>
+              </RouterLink>
+            </li>
+          </ul>
+        </template>
       </div>
 
       <!-- 通知區域 -->
@@ -131,18 +140,7 @@
           </h3>
 
           <ul v-if="!isManagementSectionCollapsed" class="sidebar-nav">
-            <!-- ✨ 修改：使用 currentUser.role 嚴格區分護理(Editor)與醫療(Contributor)職責 -->
-
-            <!-- 1. [工作日誌] Admin, Editor (Nurse), Viewer -->
-            <li v-if="isAdmin || currentUser?.role === 'editor' || currentUser?.role === 'viewer'">
-              <RouterLink to="/daily-log" class="nav-link">
-                <div class="nav-item-content">
-                  <span class="nav-title">工作日誌</span>
-                </div>
-              </RouterLink>
-            </li>
-
-            <!-- 2. [護理班表與職責] Admin, Editor (Nurse) -->
+            <!-- 1. [護理班表與職責] Admin, Editor (Nurse) -->
             <li v-if="isAdmin || currentUser?.role === 'editor'">
               <RouterLink to="/nursing-schedule" class="nav-link">
                 <div class="nav-item-content">
@@ -151,7 +149,7 @@
               </RouterLink>
             </li>
 
-            <!-- 3. [KiDit 申報] Admin, Editor (Nurse) -->
+            <!-- 2. [KiDit 申報] Admin, Editor (Nurse) -->
             <li v-if="isAdmin || currentUser?.role === 'editor'">
               <RouterLink to="/kidit-report" class="nav-link">
                 <div class="nav-item-content">
@@ -160,7 +158,7 @@
               </RouterLink>
             </li>
 
-            <!-- 4. [醫師班表] 所有登入使用者可見 -->
+            <!-- 3. [醫師班表] 所有登入使用者可見 -->
             <li>
               <RouterLink to="/physician-schedule" class="nav-link">
                 <div class="nav-item-content">
@@ -169,11 +167,20 @@
               </RouterLink>
             </li>
 
-            <!-- 5. [檢驗報告] Admin, Contributor (Doc) -->
+            <!-- 4. [檢驗報告] Admin, Contributor (Doc) -->
             <li v-if="isAdmin || currentUser?.role === 'contributor'">
               <RouterLink to="/lab-reports" class="nav-link">
                 <div class="nav-item-content">
                   <span class="nav-title">檢驗報告</span>
+                </div>
+              </RouterLink>
+            </li>
+
+            <!-- 5. [藥囑管理] Admin, Contributor (Doc) -->
+            <li v-if="isAdmin || currentUser?.role === 'contributor'">
+              <RouterLink to="/orders" class="nav-link">
+                <div class="nav-item-content">
+                  <span class="nav-title">藥囑管理</span>
                 </div>
               </RouterLink>
             </li>
@@ -187,11 +194,11 @@
               </RouterLink>
             </li>
 
-            <!-- 7. [藥囑管理] Admin, Contributor (Doc) -->
-            <li v-if="isAdmin || currentUser?.role === 'contributor'">
-              <RouterLink to="/orders" class="nav-link">
+            <!-- 7. [使用者管理] Admin Only -->
+            <li v-if="isAdmin">
+              <RouterLink to="/user-management" class="nav-link">
                 <div class="nav-item-content">
-                  <span class="nav-title">藥囑管理</span>
+                  <span class="nav-title">使用者管理</span>
                 </div>
               </RouterLink>
             </li>
@@ -205,15 +212,6 @@
               <RouterLink to="/reporting" class="nav-link">
                 <div class="nav-item-content">
                   <span class="nav-title">統計報表</span>
-                </div>
-              </RouterLink>
-            </li>
-
-            <!-- 9. [使用者管理] Admin Only -->
-            <li v-if="isAdmin">
-              <RouterLink to="/user-management" class="nav-link">
-                <div class="nav-item-content">
-                  <span class="nav-title">使用者管理</span>
                 </div>
               </RouterLink>
             </li>
@@ -710,6 +708,9 @@ onUnmounted(() => {
   letter-spacing: 1px;
   padding: 0 15px;
   margin-bottom: 8px;
+}
+.nav-section-label {
+  margin-top: 12px;
 }
 .management-section .sidebar-nav {
   padding-top: 0;
