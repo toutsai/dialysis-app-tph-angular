@@ -2132,9 +2132,14 @@ function closeRecordsSummaryDialog() {
   patientInfoMapForDialog.value = {}
 }
 function getPatientMode(shiftId) {
-  const patientId = currentRecord.schedule[shiftId]?.patientId
-  if (!patientId) return null
-  const patient = patientMap.value.get(patientId)
+  const slot = currentRecord.schedule[shiftId]
+  if (!slot?.patientId) return null
+  // 優先讀取排程 slot 上的臨時模式覆寫
+  if (slot.modeOverride) return slot.modeOverride
+  // 歸檔排程：從快照中讀取
+  if (slot.archivedPatientInfo?.mode) return slot.archivedPatientInfo.mode
+  // 即時排程：從病人資料讀取
+  const patient = patientMap.value.get(slot.patientId)
   return patient?.mode || null
 }
 async function copyMedicalRecordNumber(mrn) {
