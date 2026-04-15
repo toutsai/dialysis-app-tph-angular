@@ -37,7 +37,7 @@
                       {{ getPatientInfo(record.patientId).medicalRecordNumber || '-' }}
                     </span>
                   </td>
-                  <td class="col-name">{{ record.patientName }}</td>
+                  <td class="col-name">{{ record.patientName || getPatientInfo(record.patientId).name || '-' }}</td>
                   <td class="col-time">{{ formatTime(record.createdAt) }}</td>
                   <td class="col-content">{{ record.content }}</td>
                 </tr>
@@ -111,12 +111,18 @@ function getShiftDisplayName(shiftCode) {
 }
 
 function formatTime(timestamp) {
-  if (!timestamp || !timestamp.toDate) return 'N/A'
-  return timestamp.toDate().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })
+  if (!timestamp) return 'N/A'
+  try {
+    const date = new Date(timestamp)
+    if (isNaN(date.getTime())) return 'N/A'
+    return date.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Taipei' })
+  } catch {
+    return 'N/A'
+  }
 }
 
 function getPatientInfo(patientId) {
-  return props.patientInfoMap[patientId] || { bedNum: '-', medicalRecordNumber: '' }
+  return props.patientInfoMap[patientId] || { bedNum: '-', medicalRecordNumber: '', name: '' }
 }
 
 async function copyMedicalRecordNumber(mrn) {
@@ -156,8 +162,8 @@ const sortedRecords = computed(() => {
     }
 
     // 同一床號的紀錄依時間排序
-    const timeA = a.createdAt?.toDate() || 0
-    const timeB = b.createdAt?.toDate() || 0
+    const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0
+    const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0
     return timeA - timeB
   })
 })

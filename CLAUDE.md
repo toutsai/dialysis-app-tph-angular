@@ -206,40 +206,99 @@ dist/                          # Vue 3 + Vuetify 前端預建置產出
 
 醫院決定從 Vue 改用 Angular 前端。相關專案：
 
-- `dialysis-app-angular` — Angular 19 + Firebase 原始雲端版
+- `dialysis-app-angular` — Angular 19 + Firebase 原始雲端版 (67 commits)
 - `dialysis-app-angular-standalone` — Angular 19 + 自帶 Express/SQLite（已從 Firebase 遷移 95%）
-- `dialysis-app-tph` (本 repo) — 醫院正式後端 (PM2 部署)
+- `dialysis-app-tph` (本 repo) — 醫院正式後端 (PM2 部署, 107+ API endpoints)
 
 ### 遷移策略
 
 **目標**: Angular standalone 前端 → 對接 TPH 後端（不使用 angular-standalone 自帶的 server/）
 
-### API 對接狀態
+### API 對接狀態（2026-04-15 審計結果）
 
-**已匹配 (~60%)**：認證、病人 CRUD、排程 CRUD、備忘錄、護理職責/分組/工作日誌、任務/通知、庫存基礎、醫師班表、藥劑注射查詢、醫囑歷史、病情記錄、檢驗報告
+**已匹配 (~90%)**：分析 Angular 67 個 commits 後，大部分（~50 個）為純前端改動，TPH 後端已有 107+ 個 endpoint，覆蓋率遠高於原先預估的 60%。
 
-**需補齊的 TPH 後端 endpoint (~20 個)**：
-- `POST /api/auth/refresh-token` — Token 刷新 (高優先)
-- `GET /api/patients/with-rules` — 病人 + 排程規則合併 (高優先)
-- `GET /api/patients/history`, `POST /api/patients/history` — 病人異動歷史
-- `POST /api/orders/history/batch` — 批量查詢醫囑歷史
-- `GET/POST /api/orders/medications` — 藥囑管理
-- `GET /api/orders/medication-drafts` — 藥囑草稿
-- `POST /api/orders/lab-reports/upload` — 上傳檢驗報告
-- `GET/PUT /api/orders/lab-alert-analyses` — 檢驗警示分析
-- `GET /api/orders/bed-settings`, `/machine-bicarbonate-config` — 設備設定
-- `POST /api/schedules/sync/initialize`, `/admin/force-resync` — 排程同步觸發
-- `GET /api/schedules/expired/:date`, `/archived` — 歸檔排程
-- `GET/PUT /api/system/auto-assign-config/current` — 自動分配設定
-- `GET/PATCH /api/system/kidit-logbook` — KiDit 日誌
-- `GET /api/system/scheduled-updates` — 預約變更
-- `PATCH /api/system/notifications/:id/read` — 標記已讀
-- `GET/PUT /api/system/config/:key` — 系統設定（跑馬燈等）
-- `POST /api/nursing/schedules/upload` — 護理班表 Excel 上傳
-- `POST /api/patients/upload-image` — 病人照片上傳
-- 庫存進階功能（進貨/月計算/週資料/耗材上傳）
+**原先列為「缺少」但實際已存在的 endpoint**：
+- `GET /api/patients/with-rules` → `patients.js:271`
+- `GET/POST /api/patients/history` → `patients.js:312,383`
+- `POST /api/orders/history/batch` → `orders.js:234`
+- `GET/POST /api/orders/medications` → `orders.js:419,467`
+- `GET /api/orders/medication-drafts` → `orders.js:595`
+- `POST /api/orders/lab-reports/upload` → `orders.js:1079`
+- `GET/PUT /api/orders/lab-alert-analyses` → `orders.js:812,856`
+- `POST /api/schedules/sync/initialize` → `schedules.js:429`
+- `POST /api/schedules/admin/force-resync` → `schedules.js:901`
+- `GET /api/schedules/expired/:date` → `schedules.js:68`
+- `GET /api/system/scheduled-updates` → `system.js:1568`
+- `PATCH /api/system/notifications/:id/read` → `system.js:387`
+- `GET/PUT /api/system/site-config/:id` → `system.js:1232,1265`
+- `POST /api/nursing/schedules/upload` → `nursing.js:337`
+- `GET/PATCH /api/system/kidit-logbook` → `nursing.js:1116,1152,1171`
+- 庫存進階功能（進貨/月/週/耗材）→ `system.js:539-1148` 全部已有
 
-**HTTP 方法不匹配**：Angular 用 PATCH 更新排程/護理分配/總表，TPH 用 PUT → 需前端改用 PUT 或後端加 PATCH 路由
+### 真正需要補齊的後端改動（7 Phase）
+
+#### Phase 1: Auth Token Refresh（高優先，0.5 天）
+- **新增** `POST /api/auth/refresh-token`
+- **修改檔案**: `src/routes/auth.js`, `src/middleware/auth.js`
+- 接收已過期但在 grace period 內的 token，發新 JWT
+- 新增 `verifyTokenForRefresh()` 函式
+- **對應 Angular commit**: `3b8416d`
+
+#### Phase 2: modeOverride 排程支援（高優先，1 天）
+- **修改** 排程例外處理，支援 ADD_SESSION 帶入透析模式（如 HD→HDF）
+- **修改檔案**: `src/services/exceptionHandler.js`, `src/services/scheduleSync.js`
+- `handleAddSession()` (line 243): 讀 `data.to.mode` → 設 `newSlotData.modeOverride`
+- `handleMove()`: 同樣傳遞 modeOverride
+- 無需 schema migration（JSON text 欄位內加新 key）
+- **對應 Angular commits**: `4422a89`, `7632b8c`, `2978a3d`, `1d64a68`, `2486a1e`
+
+#### Phase 3: Auto-Assign 設定 API（中優先，0.5 天）
+- **新增** `GET/PUT /api/system/auto-assign-config/current`
+- **修改檔案**: `src/routes/system.js`
+- 複用 `site_config` table，`id='auto_assign_config'`
+- **對應 Angular commits**: `5cb116c`, `e28f29c`, `0ea5773`, `4e5509e`, `0990c93`, `b200414`
+
+#### Phase 4: 設備設定 API（中優先，0.5 天）
+- **新增** `GET/PUT /api/orders/bed-settings`
+- **新增** `GET/PUT /api/orders/machine-bicarbonate-config`
+- **修改檔案**: `src/routes/orders.js`
+- 都是 `site_config` 的薄包裝
+
+#### Phase 5: PATCH 路由別名（中優先，0.5 天）
+- **新增** `PATCH /api/schedules/:date` → alias existing PUT
+- **新增** `PATCH /api/schedules/nurse-assignments/:date` → alias existing PUT
+- **新增** `PATCH /api/nursing/group-config/:id` → alias existing PUT
+- **修改檔案**: `src/routes/schedules.js`, `src/routes/nursing.js`
+- 把 PUT handler 抽成具名函式，同時掛載 PUT 和 PATCH
+
+#### Phase 6: 病人照片上傳（低優先，0.5 天）
+- **新增** `POST /api/patients/upload-image`
+- **修改檔案**: `src/routes/patients.js`, `src/index.js`, `src/db/migrate.js`
+- 存檔到 `data/patient-images/`，新增 `patients.image_path` 欄位
+
+#### Phase 7: Config Key 別名（低優先，0.25 天）
+- **新增** `GET/PUT /api/system/config/:key` → alias `site-config/:key`
+- **修改檔案**: `src/routes/system.js`
+
+### 實作優先順序
+
+| Phase | 範圍 | 工時 | 修改檔案 | 狀態 |
+|-------|------|------|----------|------|
+| **1** | Auth token refresh | 0.5 天 | auth.js, middleware/auth.js | 待實作 |
+| **2** | modeOverride | 1 天 | exceptionHandler.js, scheduleSync.js | 待實作 |
+| **3** | Auto-assign config | 0.5 天 | system.js | 待實作 |
+| **4** | Bed/machine config | 0.5 天 | orders.js | 待實作 |
+| **5** | PATCH aliases | 0.5 天 | schedules.js, nursing.js | 待實作 |
+| **6** | Patient image upload | 0.5 天 | patients.js, index.js, migrate.js | 待實作 |
+| **7** | Config key alias | 0.25 天 | system.js | 待實作 |
+
+**關鍵路徑**: Phase 1-3 完成後（~2 天），Angular 前端即可正常運作。Phase 4-7 逐步補齊。
+
+### 不需後端改動的 Angular Commits（~50 個）
+
+純前端改動，TPH 不需修改：ICU 列印排版(4)、KiDIT 重構(4)、Lab/Med 修復(6)、
+角色/權限 UI(3)、UI/導航調整(4)、庫存 UI(~10)、報表圖表(1)、護理 UI(2)、文件(2)
 
 ### Angular standalone 已知問題
 - 自帶 server/ 後端與 TPH 完全不同步（全部檔案 DIFF），不應使用

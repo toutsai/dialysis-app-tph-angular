@@ -321,16 +321,21 @@ router.get('/notifications', authenticate, (req, res) => {
 
 
     res.json(
-      notifications.map((n) => ({
-        id: n.id,
-        type: n.type,
-        title: n.title,
-        message: n.message,
-        recipientId: n.recipient_id,
-        isRead: n.is_read === 1,
-        data: JSON.parse(n.data || '{}'),
-        createdAt: n.created_at,
-      })),
+      notifications.map((n) => {
+        const data = JSON.parse(n.data || '{}')
+        return {
+          id: n.id,
+          type: n.type,
+          title: n.title,
+          message: n.message,
+          recipientId: n.recipient_id,
+          isRead: n.is_read === 1,
+          data,
+          createdBy: data.createdBy || null,
+          metadata: data.metadata || null,
+          createdAt: n.created_at,
+        }
+      }),
     )
   } catch (error) {
     console.error('取得通知錯誤:', error)
@@ -347,10 +352,18 @@ router.get('/notifications', authenticate, (req, res) => {
  */
 router.post('/notifications', authenticate, async (req, res) => {
   try {
-    const { type, title, message, recipientId, data } = req.body
+    const { type, title, message, recipientId, data, createdBy, metadata, expireAt } = req.body
 
     const id = uuidv4()
     const db = getDatabase()
+
+    // 將 createdBy, metadata, expireAt 合併到 data JSON 中保存
+    const enrichedData = {
+      ...(data || {}),
+      createdBy: createdBy || { uid: req.user.id, name: req.user.name },
+      metadata: metadata || null,
+      expireAt: expireAt || null,
+    }
 
     db.prepare(
       `
@@ -363,7 +376,7 @@ router.post('/notifications', authenticate, async (req, res) => {
       title || '',
       message || '',
       recipientId || null,
-      JSON.stringify(data || {}),
+      JSON.stringify(enrichedData),
     )
 
 

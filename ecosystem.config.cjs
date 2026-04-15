@@ -23,7 +23,9 @@ module.exports = {
       max_memory_restart: '500M',
       restart_delay: 5000,
       autorestart: true,
-      watch: true,
+      // ⚠️ watch 設為 false — 避免複製檔案時觸發重啟導致 "Failed to fetch"
+      // 如需重啟請手動執行 pm2 restart dialysis-server
+      watch: false,
     },
   ],
 }
