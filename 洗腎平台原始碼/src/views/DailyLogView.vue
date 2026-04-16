@@ -485,10 +485,22 @@
                     />
                   </td>
                   <td class="col-reason-wide">
-                    <input type="text" v-model="item.reason" :disabled="!isRowInEditMode(item)" />
+                    <textarea
+                      v-if="isRowInEditMode(item)"
+                      v-model="item.reason"
+                      rows="2"
+                      class="wrap-textarea"
+                    ></textarea>
+                    <span v-else class="wrap-text">{{ item.reason || '' }}</span>
                   </td>
                   <td class="col-remarks-wide">
-                    <input type="text" v-model="item.remarks" :disabled="!isRowInEditMode(item)" />
+                    <textarea
+                      v-if="isRowInEditMode(item)"
+                      v-model="item.remarks"
+                      rows="2"
+                      class="wrap-textarea"
+                    ></textarea>
+                    <span v-else class="wrap-text">{{ item.remarks || '' }}</span>
                   </td>
                   <td class="col-actions">
                     <!-- ✨ 修改：隱藏編輯/儲存按鈕 -->
@@ -2703,11 +2715,27 @@ h1 {
 .dynamic-table .col-reason-wide,
 .dynamic-table .col-remarks-wide {
   white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
-/* 讓 input 在可變寬度欄位中也能正常顯示 */
-.dynamic-table .col-reason-wide input,
-.dynamic-table .col-remarks-wide input {
-  white-space: normal;
+/* 顯示模式文字自動換行 */
+.dynamic-table .wrap-text {
+  display: block;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.4;
+}
+/* 編輯模式 textarea 樣式 */
+.dynamic-table .wrap-textarea {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #80bdff;
+  border-radius: 4px;
+  font-size: inherit;
+  font-family: inherit;
+  resize: vertical;
+  line-height: 1.4;
 }
 /* 欄位寬度設定 */
 .dynamic-table .col-type {
