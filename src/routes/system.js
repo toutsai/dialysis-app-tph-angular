@@ -1307,6 +1307,129 @@ router.put('/site-config/:id', authenticate, async (req, res) => {
 })
 
 // ========================================
+// Auto-Assign 設定 API (Angular 前端使用)
+// ========================================
+
+/**
+ * GET /api/system/auto-assign-config/current
+ * 取得自動分配設定（使用 site_config table, id='auto_assign_config'）
+ */
+router.get('/auto-assign-config/current', authenticate, (req, res) => {
+  try {
+    const db = getDatabase()
+    const config = db.prepare(`SELECT * FROM site_config WHERE id = 'auto_assign_config'`).get()
+
+    if (!config) {
+      return res.json({
+        id: 'auto_assign_config',
+        configData: {},
+      })
+    }
+
+    res.json({
+      id: config.id,
+      configData: JSON.parse(config.config_data || '{}'),
+      createdAt: config.created_at,
+      updatedAt: config.updated_at,
+    })
+  } catch (error) {
+    console.error('取得自動分配設定錯誤:', error)
+    res.status(500).json({
+      error: true,
+      message: '取得自動分配設定失敗',
+    })
+  }
+})
+
+/**
+ * PUT /api/system/auto-assign-config/current
+ * 更新自動分配設定
+ */
+router.put('/auto-assign-config/current', authenticate, async (req, res) => {
+  try {
+    const configData = req.body
+    const db = getDatabase()
+
+    db.prepare(
+      `
+      INSERT INTO site_config (id, config_data, updated_at)
+      VALUES ('auto_assign_config', ?, datetime('now', 'localtime'))
+      ON CONFLICT(id) DO UPDATE SET
+        config_data = excluded.config_data,
+        updated_at = datetime('now', 'localtime')
+    `,
+    ).run(JSON.stringify(configData))
+
+    res.json({
+      success: true,
+      message: '自動分配設定已更新',
+    })
+  } catch (error) {
+    console.error('更新自動分配設定錯誤:', error)
+    res.status(500).json({
+      error: true,
+      message: '更新自動分配設定失敗',
+    })
+  }
+})
+
+// ========================================
+// Config Key 別名 (Angular 前端使用 /config/:key)
+// ========================================
+
+/**
+ * GET /api/system/config/:key
+ * 別名 → site-config/:key（Angular 前端統一使用 config 路徑）
+ */
+router.get('/config/:key', authenticate, (req, res) => {
+  try {
+    const { key } = req.params
+    const db = getDatabase()
+
+    const config = db.prepare(`SELECT * FROM site_config WHERE id = ?`).get(key)
+
+    if (!config) {
+      return res.json({ id: key, configData: {} })
+    }
+
+    res.json({
+      id: config.id,
+      configData: JSON.parse(config.config_data || '{}'),
+      createdAt: config.created_at,
+      updatedAt: config.updated_at,
+    })
+  } catch (error) {
+    console.error('取得配置錯誤:', error)
+    res.status(500).json({ error: true, message: '取得配置失敗' })
+  }
+})
+
+/**
+ * PUT /api/system/config/:key
+ * 別名 → site-config/:key
+ */
+router.put('/config/:key', authenticate, async (req, res) => {
+  try {
+    const { key } = req.params
+    const configData = req.body
+    const db = getDatabase()
+
+    db.prepare(`
+      INSERT INTO site_config (id, config_data, updated_at)
+      VALUES (?, ?, datetime('now', 'localtime'))
+      ON CONFLICT(id) DO UPDATE SET
+        config_data = excluded.config_data,
+        updated_at = datetime('now', 'localtime')
+    `).run(key, JSON.stringify(configData))
+
+    res.json({ success: true, message: '配置已更新' })
+  } catch (error) {
+    console.error('更新配置錯誤:', error)
+    res.status(500).json({ error: true, message: '更新配置失敗' })
+  }
+})
+
+// ========================================
 // 稽核日誌 API (僅管理員)
 // ========================================
 

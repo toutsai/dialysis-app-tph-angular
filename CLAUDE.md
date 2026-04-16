@@ -300,19 +300,36 @@ dist/                          # Vue 3 + Vuetify 前端預建置產出
 純前端改動，TPH 不需修改：ICU 列印排版(4)、KiDIT 重構(4)、Lab/Med 修復(6)、
 角色/權限 UI(3)、UI/導航調整(4)、庫存 UI(~10)、報表圖表(1)、護理 UI(2)、文件(2)
 
-### Angular standalone 已知問題
-- 自帶 server/ 後端與 TPH 完全不同步（全部檔案 DIFF），不應使用
-- 兩套 API 客戶端並存（localApiClient.ts fetch + ApiService HttpClient）
-- environment.ts 仍有 Firebase 憑證（未使用但應清除）
-- legacy firebase.service.ts 仍存在（只是空殼）
+### Angular 整合狀態（2026-04-16 完成）
+
+Angular 前端已整合到本 repo 的 `angular-client/` 目錄，以下工作已完成：
+- ✅ Firebase 殘留清理（shims, environment configs, firebase.service.ts）
+- ✅ API 路由映射修正（COLLECTION_ROUTE_MAP 對齊 TPH 後端）
+- ✅ Phase 1: Auth token refresh endpoint (`POST /api/auth/refresh-token`)
+- ✅ Phase 2: modeOverride 排程支援（exceptionHandler.js handleMove/handleAddSession）
+- ✅ Phase 3: Auto-assign config API (`GET/PUT /api/system/auto-assign-config/current`)
+- ✅ Phase 4: Bed/machine settings API (`GET/PUT /api/orders/bed-settings`, `machine-bicarbonate-config`)
+- ✅ Phase 5: PATCH→PUT middleware（schedules.js, nursing.js）
+- ✅ Phase 6: Patient image upload (`POST /api/patients/upload-image`)
+- ✅ Phase 7: Config key alias (`GET/PUT /api/system/config/:key`)
+
+### Angular 前端指令
+
+```bash
+npm run install:angular   # 安裝 Angular 前端依賴
+npm run build:angular     # 建置 Angular 前端 → dist/
+npm run dev:angular       # Angular 開發伺服器 (port 5173, proxy → Express:3000)
+npm run build:vue         # 建置 Vue 前端 → dist/（備用切換）
+```
 
 ## 注意事項
 
-- 前端原始碼在 `洗腎平台原始碼/` 目錄（Vue），`dist/` 是預建置產出
-- Angular 前端原始碼在 `../dialysis-app-angular-standalone/client/`
+- **Vue 前端原始碼**在 `洗腎平台原始碼/` 目錄（備用）
+- **Angular 前端原始碼**在 `angular-client/` 目錄（主要）
+- `dist/` 是預建置產出，由 Express 靜態 serve
 - `backup.js` 被 scheduler.js 和 system.js import，修改時保持 import 不變
 - Windows 環境路徑使用反斜線 (`D:\\dialysis-app\\`)
 - PM2 設定在 `ecosystem.config.cjs` (CommonJS，因為 PM2 不支援 ESM config)
 - 資料庫檔案在 `data/dialysis.db`，已被 `.gitignore` 排除
-- 前端使用 `@/` 路徑別名指向 `洗腎平台原始碼/src/`
-- Standalone 模式下 Firebase Firestore 被 mock 取代 (`mockFirestore.ts`)
+- Angular 前端使用 `@/` 路徑別名指向 `angular-client/src/`
+- PATCH 請求在 schedules.js 和 nursing.js 自動轉為 PUT

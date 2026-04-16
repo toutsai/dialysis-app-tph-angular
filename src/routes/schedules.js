@@ -10,6 +10,15 @@ import { SHIFTS, FREQ_MAP_TO_DAY_INDEX, getScheduleKey } from '../utils/schedule
 
 const router = Router()
 
+// Angular 前端使用 PATCH 做部分更新，TPH 後端使用 PUT
+// 此 middleware 將 PATCH 請求轉為 PUT，讓既有的 PUT handler 處理
+router.use((req, res, next) => {
+  if (req.method === 'PATCH') {
+    req.method = 'PUT'
+  }
+  next()
+})
+
 // ========================================
 // 每日排程 API
 // ========================================

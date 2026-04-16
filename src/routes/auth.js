@@ -454,6 +454,56 @@ router.post('/change-password', authenticate, async (req, res) => {
 })
 
 /**
+ * POST /api/auth/refresh-token
+ * 刷新 JWT Token（Angular 前端每 30 分鐘呼叫一次）
+ */
+router.post('/refresh-token', authenticate, async (req, res) => {
+  try {
+    const db = getDatabase()
+
+    // 確認使用者仍然存在且未被停用
+    const user = db
+      .prepare(`SELECT id, username, name, title, role, email FROM users WHERE id = ? AND is_active = 1`)
+      .get(req.user.id)
+
+    if (!user) {
+      return res.status(401).json({
+        error: true,
+        message: '使用者不存在或已停用',
+      })
+    }
+
+    // 將舊 Token 加入黑名單
+    await blacklistToken(req.token, req.user.id, 'token_refresh')
+
+    // 產生新 Token
+    const newToken = generateToken(user)
+
+    // 更新 session
+    await registerSession(user.id, newToken, req)
+
+    res.json({
+      token: newToken,
+      user: {
+        id: user.id,
+        uid: user.id,
+        username: user.username,
+        name: user.name,
+        title: user.title,
+        role: user.role,
+        email: user.email,
+      },
+    })
+  } catch (error) {
+    console.error('Token 刷新錯誤:', error)
+    res.status(500).json({
+      error: true,
+      message: 'Token 刷新失敗',
+    })
+  }
+})
+
+/**
  * GET /api/auth/users/directory
  * 取得精簡使用者目錄 (所有登入使用者可用)
  * 只回傳 id, name, title, role — 用於護理分組、排程顯示等

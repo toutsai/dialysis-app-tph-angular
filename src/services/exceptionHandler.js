@@ -149,6 +149,11 @@ async function handleMove(db, exceptionId, data) {
     appliedAt: new Date().toISOString(),
   }
 
+  // 支援臨時透析模式覆寫 (如 HD→HDF)
+  if (to.mode) {
+    newSlotData.modeOverride = to.mode
+  }
+
   // 檢查衝突
   if (targetSchedule[targetKey]) {
     const occupant = targetSchedule[targetKey]
@@ -261,6 +266,11 @@ async function handleAddSession(db, exceptionId, data) {
     manualNote: `(臨時加洗)`,
     exceptionId: exceptionId,
     appliedAt: new Date().toISOString(),
+  }
+
+  // 支援臨時透析模式覆寫 (如 HD→HDF)
+  if (to.mode) {
+    newSlotData.modeOverride = to.mode
   }
 
   // 檢查衝突

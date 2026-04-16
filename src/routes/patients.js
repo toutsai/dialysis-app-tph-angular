@@ -1,11 +1,17 @@
 // 病人管理路由
 import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
+import { fileURLToPath } from 'url'
+import { dirname, join, extname } from 'path'
+import { existsSync, mkdirSync, writeFileSync } from 'fs'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isContributor, isEditor, logAudit } from '../middleware/auth.js'
 import { getTaipeiTodayString } from '../utils/dateUtils.js'
 import { validate } from '../middleware/validate.js'
 import { syncEventsToKiditLogbook } from '../services/kiditSync.js'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 
 const router = Router()
 
@@ -828,6 +834,82 @@ router.post('/:id/restore', ...isEditor, async (req, res) => {
     res.status(500).json({
       error: true,
       message: '復原病人失敗'
+    })
+  }
+})
+
+// ========================================
+// 病人照片上傳 API (Angular 前端使用)
+// ========================================
+
+/**
+ * POST /api/patients/upload-image
+ * 上傳病人照片（Base64 encoded）
+ * Body: { patientId: string, image: string (base64), filename?: string }
+ */
+router.post('/upload-image', ...isContributor, async (req, res) => {
+  try {
+    const { patientId, image, filename } = req.body
+
+    if (!patientId || !image) {
+      return res.status(400).json({
+        error: true,
+        message: '缺少 patientId 或 image 資料',
+      })
+    }
+
+    const db = getDatabase()
+
+    // 確認病人存在
+    const patient = db.prepare(`SELECT id FROM patients WHERE id = ?`).get(patientId)
+    if (!patient) {
+      return res.status(404).json({
+        error: true,
+        message: '病人不存在',
+      })
+    }
+
+    // 確保圖片目錄存在
+    const imagesDir = process.env.IMAGES_PATH || join(__dirname, '../../data/patient-images')
+    if (!existsSync(imagesDir)) {
+      mkdirSync(imagesDir, { recursive: true })
+    }
+
+    // 解析 base64 圖片
+    const matches = image.match(/^data:image\/(\w+);base64,(.+)$/)
+    if (!matches) {
+      return res.status(400).json({
+        error: true,
+        message: '無效的圖片格式，需要 base64 encoded data URI',
+      })
+    }
+
+    const ext = matches[1] // png, jpg, etc.
+    const imageData = Buffer.from(matches[2], 'base64')
+    const savedFilename = `${patientId}.${ext}`
+    const imagePath = join(imagesDir, savedFilename)
+
+    // 寫入檔案
+    writeFileSync(imagePath, imageData)
+
+    // 更新資料庫（使用 JSON 欄位存路徑）
+    db.prepare(`
+      UPDATE patients SET
+        patient_status = json_set(COALESCE(patient_status, '{}'), '$.imagePath', ?),
+        updated_at = datetime('now', 'localtime')
+      WHERE id = ?
+    `).run(savedFilename, patientId)
+
+    res.json({
+      success: true,
+      imagePath: savedFilename,
+      message: '照片上傳成功',
+    })
+  } catch (error) {
+    console.error('上傳病人照片錯誤:', error)
+    res.status(500).json({
+      error: true,
+      message: '上傳照片失敗',
     })
   }
 })

@@ -1864,4 +1864,106 @@ router.get('/injection-orders', authenticate, (req, res) => {
   }
 })
 
+// ========================================
+// 設備設定 API (Angular 前端使用)
+// ========================================
+
+/**
+ * GET /api/orders/bed-settings
+ * 取得床位設備設定（使用 site_config table）
+ */
+router.get('/bed-settings', authenticate, (req, res) => {
+  try {
+    const db = getDatabase()
+    const config = db.prepare(`SELECT * FROM site_config WHERE id = 'bed_settings'`).get()
+
+    if (!config) {
+      return res.json({ id: 'bed_settings', configData: {} })
+    }
+
+    res.json({
+      id: config.id,
+      configData: JSON.parse(config.config_data || '{}'),
+      createdAt: config.created_at,
+      updatedAt: config.updated_at,
+    })
+  } catch (error) {
+    console.error('取得床位設備設定錯誤:', error)
+    res.status(500).json({ error: true, message: '取得床位設備設定失敗' })
+  }
+})
+
+/**
+ * PUT /api/orders/bed-settings
+ * 更新床位設備設定
+ */
+router.put('/bed-settings', authenticate, async (req, res) => {
+  try {
+    const configData = req.body
+    const db = getDatabase()
+
+    db.prepare(`
+      INSERT INTO site_config (id, config_data, updated_at)
+      VALUES ('bed_settings', ?, datetime('now', 'localtime'))
+      ON CONFLICT(id) DO UPDATE SET
+        config_data = excluded.config_data,
+        updated_at = datetime('now', 'localtime')
+    `).run(JSON.stringify(configData))
+
+    res.json({ success: true, message: '床位設備設定已更新' })
+  } catch (error) {
+    console.error('更新床位設備設定錯誤:', error)
+    res.status(500).json({ error: true, message: '更新床位設備設定失敗' })
+  }
+})
+
+/**
+ * GET /api/orders/machine-bicarbonate-config
+ * 取得透析機 Bicarbonate 設定
+ */
+router.get('/machine-bicarbonate-config', authenticate, (req, res) => {
+  try {
+    const db = getDatabase()
+    const config = db.prepare(`SELECT * FROM site_config WHERE id = 'machine_bicarbonate_config'`).get()
+
+    if (!config) {
+      return res.json({ id: 'machine_bicarbonate_config', configData: {} })
+    }
+
+    res.json({
+      id: config.id,
+      configData: JSON.parse(config.config_data || '{}'),
+      createdAt: config.created_at,
+      updatedAt: config.updated_at,
+    })
+  } catch (error) {
+    console.error('取得 Bicarbonate 設定錯誤:', error)
+    res.status(500).json({ error: true, message: '取得 Bicarbonate 設定失敗' })
+  }
+})
+
+/**
+ * PUT /api/orders/machine-bicarbonate-config
+ * 更新透析機 Bicarbonate 設定
+ */
+router.put('/machine-bicarbonate-config', authenticate, async (req, res) => {
+  try {
+    const configData = req.body
+    const db = getDatabase()
+
+    db.prepare(`
+      INSERT INTO site_config (id, config_data, updated_at)
+      VALUES ('machine_bicarbonate_config', ?, datetime('now', 'localtime'))
+      ON CONFLICT(id) DO UPDATE SET
+        config_data = excluded.config_data,
+        updated_at = datetime('now', 'localtime')
+    `).run(JSON.stringify(configData))
+
+    res.json({ success: true, message: 'Bicarbonate 設定已更新' })
+  } catch (error) {
+    console.error('更新 Bicarbonate 設定錯誤:', error)
+    res.status(500).json({ error: true, message: '更新 Bicarbonate 設定失敗' })
+  }
+})
+
 export default router
