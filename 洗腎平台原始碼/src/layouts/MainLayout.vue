@@ -624,7 +624,7 @@ onUnmounted(() => {
 }
 .sidebar-nav {
   list-style: none;
-  padding: 8px 0;
+  padding: 4px 0;
   margin: 0;
 }
 .nav-link {
@@ -635,7 +635,7 @@ onUnmounted(() => {
   gap: 12px;
   color: #ecf0f1;
   text-decoration: none;
-  padding: 10px 15px;
+  padding: 6px 15px;
   font-size: 1.05em;
   transition:
     background-color 0.2s,
@@ -682,7 +682,7 @@ onUnmounted(() => {
   height: 100%;
 }
 .management-section {
-  padding-top: 12px;
+  padding-top: 8px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -710,14 +710,14 @@ onUnmounted(() => {
   margin-bottom: 8px;
 }
 .nav-section-label {
-  margin-top: 12px;
+  margin-top: 8px;
 }
 .management-section .sidebar-nav {
   padding-top: 0;
 }
 .management-section .nav-link {
   font-size: 1em;
-  padding: 8px 15px;
+  padding: 5px 15px;
 }
 .nav-footer {
   padding: 12px 15px;
