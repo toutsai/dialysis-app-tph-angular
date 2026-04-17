@@ -74,7 +74,7 @@ router.get('/', authenticate, (req, res) => {
  * 取得特定日期的歸檔排程（用於周排班檢視）
  * 注意：此路由必須放在 /:date 之前
  */
-router.get('/expired/:date', authenticate, (req, res) => {
+function getExpiredSchedule(req, res) {
   try {
     const { date } = req.params
     const db = getDatabase()
@@ -110,7 +110,6 @@ router.get('/expired/:date', authenticate, (req, res) => {
       })
     }
 
-
     res.json({
       id: archived.id,
       date: archived.date,
@@ -127,7 +126,113 @@ router.get('/expired/:date', authenticate, (req, res) => {
       message: '取得歸檔排程失敗'
     })
   }
+}
+router.get('/expired/:date', authenticate, getExpiredSchedule)
+
+/**
+ * POST /api/schedules/archived/batch
+ * 批次取得多個日期的歸檔排程（用於週排班檢視）
+ */
+router.post('/archived/batch', authenticate, (req, res) => {
+  try {
+    const { dates } = req.body
+    if (!Array.isArray(dates) || dates.length === 0) {
+      return res.json([])
+    }
+
+    const db = getDatabase()
+    const results = []
+
+    for (const date of dates) {
+      // 先查歸檔表
+      let record = db.prepare(`SELECT * FROM archived_schedules WHERE date = ?`).get(date)
+
+      if (record) {
+        results.push({
+          id: record.id,
+          date: record.date,
+          schedule: JSON.parse(record.schedule || '{}'),
+          lastModifiedBy: JSON.parse(record.last_modified_by || '{}'),
+          createdAt: record.created_at,
+          updatedAt: record.updated_at
+        })
+        continue
+      }
+
+      // 再查一般排程表
+      record = db.prepare(`SELECT * FROM schedules WHERE date = ?`).get(date)
+
+      if (record) {
+        results.push({
+          id: record.id,
+          date: record.date,
+          schedule: JSON.parse(record.schedule || '{}'),
+          syncMethod: record.sync_method,
+          lastModifiedBy: JSON.parse(record.last_modified_by || '{}'),
+          createdAt: record.created_at,
+          updatedAt: record.updated_at
+        })
+      }
+    }
+
+    res.json(results)
+
+  } catch (error) {
+    console.error('批次取得歸檔排程錯誤:', error)
+    res.status(500).json({
+      error: true,
+      message: '批次取得歸檔排程失敗'
+    })
+  }
 })
+
+/**
+ * GET /api/schedules/archived?date=YYYY-MM-DD
+ * Angular 前端用此路由取得歸檔排程（對應後端 /expired/:date）
+ */
+router.get('/archived', authenticate, (req, res) => {
+  const date = req.query.date
+  if (!date) {
+    return res.status(400).json({ error: true, message: '需要 date 參數' })
+  }
+  req.params.date = date
+  getExpiredSchedule(req, res)
+})
+
+/**
+ * GET /api/schedules/range?start=&end=
+ * Angular 前端用此路由取得日期範圍排程（別名，對應 GET /api/schedules?startDate=&endDate=）
+ */
+router.get('/range', authenticate, (req, res) => {
+  const { start, end } = req.query
+  const db = getDatabase()
+  try {
+    let query = 'SELECT * FROM schedules'
+    const params = []
+    if (start && end) {
+      query += ' WHERE date >= ? AND date <= ?'
+      params.push(start, end)
+    } else if (start) {
+      query += ' WHERE date >= ?'
+      params.push(start)
+    }
+    query += ' ORDER BY date'
+    const schedules = db.prepare(query).all(...params)
+    res.json(schedules.map(s => ({
+      id: s.id,
+      date: s.date,
+      schedule: JSON.parse(s.schedule || '{}'),
+      syncMethod: s.sync_method,
+      lastModifiedBy: JSON.parse(s.last_modified_by || '{}'),
+      createdAt: s.created_at,
+      updatedAt: s.updated_at
+    })))
+  } catch (error) {
+    console.error('取得排程範圍錯誤:', error)
+    res.status(500).json({ error: true, message: '取得排程範圍失敗' })
+  }
+})
+
 
 /**
  * GET /api/schedules/:date
@@ -276,10 +381,10 @@ router.put('/:date', ...isEditor, async (req, res) => {
 // ========================================
 
 /**
- * GET /api/schedules/base/master
+ * GET /api/schedules/base/master (或 /base/MASTER_SCHEDULE)
  * 取得主要排班總表
  */
-router.get('/base/master', authenticate, (req, res) => {
+function getBaseScheduleMaster(req, res) {
   try {
     const db = getDatabase()
 
@@ -309,13 +414,15 @@ router.get('/base/master', authenticate, (req, res) => {
       message: '取得排班總表失敗'
     })
   }
-})
+}
+router.get('/base/master', authenticate, getBaseScheduleMaster)
+router.get('/base/MASTER_SCHEDULE', authenticate, getBaseScheduleMaster)
 
 /**
- * PUT /api/schedules/base/master
+ * PUT /api/schedules/base/master (或 /base/MASTER_SCHEDULE)
  * 更新主要排班總表（並自動同步到未來 60 天排程）
  */
-router.put('/base/master', ...isEditor, async (req, res) => {
+async function putBaseScheduleMaster(req, res) {
   try {
     const { schedule } = req.body
 
@@ -368,13 +475,17 @@ router.put('/base/master', ...isEditor, async (req, res) => {
       message: '更新排班總表失敗'
     })
   }
-})
+}
+router.put('/base/master', ...isEditor, putBaseScheduleMaster)
+router.put('/base/MASTER_SCHEDULE', ...isEditor, putBaseScheduleMaster)
+router.patch('/base/master', ...isEditor, putBaseScheduleMaster)
+router.patch('/base/MASTER_SCHEDULE', ...isEditor, putBaseScheduleMaster)
 
 /**
- * PATCH /api/schedules/base/master/patient/:patientId
+ * PATCH /api/schedules/base/master/patient/:patientId (或 /base/MASTER_SCHEDULE/patient/:patientId)
  * 更新單一病人的排班規則（並自動同步到未來 60 天排程）
  */
-router.patch('/base/master/patient/:patientId', ...isEditor, async (req, res) => {
+async function patchBaseSchedulePatient(req, res) {
   try {
     const { patientId } = req.params
     const rule = req.body
@@ -429,7 +540,9 @@ router.patch('/base/master/patient/:patientId', ...isEditor, async (req, res) =>
       message: '更新病人排班規則失敗'
     })
   }
-})
+}
+router.patch('/base/master/patient/:patientId', ...isEditor, patchBaseSchedulePatient)
+router.patch('/base/MASTER_SCHEDULE/patient/:patientId', ...isEditor, patchBaseSchedulePatient)
 
 /**
  * POST /api/schedules/sync/initialize
@@ -463,7 +576,7 @@ router.post('/sync/initialize', ...isEditor, async (req, res) => {
  * GET /api/schedules/exceptions
  * 取得調班申請列表
  */
-router.get('/exceptions/list', authenticate, (req, res) => {
+function getExceptionsList(req, res) {
   try {
     const { status, patientId, startDate, endDate, id } = req.query
     const db = getDatabase()
@@ -531,7 +644,9 @@ router.get('/exceptions/list', authenticate, (req, res) => {
       message: '取得調班申請失敗'
     })
   }
-})
+}
+router.get('/exceptions/list', authenticate, getExceptionsList)
+router.get('/exception-tasks', authenticate, getExceptionsList)
 
 /**
  * POST /api/schedules/exceptions

@@ -129,6 +129,147 @@ router.post('/daily-injections', authenticate, async (req, res) => {
 })
 
 /**
+ * POST /api/medications/injections
+ * Angular 前端別名（對應 POST /api/medications/daily-injections）
+ */
+router.post('/injections', authenticate, async (req, res) => {
+  // 若 body 含 patientIds + uploadMonth，查詢 injection_orders
+  const { patientIds, orderType, uploadMonth } = req.body
+  if (patientIds && uploadMonth) {
+    try {
+      const db = getDatabase()
+      const placeholders = patientIds.map(() => '?').join(',')
+      let query = `SELECT * FROM injection_orders WHERE patient_id IN (${placeholders})`
+      const params = [...patientIds]
+      if (uploadMonth) {
+        query += ' AND upload_month = ?'
+        params.push(uploadMonth)
+      }
+      if (orderType) {
+        query += ' AND order_type = ?'
+        params.push(orderType)
+      }
+      const rows = db.prepare(query).all(...params)
+      return res.json(rows.map(r => ({
+        id: r.id,
+        patientId: r.patient_id,
+        patientName: r.patient_name,
+        medicalRecordNumber: r.medical_record_number,
+        orderCode: r.order_code,
+        orderName: r.order_name,
+        changeDate: r.change_date,
+        uploadMonth: r.upload_month,
+        dose: r.dose,
+        frequency: r.frequency,
+        note: r.note,
+        action: r.action,
+        orderType: r.order_type,
+        sourceFile: r.source_file,
+        createdAt: r.created_at
+      })))
+    } catch (error) {
+      console.error('查詢 injection_orders 錯誤:', error)
+      return res.status(500).json({ error: true, message: '查詢失敗' })
+    }
+  }
+  // 否則 fallback 到 daily-injections 邏輯
+  req.url = '/daily-injections'
+  router.handle(req, res, () => res.status(404).json({ error: true, message: 'Not found' }))
+})
+
+/**
+ * GET /api/medications/injections?orderType=&uploadMonth=&patientIds=
+ * Angular 前端別名（查詢 injection_orders）
+ */
+router.get('/injections', authenticate, (req, res) => {
+  try {
+    const { orderType, uploadMonth, patientIds } = req.query
+    const db = getDatabase()
+
+    let query = 'SELECT * FROM injection_orders WHERE 1=1'
+    const params = []
+
+    if (patientIds) {
+      const ids = patientIds.split(',')
+      query += ` AND patient_id IN (${ids.map(() => '?').join(',')})`
+      params.push(...ids)
+    }
+    if (uploadMonth) {
+      query += ' AND upload_month = ?'
+      params.push(uploadMonth)
+    }
+    if (orderType) {
+      query += ' AND order_type = ?'
+      params.push(orderType)
+    }
+
+    const rows = db.prepare(query).all(...params)
+    res.json(rows.map(r => ({
+      id: r.id,
+      patientId: r.patient_id,
+      patientName: r.patient_name,
+      medicalRecordNumber: r.medical_record_number,
+      orderCode: r.order_code,
+      orderName: r.order_name,
+      changeDate: r.change_date,
+      uploadMonth: r.upload_month,
+      dose: r.dose,
+      frequency: r.frequency,
+      note: r.note,
+      action: r.action,
+      orderType: r.order_type,
+      sourceFile: r.source_file,
+      createdAt: r.created_at
+    })))
+  } catch (error) {
+    console.error('查詢 injection_orders 錯誤:', error)
+    res.status(500).json({ error: true, message: '查詢失敗' })
+  }
+})
+
+/**
+ * POST /api/medications/daily-drafts
+ * Angular 前端別名（查詢每日藥囑草稿）
+ */
+router.post('/daily-drafts', authenticate, (req, res) => {
+  try {
+    const { targetDate, patientIds } = req.body
+    const db = getDatabase()
+
+    let query = 'SELECT * FROM medication_drafts WHERE 1=1'
+    const params = []
+
+    if (targetDate) {
+      query += ' AND target_date = ?'
+      params.push(targetDate)
+    }
+    if (patientIds && patientIds.length > 0) {
+      query += ` AND patient_id IN (${patientIds.map(() => '?').join(',')})`
+      params.push(...patientIds)
+    }
+
+    const drafts = db.prepare(query).all(...params)
+    res.json({
+      success: true,
+      drafts: drafts.map(d => ({
+        id: d.id,
+        patientId: d.patient_id,
+        patientName: d.patient_name,
+        targetDate: d.target_date,
+        medications: JSON.parse(d.medications || '[]'),
+        status: d.status,
+        createdBy: JSON.parse(d.created_by || '{}'),
+        createdAt: d.created_at,
+        updatedAt: d.updated_at
+      }))
+    })
+  } catch (error) {
+    console.error('查詢每日藥囑草稿錯誤:', error)
+    res.status(500).json({ error: true, message: '查詢草稿失敗' })
+  }
+})
+
+/**
  * GET /api/medications/patient/:patientId
  * 取得特定病人的用藥列表
  */

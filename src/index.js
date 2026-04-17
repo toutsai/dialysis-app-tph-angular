@@ -42,21 +42,31 @@ const PORT = process.env.PORT || 3000
 // CORS 白名單設定
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim())
-  : [
-      `http://localhost:${PORT}`,
-      'http://localhost:5173',
-      'http://localhost:4200',
-    ]
+  : null
 
 app.use(cors({
   origin: (origin, callback) => {
     // 允許沒有 origin 的請求（同源、Postman、curl 等）
-    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
-      callback(null, true)
-    } else {
+    if (!origin) return callback(null, true)
+
+    // 若有設定白名單，嚴格比對
+    if (ALLOWED_ORIGINS) {
+      if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true)
       console.warn(`[CORS] 拒絕來源: ${origin}`)
-      callback(new Error('Not allowed by CORS'))
+      return callback(new Error('Not allowed by CORS'))
     }
+
+    // 開發模式：允許 localhost / 127.0.0.1 / 區域網路 IP 的任意 port
+    try {
+      const url = new URL(origin)
+      const host = url.hostname
+      if (host === 'localhost' || host === '127.0.0.1' || /^192\.168\.\d+\.\d+$/.test(host)) {
+        return callback(null, true)
+      }
+    } catch {}
+
+    console.warn(`[CORS] 拒絕來源: ${origin}`)
+    callback(new Error('Not allowed by CORS'))
   },
   credentials: true
 }))
@@ -83,6 +93,40 @@ app.use('/api/orders', ordersRoutes)
 app.use('/api/medications', medicationsRoutes)
 app.use('/api/nursing', nursingRoutes)
 app.use('/api/system', systemRoutes)
+
+// ========================================
+// Angular 前端路由別名（Firebase 遷移相容）
+// ========================================
+
+// POST /api/orders/process → orders 路由的 /medications/upload
+app.use('/api/orders/process', (req, res, next) => {
+  req.url = '/medications/upload'
+  ordersRoutes(req, res, next)
+})
+
+// POST /api/lab-reports/process → orders 路由的 /lab-reports/upload
+app.use('/api/lab-reports/process', (req, res, next) => {
+  req.url = '/lab-reports/upload'
+  ordersRoutes(req, res, next)
+})
+
+// POST /api/consumables/process → orders 路由的 /consumables/upload
+app.use('/api/consumables/process', (req, res, next) => {
+  req.url = '/consumables/upload'
+  ordersRoutes(req, res, next)
+})
+
+// GET/PUT /api/system/marquee → system 路由的 /site-config/marquee
+app.use('/api/system/marquee', (req, res, next) => {
+  req.url = '/site-config/marquee'
+  systemRoutes(req, res, next)
+})
+
+// GET /api/system/scheduled-changes → system 路由的 /scheduled-updates
+app.use('/api/system/scheduled-changes', (req, res, next) => {
+  req.url = '/scheduled-updates'
+  systemRoutes(req, res, next)
+})
 
 // ========================================
 // 健康檢查端點

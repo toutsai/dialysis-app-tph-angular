@@ -339,10 +339,10 @@ function syncNurseNamesToAssignments(db, yearMonth, scheduleByNurse) {
 }
 
 /**
- * POST /api/nursing/schedules/upload
+ * POST /api/nursing/schedules/upload (或 /save-schedule)
  * 上傳並解析護理班表 Excel
  */
-router.post('/schedules/upload', ...isAdmin, async (req, res) => {
+async function handleNursingScheduleUpload(req, res) {
   try {
     const { fileContentBase64, fileName } = req.body
 
@@ -609,7 +609,9 @@ router.post('/schedules/upload', ...isAdmin, async (req, res) => {
       message: error.message || '上傳班表時發生錯誤',
     })
   }
-})
+}
+router.post('/schedules/upload', ...isAdmin, handleNursingScheduleUpload)
+router.post('/save-schedule', ...isAdmin, handleNursingScheduleUpload)
 
 /**
  * POST /api/nursing/schedules/sync-names
