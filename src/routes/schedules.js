@@ -426,6 +426,14 @@ async function putBaseScheduleMaster(req, res) {
   try {
     const { schedule } = req.body
 
+    // 保護：防止空資料覆蓋總表
+    if (schedule === undefined || schedule === null) {
+      return res.status(400).json({
+        error: true,
+        message: '缺少 schedule 欄位，無法更新總表'
+      })
+    }
+
     const db = getDatabase()
 
     // 先取得變更前的總表
