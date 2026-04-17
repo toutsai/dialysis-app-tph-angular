@@ -42,7 +42,11 @@ const PORT = process.env.PORT || 3000
 // CORS 白名單設定
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim())
-  : [`http://localhost:${PORT}`]
+  : [
+      `http://localhost:${PORT}`,
+      'http://localhost:5173',
+      'http://localhost:4200',
+    ]
 
 app.use(cors({
   origin: (origin, callback) => {

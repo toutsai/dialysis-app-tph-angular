@@ -141,3 +141,8 @@ data/
 .env
 data/dialysis.db
 *.db
+
+# Angular cache
+.angular/cache
+/.angular/cache
+/angular-client/.angular/cache

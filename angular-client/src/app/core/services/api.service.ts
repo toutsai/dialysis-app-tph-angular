@@ -66,9 +66,8 @@ export class ApiService {
   readonly baseUrl: string;
 
   constructor() {
-    const port = window.location.port;
-    const isDev = port === '5173' || port === '4200' || port === '4201';
-    this.baseUrl = isDev ? 'http://localhost:3000/api' : '/api';
+    // 統一使用相對路徑，開發模式由 proxy.conf.json 轉發到 Express:3000
+    this.baseUrl = '/api';
   }
 
   // -----------------------------------------------------------------------
