@@ -97,10 +97,6 @@ app.get('/api/health', (req, res) => {
 // 靜態檔案服務 (前端)
 // ========================================
 
-// 病人照片靜態檔案路徑
-const imagesPath = process.env.IMAGES_PATH || join(__dirname, '../data/patient-images')
-app.use('/api/patient-images', express.static(imagesPath))
-
 // 判斷靜態檔案路徑
 // - Electron 打包後：透過環境變數 STATIC_PATH 傳入
 // - 開發模式：使用相對路徑 ../../dist

@@ -24,13 +24,13 @@ export const COLLECTION_ROUTE_MAP: Record<string, string> = {
   nurse_assignments: '/schedules/nurse-assignments',
   kidit_logbook: '/nursing/kidit-logbook',
   exception_requests: '/schedules/exceptions',
-  exception_tasks: '/schedules/exception-tasks',     // TODO: 待後端實作
+  exception_tasks: '/schedules/exception-tasks',
   scheduled_updates: '/system/scheduled-updates',
   inventory_items: '/system/inventory',
-  inventory_transactions: '/system/inventory/transactions', // TODO: 待後端實作
+  inventory_transactions: '/system/inventory/transactions',
   consumable_records: '/orders/consumables',
-  marquee_settings: '/system/marquee',               // TODO: 待後端實作
-  auto_assign_configs: '/system/auto-assign-config', // TODO: Phase 3 待實作
+  marquee_settings: '/system/marquee',
+  auto_assign_configs: '/system/auto-assign-config',
   // 共用元件/服務遷移所需的映射
   condition_records: '/orders/condition-records',
   handover_logs: '/nursing/handover-logs',
@@ -46,12 +46,12 @@ export const COLLECTION_ROUTE_MAP: Record<string, string> = {
   inventory_purchases: '/system/inventory/purchases',
   inventory_counts: '/system/inventory/monthly/count',
   consumables_reports: '/system/inventory/consumables/query',
-  bed_inventory_settings: '/orders/bed-settings',              // TODO: Phase 4 待實作
-  machine_bicarbonate_config: '/orders/machine-bicarbonate-config', // TODO: Phase 4 待實作
+  bed_inventory_settings: '/orders/bed-settings',
+  machine_bicarbonate_config: '/orders/machine-bicarbonate-config',
   // 其他
   users: '/auth/users',
   expired_schedules: '/schedules/expired',
-  scheduled_changes: '/system/scheduled-changes',    // TODO: 待後端實作
+  scheduled_changes: '/system/scheduled-changes',
   lab_alert_analyses: '/orders/lab-alert-analyses',
   scheduled_patient_updates: '/system/scheduled-updates',
 };
