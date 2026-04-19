@@ -63,6 +63,7 @@ import {
   fetchTeamsByDate,
   saveTeams,
   updateTeams,
+  saveScheduleWithTeams,
 } from '@/services/nurseAssignmentsService';
 import {
   fetchAllSchedules as optimizedFetchAllSchedules,
@@ -591,37 +592,51 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     }
     this.statusIndicator.set('儲存中...');
     try {
-      const promises: Promise<unknown>[] = [];
-      if (this.hasUnsavedChanges()) {
+      const scheduleDirty = this.hasUnsavedChanges();
+      const teamsRec = this.currentTeamsRecord();
+      const teamsDirty =
+        this.hasUnsavedTeamChanges() && Object.keys(teamsRec.teams).length > 0;
+
+      if (!scheduleDirty && !teamsDirty) {
+        this.statusIndicator.set('無變更可儲存');
+        return;
+      }
+
+      // 同時有兩種變更時使用原子性 endpoint，確保 schedule / teams 一致性
+      if (scheduleDirty && teamsDirty) {
+        const date = this.currentRecord.date;
+        const result = await saveScheduleWithTeams(date, {
+          schedule: this.currentRecord.schedule || {},
+          names: this.currentRecord.names || {},
+          teams: teamsRec.teams,
+          takeoffEnabled: (teamsRec as any).takeoffEnabled,
+        });
+        if (result.schedule?.id) this.currentRecord.id = result.schedule.id;
+        if (result.teams) {
+          this.currentTeamsRecord.update((r) => ({ ...r, id: r.id || date }));
+        }
+      } else if (scheduleDirty) {
         const dataToSave = {
           date: this.currentRecord.date,
           schedule: this.currentRecord.schedule || {},
           names: this.currentRecord.names || {},
         };
         if (this.currentRecord.id) {
-          promises.push(optimizedUpdateSchedule(this.currentRecord.id, dataToSave));
+          await optimizedUpdateSchedule(this.currentRecord.id, dataToSave);
         } else if (Object.keys(dataToSave.schedule).length > 0) {
-          promises.push(
-            optimizedSaveSchedule(dataToSave).then((savedRecord: { id: string }) => {
-              this.currentRecord.id = savedRecord.id;
-            }),
-          );
+          const saved = (await optimizedSaveSchedule(dataToSave)) as { id: string };
+          this.currentRecord.id = saved.id;
         }
-      }
-      const teamsRec = this.currentTeamsRecord();
-      if (this.hasUnsavedTeamChanges() && Object.keys(teamsRec.teams).length > 0) {
+      } else if (teamsDirty) {
         const teamsToSave = { date: teamsRec.date, teams: teamsRec.teams };
         if (teamsRec.id) {
-          promises.push(updateTeams(teamsRec.id, teamsToSave));
+          await updateTeams(teamsRec.id, teamsToSave);
         } else {
-          promises.push(
-            saveTeams(teamsToSave).then((savedRecord: { id: string }) => {
-              this.currentTeamsRecord.update((r) => ({ ...r, id: savedRecord.id }));
-            }),
-          );
+          const saved = (await saveTeams(teamsToSave)) as { id: string };
+          this.currentTeamsRecord.update((r) => ({ ...r, id: saved.id }));
         }
       }
-      await Promise.all(promises);
+
       this.hasUnsavedChanges.set(false);
       this.hasUnsavedTeamChanges.set(false);
       this.statusIndicator.set('儲存成功！');
@@ -922,12 +937,13 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       this.showAlert('儲存失敗', '找不到目標病人資訊。');
       return;
     }
+    const patientName = patient.name || '（未命名病人）';
     try {
       await createDialysisOrderAndUpdatePatient(patient.id, patient.name, orderData);
       await this.patientStore.forceRefreshPatients();
       await this.loadDataForDay(this.currentDate());
       this.isOrderModalVisible.set(false);
-      this.showAlert('儲存成功', `已更新病人 ${patient.name} 的醫囑。`);
+      this.showAlert('儲存成功', `已更新病人 ${patientName} 的醫囑。`);
     } catch (error: any) {
       console.error('儲存醫囑失敗:', error);
       this.showAlert('儲存失敗', `儲存醫囑發生錯誤: ${error.message}`);
@@ -1166,38 +1182,54 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   // Drag and drop
+  // 行為規格：
+  // - 床位 → 床位：目標空床 = 刪舊換新；目標有病人 = 互換
+  // - 側欄 → 床位：目標空床 + 病人當日未排班 = 寫入；
+  //                目標有病人 或 病人當日已有排班 = 提示並禁止
   onDrop(event: DragEvent, targetShiftId: string): void {
     if (this.isPageLocked()) return;
     event.preventDefault();
     document.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'));
+
     const sourceShiftId = event.dataTransfer?.getData('sourceShiftId') || '';
     const jsonData = event.dataTransfer?.getData('application/json');
     if (!jsonData) return;
+
     const droppedSlotData = JSON.parse(jsonData);
-    if (!droppedSlotData?.patientId) return;
-    const patient = this.patientMap().get(droppedSlotData.patientId) as Record<string, unknown>;
+    const droppedPatientId = droppedSlotData?.patientId;
+    if (!droppedPatientId) return;
+
+    const patient = this.patientMap().get(droppedPatientId) as Record<string, unknown>;
     if (!patient) return;
+
     const targetSlotData = this.currentRecord.schedule[targetShiftId];
-    if (sourceShiftId === 'sidebar' && this.scheduledPatientIds.has(patient['id'] as string)) {
-      this.showConfirm('重複排班警告', `病人 ${patient['name']} 在本日已有排班，您確定要重複排班嗎？`, () => {
-        if (targetSlotData?.patientId) {
-          this.showAlert('操作失敗', '目標床位已被佔用，無法放置！');
-          return;
-        }
-        this.handleSlotUpdate(targetShiftId, droppedSlotData.patientId, droppedSlotData);
-      });
-      return;
-    }
-    if (targetSlotData?.patientId) {
-      if (sourceShiftId === 'sidebar') {
+    const targetIsOccupied = !!targetSlotData?.patientId;
+    const fromSidebar = sourceShiftId === 'sidebar';
+
+    if (fromSidebar) {
+      // 側欄拖入：嚴格禁止重複排班，也不允許覆蓋已佔用床位
+      if (this.scheduledPatientIds.has(droppedPatientId)) {
+        this.showAlert(
+          '操作失敗',
+          `病人 ${patient['name']} 本日已有排班，無法重複排班。`,
+        );
+        return;
+      }
+      if (targetIsOccupied) {
         this.showAlert('操作失敗', '目標床位已被佔用，無法從側邊欄拖曳至此。');
         return;
       }
-      this.handleSlotUpdate(targetShiftId, droppedSlotData.patientId, droppedSlotData);
+      this.handleSlotUpdate(targetShiftId, droppedPatientId, droppedSlotData);
+      return;
+    }
+
+    // 床位 → 床位：互換或搬移
+    if (targetIsOccupied) {
+      this.handleSlotUpdate(targetShiftId, droppedPatientId, droppedSlotData);
       this.handleSlotUpdate(sourceShiftId, targetSlotData.patientId, targetSlotData);
     } else {
-      this.handleSlotUpdate(targetShiftId, droppedSlotData.patientId, droppedSlotData);
-      if (sourceShiftId && sourceShiftId !== 'sidebar') {
+      this.handleSlotUpdate(targetShiftId, droppedPatientId, droppedSlotData);
+      if (sourceShiftId) {
         this.handleSlotUpdate(sourceShiftId, null);
       }
     }
@@ -1366,7 +1398,15 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     this.hasUnsavedTeamChanges.set(false);
     this.statusIndicator.set('讀取中...');
     this.isLoading.set(true);
-    const dateStr = this.formatDate(date);
+    let dateStr: string;
+    try {
+      dateStr = this.formatDate(date);
+    } catch (err) {
+      console.error('日期格式化失敗:', err);
+      this.statusIndicator.set('日期錯誤');
+      this.isLoading.set(false);
+      return;
+    }
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const targetDate = new Date(date);

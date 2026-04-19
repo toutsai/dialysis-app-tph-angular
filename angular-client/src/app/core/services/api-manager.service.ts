@@ -21,6 +21,7 @@ export type FirestoreRecord = { id?: string; [key: string]: unknown };
 /** Observable-based CRUD interface (new) */
 export interface ApiManager$<T> {
   fetchAll$: (queryConstraints?: unknown[]) => Observable<T[]>;
+  fetchWhere$: (params: Record<string, string | number | undefined>) => Observable<T[]>;
   fetchById$: (id: string) => Observable<T | null>;
   save$: (idOrData: string | T, data?: T) => Observable<T>;
   update$: (id: string, data: Partial<T>) => Observable<T>;
@@ -31,6 +32,7 @@ export interface ApiManager$<T> {
 /** Promise-based CRUD interface (backward compatible) */
 export interface ApiManager<T extends FirestoreRecord> {
   fetchAll: (queryConstraints?: unknown[]) => Promise<T[]>;
+  fetchWhere: (params: Record<string, string | number | undefined>) => Promise<T[]>;
   fetchById: (id: string) => Promise<T | null>;
   save: (idOrData: string | T, data?: T) => Promise<T>;
   update: (id: string, data: Partial<T>) => Promise<T>;
@@ -79,6 +81,25 @@ export class ApiManagerService {
         catchError((error) => {
           console.error(
             `[ApiManagerService] Error fetching ${resourceType}:`,
+            error,
+          );
+          return throwError(() => error);
+        }),
+      );
+    };
+
+    const fetchWhere$ = (
+      params: Record<string, string | number | undefined>,
+    ): Observable<T[]> => {
+      const cleaned: Record<string, string> = {};
+      for (const [k, v] of Object.entries(params)) {
+        if (v !== undefined && v !== null && v !== '') cleaned[k] = String(v);
+      }
+      return this.api.get<unknown>(route, cleaned).pipe(
+        this.api.unwrapList<T>(),
+        catchError((error) => {
+          console.error(
+            `[ApiManagerService] Error fetching ${resourceType} with params:`,
             error,
           );
           return throwError(() => error);
@@ -190,6 +211,10 @@ export class ApiManagerService {
     const fetchAll = (queryConstraints: unknown[] = []): Promise<T[]> =>
       firstValueFrom(fetchAll$(queryConstraints));
 
+    const fetchWhere = (
+      params: Record<string, string | number | undefined>,
+    ): Promise<T[]> => firstValueFrom(fetchWhere$(params));
+
     const fetchById = (id: string): Promise<T | null> =>
       firstValueFrom(fetchById$(id));
 
@@ -208,6 +233,7 @@ export class ApiManagerService {
     return {
       // Promise-based (backward compatible)
       fetchAll,
+      fetchWhere,
       fetchById,
       save,
       update,
@@ -215,6 +241,7 @@ export class ApiManagerService {
       create: createDocument,
       // Observable-based (new)
       fetchAll$,
+      fetchWhere$,
       fetchById$,
       save$,
       update$,

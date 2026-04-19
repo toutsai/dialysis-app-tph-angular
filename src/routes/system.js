@@ -31,7 +31,7 @@ router.get('/health', (req, res) => {
  */
 router.get('/tasks', authenticate, (req, res) => {
   try {
-    const { status, assignedTo, category, patientId } = req.query
+    const { status, assignedTo, category, patientId, targetDate } = req.query
     const db = getDatabase()
 
     let query = 'SELECT * FROM tasks WHERE status != ?'
@@ -55,6 +55,11 @@ router.get('/tasks', authenticate, (req, res) => {
     if (patientId) {
       query += ' AND patient_id = ?'
       params.push(patientId)
+    }
+
+    if (targetDate) {
+      query += ' AND target_date = ?'
+      params.push(targetDate)
     }
 
     query += ' ORDER BY created_at DESC'

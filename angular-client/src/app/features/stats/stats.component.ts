@@ -16,7 +16,12 @@ import { Subject, Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { SHIFT_CODES, earlyTeams as importedEarlyTeams, lateTeams as importedLateTeams, baseTeams } from '@/constants/scheduleConstants';
 import { generateAutoNote, getUnifiedCellStyle } from '@/utils/scheduleUtils';
-import { fetchTeamsByDate, saveTeams, updateTeams } from '@/services/nurseAssignmentsService';
+import {
+  fetchTeamsByDate,
+  saveTeams,
+  updateTeams,
+  saveScheduleWithTeams,
+} from '@/services/nurseAssignmentsService';
 import { createDialysisOrderAndUpdatePatient } from '@/services/optimizedApiService';
 import * as XLSX from 'xlsx';
 
@@ -99,6 +104,9 @@ const dutyAssignments: Record<string, Record<string, string | string[]>> = {
   styleUrl: './stats.component.css'
 })
 export class StatsComponent implements OnInit, OnDestroy {
+  // 外圍床位在排序時的 sentinel 值，確保排在一般床號之後
+  private static readonly PERIPHERAL_BED_SORT_ORDER = 9999;
+
   private readonly auth = inject(AuthService);
   private readonly firebase = inject(ApiConfigService);
   private readonly apiManager = inject(ApiManagerService);
@@ -112,7 +120,6 @@ export class StatsComponent implements OnInit, OnDestroy {
 
   // API instances
   private readonly schedulesApi = this.apiManager.create<FirestoreRecord>('schedules');
-  private readonly ordersHistoryApi = this.apiManager.create<FirestoreRecord>('dialysis_orders_history');
   private readonly usersApi = this.apiManager.create<FirestoreRecord>('users');
 
   // --- Constants exposed to template ---
@@ -379,9 +386,10 @@ export class StatsComponent implements OnInit, OnDestroy {
         }
       }
 
+      const peripheralOrder = StatsComponent.PERIPHERAL_BED_SORT_ORDER;
       const sortPatientsByBed = (a: any, b: any) =>
-        (a.dialysisBed === '外圍' ? 100 : parseInt(a.dialysisBed, 10)) -
-        (b.dialysisBed === '外圍' ? 100 : parseInt(b.dialysisBed, 10));
+        (a.dialysisBed === '外圍' ? peripheralOrder : parseInt(a.dialysisBed, 10)) -
+        (b.dialysisBed === '外圍' ? peripheralOrder : parseInt(b.dialysisBed, 10));
 
       [earlyShiftStats, lateShiftStats, lateTakeOffStats].forEach((stats, index) => {
         for (const team in stats) {
@@ -485,26 +493,6 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   // --- Data Loading ---
-
-  private async getEffectiveOrdersForDate(patientId: string, targetDate: Date): Promise<any> {
-    if (!patientId || !targetDate) return {};
-    const dateStr = targetDate.toISOString().slice(0, 10);
-    try {
-      const allResults = await this.ordersHistoryApi.fetchAll();
-      // Filter by patientId and effectiveDate <= dateStr, then sort and take first
-      const filtered = allResults
-        .filter((r: any) => r.patientId === patientId && r.orders?.effectiveDate && r.orders.effectiveDate <= dateStr)
-        .sort((a: any, b: any) => {
-          const dateComp = (b.orders?.effectiveDate || '').localeCompare(a.orders?.effectiveDate || '');
-          if (dateComp !== 0) return dateComp;
-          return new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime();
-        });
-      return filtered.length > 0 ? filtered[0].orders : {};
-    } catch (error) {
-      console.error(`獲取病人 ${patientId} 的醫囑失敗:`, error);
-      return {};
-    }
-  }
 
   async loadDailyStaffInfo(date: Date): Promise<void> {
     try {
@@ -647,41 +635,46 @@ export class StatsComponent implements OnInit, OnDestroy {
   async saveChangesToCloud(): Promise<void> {
     if (this.isPageLocked || !this.hasUnsavedChanges) return;
     this.statusIndicator = '儲存中...';
-    const promises: Promise<any>[] = [];
     try {
-      if (this.hasUnsavedScheduleChanges) {
-        const scheduleToSave = JSON.parse(JSON.stringify(this.currentRecord.schedule));
-        for (const key in scheduleToSave) {
-          delete scheduleToSave[key].nurseTeam;
-          delete scheduleToSave[key].nurseTeamIn;
-          delete scheduleToSave[key].nurseTeamOut;
-          delete scheduleToSave[key].nurseTeamTakeOff;
-          delete scheduleToSave[key].autoNote;
+      const scheduleDirty = this.hasUnsavedScheduleChanges;
+      const teamsDirty = this.hasUnsavedTeamChanges;
+
+      // 護理分組頁面的跨班次拖放會同時改動 schedule 與 teams，
+      // 以原子性 endpoint 儲存避免其中一個成功另一個失敗導致 UI/DB 不一致。
+      if (scheduleDirty && teamsDirty) {
+        const scheduleToSave = this.buildCleanScheduleForSave();
+        const result = await saveScheduleWithTeams(this.currentRecord.date, {
+          schedule: scheduleToSave,
+          teams: this.currentTeamsRecord.teams || {},
+          names: this.currentTeamsRecord.names || {},
+        });
+        if (result.schedule?.id) this.currentRecord.id = result.schedule.id;
+        if (result.teams && !this.currentTeamsRecord.id) {
+          this.currentTeamsRecord.id = this.currentRecord.date;
         }
+      } else if (scheduleDirty) {
+        const scheduleToSave = this.buildCleanScheduleForSave();
         const scheduleData = { date: this.currentRecord.date, schedule: scheduleToSave };
         if (this.currentRecord.id) {
-          promises.push(this.schedulesApi.update(this.currentRecord.id, scheduleData));
+          await this.schedulesApi.update(this.currentRecord.id, scheduleData);
         } else if (Object.keys(scheduleData.schedule).length > 0) {
-          promises.push(
-            this.schedulesApi.save(scheduleData).then((saved: any) => (this.currentRecord.id = saved.id))
-          );
+          const saved: any = await this.schedulesApi.save(scheduleData);
+          this.currentRecord.id = saved.id;
         }
-      }
-      if (this.hasUnsavedTeamChanges) {
+      } else if (teamsDirty) {
         const teamsData = {
           date: this.currentTeamsRecord.date,
           teams: this.currentTeamsRecord.teams || {},
           names: this.currentTeamsRecord.names || {},
         };
         if (this.currentTeamsRecord.id) {
-          promises.push(updateTeams(this.currentTeamsRecord.id, teamsData));
+          await updateTeams(this.currentTeamsRecord.id, teamsData);
         } else {
-          promises.push(
-            saveTeams(teamsData).then((saved: any) => (this.currentTeamsRecord.id = saved.id))
-          );
+          const saved: any = await saveTeams(teamsData);
+          this.currentTeamsRecord.id = saved.id;
         }
       }
-      await Promise.all(promises);
+
       this.hasUnsavedScheduleChanges = false;
       this.hasUnsavedTeamChanges = false;
       this.statusIndicator = '變更已儲存！';
@@ -694,6 +687,19 @@ export class StatsComponent implements OnInit, OnDestroy {
       this.statusIndicator = '儲存失敗';
       this.showAlert('儲存失敗', `儲存失敗: ${error.message}`);
     }
+  }
+
+  /** 儲存前清掉畫面用的臨時欄位（nurseTeam 等會由 nurse_assignments 表承載） */
+  private buildCleanScheduleForSave(): Record<string, any> {
+    const clean = JSON.parse(JSON.stringify(this.currentRecord.schedule));
+    for (const key in clean) {
+      delete clean[key].nurseTeam;
+      delete clean[key].nurseTeamIn;
+      delete clean[key].nurseTeamOut;
+      delete clean[key].nurseTeamTakeOff;
+      delete clean[key].autoNote;
+    }
+    return clean;
   }
 
   // --- Drag and Drop ---

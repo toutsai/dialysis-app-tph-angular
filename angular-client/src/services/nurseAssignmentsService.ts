@@ -94,3 +94,48 @@ export async function clearTeamsByDate(dateStr: string): Promise<void> {
     throw error;
   }
 }
+
+/**
+ * 原子性儲存：同時更新當日 schedule 與 nurse_assignments。
+ * 後端在單一 DB transaction 內完成，避免兩次獨立請求造成 UI/DB 不同步。
+ *
+ * 使用場景：Schedule.saveDataToCloud / Stats.saveChangesToCloud
+ */
+export interface SaveScheduleWithTeamsPayload {
+  schedule?: Record<string, unknown>;
+  names?: Record<string, string>;
+  teams?: Record<string, unknown>;
+  takeoffEnabled?: boolean;
+}
+
+export interface SaveScheduleWithTeamsResult {
+  schedule: {
+    id: string;
+    date: string;
+    schedule: Record<string, unknown>;
+    lastModifiedBy?: Record<string, unknown>;
+    updatedAt?: string;
+  } | null;
+  teams: {
+    date: string;
+    teams: Record<string, unknown>;
+    names: Record<string, string>;
+    takeoffEnabled: boolean;
+  } | null;
+}
+
+export async function saveScheduleWithTeams(
+  date: string,
+  payload: SaveScheduleWithTeamsPayload,
+): Promise<SaveScheduleWithTeamsResult> {
+  try {
+    const res = (await localApi.put(
+      `/schedules/${date}/with-teams`,
+      payload,
+    )) as SaveScheduleWithTeamsResult;
+    return res;
+  } catch (error) {
+    console.error('Failed to atomically save schedule + teams:', error);
+    throw error;
+  }
+}

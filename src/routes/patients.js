@@ -312,14 +312,39 @@ router.get('/with-rules', authenticate, (req, res) => {
 router.get('/history', authenticate, (req, res) => {
   try {
     const db = getDatabase()
+    const { since, until, patientId, eventType, limit } = req.query
 
-    const history = db.prepare(`
-      SELECT * FROM patient_history
-      ORDER BY timestamp DESC
-      LIMIT 100
-    `).all()
+    const conditions = []
+    const params = []
 
+    if (since) {
+      conditions.push('timestamp >= ?')
+      params.push(since)
+    }
+    if (until) {
+      conditions.push('timestamp <= ?')
+      params.push(until)
+    }
+    if (patientId) {
+      conditions.push('patient_id = ?')
+      params.push(patientId)
+    }
+    if (eventType) {
+      conditions.push('event_type = ?')
+      params.push(eventType)
+    }
 
+    // 無篩選時維持原本 LIMIT 100，避免全表掃描；有篩選時允許至 1000
+    const effectiveLimit = Math.min(parseInt(limit, 10) || (conditions.length > 0 ? 1000 : 100), 5000)
+
+    let query = 'SELECT * FROM patient_history'
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ')
+    }
+    query += ' ORDER BY timestamp DESC LIMIT ?'
+    params.push(effectiveLimit)
+
+    const history = db.prepare(query).all(...params)
 
     res.json(history.map(h => ({
       id: h.id,
