@@ -72,6 +72,16 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
     { value: 'change_bed_only', text: '僅更換床位 (同頻率)' },
   ];
 
+  private resolveFreqDays(freq: string | undefined | null): number[] {
+    if (!freq) return [];
+    const days = this.FREQ_MAP_TO_DAY_INDEX[freq];
+    if (days === undefined) {
+      console.warn(`[BaseSchedule] FREQ_MAP_TO_DAY_INDEX has no entry for freq: "${freq}"`);
+      return [];
+    }
+    return days;
+  }
+
   masterRecord = signal<any>(null);
   statusText = signal('');
   draggedItem = signal<any>(null);
@@ -106,7 +116,7 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
       if (patient && !(patient as any).isDeleted) {
         const ruleData = record.schedule[patientId];
         if (ruleData?.freq) {
-          const dayIndices = this.FREQ_MAP_TO_DAY_INDEX[ruleData.freq] || [];
+          const dayIndices = this.resolveFreqDays(ruleData.freq);
           const { bedNum, shiftIndex } = ruleData;
           if (bedNum !== undefined && shiftIndex !== undefined && !isNaN(shiftIndex)) {
             dayIndices.forEach((dayIndex: number) => {
@@ -158,7 +168,7 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
         const patient = pMap.get(patientId);
         if (!patient || (patient as any).isDeleted) continue;
         const shiftCode = this.SHIFTS[ruleData.shiftIndex];
-        const dayIndices = this.FREQ_MAP_TO_DAY_INDEX[ruleData.freq] || [];
+        const dayIndices = this.resolveFreqDays(ruleData.freq);
         dayIndices.forEach((dayIndex: number) => {
           if (dayIndex >= 0 && dayIndex < 6 && shiftCode && (dailyCounts[dayIndex].counts as any)[shiftCode]) {
             const shiftStats = (dailyCounts[dayIndex].counts as any)[shiftCode];
@@ -234,7 +244,7 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
       this.showAlert('提示', '該病人未被排入總床位表。');
       return;
     }
-    const dayIndices = this.FREQ_MAP_TO_DAY_INDEX[ruleData.freq] || [];
+    const dayIndices = this.resolveFreqDays(ruleData.freq);
     if (dayIndices.length === 0) return;
     const { bedNum, shiftIndex } = ruleData;
     const firstDayIndex = dayIndices[0];
@@ -357,8 +367,8 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
       if (pId === patientId) continue;
       const rule = record.schedule[pId];
       if (
-        rule.bedNum == bedNum &&
-        rule.shiftIndex == newShiftIndex &&
+        String(rule.bedNum) === String(bedNum) &&
+        Number(rule.shiftIndex) === Number(newShiftIndex) &&
         hasFrequencyConflict(finalFreq, rule.freq)
       ) {
         const conflictPatient = this.patientStore.patientMap().get(pId);
@@ -616,7 +626,7 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
     for (const patientId in schedule) {
       const rule = schedule[patientId];
       const slotKey = `${rule.bedNum}-${rule.shiftIndex}`;
-      const freqDays = this.FREQ_MAP_TO_DAY_INDEX[rule.freq] || [];
+      const freqDays = this.resolveFreqDays(rule.freq);
       for (const dayIndex of freqDays) {
         const daySlotKey = `${slotKey}-${dayIndex}`;
         if (occupiedSlots.has(daySlotKey)) {

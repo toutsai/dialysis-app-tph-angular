@@ -7,6 +7,7 @@ import { syncMasterScheduleToFuture, initializeFutureSchedules, mergeExceptionsI
 import { processScheduleException } from '../services/exceptionHandler.js'
 import { getTaipeiTodayString, formatDateToYYYYMMDD, getTaipeiDayIndex } from '../utils/dateUtils.js'
 import { SHIFTS, FREQ_MAP_TO_DAY_INDEX, getScheduleKey } from '../utils/scheduleUtils.js'
+import { emitExceptionChange } from '../services/eventBus.js'
 
 const router = Router()
 
@@ -723,6 +724,8 @@ router.post('/exceptions', ...isEditor, async (req, res) => {
         console.error(`❌ [Schedules] 調班 ${id} 處理異常:`, err.message)
       })
 
+    emitExceptionChange('created', { id: created.id, type: created.type, patientId: data.patientId })
+
     res.status(201).json({
       id: created.id,
       type: created.type,
@@ -789,6 +792,8 @@ router.patch('/exceptions/:id', ...isEditor, async (req, res) => {
     await logAudit('EXCEPTION_UPDATE', req.user.id, req.user.name, 'schedule_exceptions', id, {
       newStatus: status
     })
+
+    emitExceptionChange('updated', { id, status })
 
     res.json({
       success: true,
@@ -915,6 +920,8 @@ router.delete('/exceptions/:id', ...isEditor, async (req, res) => {
       type: exData.type,
       status: exData.status
     })
+
+    emitExceptionChange('deleted', { id, type: exData.type })
 
     res.json({
       success: true,

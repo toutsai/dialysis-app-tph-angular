@@ -268,9 +268,14 @@ export class WeeklyComponent implements OnInit, OnDestroy {
   async fetchLiveSchedulesForWeek(dateStrings: string[]): Promise<any[]> {
     if (dateStrings.length === 0) return [];
     const schedulesApi = this.apiManagerService.create<FirestoreRecord>('schedules');
-    const allRecords = await schedulesApi.fetchAll();
+    const sorted = [...dateStrings].sort();
+    // 後端 /schedules 支援 startDate + endDate 範圍查詢
+    const rangeRecords = (await schedulesApi.fetchWhere({
+      startDate: sorted[0],
+      endDate: sorted[sorted.length - 1],
+    })) as any[];
     const dateSet = new Set(dateStrings);
-    const records = allRecords.filter((r: any) => dateSet.has(r.date));
+    const records = rangeRecords.filter((r: any) => dateSet.has(r.date));
     records.forEach((record: any) => {
       if (record.schedule) {
         for (const shiftId in record.schedule) {

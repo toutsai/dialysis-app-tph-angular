@@ -167,12 +167,16 @@ export class ExceptionCreateDialogComponent implements OnChanges {
         dataToSubmit.startDate = dataToSubmit.from.sourceDate;
         dataToSubmit.endDate = dataToSubmit.to.goalDate;
         break;
-      case 'ADD_SESSION':
+      case 'ADD_SESSION': {
+        const selectedMode = this.formData.mode || 'HD';
         dataToSubmit.startDate = dataToSubmit.to.goalDate;
         dataToSubmit.endDate = dataToSubmit.to.goalDate;
         dataToSubmit.from = null;
-        dataToSubmit.mode = this.formData.mode || 'HD';
+        // 後端 exceptionHandler.js 從 data.to.mode 讀取 modeOverride
+        dataToSubmit.to.mode = selectedMode;
+        dataToSubmit.mode = selectedMode;
         break;
+      }
       case 'SWAP':
         dataToSubmit.startDate = dataToSubmit.date;
         dataToSubmit.endDate = dataToSubmit.date;

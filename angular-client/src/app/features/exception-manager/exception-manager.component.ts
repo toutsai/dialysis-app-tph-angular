@@ -83,6 +83,7 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
   existingExceptionsToMerge = signal<any[]>([]);
 
   private pollingTimer: any = null;
+  private eventSource: EventSource | null = null;
   private calendarApi: CalendarApi | null = null;
   @ViewChild('fullCalendar') fullCalendarRef!: ElementRef;
 
@@ -258,6 +259,10 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
     if (this.pollingTimer) {
       clearInterval(this.pollingTimer);
       this.pollingTimer = null;
+    }
+    if (this.eventSource) {
+      this.eventSource.close();
+      this.eventSource = null;
     }
   }
 
@@ -654,17 +659,19 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
       const keyword = typeKeywords[existingEx.type];
       if (!keyword) return;
 
-      // Fetch tasks and memos, filter locally
-      const allTasks = await this.tasksApi.fetchAll();
-      const matchingTasks = (allTasks as any[]).filter((t: any) =>
-        t.patientId === existingEx.patientId && t.targetDate === targetDate
-      );
+      // 後端支援 patientId + targetDate 篩選，避免全量載入
+      const matchingTasks = (await this.tasksApi.fetchWhere({
+        patientId: existingEx.patientId,
+        targetDate,
+      })) as any[];
 
       let matchingMemos: any[] = [];
       try {
+        // memos 後端暫不支援查詢篩選，fallback 全量再本地篩
         const allMemos = await this.memosApi.fetchAll();
-        matchingMemos = (allMemos as any[]).filter((m: any) =>
-          m.patientId === existingEx.patientId && m.targetDate === targetDate
+        matchingMemos = (allMemos as any[]).filter(
+          (m: any) =>
+            m.patientId === existingEx.patientId && m.targetDate === targetDate,
         );
       } catch {
         // memos 集合可能不存在
@@ -741,11 +748,14 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
       clearInterval(this.pollingTimer);
       this.pollingTimer = null;
     }
+    if (this.eventSource) {
+      this.eventSource.close();
+      this.eventSource = null;
+    }
     this.isLoading.set(true);
     try {
       await this.patientStore.fetchPatientsIfNeeded();
 
-      // Initial fetch
       const fetchExceptions = async () => {
         const allExceptions = await this.exceptionsApi.fetchAll();
         const sorted = (allExceptions as any[]).sort((a: any, b: any) => {
@@ -758,11 +768,44 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
       };
       await fetchExceptions();
 
-      // Poll for updates every 30 seconds
-      this.pollingTimer = setInterval(fetchExceptions, 30000);
+      // 優先使用 SSE 即時推播；SSE 失敗時回退到 30 秒輪詢
+      this.startExceptionEventStream(fetchExceptions);
     } catch (error) {
       console.error('載入資料失敗:', error);
       this.isLoading.set(false);
+    }
+  }
+
+  private startExceptionEventStream(refetch: () => Promise<void>): void {
+    const token = this.firebase.getToken();
+    const startPolling = () => {
+      if (this.pollingTimer) return;
+      this.pollingTimer = setInterval(refetch, 30000);
+    };
+
+    if (!token || typeof EventSource === 'undefined') {
+      startPolling();
+      return;
+    }
+
+    try {
+      const url = `/api/events/exceptions?token=${encodeURIComponent(token)}`;
+      const es = new EventSource(url);
+      this.eventSource = es;
+
+      es.addEventListener('exception', () => {
+        refetch().catch((err) => console.warn('[SSE] refetch failed:', err));
+      });
+
+      es.onerror = () => {
+        console.warn('[SSE] connection error, falling back to polling');
+        es.close();
+        this.eventSource = null;
+        startPolling();
+      };
+    } catch (err) {
+      console.warn('[SSE] init failed:', err);
+      startPolling();
     }
   }
 

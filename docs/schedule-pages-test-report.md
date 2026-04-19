@@ -1,8 +1,9 @@
 # 排程頁面功能對比測試報告
 
 **產出日期**: 2026-04-18
+**更新日期**: 2026-04-19 (新增 Patients/Stats 分析、完成 P0/P1/P2 修正)
 **對比基準**: `toutsai/dialysis-app-angular` (Firebase 原版) vs `angular-client/` (TPH REST 對接版)
-**測試範圍**: 4 個排程核心頁面 (Schedule / Weekly / BaseSchedule / ExceptionManager)
+**測試範圍**: 4 個排程核心頁面 + 2 個延伸頁面 (Patients / Stats 護理分組)
 **方法**: 靜態程式碼分析 + 手動驗證 checklist
 
 ---
@@ -14,14 +15,36 @@
 | ScheduleView | 38 | 38 | 0 | 0 | 5 (code smell) |
 | WeeklyView | 22 | 20 | 2 | 0 | 1 (效能) |
 | BaseScheduleView | 17 | 17 | 0 | 0 | 5 (code smell) |
-| ExceptionManagerView | 23 | 18 | 4 | 1 | **1 (實質 Bug)** |
-| **合計** | **100** | **93** | **6** | **1** | **12** |
+| ExceptionManagerView | 23 | 18 | 4 | 1 | 1 (實質 Bug，已修) |
+| PatientsView | 20 | 12 | 8 | 0 | 5 (效能/架構) |
+| StatsView (護理分組) | 40 | 40 | 0 | 0 | 5 (code smell) |
+| **合計** | **160** | **145** | **14** | **1** | **22** |
 
-**整體評估**：angular-client 功能面與 Firebase 版 **93% 對等**，UI 操作幾乎完整移植。**1 個實質 Bug** 發生在 ExceptionManager 的 modeOverride（臨時透析模式 HD→HDF）—前端存資料位置與後端期望不符，導致模式覆寫失效。
+**整體評估**：angular-client 功能面與 Firebase 版 **90.6% 對等**。6 頁面 UI 操作完整移植。原本 1 個實質 Bug（modeOverride 靜默失效）**已於本輪修復**。其他差異集中在資料層：Firebase SDK 直連 vs REST API、Firestore `where` 伺服器篩選 vs 客戶端篩選、`onSnapshot` 實時 vs 輪詢。
 
 ---
 
-## 🔴 關鍵發現：modeOverride 實質 Bug
+## ✅ 本輪修復摘要 (2026-04-19)
+
+| 優先 | 項目 | 狀態 | 修改檔案 |
+|------|------|------|----------|
+| P0 | modeOverride Bug（mode 改存 `to.mode`） | ✅ | `exception-create-dialog.component.ts` |
+| P0 | 列表檢視按鈕（listMonth） | ✅ | `exception-manager.component.html` |
+| P1 | 輪詢間隔 30s → 10s | ✅ | `exception-manager.component.ts` |
+| P1 | BaseSchedule 嚴格比較 | ✅ | `base-schedule.component.ts:360` |
+| P1 | FREQ_MAP 無效值警告（`resolveFreqDays` helper） | ✅ | `base-schedule.component.ts` |
+| P2 | `ApiManager.fetchWhere()` + 後端 tasks `targetDate` 篩選 | ✅ | `api-manager.service.ts`, `system.js`, `exception-manager`, `weekly` |
+| P2 | SSE 即時更新（`/api/events/exceptions` + EventSource，失敗回退輪詢） | ✅ | `src/services/eventBus.js`, `src/routes/events.js`, `schedules.js`（emit）, `exception-manager.component.ts`（consume） |
+
+**設計筆記**:
+- SSE 以 `?token=<JWT>` 驗證（EventSource 無法帶自訂 header）
+- SSE 只廣播事件通知，不送資料本體；前端收到後重取列表（避免資料同步複雜化）
+- SSE 連線失敗時自動退回 30 秒輪詢，保持可用性
+- 未來若部署 PM2 cluster，需改為 Redis pub/sub
+
+---
+
+## 🔴 關鍵發現：modeOverride 實質 Bug（已修）
 
 ### 問題描述
 CLAUDE.md 記載 Phase 2 已完成「modeOverride 排程支援」，但前後端資料路徑不一致：
@@ -278,21 +301,132 @@ dataToSubmit.mode = this.formData.mode || 'HD';   // 同樣放頂層
 
 ---
 
-## 建議後續行動
+## PatientsView 詳細分析（2026-04-19 新增）
 
-### 立即處理（P0）
-1. **modeOverride Bug 修復**：ExceptionCreateDialog 改為 `dataToSubmit.to.mode = ...`（0.25 天）
-2. **列表檢視按鈕補回**：exception-manager.component.html 新增按鈕（0.1 天）
+### 操作對照表（20 項）
 
-### 次要優化（P1）
-3. **輪詢縮短**：exception-manager 30s → 5-10s（0.1 天）
-4. **BaseSchedule 寬鬆比較修正**：`==` → `===`（0.1 天）
-5. **FREQ_MAP 無效值警告**：加 `console.warn` 便於排錯（0.1 天）
+| # | 操作/按鈕 | 狀態 | 備註 |
+|---|----------|------|------|
+| 1 | 新增病人 (globalSearch) | 🟢 | PatientFormModal |
+| 2 | 編輯病人 | 🟡 | Firebase: updateDoc；angular: patientsApi.update |
+| 3 | 刪除病人（軟刪除） | 🟡 | 同上 |
+| 4 | 復原病人 | 🟡 | Firebase 設 patientCategory；angular 無此欄位 |
+| 5 | 病人狀態轉移 | 🟡 | API 層差異 |
+| 6 | 排程衝突檢查 | 🔴 | Firebase: `where('date','==',dateStr)`；angular: fetchAll 全載再篩（`patients.component.ts:826`） |
+| 7 | 預約變更排程 | 🟢 | scheduledChangesApi.save |
+| 8 | 設定床號 | 🟡 | API 層差異 |
+| 9 | 編輯透析醫囑 | 🟡 | API 層差異 |
+| 10 | 暫停/中止透析 | 🟡 | 邏輯相同 |
+| 11 | 自動建立任務（首透衛教/抽血） | 🟢 | createAutomatedTask |
+| 12 | 病人衝突處理 | 🟡 | API 層差異 |
+| 13 | 排序 | 🟢 | |
+| 14 | 搜尋/篩選（er/ipd/opd） | 🟢 | |
+| 15 | 全域搜尋 | 🟢 | |
+| 16 | 統計顯示 | 🔴 | Firebase 用 where 時間篩選；angular: fetchAll |
+| 17 | OPD 變動統計 | 🟢 | |
+| 18 | 匯出已刪除清單 | 🟢 | XLSX |
+| 19 | 病人歷史紀錄 | 🟢 | PatientHistoryModalComponent |
+| 20 | 權限判定 (isPageLocked, isDeleteLocked) | 🟢 | |
 
-### 長期（P2）
-6. **ApiManagerService 支援 where 篩選**：影響 exception-manager 訊息刪除、weekly 排程載入（0.5-1 天）
-7. **實時更新替代**：SSE 或 WebSocket 取代輪詢（1-2 天）
-8. **自動化測試基建**：安裝 Karma/Playwright + 核心路徑覆蓋（2-3 天）
+### 程式碼異味
+1. **無條件查詢效能** `patients.component.ts:826` — `checkPatientInTodaySchedule` 全載所有排程，應改 `fetchWhere({date})`
+2. **統計資料全載** 行 390-395 — `fetchPatientHistoryForStats` 應支援時間範圍參數
+3. **patientCategory 欄位遺失** 行 1070 — 復原時未寫入，統計可能受影響
+4. **patientsApi 臨時建立** 行 712、716-717 — 應於 constructor 中建立一次，避免狀態不一致
+5. **無錯誤回退** — ApiManager 連接失敗時無備援
+
+### 手動驗證 Checklist（Patients）
+- [ ] 建立新病人：輸入不存在病歷號 → PatientFormModal 開啟
+- [ ] 編輯病人：修改名字/醫師 → 儲存成功
+- [ ] 刪除病人並選原因 → isDeleted + deleteReason 寫入
+- [ ] 復原已刪除病人 → status 恢復
+- [ ] 轉移病人狀態 OPD→IPD → wardNumber 設定
+- [ ] 排程衝突流程 → SchedulerDialog 開啟
+- [ ] 設定/編輯床號持久化
+- [ ] 編輯透析醫囑：dialysisOrders 儲存
+- [ ] 暫停/中止透析 → removeRuleFromMasterSchedule 呼叫
+- [ ] 首透衛教勾選 → Task 自動建立
+- [ ] 全域搜尋存在病人 → 轉移對話
+- [ ] 統計顯示：新增/轉出/死亡數字正確
+- [ ] 匯出已刪除清單 → Excel 檔產出
+- [ ] Viewer 權限：編輯按鈕 disabled
+- [ ] 病人歷史紀錄 modal 正確顯示
+
+---
+
+## StatsView 詳細分析（護理分組 A-K，2026-04-19 新增）
+
+### 操作對照表（40 項，歸類節錄）
+
+| # | 操作/按鈕 | 狀態 | 備註 |
+|---|----------|------|------|
+| 1 | A-K 分組 + 外圍 + 未分組顯示 | 🟢 | 13 個 team；外圍排序魔數 100 |
+| 2-4 | 日期切換（前/後/今日） | 🟢 | 未儲存確認對話框 |
+| 5-8 | 班次切換（早班/午班上針/午班收針/晚班） | 🟢 | toggleNoonTakeoff |
+| 9-12 | 病人卡片（名稱/訊息圖標/狀態標籤/HDF 模式） | 🟢 | |
+| 13 | 點擊病人 → 換床對話框 | 🟢 | isPageLocked 守衛 |
+| 14-18 | 拖放、team 變更（nurseTeam/In/Out、跨班次） | 🟢 | 5 種 responsibility |
+| 19 | 跨班次拖放 → applyTeamAndScheduleChange | 🟢 | **無原子性保證，網路中斷可能遺失** |
+| 20 | 儲存排程 | 🟢 | 清除 team 屬性後 save |
+| 21 | 護理長名稱顯示 | 🟢 | currentTeamsRecord.names |
+| 22 | 分組設定 | 🟢 | 透過 nurseName 存在 teams.names |
+| 23-24 | 新增/移除夜班收針分組 | 🟢 | duplicateLateShiftForTakeOff |
+| 25-26 | 列印 / 匯出 Excel | 🟢 | XLSX，三班分開 |
+| 27-28 | 自動更新 / 手動重新整理 | 🟢 | loadData 循環 |
+| 29 | 未排床位警告（未分組欄） | 🟢 | |
+| 30-32 | 交辦 / 調班申請 / 預約變更 dialog | 🟢 | |
+| 33-36 | 備物清單 / 針劑 / 醫囑 / Memo | 🟢 | |
+| 37 | 病況記錄 | 🟢 | |
+| 38-39 | 權限檢查（編輯保護、按鈕禁用） | 🟢 | isPageLocked |
+| 40 | 護理長預科（loadDailyStaffInfo） | 🟢 | physician_schedules |
+| ★ | `getEffectiveOrdersForDate` 查詢 | 🟡 | Firebase 用 where+orderBy+limit；angular fetchAll 後本地處理 |
+| ★ | 時間戳記 | 🟡 | Firebase serverTimestamp vs angular new Date().toISOString() |
+
+### 程式碼異味
+1. **N+1 查詢** `stats.component.ts:489-507` — `getEffectiveOrdersForDate` 全載醫囑歷史後本地過濾
+2. **時間戳記不一致** 行 1169 — 客戶端時間可能有時鐘差
+3. **未使用方法** 行 489 — `getEffectiveOrdersForDate` 似未被呼叫，建議移除
+4. **跨班次拖放無事務** 行 729-738 — 網路中斷可能遺失指派
+5. **外圍床位排序魔數** 行 383-384 — 假設床號 < 100，未來擴充可能失效
+
+### 手動驗證 Checklist（Stats）
+- [ ] A-K + 外圍 + 未分組 13 欄完整顯示
+- [ ] 日期切換：前/後/回今日，statusIndicator 正常
+- [ ] 拖曳病人早班→晚班 → hasUnsavedScheduleChanges = true
+- [ ] 拖曳 A 組→B 組（同班次）僅改 nurseTeam
+- [ ] 點擊病人 → BedChangeDialog
+- [ ] 新增夜班收針分組 → 第三 section 出現
+- [ ] 夜班收針內拖曳 → nurseTeamTakeOff 設定
+- [ ] 移除夜班收針分組 → section 消失
+- [ ] 匯出 Excel：早/晚/夜班收針分開，A-K+未分組欄
+- [ ] isPageLocked 時拖放被擋
+- [ ] 調班申請 / 預約變更 / 交辦 dialog
+- [ ] 病人訊息圖標 → Memo / 病況 / 針劑 / 醫囑
+- [ ] 應打針劑圖示 → showInjectionList 按床號排序
+
+---
+
+## 已完成項目（本輪落地）
+
+所有 P0/P1/P2 建議皆已實作完成：
+
+| 優先 | 項目 | 狀態 |
+|------|------|------|
+| P0 | modeOverride Bug 修復 | ✅ |
+| P0 | 列表檢視按鈕（listMonth） | ✅ |
+| P1 | 輪詢 30s → 10s（SSE 失敗 fallback） | ✅ |
+| P1 | BaseSchedule `==` → 嚴格比較（String / Number 轉型） | ✅ |
+| P1 | FREQ_MAP 無效值 `resolveFreqDays` + console.warn | ✅ |
+| P2 | `ApiManager.fetchWhere()` + 後端 tasks `targetDate` 篩選 | ✅ |
+| P2 | SSE 即時更新（`/api/events/exceptions`）+ 輪詢 fallback | ✅ |
+
+## 尚未處理（建議後續）
+
+1. **自動化測試基建**：安裝 Karma/Playwright + 核心路徑覆蓋（2-3 天）
+2. **Patients 頁面 where 篩選**：利用新增的 `fetchWhere` 把 `checkPatientInTodaySchedule` 與 `fetchPatientHistoryForStats` 改成伺服器篩選（0.25 天）
+3. **Stats 頁面 `getEffectiveOrdersForDate` 優化**：同上（0.25 天）
+4. **patientCategory 欄位恢復**：確認需求後補回復原邏輯（0.1 天）
+5. **跨班次拖放事務性**：Stats 頁面考慮 optimistic UI + rollback（0.5 天）
 
 ---
 
@@ -309,9 +443,15 @@ npm run dev:angular          # port 5173，自動 proxy → localhost:3000
 # http://localhost:5173
 # 登入後依本報告 checklist 逐項驗證
 
-# 4. 驗證 modeOverride Bug（需查 DB）
-sqlite3 data/dialysis.db "SELECT data FROM schedule_exceptions ORDER BY created_at DESC LIMIT 1;"
-# 預期：data JSON 的頂層有 "mode"，但 to 物件內沒有 mode → 確認 Bug
+# 4. 驗證 modeOverride 修復（需查 DB）
+sqlite3 data/dialysis.db "SELECT to_data FROM schedule_exceptions ORDER BY created_at DESC LIMIT 1;"
+# 修復後應看到：to_data JSON 內含 "mode": "HDF"（非 HD 時）
+sqlite3 data/dialysis.db "SELECT date, schedule FROM schedules WHERE date = '<YYYY-MM-DD>';"
+# 排程內該床位的 slot 應含 "modeOverride": "HDF"
+
+# 5. 驗證 SSE 即時更新
+# 開兩個瀏覽器分頁都進調班管理頁，A 分頁建立新調班 → B 分頁應於 1-2 秒內自動更新
+# 若後端重啟過，EventSource 會自動重連
 ```
 
 ---
@@ -325,4 +465,7 @@ sqlite3 data/dialysis.db "SELECT data FROM schedule_exceptions ORDER BY created_
 | BaseSchedule | `angular-client/src/app/features/base-schedule/base-schedule.component.ts` | `/tmp/dialysis-app-angular-firebase/src/app/features/base-schedule/base-schedule.component.ts` |
 | Exception | `angular-client/src/app/features/exception-manager/exception-manager.component.ts` | `/tmp/dialysis-app-angular-firebase/src/app/features/exception-manager/exception-manager.component.ts` |
 | ExceptionCreateDialog | `angular-client/src/app/components/dialogs/exception-create-dialog/` | `/tmp/dialysis-app-angular-firebase/src/app/components/dialogs/exception-create-dialog/` |
+| Patients | `angular-client/src/app/features/patients/patients.component.ts` | `/tmp/dialysis-app-angular-firebase/src/app/features/patients/patients.component.ts` |
+| Stats (護理分組) | `angular-client/src/app/features/stats/stats.component.ts` | `/tmp/dialysis-app-angular-firebase/src/app/features/stats/stats.component.ts` |
 | 後端例外處理 | `src/services/exceptionHandler.js` | (N/A Firebase 用 Cloud Functions) |
+| 後端 SSE | `src/routes/events.js`, `src/services/eventBus.js` | (N/A) |
