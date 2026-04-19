@@ -450,14 +450,37 @@ dataToSubmit.mode = this.formData.mode || 'HD';   // 同樣放頂層
 - **patient_history limit 策略**：無 query params 時維持 `LIMIT 100`（向下相容）；加了篩選才允許至 1000，極限 5000。避免無意中全表掃描。
 - **PERIPHERAL_BED_SORT_ORDER = 9999**：原本魔數 100 在床號擴充超過 100 時會排錯。9999 為 SQLite INTEGER 慣用 sentinel，預留擴充空間。
 
-## 仍未處理（Batch C — 需架構討論）
+## Batch C 處理結果（2026-04-19 深夜）
 
-1. **Schedule onDrop 條件重構**：重複排班與佔床判斷分散，需要重新設計狀態機（0.5 天，需求訪談後）
-2. **Schedule 護理分組事務性**：儲存失敗時 UI 與 DB 脫節，建議改 optimistic + rollback（0.5 天）
-3. **Patients `patientCategory` 欄位恢復**：原 Firebase 有此欄位，需先確認業務需求（0.25 天，等使用者確認）
-4. **Patients `patientsApi` 初始化**：跨方法臨時建立 instance，應統一在 constructor（0.25 天）
-5. **Stats 跨班次拖放原子性**：目前刪除舊位置再新增，網路中斷會遺失；需 optimistic UI（0.5 天）
-6. **自動化測試基建**：Karma/Playwright（2-3 天）
+| # | 項目 | 處理方式 | 狀態 |
+|---|------|----------|------|
+| C1 | Schedule `onDrop` 條件重構 | 依使用者規格：床位↔床位 互換/搬移；側欄→已排病人 = 提示禁止（取消原確認對話框） | ✅ |
+| C2 | Schedule 護理分組儲存事務性 | 新後端 `PUT /api/schedules/:date/with-teams` 包 `db.transaction()`；Schedule 與 Stats 雙頁改用新 endpoint | ✅ |
+| C3 | Patients `patientCategory` 欄位恢復 | 驗證發現 angular-client 早已寫入此欄位（`patients.component.ts:1073`），後端 schema 亦有 `patient_category` 欄（`schema.sql:71`），原 Explore 報告為誤報 | ✅ 無需修改 |
+| C4 | Patients `patientsApi` 初始化 | 移除 `patients.component.ts:721` 的臨時 `const patientsApi = ...`，統一用 `this.patientsApi` | ✅ |
+| C5 | Stats 跨班次拖放原子性 | 與 C2 共用新 endpoint `PUT /:date/with-teams`；當 schedule + teams 同時 dirty 時走原子路徑 | ✅ |
+| C6 | 自動化測試基建 | Karma/Playwright 擇一尚未決定 | ⏸️ 待決策 |
+
+### C1 行為對照
+
+| 情境 | 原行為 | 新行為 |
+|------|--------|--------|
+| 床位 A → 空床 B | 病人從 A 搬到 B，A 清空 | 相同 |
+| 床位 A → 有病人的 B | 兩人互換 | 相同 |
+| 側欄 → 空床（病人當日無排班） | 寫入 | 相同 |
+| 側欄 → 空床（**病人當日已排班**） | 彈確認對話框，允許重複 | **提示並禁止**（不再能重複排班） |
+| 側欄 → 已佔用床 | 提示失敗 | 相同 |
+
+### C2/C5 設計
+
+- 後端 `PUT /api/schedules/:date/with-teams`
+  - Body: `{ schedule?, names?, teams?, takeoffEnabled? }`
+  - 在 `db.transaction(() => {...})` 內同時寫 `schedules` + `nurse_assignments`
+  - 任一步失敗整個回滾
+- 前端 `saveScheduleWithTeams(date, payload)` in `nurseAssignmentsService.ts`
+- Schedule.saveDataToCloud / Stats.saveChangesToCloud：
+  - 兩者皆 dirty → 走原子 endpoint
+  - 只有其中一種 dirty → 維持舊的單一 endpoint（無事務需求）
 
 ---
 

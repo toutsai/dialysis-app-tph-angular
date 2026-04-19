@@ -718,8 +718,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
       };
 
       // Use ApiManager to create patient
-      const patientsApi = this.apiManagerService.create<FirestoreRecord>('patients');
-      const savedPatient = await patientsApi.save(dataToCreate);
+      const savedPatient = await this.patientsApi.save(dataToCreate);
 
       const automatedTaskPromises: Promise<any>[] = [];
       if ((savedPatient as any).patientStatus?.isFirstDialysis?.active) {

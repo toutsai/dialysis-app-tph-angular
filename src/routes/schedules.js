@@ -988,6 +988,105 @@ router.get('/nurse-assignments/:date', authenticate, (req, res) => {
 })
 
 /**
+ * PUT /api/schedules/:date/with-teams
+ * 原子性儲存：同時寫入當日排程 (schedules) 與護理分組 (nurse_assignments)。
+ * 避免兩次獨立 API call 中間網路斷線導致 UI 與 DB 不一致。
+ *
+ * Body: { schedule?, names?, teams?, takeoffEnabled? }
+ *   - schedule 存在 → 寫 schedules 表
+ *   - teams 存在 → 寫 nurse_assignments 表
+ *   - 兩者都沒提供 → 400
+ * Response: { schedule: {...} | null, teams: {...} | null }
+ */
+router.put('/:date/with-teams', ...isEditor, async (req, res) => {
+  try {
+    const { date } = req.params
+    const { schedule, names: scheduleNames, teams, names: teamsNames, takeoffEnabled } = req.body
+
+    const hasSchedule = schedule !== undefined && schedule !== null
+    const hasTeams = teams !== undefined && teams !== null
+
+    if (!hasSchedule && !hasTeams) {
+      return res.status(400).json({
+        error: true,
+        message: '請至少提供 schedule 或 teams 其中一項',
+      })
+    }
+
+    const db = getDatabase()
+    const lastModifiedBy = JSON.stringify({ uid: req.user.id, name: req.user.name })
+
+    // 用 better-sqlite3 的 transaction 確保原子性
+    const runAtomic = db.transaction(() => {
+      let scheduleResult = null
+      let teamsResult = null
+
+      if (hasSchedule) {
+        const existing = db.prepare('SELECT id FROM schedules WHERE date = ?').get(date)
+        if (existing) {
+          db.prepare(`
+            UPDATE schedules
+            SET schedule = ?,
+                last_modified_by = ?,
+                updated_at = datetime('now', 'localtime')
+            WHERE date = ?
+          `).run(JSON.stringify(schedule), lastModifiedBy, date)
+        } else {
+          db.prepare(`
+            INSERT INTO schedules (id, date, schedule, last_modified_by)
+            VALUES (?, ?, ?, ?)
+          `).run(date, date, JSON.stringify(schedule), lastModifiedBy)
+        }
+        const row = db.prepare('SELECT * FROM schedules WHERE date = ?').get(date)
+        scheduleResult = {
+          id: row.id,
+          date: row.date,
+          schedule: JSON.parse(row.schedule || '{}'),
+          lastModifiedBy: JSON.parse(row.last_modified_by || '{}'),
+          updatedAt: row.updated_at,
+        }
+      }
+
+      if (hasTeams) {
+        const teamsPayload = {
+          teams: teams || {},
+          names: teamsNames || scheduleNames || {},
+          takeoffEnabled: !!takeoffEnabled,
+        }
+        db.prepare(`
+          INSERT INTO nurse_assignments (id, date, teams, updated_at)
+          VALUES (?, ?, ?, datetime('now', 'localtime'))
+          ON CONFLICT(date) DO UPDATE SET
+            teams = excluded.teams,
+            updated_at = datetime('now', 'localtime')
+        `).run(date, date, JSON.stringify(teamsPayload))
+        teamsResult = { date, ...teamsPayload }
+      }
+
+      return { scheduleResult, teamsResult }
+    })
+
+    const { scheduleResult, teamsResult } = runAtomic()
+
+    // 稽核記錄寫在交易外（失敗不應回滾主要資料）
+    if (scheduleResult) {
+      await logAudit('SCHEDULE_UPDATE', req.user.id, req.user.name, 'schedules', date, {
+        slotCount: Object.keys(schedule || {}).length,
+        withTeams: hasTeams,
+      })
+    }
+
+    res.json({ schedule: scheduleResult, teams: teamsResult })
+  } catch (error) {
+    console.error('原子性儲存排程與分組錯誤:', error)
+    res.status(500).json({
+      error: true,
+      message: '儲存排程與分組失敗',
+    })
+  }
+})
+
+/**
  * PUT /api/schedules/nurse-assignments/:date
  * 更新護理人員分配
  */
