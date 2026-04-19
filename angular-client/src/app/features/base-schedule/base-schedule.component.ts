@@ -2,7 +2,6 @@ import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import * as XLSX from 'xlsx';
-import { ApiConfigService } from '@services/api-config.service';
 import { AuthService } from '@app/core/services/auth.service';
 import { ApiManagerService, type ApiManager } from '@app/core/services/api-manager.service';
 import { PatientStoreService } from '@app/core/services/patient-store.service';
@@ -19,6 +18,7 @@ import {
   generateAutoNote,
   getUnifiedCellStyle,
   hasFrequencyConflict,
+  type CellStyleResult,
 } from '@/utils/scheduleUtils';
 import { getToday } from '@/utils/dateUtils';
 
@@ -40,7 +40,6 @@ import { getToday } from '@/utils/dateUtils';
   styleUrl: './base-schedule.component.css'
 })
 export class BaseScheduleComponent implements OnInit, OnDestroy {
-  private readonly firebaseService = inject(ApiConfigService);
   private readonly authService = inject(AuthService);
   private readonly apiManagerService = inject(ApiManagerService);
   readonly patientStore = inject(PatientStoreService);
@@ -135,7 +134,7 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
   });
 
   weeklyCellStyleMap = computed(() => {
-    const styleMap = new Map<string, any>();
+    const styleMap = new Map<string, CellStyleResult>();
     const wsm = this.weekScheduleMap();
     const pMap = this.patientStore.patientMap();
     for (const slotId in wsm) {
@@ -216,7 +215,7 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
     window.removeEventListener('schedule-updated', this.handleScheduleUpdateBound);
   }
 
-  getBaseCellStyle = (slotId: string): any => {
+  getBaseCellStyle = (slotId: string): CellStyleResult => {
     return this.weeklyCellStyleMap().get(slotId) || {};
   };
 

@@ -420,13 +420,44 @@ dataToSubmit.mode = this.formData.mode || 'HD';   // 同樣放頂層
 | P2 | `ApiManager.fetchWhere()` + 後端 tasks `targetDate` 篩選 | ✅ |
 | P2 | SSE 即時更新（`/api/events/exceptions`）+ 輪詢 fallback | ✅ |
 
-## 尚未處理（建議後續）
+## 本輪 Batch A + B 修復（2026-04-19 晚段）
 
-1. **自動化測試基建**：安裝 Karma/Playwright + 核心路徑覆蓋（2-3 天）
-2. **Patients 頁面 where 篩選**：利用新增的 `fetchWhere` 把 `checkPatientInTodaySchedule` 與 `fetchPatientHistoryForStats` 改成伺服器篩選（0.25 天）
-3. **Stats 頁面 `getEffectiveOrdersForDate` 優化**：同上（0.25 天）
-4. **patientCategory 欄位恢復**：確認需求後補回復原邏輯（0.1 天）
-5. **跨班次拖放事務性**：Stats 頁面考慮 optimistic UI + rollback（0.5 天）
+### Batch A（code smell 清理，8 項）
+| # | 頁面 | 項目 | 修改檔案 | 狀態 |
+|---|------|------|----------|------|
+| A1 | Schedule | `handleSaveOrder` 加 `patient.name` fallback 訊息 | `schedule.component.ts:930` | ✅ |
+| A2 | Schedule | `loadDataForDay` 把 `formatDate` 包入 try-catch | `schedule.component.ts:1369-1378` | ✅ |
+| A3 | Schedule | `exportScheduleToExcel` 檢視後確認非 bug（同步 XLSX） | — | ⏭️ 跳過 |
+| A4 | Weekly | `getWeeklyCellStyle` 型別問題 | — | ⏭️ 跳過（angular-client 已是正確 `CellStyleResult` 型別） |
+| A5 | BaseSchedule | 刪除未使用的 `firebaseService` 注入（重命名過於表面） | `base-schedule.component.ts` | ✅ |
+| A6 | BaseSchedule | `handleSearchBlur` setTimeout 200ms | — | ⏭️ 跳過（click-outside 標準模式） |
+| A7 | BaseSchedule | `getBaseCellStyle` 返回型別 `any` → `CellStyleResult` | `base-schedule.component.ts:218` | ✅ |
+| A8 | Exception | 移除 `ApiConfigService` 冗餘 | — | ⏭️ 保留（SSE getToken 使用中） |
+| A9 | Exception | 移除 memos 清理 dead code（TPH memos 表無 patientId/targetDate 欄位） | `exception-manager.component.ts:662-695` | ✅ |
+| A10 | Stats | 移除未使用方法 `getEffectiveOrdersForDate` + `ordersHistoryApi` 注入 | `stats.component.ts:489-507` | ✅ |
+| A11 | Stats | 外圍床位 `100` → `PERIPHERAL_BED_SORT_ORDER = 9999` 常數 | `stats.component.ts:381-383` | ✅ |
+| A12 | Stats | `serverTimestamp()` vs ISO | — | ⏭️ 跳過（ISO 字串格式足夠，客戶端時差無實務影響） |
+
+### Batch B（效能優化，3 項）
+| # | 項目 | 修改檔案 | 狀態 |
+|---|------|----------|------|
+| B1 | Patients `checkPatientInTodaySchedule` 改用 `fetchWhere({ date })` | `patients.component.ts:826` | ✅ |
+| B2 | Patients `fetchPatientHistoryForStats` 改用 `fetchWhere({ since })` | `patients.component.ts:395` | ✅ |
+| B3 | 後端 `GET /api/patients/history` 新增 `since`/`until`/`patientId`/`eventType`/`limit` query params | `src/routes/patients.js:312` | ✅ |
+
+### 設計說明
+- **memos dead code 移除**：TPH `memos` 表僅有 `date / content / author_id / author_name` 欄位，沒有 `patientId` 或 `targetDate`，Firebase 版的 memo 清理邏輯在 TPH 後端不可能匹配任何資料。移除該段邏輯而非強行擴充 schema，因為該清理功能在 TPH 從未真的作用過。
+- **patient_history limit 策略**：無 query params 時維持 `LIMIT 100`（向下相容）；加了篩選才允許至 1000，極限 5000。避免無意中全表掃描。
+- **PERIPHERAL_BED_SORT_ORDER = 9999**：原本魔數 100 在床號擴充超過 100 時會排錯。9999 為 SQLite INTEGER 慣用 sentinel，預留擴充空間。
+
+## 仍未處理（Batch C — 需架構討論）
+
+1. **Schedule onDrop 條件重構**：重複排班與佔床判斷分散，需要重新設計狀態機（0.5 天，需求訪談後）
+2. **Schedule 護理分組事務性**：儲存失敗時 UI 與 DB 脫節，建議改 optimistic + rollback（0.5 天）
+3. **Patients `patientCategory` 欄位恢復**：原 Firebase 有此欄位，需先確認業務需求（0.25 天，等使用者確認）
+4. **Patients `patientsApi` 初始化**：跨方法臨時建立 instance，應統一在 constructor（0.25 天）
+5. **Stats 跨班次拖放原子性**：目前刪除舊位置再新增，網路中斷會遺失；需 optimistic UI（0.5 天）
+6. **自動化測試基建**：Karma/Playwright（2-3 天）
 
 ---
 

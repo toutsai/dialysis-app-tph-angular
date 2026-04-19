@@ -54,7 +54,6 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
 
   private readonly exceptionsApi = this.apiManager.create<FirestoreRecord>('schedule_exceptions');
   private readonly tasksApi = this.apiManager.create<FirestoreRecord>('tasks');
-  private readonly memosApi = this.apiManager.create<FirestoreRecord>('memos');
 
   readonly allPatients = this.patientStore.allPatients;
   readonly currentUser = this.authService.currentUser;
@@ -665,29 +664,14 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
         targetDate,
       })) as any[];
 
-      let matchingMemos: any[] = [];
-      try {
-        // memos 後端暫不支援查詢篩選，fallback 全量再本地篩
-        const allMemos = await this.memosApi.fetchAll();
-        matchingMemos = (allMemos as any[]).filter(
-          (m: any) =>
-            m.patientId === existingEx.patientId && m.targetDate === targetDate,
-        );
-      } catch {
-        // memos 集合可能不存在
-      }
+      // 註：TPH memos 表結構僅有 date/content/author，無 patientId/targetDate 欄位，
+      // 因此 Firebase 版的 memo 清理邏輯在此後端無對應資料可匹配，故移除該段 dead code。
 
       const deletePromises: Promise<any>[] = [];
 
       matchingTasks.forEach((task: any) => {
         if (task.content && task.content.includes(keyword)) {
           deletePromises.push(this.tasksApi.delete(task.id));
-        }
-      });
-
-      matchingMemos.forEach((memo: any) => {
-        if (memo.content && memo.content.includes(keyword)) {
-          deletePromises.push(this.memosApi.delete(memo.id));
         }
       });
 

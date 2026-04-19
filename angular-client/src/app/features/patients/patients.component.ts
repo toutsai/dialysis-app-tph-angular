@@ -392,8 +392,11 @@ export class PatientsComponent implements OnInit, OnDestroy {
       const twoMonthsAgo = new Date();
       twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
       twoMonthsAgo.setDate(1);
-      const allHistory = await this.patientHistoryApi.fetchAll();
-      return allHistory.filter((h: any) => h.timestamp >= twoMonthsAgo.toISOString());
+      // 後端 /patients/history 支援 ?since= 篩選，避免全表掃描
+      const history = (await this.patientHistoryApi.fetchWhere({
+        since: twoMonthsAgo.toISOString(),
+      })) as any[];
+      return history;
     } catch (error) {
       console.error('讀取病人歷史紀錄失敗:', error);
       this.showAlert('讀取失敗', '讀取病人歷史統計資料失敗！');
@@ -823,8 +826,8 @@ export class PatientsComponent implements OnInit, OnDestroy {
     try {
       const today = new Date();
       const dateStr = today.toISOString().split('T')[0];
-      const allRecords = await this.schedulesApi.fetchAll();
-      const dailyRecords = allRecords.filter((r: any) => r.date === dateStr);
+      // 後端 /schedules 支援 ?date= 篩選，無須全量載入
+      const dailyRecords = (await this.schedulesApi.fetchWhere({ date: dateStr })) as any[];
       if (dailyRecords.length === 0) return false;
       const schedule: any = dailyRecords[0].schedule || {};
       for (const slotData of Object.values(schedule) as any[]) {

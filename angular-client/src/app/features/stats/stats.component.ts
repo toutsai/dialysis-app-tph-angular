@@ -99,6 +99,9 @@ const dutyAssignments: Record<string, Record<string, string | string[]>> = {
   styleUrl: './stats.component.css'
 })
 export class StatsComponent implements OnInit, OnDestroy {
+  // 外圍床位在排序時的 sentinel 值，確保排在一般床號之後
+  private static readonly PERIPHERAL_BED_SORT_ORDER = 9999;
+
   private readonly auth = inject(AuthService);
   private readonly firebase = inject(ApiConfigService);
   private readonly apiManager = inject(ApiManagerService);
@@ -112,7 +115,6 @@ export class StatsComponent implements OnInit, OnDestroy {
 
   // API instances
   private readonly schedulesApi = this.apiManager.create<FirestoreRecord>('schedules');
-  private readonly ordersHistoryApi = this.apiManager.create<FirestoreRecord>('dialysis_orders_history');
   private readonly usersApi = this.apiManager.create<FirestoreRecord>('users');
 
   // --- Constants exposed to template ---
@@ -379,9 +381,10 @@ export class StatsComponent implements OnInit, OnDestroy {
         }
       }
 
+      const peripheralOrder = StatsComponent.PERIPHERAL_BED_SORT_ORDER;
       const sortPatientsByBed = (a: any, b: any) =>
-        (a.dialysisBed === '外圍' ? 100 : parseInt(a.dialysisBed, 10)) -
-        (b.dialysisBed === '外圍' ? 100 : parseInt(b.dialysisBed, 10));
+        (a.dialysisBed === '外圍' ? peripheralOrder : parseInt(a.dialysisBed, 10)) -
+        (b.dialysisBed === '外圍' ? peripheralOrder : parseInt(b.dialysisBed, 10));
 
       [earlyShiftStats, lateShiftStats, lateTakeOffStats].forEach((stats, index) => {
         for (const team in stats) {
@@ -485,26 +488,6 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   // --- Data Loading ---
-
-  private async getEffectiveOrdersForDate(patientId: string, targetDate: Date): Promise<any> {
-    if (!patientId || !targetDate) return {};
-    const dateStr = targetDate.toISOString().slice(0, 10);
-    try {
-      const allResults = await this.ordersHistoryApi.fetchAll();
-      // Filter by patientId and effectiveDate <= dateStr, then sort and take first
-      const filtered = allResults
-        .filter((r: any) => r.patientId === patientId && r.orders?.effectiveDate && r.orders.effectiveDate <= dateStr)
-        .sort((a: any, b: any) => {
-          const dateComp = (b.orders?.effectiveDate || '').localeCompare(a.orders?.effectiveDate || '');
-          if (dateComp !== 0) return dateComp;
-          return new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime();
-        });
-      return filtered.length > 0 ? filtered[0].orders : {};
-    } catch (error) {
-      console.error(`獲取病人 ${patientId} 的醫囑失敗:`, error);
-      return {};
-    }
-  }
 
   async loadDailyStaffInfo(date: Date): Promise<void> {
     try {

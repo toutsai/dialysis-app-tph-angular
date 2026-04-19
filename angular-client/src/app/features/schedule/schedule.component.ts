@@ -922,12 +922,13 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       this.showAlert('儲存失敗', '找不到目標病人資訊。');
       return;
     }
+    const patientName = patient.name || '（未命名病人）';
     try {
       await createDialysisOrderAndUpdatePatient(patient.id, patient.name, orderData);
       await this.patientStore.forceRefreshPatients();
       await this.loadDataForDay(this.currentDate());
       this.isOrderModalVisible.set(false);
-      this.showAlert('儲存成功', `已更新病人 ${patient.name} 的醫囑。`);
+      this.showAlert('儲存成功', `已更新病人 ${patientName} 的醫囑。`);
     } catch (error: any) {
       console.error('儲存醫囑失敗:', error);
       this.showAlert('儲存失敗', `儲存醫囑發生錯誤: ${error.message}`);
@@ -1366,7 +1367,15 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     this.hasUnsavedTeamChanges.set(false);
     this.statusIndicator.set('讀取中...');
     this.isLoading.set(true);
-    const dateStr = this.formatDate(date);
+    let dateStr: string;
+    try {
+      dateStr = this.formatDate(date);
+    } catch (err) {
+      console.error('日期格式化失敗:', err);
+      this.statusIndicator.set('日期錯誤');
+      this.isLoading.set(false);
+      return;
+    }
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const targetDate = new Date(date);
