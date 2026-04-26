@@ -1201,9 +1201,7 @@ router.get('/inventory/consumption/monthly-summary', authenticate, (req, res) =>
     // 我們可以從 inventory_items 獲取 mapping map。
 
     // 重新連線取得 mapping
-    const db2 = getDatabase()
-    const items = db2.prepare('SELECT name, category FROM inventory_items').all()
-    db2.close()
+    const items = db.prepare('SELECT name, category FROM inventory_items').all()
 
     const itemCategoryMap = {}
     items.forEach((i) => {
