@@ -10,7 +10,7 @@
           <span class="current-date-text">{{ formatDate(currentDate) }}</span>
           <span class="weekday-display">({{ weekdayDisplay }})</span>
           <button class="btn" (click)="changeDate(1)">下一天 &raquo;</button>
-          <button class="btn btn-info" (click)="goToToday()">回到今日</button>
+          <button class="btn btn-today-ghost" (click)="goToToday()">回到今日</button>
           <button class="btn btn-primary" (click)="isCreateTaskModalVisible = true" [disabled]="!hasPermission('viewer')">
             <i class="fas fa-plus"></i> 新增交辦
           </button>

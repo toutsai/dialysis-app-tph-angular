@@ -151,6 +151,49 @@ const AISLE_SIDE_BEDS: number[] = [1, 7, 8, 15, 16, 22, 23, 29, 31, 36, 37, 53, 
 const PERIPHERAL_BED_COUNT = 6;
 const DEFAULT_TEAM_CAPACITY = 4;
 
+type BedSpatialPoint = {
+  side: 'left' | 'right';
+  zone: number;
+  row: number;
+  col: number;
+  x: number;
+  y: number;
+  aisleAffinity: number;
+};
+
+const BED_COORDINATES = (() => {
+  const map = new Map<string, BedSpatialPoint>();
+  LAYOUT_DATA.leftWingRows.forEach((row, rowIndex) => {
+    row.forEach((bed, colIndex) => {
+      if (typeof bed === 'number') {
+        map.set(String(bed), { side: 'left', zone: Math.floor(rowIndex / 2), row: rowIndex, col: colIndex, x: colIndex, y: rowIndex, aisleAffinity: AISLE_SIDE_BEDS.includes(bed) ? 1 : 0 });
+      }
+    });
+  });
+  LAYOUT_DATA.rightWingRows.forEach((row, rowIndex) => {
+    row.forEach((bed, colIndex) => {
+      map.set(String(bed), { side: 'right', zone: Math.floor(rowIndex / 2), row: rowIndex, col: colIndex, x: 4 + colIndex, y: rowIndex, aisleAffinity: AISLE_SIDE_BEDS.includes(bed) ? 1 : 0 });
+    });
+  });
+  return map;
+})();
+
+const BED_ZONE_PATH = (() => {
+  const beds: number[] = [];
+  const zoneCount = Math.max(
+    Math.ceil(LAYOUT_DATA.leftWingRows.length / 2),
+    Math.ceil(LAYOUT_DATA.rightWingRows.length / 2)
+  );
+  for (let zone = 0; zone < zoneCount; zone++) {
+    for (let offset = 0; offset < 2; offset++) {
+      const rowIndex = zone * 2 + offset;
+      beds.push(...(LAYOUT_DATA.leftWingRows[rowIndex] || []).filter((bed): bed is number => typeof bed === 'number'));
+      beds.push(...(LAYOUT_DATA.rightWingRows[rowIndex] || []));
+    }
+  }
+  return beds.map((bed) => String(bed));
+})();
+
 const FREQ_TO_DAYS: Record<string, number[]> = {
   '一三五': [1, 3, 5],
   '二四六': [2, 4, 6],
@@ -1234,6 +1277,17 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     });
   }
 
+  async autoAssignNurseTeamsExperimental(): Promise<void> {
+    if (this.isPageLocked()) {
+      this.showAlert('操作失敗', '頁面已鎖定，無法執行新版自動分組。');
+      return;
+    }
+    await this.autoAssignConfig.fetchConfig();
+    this.showConfirm('確認操作', '此操作將會以新版邏輯覆蓋現有的護理師分組，您確定要繼續嗎？', () => {
+      this.executeAutoAssignment(true);
+    });
+  }
+
 
   handleConfirm(): void {
     if (typeof this.onConfirmAction === 'function') this.onConfirmAction();
@@ -1575,7 +1629,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     }
   }
 
-  private executeAutoAssignment(): void {
+  private executeAutoAssignment(useExperimentalLogic = false): void {
     // Clear existing teams
     const teamsRec = { ...this.currentTeamsRecord(), teams: {} as Record<string, any> };
 
@@ -1642,10 +1696,80 @@ export class ScheduleComponent implements OnInit, OnDestroy {
         if (key >= 1 && key <= 7) return 1;
         return 2;
       };
+      const spatialPathIndex = (patient: any) => {
+        const bedKey = String(bedSortKey(patient));
+        const index = BED_ZONE_PATH.indexOf(bedKey);
+        return index >= 0 ? index : 999;
+      };
+      const bedCoord = (patient: any) => BED_COORDINATES.get(String(bedSortKey(patient)));
+      const averageCoord = (patients: any[]) => {
+        const coords = patients.map(bedCoord).filter(Boolean) as BedSpatialPoint[];
+        if (coords.length === 0) return null;
+        const leftCount = coords.filter(c => c.side === 'left').length;
+        const side: 'left' | 'right' = leftCount >= coords.length - leftCount ? 'left' : 'right';
+        return {
+          side,
+          zone: Math.round(coords.reduce((sum, coord) => sum + coord.zone, 0) / coords.length),
+          x: coords.reduce((sum, coord) => sum + coord.x, 0) / coords.length,
+          y: coords.reduce((sum, coord) => sum + coord.y, 0) / coords.length,
+          aisleAffinity: coords.reduce((sum, coord) => sum + coord.aisleAffinity, 0) / coords.length,
+        };
+      };
+      const teamCenter = (team: string) => averageCoord(assignments[team] || []);
+      const distanceScore = (patient: any, center: { side: 'left' | 'right'; zone: number; x: number; y: number; aisleAffinity?: number } | null) => {
+        const coord = bedCoord(patient);
+        if (!coord || !center) return 999;
+        const dx = Math.abs(coord.x - center.x);
+        const dy = Math.abs(coord.y - center.y);
+        const zoneDiff = Math.abs(coord.zone - center.zone);
+        const crossWallAisleBonus = zoneDiff > 0 ? (coord.aisleAffinity + (center.aisleAffinity ?? 0)) * 1.2 : 0;
+        const wallPenalty = zoneDiff === 0 ? 0 : Math.max(2.2, (zoneDiff === 1 ? 4.2 : zoneDiff * 6.5) - crossWallAisleBonus);
+        const corridorPenalty = coord.side === center.side ? 0 : 0.35;
+        return wallPenalty + (dy * 0.8) + (dx * 0.25) + corridorPenalty;
+      };
+      const patientDistanceScore = (a: any, b: any) => {
+        const coord = bedCoord(b);
+        if (!coord) return Math.abs(bedSortKey(a) - bedSortKey(b));
+        return distanceScore(a, coord);
+      };
+      const teamDispersionScore = (patients: any[]) => {
+        if (patients.length <= 1) return 0;
+        let pairScore = 0;
+        let maxPairScore = 0;
+        let pairCount = 0;
+        for (let i = 0; i < patients.length; i++) {
+          for (let j = i + 1; j < patients.length; j++) {
+            const score = patientDistanceScore(patients[i], patients[j]);
+            pairScore += score;
+            maxPairScore = Math.max(maxPairScore, score);
+            pairCount++;
+          }
+        }
+        return (pairScore / Math.max(1, pairCount)) + (maxPairScore * 0.7);
+      };
+      const buildTeamAnchors = (patients: any[], orderedTeams: string[], targets: Record<string, number>) => {
+        const anchors: Record<string, { side: 'left' | 'right'; zone: number; x: number; y: number; aisleAffinity?: number } | null> = {};
+        const sorted = [...patients].sort((a, b) => spatialPathIndex(a) - spatialPathIndex(b));
+        let cursor = 0;
+        for (const team of orderedTeams) {
+          const remainingQuota = Math.max(0, (targets[team] || 0) - (assignments[team]?.length || 0));
+          const slice = sorted.slice(cursor, cursor + remainingQuota);
+          anchors[team] = averageCoord(slice);
+          cursor += remainingQuota;
+        }
+        return anchors;
+      };
       const unassignedByBed = () =>
         allPatients
           .filter(p => !assignedIds.has(p.id))
           .sort((a, b) => bedSortKey(a) - bedSortKey(b));
+      const unassignedBySpatial = () =>
+        allPatients
+          .filter(p => !assignedIds.has(p.id))
+          .sort((a, b) => {
+            const spatialDiff = spatialPathIndex(a) - spatialPathIndex(b);
+            return spatialDiff !== 0 ? spatialDiff : bedSortKey(a) - bedSortKey(b);
+          });
       const assignByQuota = (patients: any[], orderedTeams: string[], targets: Record<string, number>) => {
         let patientIndex = 0;
         for (const team of orderedTeams) {
@@ -1655,6 +1779,130 @@ export class ScheduleComponent implements OnInit, OnDestroy {
           }
         }
       };
+      const assignSpatialByQuota = (patients: any[], orderedTeams: string[], targets: Record<string, number>) => {
+        const anchors = buildTeamAnchors(patients, orderedTeams, targets);
+        const teamOrder = new Map(orderedTeams.map((team, index) => [team, index]));
+        for (const patient of [...patients].sort((a, b) => spatialPathIndex(a) - spatialPathIndex(b))) {
+          if (assignedIds.has(patient.id)) continue;
+          const candidates = orderedTeams.filter(team => (assignments[team]?.length || 0) < (targets[team] || 0));
+          if (candidates.length === 0) break;
+          const bestTeam = candidates
+            .map(team => {
+              const center = teamCenter(team) || anchors[team];
+              const load = (assignments[team]?.length || 0) / Math.max(1, targets[team] || 1);
+              return {
+                team,
+                score: distanceScore(patient, center) + (load * 0.35) + ((teamOrder.get(team) || 0) * 0.01),
+              };
+            })
+            .sort((a, b) => a.score - b.score)[0]?.team;
+          if (bestTeam) addPatient(bestTeam, patient);
+        }
+      };
+      const assignResponsibilityZoneByQuota = (patients: any[], orderedTeams: string[], targets: Record<string, number>) => {
+        const remaining = [...patients].sort((a, b) => {
+          const spatialDiff = spatialPathIndex(a) - spatialPathIndex(b);
+          return spatialDiff !== 0 ? spatialDiff : bedSortKey(a) - bedSortKey(b);
+        });
+        const takePatient = (patient: any, team: string) => {
+          if (!addPatient(team, patient)) return false;
+          const index = remaining.findIndex(p => p.id === patient.id);
+          if (index >= 0) remaining.splice(index, 1);
+          return true;
+        };
+
+        for (const team of orderedTeams) {
+          let quota = Math.max(0, (targets[team] || 0) - (assignments[team]?.length || 0));
+          if (quota <= 0) continue;
+
+          const currentCenter = teamCenter(team);
+          if (currentCenter) {
+            const candidates = [...remaining]
+              .sort((a, b) => {
+                const distanceDiff = distanceScore(a, currentCenter) - distanceScore(b, currentCenter);
+                return distanceDiff !== 0 ? distanceDiff : spatialPathIndex(a) - spatialPathIndex(b);
+              })
+              .slice(0, quota);
+            candidates.forEach(patient => {
+              if (quota > 0 && takePatient(patient, team)) quota--;
+            });
+            continue;
+          }
+
+          const slice = remaining.slice(0, quota);
+          slice.forEach(patient => {
+            if (quota > 0 && takePatient(patient, team)) quota--;
+          });
+        }
+
+        if (remaining.length > 0) {
+          assignSpatialByQuota(remaining, orderedTeams, targets);
+        }
+      };
+      const improveSpatialAssignmentsBySwap = (orderedTeams: string[]) => {
+        const isMovable = (patient: any) =>
+          patient?.status === 'opd' && !patient.isHepatitis && !patient.isPeripheral;
+        for (let pass = 0; pass < 4; pass++) {
+          let improved = false;
+          for (let i = 0; i < orderedTeams.length; i++) {
+            for (let j = i + 1; j < orderedTeams.length; j++) {
+              const teamA = orderedTeams[i];
+              const teamB = orderedTeams[j];
+              const patientsA = assignments[teamA] || [];
+              const patientsB = assignments[teamB] || [];
+              const currentScore = teamDispersionScore(patientsA) + teamDispersionScore(patientsB);
+              let bestSwap: { indexA: number; indexB: number; score: number } | null = null;
+
+              patientsA.forEach((patientA, indexA) => {
+                if (!isMovable(patientA)) return;
+                patientsB.forEach((patientB, indexB) => {
+                  if (!isMovable(patientB)) return;
+                  const nextA = [...patientsA];
+                  const nextB = [...patientsB];
+                  nextA[indexA] = patientB;
+                  nextB[indexB] = patientA;
+                  const nextScore = teamDispersionScore(nextA) + teamDispersionScore(nextB);
+                  if (nextScore + 0.5 < currentScore && (!bestSwap || nextScore < bestSwap.score)) {
+                    bestSwap = { indexA, indexB, score: nextScore };
+                  }
+                });
+              });
+
+              if (bestSwap) {
+                const patientA = patientsA[bestSwap.indexA];
+                patientsA[bestSwap.indexA] = patientsB[bestSwap.indexB];
+                patientsB[bestSwap.indexB] = patientA;
+                improved = true;
+              }
+            }
+          }
+          if (!improved) break;
+        }
+      };
+      const buildBalancedRegularTargets = (
+        orderedTeams: string[],
+        totalTargetCount: number,
+        perTeamSoftLimit: Record<string, number>
+      ) => {
+        const targets: Record<string, number> = {};
+        const teamOrder = new Map(orderedTeams.map((team, index) => [team, index]));
+        orderedTeams.forEach(team => {
+          targets[team] = assignments[team]?.length || 0;
+        });
+        let targetSum = orderedTeams.reduce((sum, team) => sum + (targets[team] || 0), 0);
+        while (targetSum < totalTargetCount && orderedTeams.length > 0) {
+          const candidates = orderedTeams
+            .filter(team => (targets[team] || 0) < (perTeamSoftLimit[team] ?? Number.MAX_SAFE_INTEGER));
+          const pool = candidates.length > 0 ? candidates : orderedTeams;
+          const team = [...pool].sort((a, b) => {
+            const countDiff = (targets[a] || 0) - (targets[b] || 0);
+            return countDiff !== 0 ? countDiff : (teamOrder.get(a) || 0) - (teamOrder.get(b) || 0);
+          })[0];
+          targets[team] = (targets[team] || 0) + 1;
+          targetSum++;
+        }
+        return targets;
+      };
 
       // Step 1: Priority teams (hepatitis, IPD/ER)
       const { hepatitis, inPatientTeams, inPatientCapacity } = rules.priorityTeams;
@@ -1663,14 +1911,34 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       }
       if (inPatientTeams && inPatientCapacity) {
         const unassignedIPD = allPatients.filter(p => (p.status === 'ipd' || p.status === 'er') && !assignedIds.has(p.id));
-        // Sequential fill: fill H first, then I, then J (not round-robin)
-        unassignedIPD.forEach(patient => {
-          for (const team of inPatientTeams) {
-            if ((assignments[team]?.length || 0) < inPatientCapacity[team]) {
-              if (addPatient(team, patient)) break;
+        if (useExperimentalLogic) {
+          [...unassignedIPD].sort((a, b) => spatialPathIndex(a) - spatialPathIndex(b)).forEach(patient => {
+            const candidates = inPatientTeams.filter((team: string) => {
+              const used = (assignments[team] || []).filter((p: any) => p.status === 'ipd' || p.status === 'er').length;
+              return used < (inPatientCapacity[team] ?? 0);
+            });
+            const bestTeam = candidates
+              .map((team: string, index: number) => {
+                const center = teamCenter(team);
+                const distance = center ? distanceScore(patient, center) : 0;
+                const totalLoad = assignments[team]?.length || 0;
+                const ipdLoad = (assignments[team] || []).filter((p: any) => p.status === 'ipd' || p.status === 'er').length;
+                return { team, score: distance + (ipdLoad * 2) + (totalLoad * 0.25) + (index * 0.01) };
+              })
+              .sort((a, b) => a.score - b.score)[0]?.team;
+            if (bestTeam) {
+              addPatient(bestTeam, patient);
             }
-          }
-        });
+          });
+        } else {
+          unassignedIPD.forEach(patient => {
+            for (const team of inPatientTeams) {
+              if ((assignments[team]?.length || 0) < inPatientCapacity[team]) {
+                if (addPatient(team, patient)) break;
+              }
+            }
+          });
+        }
       }
 
       const { specialTeam, regularTeams } = rules.mainDistribution;
@@ -1678,37 +1946,53 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       const participating = regularTeams;
 
       // Step 2: Calculate final quotas before assigning remaining patients.
-      const regularTargets: Record<string, number> = {};
-      let regularOpenSlots = 0;
-      for (const team of participating) {
-        const baseCapacity = maxCap[team] ?? DEFAULT_TEAM_CAPACITY;
-        const currentCount = assignments[team]?.length || 0;
-        regularTargets[team] = Math.max(currentCount, baseCapacity);
-        regularOpenSlots += Math.max(0, baseCapacity - currentCount);
-      }
-
-      let remainingCount = allPatients.length - assignedIds.size;
-      const leaderCount = specialTeam
-        ? Math.min(specialTeam.capacity || 0, Math.max(0, remainingCount - regularOpenSlots))
-        : 0;
-      remainingCount -= leaderCount;
-
-      let extraRegularCount = Math.max(0, remainingCount - regularOpenSlots);
-      let quotaRound = DEFAULT_TEAM_CAPACITY;
-      while (extraRegularCount > 0 && participating.length > 0) {
-        let assignedThisRound = false;
+      let leaderCount = 0;
+      let regularTargets: Record<string, number> = {};
+      if (useExperimentalLogic) {
+        const regularSoftLimit = Object.fromEntries(
+          participating.map((team: string) => [team, maxCap[team] ?? DEFAULT_TEAM_CAPACITY])
+        );
+        const regularBaseCapacity = participating.reduce(
+          (sum: number, team: string) => sum + (regularSoftLimit[team] ?? DEFAULT_TEAM_CAPACITY),
+          0
+        );
+        leaderCount = specialTeam
+          ? Math.min(specialTeam.capacity || 0, Math.max(0, allPatients.length - regularBaseCapacity))
+          : 0;
+        const regularTargetCount = Math.max(0, allPatients.length - leaderCount);
+        regularTargets = buildBalancedRegularTargets(participating, regularTargetCount, regularSoftLimit);
+      } else {
+        let regularOpenSlots = 0;
         for (const team of participating) {
-          if (extraRegularCount <= 0) break;
-          if ((regularTargets[team] || 0) <= quotaRound) {
-            regularTargets[team] = (regularTargets[team] || 0) + 1;
-            extraRegularCount--;
-            assignedThisRound = true;
-          }
+          const baseCapacity = maxCap[team] ?? DEFAULT_TEAM_CAPACITY;
+          const currentCount = assignments[team]?.length || 0;
+          regularTargets[team] = Math.max(currentCount, baseCapacity);
+          regularOpenSlots += Math.max(0, baseCapacity - currentCount);
         }
-        if (!assignedThisRound) quotaRound++;
+
+        let remainingCount = allPatients.length - assignedIds.size;
+        leaderCount = specialTeam
+          ? Math.min(specialTeam.capacity || 0, Math.max(0, remainingCount - regularOpenSlots))
+          : 0;
+        remainingCount -= leaderCount;
+
+        let extraRegularCount = Math.max(0, remainingCount - regularOpenSlots);
+        let quotaRound = DEFAULT_TEAM_CAPACITY;
+        while (extraRegularCount > 0 && participating.length > 0) {
+          let assignedThisRound = false;
+          for (const team of participating) {
+            if (extraRegularCount <= 0) break;
+            if ((regularTargets[team] || 0) <= quotaRound) {
+              regularTargets[team] = (regularTargets[team] || 0) + 1;
+              extraRegularCount--;
+              assignedThisRound = true;
+            }
+          }
+          if (!assignedThisRound) quotaRound++;
+        }
       }
 
-      // Step 3: Reserve leader patients first, then fill regular quotas by bed order.
+      // Step 3: Reserve leader patients first, then fill regular quotas.
       if (leaderCount > 0 && specialTeam) {
         const leaderPatients = unassignedByBed()
           .filter(p => p.status === 'opd' && !p.isHepatitis)
@@ -1720,7 +2004,12 @@ export class ScheduleComponent implements OnInit, OnDestroy {
         leaderPatients.forEach((patient) => addPatient(specialTeam.name, patient));
       }
 
-      assignByQuota(unassignedByBed(), participating, regularTargets);
+      if (useExperimentalLogic) {
+        assignResponsibilityZoneByQuota(unassignedBySpatial(), participating, regularTargets);
+        improveSpatialAssignmentsBySwap(participating);
+      } else {
+        assignByQuota(unassignedByBed(), participating, regularTargets);
+      }
 
       // Step 4: Extreme fallback for unexpected config/data gaps.
       assignByQuota(unassignedByBed(), participating, Object.fromEntries(

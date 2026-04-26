@@ -789,6 +789,16 @@ button {
   background-color: #138496;
 }
 
+.btn-today-ghost {
+  background-color: transparent;
+  color: #117a8b;
+  border-color: #17a2b8;
+}
+
+.btn-today-ghost:hover:not(:disabled) {
+  background-color: #e8f7fa;
+}
+
 .btn-warning {
   background-color: #ffc107;
   color: #212529;

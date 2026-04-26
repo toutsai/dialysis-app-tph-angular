@@ -19,7 +19,7 @@
           <span class="current-date-text">{{ currentDateDisplay() }}</span>
           <span class="weekday-display">({{ weekdayDisplay() }})</span>
           <button class="btn" (click)="changeDate(1)">後一天 &raquo;</button>
-          <button class="btn btn-info" (click)="goToToday()">今天</button>
+          <button class="btn btn-today-ghost" (click)="goToToday()">今天</button>
           <button class="btn btn-warning" (click)="runScheduleCheck()">排程檢視</button>
           @if (auth.canEditSchedules()) {
             <button
@@ -36,6 +36,14 @@
               [disabled]="isPageLocked()"
             >
               自動分組
+            </button>
+            <button
+              class="btn"
+              style="background-color: #20a8b8; color: white; border-color: #20a8b8"
+              (click)="autoAssignNurseTeamsExperimental()"
+              [disabled]="isPageLocked()"
+            >
+              新版自動分組(試)
             </button>
             <button
               class="btn btn-config-icon"
