@@ -9,6 +9,7 @@ import {
   DestroyRef,
 } from '@angular/core';
 import { ApiConfigService } from './api-config.service';
+import { AuthService } from './auth.service';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -21,7 +22,7 @@ export interface TaskItem {
   content: string;
   type?: string;
   category?: 'task' | 'message';
-  status: 'pending' | 'resolved' | 'cancelled';
+  status: string;
   targetDate?: string;
   creator: { uid: string; name: string };
   assignee?: { uid: string; name: string };
@@ -39,9 +40,15 @@ export interface FeedMessage {
   type?: string;
   category?: string;
   status: string;
+  targetDate?: string;
   creator: { uid: string; name: string };
   createdAt: string | Date;
   [key: string]: unknown;
+}
+
+interface ConditionRecordRef {
+  patientId: string;
+  recordDate: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -76,7 +83,7 @@ function toDateStr(
   return d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
 }
 
-// Retention window
+// Pending tasks/messages stay visible; this window only limits non-pending items.
 const RETENTION_DAYS = 7;
 
 // Polling interval
@@ -89,6 +96,7 @@ const POLL_INTERVAL = 15_000; // 15 seconds
 @Injectable({ providedIn: 'root' })
 export class TaskStoreService implements OnDestroy {
   private readonly firebaseService = inject(ApiConfigService);
+  private readonly auth = inject(AuthService);
   private readonly destroyRef = inject(DestroyRef);
 
   // -----------------------------------------------------------------------
@@ -99,7 +107,7 @@ export class TaskStoreService implements OnDestroy {
   readonly feedMessages = signal<FeedMessage[]>([]);
   readonly feedMessagesVersion = signal<number>(0);
   readonly isLoading = signal<boolean>(false);
-  readonly conditionRecordPatientIds = signal<Set<string>>(new Set());
+  readonly conditionRecordDatesByPatient = signal<Map<string, Set<string>>>(new Map());
 
   // -----------------------------------------------------------------------
   // Computed signals
@@ -171,7 +179,7 @@ export class TaskStoreService implements OnDestroy {
     this.myTasks.set([]);
     this.mySentTasks.set([]);
     this.feedMessages.set([]);
-    this.conditionRecordPatientIds.set(new Set());
+    this.conditionRecordDatesByPatient.set(new Map());
     this.currentUid = null;
     console.log('[TaskStoreService] Polling stopped');
   }
@@ -184,13 +192,20 @@ export class TaskStoreService implements OnDestroy {
   ): Map<string, Set<string>> {
     const map = new Map<string, Set<string>>();
     for (const msg of this.feedMessages()) {
-      if (toDateStr(msg.createdAt) !== dateStr) continue;
+      if (!this.shouldShowMessageOnDate(msg, dateStr)) continue;
       const pid = msg.patientId;
       if (!pid) continue;
       if (!map.has(pid)) {
         map.set(pid, new Set<string>());
       }
       map.get(pid)!.add(msg.type || '常規');
+    }
+    for (const [pid, dates] of this.conditionRecordDatesByPatient()) {
+      if (!dates.has(dateStr)) continue;
+      if (!map.has(pid)) {
+        map.set(pid, new Set<string>());
+      }
+      map.get(pid)!.add('record');
     }
     return map;
   }
@@ -211,8 +226,10 @@ export class TaskStoreService implements OnDestroy {
       }
       map.get(pid)!.add(msg.type || '常規');
     }
-    // Also add 'record' for patients with condition records
-    for (const pid of this.conditionRecordPatientIds()) {
+    // Also add 'record' for patients with condition records today.
+    const today = todayStr();
+    for (const [pid, dates] of this.conditionRecordDatesByPatient()) {
+      if (!dates.has(today)) continue;
       if (!map.has(pid)) {
         map.set(pid, new Set<string>());
       }
@@ -223,6 +240,19 @@ export class TaskStoreService implements OnDestroy {
       result.set(pid, Array.from(types));
     }
     return result;
+  }
+
+  updateItemLocally(
+    id: string,
+    updates: Partial<TaskItem & FeedMessage>,
+  ): void {
+    const applyUpdates = <T extends { id: string }>(items: T[]): T[] =>
+      items.map((item) => (item.id === id ? { ...item, ...updates } : item));
+
+    this.myTasks.update((items) => applyUpdates(items));
+    this.mySentTasks.update((items) => applyUpdates(items));
+    this.feedMessages.update((items) => applyUpdates(items));
+    this.feedMessagesVersion.update((v) => v + 1);
   }
 
   /**
@@ -243,18 +273,18 @@ export class TaskStoreService implements OnDestroy {
     const cutoff = daysAgoISO(RETENTION_DAYS);
 
     try {
-      const [myTasks, sentTasks, feedMessages, conditionIds] = await Promise.all([
+      const [myTasks, sentTasks, feedMessages, conditionRecords] = await Promise.all([
         this.fetchMyTasks(uid, cutoff),
         this.fetchSentTasks(uid, cutoff),
         this.fetchFeedMessages(cutoff),
-        this.fetchConditionRecordIds(cutoff),
+        this.fetchConditionRecords(cutoff),
       ]);
 
       this.myTasks.set(myTasks);
       this.mySentTasks.set(sentTasks);
       this.feedMessages.set(feedMessages);
       this.feedMessagesVersion.update((v) => v + 1);
-      this.conditionRecordPatientIds.set(new Set(conditionIds));
+      this.conditionRecordDatesByPatient.set(this.buildConditionRecordDateMap(conditionRecords));
     } catch (error) {
       console.error('[TaskStoreService] Polling error:', error);
     }
@@ -262,7 +292,9 @@ export class TaskStoreService implements OnDestroy {
 
   private async fetchMyTasks(uid: string, since: string): Promise<TaskItem[]> {
     try {
-      const params = new URLSearchParams({ assignee: uid, since });
+      const params = new URLSearchParams({ category: 'task', assignee: uid, since });
+      const role = this.auth.currentUser()?.role;
+      if (role) params.set('assigneeRole', role);
       const res = await fetch(
         `${this.firebaseService.apiBaseUrl}/system/tasks?${params}`,
         { headers: this.firebaseService.getHeaders() },
@@ -277,7 +309,7 @@ export class TaskStoreService implements OnDestroy {
 
   private async fetchSentTasks(uid: string, since: string): Promise<TaskItem[]> {
     try {
-      const params = new URLSearchParams({ creator: uid, since });
+      const params = new URLSearchParams({ category: 'task', creator: uid, since });
       const res = await fetch(
         `${this.firebaseService.apiBaseUrl}/system/tasks?${params}`,
         { headers: this.firebaseService.getHeaders() },
@@ -305,9 +337,9 @@ export class TaskStoreService implements OnDestroy {
     }
   }
 
-  private async fetchConditionRecordIds(since: string): Promise<string[]> {
+  private async fetchConditionRecords(since: string): Promise<ConditionRecordRef[]> {
     try {
-      const params = new URLSearchParams({ since });
+      const params = new URLSearchParams({ startDate: since });
       const res = await fetch(
         `${this.firebaseService.apiBaseUrl}/orders/condition-records?${params}`,
         { headers: this.firebaseService.getHeaders() },
@@ -316,10 +348,31 @@ export class TaskStoreService implements OnDestroy {
       const data = await res.json();
       const items = Array.isArray(data) ? data : (data.data || []);
       return items
-        .filter((item: any) => item.patientId)
-        .map((item: any) => item.patientId as string);
+        .filter((item: any) => item.patientId && item.recordDate)
+        .map((item: any) => ({
+          patientId: item.patientId as string,
+          recordDate: item.recordDate as string,
+        }));
     } catch {
       return [];
     }
+  }
+
+  private shouldShowMessageOnDate(msg: FeedMessage, dateStr: string): boolean {
+    const excludedStatuses = new Set(['completed', 'resolved', 'cancelled']);
+    if (msg.status && excludedStatuses.has(msg.status)) return false;
+    if (msg.targetDate) return msg.targetDate === dateStr;
+    return true;
+  }
+
+  private buildConditionRecordDateMap(records: ConditionRecordRef[]): Map<string, Set<string>> {
+    const map = new Map<string, Set<string>>();
+    for (const record of records) {
+      if (!map.has(record.patientId)) {
+        map.set(record.patientId, new Set<string>());
+      }
+      map.get(record.patientId)!.add(record.recordDate);
+    }
+    return map;
   }
 }

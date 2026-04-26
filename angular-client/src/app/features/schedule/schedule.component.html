@@ -410,10 +410,11 @@
                 }
               </div>
             }
+            <div class="nursing-station">護理站</div>
           </div>
 
-          <!-- Aisle (Nursing Station) -->
-          <div class="aisle">護理站</div>
+          <!-- Central Aisle -->
+          <div class="aisle">中央走道</div>
 
           <!-- Right Wing -->
           <div class="right-wing">
@@ -771,6 +772,7 @@
     [isVisible]="isConditionRecordDialogVisible()"
     [patientId]="selectedPatientForDialog()!.id"
     [patientName]="selectedPatientForDialog()!.name"
+    [targetDate]="currentDateDisplay()"
     (closeEvent)="closeConditionRecordDialog()"
   ></app-condition-record-display-dialog>
 }

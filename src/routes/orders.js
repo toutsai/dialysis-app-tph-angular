@@ -910,12 +910,12 @@ router.get('/condition-records', authenticate, (req, res) => {
     }
 
     if (startDate) {
-      query += ' AND created_at >= ?'
+      query += ' AND record_date >= ?'
       params.push(startDate)
     }
 
     if (endDate) {
-      query += ' AND created_at <= ?'
+      query += ' AND record_date <= ?'
       params.push(endDate)
     }
 

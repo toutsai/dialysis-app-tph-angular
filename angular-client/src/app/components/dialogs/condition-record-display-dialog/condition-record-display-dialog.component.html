@@ -2,7 +2,7 @@
   <div class="dialog-backdrop">
     <div class="condition-record-dialog">
       <header class="dialog-header">
-        <h3>{{ patientName }} 的近期病情紀錄</h3>
+        <h3>{{ dialogTitle }}</h3>
         <button class="close-btn" (click)="close()" title="關閉">&times;</button>
       </header>
       <main class="dialog-content">
@@ -21,7 +21,7 @@
             }
           </ul>
         } @else {
-          <div class="empty-state">該病人近 7 天內沒有病情紀錄。</div>
+          <div class="empty-state">{{ emptyMessage }}</div>
         }
       </main>
       <footer class="dialog-footer">

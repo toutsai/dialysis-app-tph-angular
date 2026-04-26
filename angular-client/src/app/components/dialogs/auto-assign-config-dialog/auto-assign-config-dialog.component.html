@@ -47,7 +47,7 @@
 
           @if (config.earlyShift.inpatientTeams.length > 0) {
             <div class="config-row sub-row">
-              <label>各組上限</label>
+              <label>住院/急診上限</label>
               <div class="capacity-inputs">
                 @for (t of config.earlyShift.inpatientTeams; track t) {
                   <div class="cap-item">
@@ -122,7 +122,7 @@
 
           @if (config.lateShift.inpatientTeams.length > 0) {
             <div class="config-row sub-row">
-              <label>各組上限</label>
+              <label>住院/急診上限</label>
               <div class="capacity-inputs">
                 @for (t of config.lateShift.inpatientTeams; track t) {
                   <div class="cap-item">

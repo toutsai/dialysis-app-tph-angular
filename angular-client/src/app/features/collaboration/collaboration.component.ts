@@ -1,5 +1,6 @@
 import {
   Component,
+  ChangeDetectionStrategy,
   OnInit,
   OnDestroy,
   inject,
@@ -76,6 +77,7 @@ interface PatientOption {
   imports: [CommonModule, FormsModule, TaskCreateDialogComponent],
   templateUrl: './collaboration.component.html',
   styleUrl: './collaboration.component.css',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CollaborationComponent implements OnInit, OnDestroy {
   // Services
@@ -196,13 +198,13 @@ export class CollaborationComponent implements OnInit, OnDestroy {
 
   readonly sortedMyTasks = computed(() => {
     const tasks = (this.taskStore.myTasks() as unknown as TaskItem[])
-      .filter((t) => t.category === 'task' || t.assignee);
+      .filter((t) => this.isTaskItem(t));
     return this.sortItems(tasks);
   });
 
   readonly sortedMySentTasks = computed(() => {
     const tasks = (this.taskStore.mySentTasks() as unknown as TaskItem[])
-      .filter((t) => t.category === 'task' || t.assignee);
+      .filter((t) => this.isTaskItem(t));
     return this.sortItems(tasks);
   });
 
@@ -353,15 +355,17 @@ export class CollaborationComponent implements OnInit, OnDestroy {
   async updateTaskStatus(taskId: string, newStatus: string, collectionName = 'tasks'): Promise<void> {
     const user = this.auth.currentUser();
     if (!user) return;
+    const localUpdates = {
+      status: newStatus,
+      resolvedBy: {
+        uid: String((user as Record<string, unknown>)['uid'] || ''),
+        name: String((user as Record<string, unknown>)['name'] || ''),
+      },
+      resolvedAt: new Date().toISOString(),
+    };
     try {
-      await this.tasksApi.update(taskId, {
-        status: newStatus,
-        resolvedBy: {
-          uid: (user as Record<string, unknown>)['uid'],
-          name: (user as Record<string, unknown>)['name'],
-        },
-        resolvedAt: new Date().toISOString(),
-      } as any);
+      this.taskStore.updateItemLocally(taskId, localUpdates);
+      await this.tasksApi.update(taskId, localUpdates as any);
       this.notificationService.show(
         newStatus === 'completed' ? '\u72C0\u614B\u5DF2\u66F4\u65B0\u70BA\u5DF2\u8B80' : '\u72C0\u614B\u5DF2\u79FB\u56DE\u5F85\u8FA6',
         'success',
@@ -420,6 +424,10 @@ export class CollaborationComponent implements OnInit, OnDestroy {
   }
 
   // Private helpers
+  private isTaskItem(item: TaskItem): boolean {
+    return (item.category || 'task') === 'task';
+  }
+
   private sortItems(items: TaskItem[]): TaskItem[] {
     if (!Array.isArray(items)) return [];
     return [...items].sort((a, b) => {

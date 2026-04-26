@@ -83,7 +83,7 @@ export class DailyRecordsSummaryDialogComponent implements OnChanges {
   }
 
   getPatientInfo(patientId: string): any {
-    return this.patientInfoMap[patientId] || { bedNum: '-', medicalRecordNumber: '' };
+    return this.patientInfoMap[patientId] || { bedNum: '-', patientName: '', medicalRecordNumber: '' };
   }
 
   async copyMedicalRecordNumber(mrn: string): Promise<void> {

@@ -149,6 +149,7 @@ const ALL_BED_NUMBERS: (string | number)[] = [
 const HEPATITIS_BEDS: (string | number)[] = ['空', 31, 32, 33, 35, 36];
 const AISLE_SIDE_BEDS: number[] = [1, 7, 8, 15, 16, 22, 23, 29, 31, 36, 37, 53, 55, 61, 62, 65];
 const PERIPHERAL_BED_COUNT = 6;
+const DEFAULT_TEAM_CAPACITY = 4;
 
 const FREQ_TO_DAYS: Record<string, number[]> = {
   '一三五': [1, 3, 5],
@@ -305,7 +306,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     const patients = this.patientMap();
     const teams = this.currentTeamsRecord().teams;
     const dailyMessageTypes = this.taskStore.getPatientMessageTypesMapForDate(this.currentDateDisplay());
-    const pendingMessageTypes = this.taskStore.getPendingMessageTypesMap();
     const views = new Map<string, ScheduleCellView>();
 
     for (const [shiftId, slotData] of Object.entries(this.currentRecord.schedule || {})) {
@@ -325,7 +325,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
           ? patientMode
           : null;
       const dailyTypes = [...(dailyMessageTypes.get(patientId) || [])];
-      const pendingTypes = pendingMessageTypes.get(patientId) || [];
+      const pendingTypes = [...(dailyMessageTypes.get(patientId) || [])];
       const status = (patientInfo?.['status'] as string) || '';
 
       views.set(shiftId, {
@@ -1027,6 +1027,8 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     data.push([]);
     const headers = ['床號', getShiftDisplayName('early'), getShiftDisplayName('noon'), getShiftDisplayName('late')];
     data.push(headers);
+
+    const views = this.scheduleCellViews();
     const allBedsToExport: (string | number)[] = [...this.sortedBedNumbers()];
     for (let i = 1; i <= PERIPHERAL_BED_COUNT; i++) {
       allBedsToExport.push(`外圍 ${i}`);
@@ -1039,17 +1041,33 @@ export class ScheduleComponent implements OnInit, OnDestroy {
           ? `peripheral-${bedNum}-${shiftCode}`
           : `bed-${bedNum}-${shiftCode}`;
         const slot = this.currentRecord.schedule[shiftId];
-        if (slot?.patientId) {
-          const patient = this.patientMap().get(slot.patientId) as Record<string, unknown>;
-          const statusMap: Record<string, string> = { opd: '門診', ipd: '住院', er: '急診' };
-          const cellText = `${patient?.['name'] || '未知'} (${patient?.['medicalRecordNumber'] || 'N/A'})\n[${statusMap[patient?.['status'] as string] || '未知'}]\n${this.getCombinedNote(shiftId)}`;
-          row.push(cellText);
-        } else {
+        if (!slot?.patientId) {
           row.push('');
+          return;
         }
+
+        const view = views.get(shiftId);
+        const patient = this.patientMap().get(slot.patientId) as Record<string, unknown> | undefined;
+        const patientInfo = this.getArchivedOrLivePatientInfo(slot) || patient;
+        const status = (patientInfo?.['status'] || patient?.['status']) as string | undefined;
+        const wardNumber = view?.wardNumber || ((patientInfo?.['wardNumber'] || patient?.['wardNumber']) as string) || '';
+        const admissionInfo = status === 'ipd'
+          ? `住院${wardNumber ? `(${wardNumber})` : ''}`
+          : status === 'er'
+            ? `急診${wardNumber ? `(${wardNumber})` : ''}`
+            : '';
+        const lines = [
+          view?.medicalRecordNumber || patient?.['medicalRecordNumber'] || '',
+          view?.patientName || patient?.['name'] || '',
+          admissionInfo,
+          view?.mode || '',
+          view?.combinedNote || this.getCombinedNote(shiftId),
+        ].filter((line) => String(line).trim().length > 0);
+        row.push(lines.join('\n'));
       });
       data.push(row);
     });
+
     const worksheet = XLSX.utils.aoa_to_sheet(data);
     worksheet['!merges'] = [
       { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
@@ -1185,6 +1203,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
           const patient = this.patientMap().get(slot.patientId) as Record<string, unknown>;
           patientInfoMap[slot.patientId] = {
             bedNum,
+            patientName: (patient?.['name'] as string) || '',
             medicalRecordNumber: (patient?.['medicalRecordNumber'] as string) || '',
           };
         }
@@ -1583,6 +1602,8 @@ export class ScheduleComponent implements OnInit, OnDestroy {
 
     const mainArea = (list: any[]) => list.filter(p => !p.isPeripheral);
     const peripheral = (list: any[]) => list.filter(p => p.isPeripheral);
+    const buildRegularTeamCapacity = (teams: string[]) =>
+      Object.fromEntries(teams.map((team) => [team, DEFAULT_TEAM_CAPACITY]));
     const sortByBed = (list: any[]) => [...list].sort((a, b) => {
       const getKey = (id: string) => {
         const parts = id.split('-');
@@ -1610,6 +1631,30 @@ export class ScheduleComponent implements OnInit, OnDestroy {
         }
         return false;
       };
+      const bedSortKey = (patient: any) => {
+        const parts = String(patient.shiftId || '').split('-');
+        if (parts[0] === 'peripheral') return 1000 + (parseInt(parts[1], 10) || 999);
+        return parseInt(parts[1], 10) || 999;
+      };
+      const leaderPriorityKey = (patient: any) => {
+        const key = bedSortKey(patient);
+        if (key === 62 || key === 63) return 0;
+        if (key >= 1 && key <= 7) return 1;
+        return 2;
+      };
+      const unassignedByBed = () =>
+        allPatients
+          .filter(p => !assignedIds.has(p.id))
+          .sort((a, b) => bedSortKey(a) - bedSortKey(b));
+      const assignByQuota = (patients: any[], orderedTeams: string[], targets: Record<string, number>) => {
+        let patientIndex = 0;
+        for (const team of orderedTeams) {
+          while ((assignments[team]?.length || 0) < (targets[team] || 0) && patientIndex < patients.length) {
+            addPatient(team, patients[patientIndex]);
+            patientIndex++;
+          }
+        }
+      };
 
       // Step 1: Priority teams (hepatitis, IPD/ER)
       const { hepatitis, inPatientTeams, inPatientCapacity } = rules.priorityTeams;
@@ -1628,39 +1673,59 @@ export class ScheduleComponent implements OnInit, OnDestroy {
         });
       }
 
-      // Step 2: Special team (A)
       const { specialTeam, regularTeams } = rules.mainDistribution;
-      if (specialTeam) {
-        const availableOPD = allPatients.filter(p => !assignedIds.has(p.id) && p.status === 'opd' && !p.isHepatitis);
-        availableOPD.slice(0, specialTeam.capacity).forEach(p => addPatient(specialTeam.name, p));
-      }
-
-      // Step 3: Distribute remaining evenly across regular teams
       const maxCap = rules.teamMaxCapacity || {};
       const participating = regularTeams;
-      const remaining = allPatients.filter(p => !assignedIds.has(p.id));
-      let totalWorkload = remaining.length;
-      participating.forEach((team: string) => totalWorkload += assignments[team]?.length || 0);
 
-      if (totalWorkload > 0 && participating.length > 0) {
-        const base = Math.floor(totalWorkload / participating.length);
-        const rem = totalWorkload % participating.length;
-        const targets: Record<string, number> = {};
-        participating.forEach((team: string, i: number) => {
-          let target = base + (i < rem ? 1 : 0);
-          // Enforce max capacity for specific teams (e.g., H/I capped at 3)
-          if (maxCap[team] !== undefined) target = Math.min(target, maxCap[team]);
-          targets[team] = target;
-        });
-        let pi = 0;
+      // Step 2: Calculate final quotas before assigning remaining patients.
+      const regularTargets: Record<string, number> = {};
+      let regularOpenSlots = 0;
+      for (const team of participating) {
+        const baseCapacity = maxCap[team] ?? DEFAULT_TEAM_CAPACITY;
+        const currentCount = assignments[team]?.length || 0;
+        regularTargets[team] = Math.max(currentCount, baseCapacity);
+        regularOpenSlots += Math.max(0, baseCapacity - currentCount);
+      }
+
+      let remainingCount = allPatients.length - assignedIds.size;
+      const leaderCount = specialTeam
+        ? Math.min(specialTeam.capacity || 0, Math.max(0, remainingCount - regularOpenSlots))
+        : 0;
+      remainingCount -= leaderCount;
+
+      let extraRegularCount = Math.max(0, remainingCount - regularOpenSlots);
+      let quotaRound = DEFAULT_TEAM_CAPACITY;
+      while (extraRegularCount > 0 && participating.length > 0) {
+        let assignedThisRound = false;
         for (const team of participating) {
-          const needed = Math.max(0, targets[team] - (assignments[team]?.length || 0));
-          if (needed > 0) {
-            remaining.slice(pi, pi + needed).forEach(p => addPatient(team, p));
-            pi += needed;
+          if (extraRegularCount <= 0) break;
+          if ((regularTargets[team] || 0) <= quotaRound) {
+            regularTargets[team] = (regularTargets[team] || 0) + 1;
+            extraRegularCount--;
+            assignedThisRound = true;
           }
         }
+        if (!assignedThisRound) quotaRound++;
       }
+
+      // Step 3: Reserve leader patients first, then fill regular quotas by bed order.
+      if (leaderCount > 0 && specialTeam) {
+        const leaderPatients = unassignedByBed()
+          .filter(p => p.status === 'opd' && !p.isHepatitis)
+          .sort((a, b) => {
+            const priorityDiff = leaderPriorityKey(a) - leaderPriorityKey(b);
+            return priorityDiff !== 0 ? priorityDiff : bedSortKey(a) - bedSortKey(b);
+          })
+          .slice(0, leaderCount);
+        leaderPatients.forEach((patient) => addPatient(specialTeam.name, patient));
+      }
+
+      assignByQuota(unassignedByBed(), participating, regularTargets);
+
+      // Step 4: Extreme fallback for unexpected config/data gaps.
+      assignByQuota(unassignedByBed(), participating, Object.fromEntries(
+        participating.map((team: string) => [team, Number.MAX_SAFE_INTEGER])
+      ));
       return assignments;
     };
 
@@ -1683,14 +1748,12 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     const earlyInpatientCap: Record<string, number> = {};
     for (const [k, v] of Object.entries(earlyCfg.inpatientCapacity)) earlyInpatientCap[`早${k}`] = v;
 
-    // H/I per-shift max capacity = 3 (inpatients + OPD combined)
-    const earlyMaxCap: Record<string, number> = {};
-    for (const t of earlyInpatientTeams) earlyMaxCap[t] = 3;
+    const earlyTeamMaxCap = buildRegularTeamCapacity(earlyRegularTeams);
 
     const earlyRules = {
       priorityTeams: { hepatitis: `早${earlyCfg.hepatitisTeam}`, inPatientTeams: earlyInpatientTeams, inPatientCapacity: earlyInpatientCap },
       mainDistribution: { specialTeam: useEarlyLeader ? { name: `早${earlyCfg.leaderTeam}`, capacity: earlyCfg.leaderCapacity } : null, regularTeams: earlyRegularTeams },
-      teamMaxCapacity: earlyMaxCap,
+      teamMaxCapacity: earlyTeamMaxCap,
     };
 
     const earlyAssignments = distributePatients(sortByBed(earlyMain), earlyTeamsToUse, earlyRules);
@@ -1708,18 +1771,18 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     const noonMain = mainArea(allNoonPatients);
     const useNoonLeader = noonMain.length > earlyCfg.leaderThreshold;
 
-    // Adjust noon inpatient capacity: cross-shift max 3 per group
+    // Adjust noon inpatient capacity by the configured IPD/ER max per inpatient group.
     const noonInpatientCap: Record<string, number> = {};
     for (const [k, v] of Object.entries(earlyCfg.inpatientCapacity)) {
       const teamKey = `早${k}`;
       const usedInEarly = earlyInpatientCounts[teamKey] || 0;
-      noonInpatientCap[teamKey] = Math.max(0, 3 - usedInEarly);
+      noonInpatientCap[teamKey] = Math.max(0, v - usedInEarly);
     }
 
     const noonOnRules = {
       priorityTeams: { hepatitis: `早${earlyCfg.hepatitisTeam}`, inPatientTeams: earlyInpatientTeams, inPatientCapacity: noonInpatientCap },
       mainDistribution: { specialTeam: useNoonLeader ? { name: `早${earlyCfg.leaderTeam}`, capacity: earlyCfg.leaderCapacity } : null, regularTeams: earlyRegularTeams },
-      teamMaxCapacity: earlyMaxCap,
+      teamMaxCapacity: earlyTeamMaxCap,
     };
     const noonOnAssignments = distributePatients(sortByBed(noonMain), earlyTeamsToUse, noonOnRules);
     noonOnAssignments['早外圍'] = peripheral(allNoonPatients);
@@ -1729,10 +1792,12 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     const lateInpatientTeams = lateCfg.inpatientTeams.map(t => `晚${t}`);
     const lateInpatientCap: Record<string, number> = {};
     for (const [k, v] of Object.entries(lateCfg.inpatientCapacity)) lateInpatientCap[`晚${k}`] = v;
+    const lateTeamMaxCap = buildRegularTeamCapacity(lateTeamsToUse);
 
     const lateRules = {
       priorityTeams: { hepatitis: `晚${lateCfg.hepatitisTeam}`, inPatientTeams: lateInpatientTeams, inPatientCapacity: lateInpatientCap },
       mainDistribution: { specialTeam: null, regularTeams: lateTeamsToUse },
+      teamMaxCapacity: lateTeamMaxCap,
     };
 
     const noonOffAssignments = distributePatients(sortByBed(noonMain), lateTeamsToUse, lateRules);

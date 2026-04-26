@@ -27,11 +27,23 @@ export class ConditionRecordDisplayDialogComponent implements OnChanges {
     this.conditionRecordsApi = this.apiManagerService.create<FirestoreRecord>('condition_records');
   }
 
+  get dialogTitle(): string {
+    return this.targetDate
+      ? `${this.patientName} ${this.targetDate} 病情紀錄`
+      : `${this.patientName} 病情紀錄`;
+  }
+
+  get emptyMessage(): string {
+    return this.targetDate
+      ? '此病人於此日期沒有病情紀錄。'
+      : '此病人沒有病情紀錄。';
+  }
+
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['isVisible'] && this.isVisible) {
       this.fetchRecords();
     }
-    if (changes['patientId'] && this.isVisible) {
+    if ((changes['patientId'] || changes['targetDate']) && this.isVisible) {
       this.fetchRecords();
     }
   }
@@ -44,15 +56,12 @@ export class ConditionRecordDisplayDialogComponent implements OnChanges {
 
     this.isLoading = true;
     try {
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      const sevenDaysAgoStr = sevenDaysAgo.toISOString();
-
       const allRecords = await this.conditionRecordsApi.fetchAll();
-      this.records = (allRecords as any[]).filter(
-        (r: any) => r.patientId === this.patientId &&
-          (typeof r.createdAt === 'string' ? r.createdAt >= sevenDaysAgoStr : true)
-      ).sort((a: any, b: any) => {
+      this.records = (allRecords as any[]).filter((r: any) => {
+        if (r.patientId !== this.patientId) return false;
+        if (this.targetDate) return r.recordDate === this.targetDate;
+        return true;
+      }).sort((a: any, b: any) => {
         const dateA = typeof a.createdAt === 'string' ? a.createdAt : '';
         const dateB = typeof b.createdAt === 'string' ? b.createdAt : '';
         return dateB.localeCompare(dateA);

@@ -31,7 +31,7 @@ router.get('/health', (req, res) => {
  */
 router.get('/tasks', authenticate, (req, res) => {
   try {
-    const { status, assignedTo, category, patientId, targetDate } = req.query
+    const { status, assignedTo, assignee, assigneeRole, creator, category, patientId, targetDate, since } = req.query
     const db = getDatabase()
 
     let query = 'SELECT * FROM tasks WHERE status != ?'
@@ -62,6 +62,17 @@ router.get('/tasks', authenticate, (req, res) => {
       params.push(targetDate)
     }
 
+    if (since) {
+      query += ` AND (
+        status = 'pending'
+        OR created_at >= ?
+        OR resolved_at >= ?
+        OR completed_at >= ?
+        OR updated_at >= ?
+      )`
+      params.push(since, since, since, since)
+    }
+
     query += ' ORDER BY created_at DESC'
 
     const tasks = db.prepare(query).all(...params)
@@ -89,7 +100,20 @@ router.get('/tasks', authenticate, (req, res) => {
         completedAt: t.completed_at,
         createdAt: t.created_at,
         updatedAt: t.updated_at,
-      })),
+      })).filter((task) => {
+        if (assignee) {
+          const taskAssignee = task.assignee || {}
+          const isAssignedToUser = taskAssignee.value === assignee || taskAssignee.uid === assignee
+          const isAssignedToRole =
+            assigneeRole && (taskAssignee.value === assigneeRole || taskAssignee.role === assigneeRole)
+          if (!isAssignedToUser && !isAssignedToRole) return false
+        }
+        if (creator) {
+          const taskCreator = task.creator || task.createdBy || {}
+          if (taskCreator.uid !== creator) return false
+        }
+        return true
+      }),
     )
   } catch (error) {
     console.error('取得任務列表錯誤:', error)

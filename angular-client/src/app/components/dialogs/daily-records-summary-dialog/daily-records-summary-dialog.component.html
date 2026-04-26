@@ -37,7 +37,7 @@
                       {{ getPatientInfo(record.patientId).medicalRecordNumber || '-' }}
                     </span>
                   </td>
-                  <td class="col-name">{{ record.patientName }}</td>
+                  <td class="col-name">{{ record.patientName || getPatientInfo(record.patientId).patientName || '-' }}</td>
                   <td class="col-time">{{ formatTime(record.createdAt) }}</td>
                   <td class="col-content">{{ record.content }}</td>
                 </tr>
