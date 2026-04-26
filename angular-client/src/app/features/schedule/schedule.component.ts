@@ -100,6 +100,21 @@ interface TeamsRecord {
   teams: Record<string, Record<string, string | null>>;
 }
 
+interface ScheduleCellView {
+  patientId: string;
+  patientName: string;
+  medicalRecordNumber: string;
+  mode: string | null;
+  combinedNote: string;
+  cellStyle: Record<string, boolean>;
+  messageTypes: string[];
+  wardNumber: string;
+  isInpatientOrER: boolean;
+  nurseTeam: string;
+  nurseTeamIn: string;
+  nurseTeamOut: string;
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -148,6 +163,7 @@ const FREQ_TO_DAYS: Record<string, number[]> = {
 };
 
 const BASE_TEAMS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'];
+const PERIPHERAL_BED_RANGE = Array.from({ length: PERIPHERAL_BED_COUNT }, (_, i) => i + 1);
 
 // ---------------------------------------------------------------------------
 // Component
@@ -197,6 +213,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
 
   // Reactive state
   readonly currentDate = signal(new Date());
+  private readonly scheduleRevision = signal(0);
   readonly hasUnsavedChanges = signal(false);
   readonly statusIndicator = signal('');
   currentRecord: ScheduleRecord = { id: null, date: '', schedule: {}, names: {} };
@@ -283,7 +300,55 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     return day === 0 ? 7 : day;
   });
 
-  get scheduledPatientIds(): Set<string> {
+  readonly scheduleCellViews = computed(() => {
+    this.scheduleRevision();
+    const patients = this.patientMap();
+    const teams = this.currentTeamsRecord().teams;
+    const dailyMessageTypes = this.taskStore.getPatientMessageTypesMapForDate(this.currentDateDisplay());
+    const pendingMessageTypes = this.taskStore.getPendingMessageTypesMap();
+    const views = new Map<string, ScheduleCellView>();
+
+    for (const [shiftId, slotData] of Object.entries(this.currentRecord.schedule || {})) {
+      if (!slotData?.patientId) continue;
+      const patientInfo = this.getArchivedOrLivePatientInfo(slotData);
+      const patient = patients.get(slotData.patientId) as Record<string, unknown> | undefined;
+      if (!patientInfo && !patient) continue;
+
+      const patientId = slotData.patientId;
+      const shiftCode = shiftId.split('-').pop() || '';
+      const teamData = teams[`${patientId}-${shiftCode}`] || {};
+      const modeOverride = slotData.modeOverride as string | undefined;
+      const patientMode = (patient?.['mode'] as string | undefined) || null;
+      const mode = modeOverride && modeOverride !== 'HD'
+        ? modeOverride
+        : patientMode && patientMode !== 'HD'
+          ? patientMode
+          : null;
+      const dailyTypes = [...(dailyMessageTypes.get(patientId) || [])];
+      const pendingTypes = pendingMessageTypes.get(patientId) || [];
+      const status = (patientInfo?.['status'] as string) || '';
+
+      views.set(shiftId, {
+        patientId,
+        patientName: ((patient?.['name'] || patientInfo?.['name']) as string) || '',
+        medicalRecordNumber: ((patient?.['medicalRecordNumber'] || patientInfo?.['medicalRecordNumber']) as string) || '',
+        mode,
+        combinedNote: this.buildCombinedNote(slotData),
+        cellStyle: getUnifiedCellStyle(slotData, patientInfo, null, dailyTypes),
+        messageTypes: pendingTypes,
+        wardNumber: ((patient?.['wardNumber'] || patientInfo?.['wardNumber']) as string) || '',
+        isInpatientOrER: status === 'ipd' || status === 'er',
+        nurseTeam: (teamData['nurseTeam'] as string) || '',
+        nurseTeamIn: (teamData['nurseTeamIn'] as string) || '',
+        nurseTeamOut: (teamData['nurseTeamOut'] as string) || '',
+      });
+    }
+
+    return views;
+  });
+
+  readonly scheduledPatientIdsComputed = computed(() => {
+    this.scheduleRevision();
     const ids = new Set<string>();
     if (this.currentRecord.schedule) {
       for (const [, slot] of Object.entries(this.currentRecord.schedule)) {
@@ -291,6 +356,10 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       }
     }
     return ids;
+  });
+
+  get scheduledPatientIds(): Set<string> {
+    return this.scheduledPatientIdsComputed();
   }
 
   get statsToolbarData() {
@@ -441,46 +510,26 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   getPatientName(shiftId: string): string {
-    const patientId = this.currentRecord.schedule[shiftId]?.patientId;
-    const patient = this.patientMap().get(patientId || '');
-    return ((patient as Record<string, unknown>)?.['name'] as string) || '';
+    return this.scheduleCellViews().get(shiftId)?.patientName || '';
   }
 
   getPatientMode(shiftId: string): string | null {
-    const slotData = this.currentRecord.schedule[shiftId];
-    if (!slotData?.patientId) return null;
-    // 優先使用 slot 上的 modeOverride（來自臨時加洗不同模式）
-    if (slotData.modeOverride && slotData.modeOverride !== 'HD') {
-      return slotData.modeOverride as string;
-    }
-    const patient = this.patientMap().get(slotData.patientId);
-    const mode = ((patient as Record<string, unknown>)?.['mode'] as string) || null;
-    return mode && mode !== 'HD' ? mode : null;
+    return this.scheduleCellViews().get(shiftId)?.mode || null;
   }
 
   getCombinedNote(shiftId: string): string {
-    const slotData = this.currentRecord.schedule[shiftId];
-    if (!slotData) return '';
-    const autoTags = (slotData.autoNote || '').split(' ').filter(Boolean);
-    const manualTags = (slotData.manualNote || '').split(' ').filter(Boolean);
-    const combinedTags = [...new Set([...autoTags, ...manualTags])];
-    const finalTags = combinedTags.filter((tag) => !['住', '急'].includes(tag));
-    return finalTags.join(' ');
+    return this.scheduleCellViews().get(shiftId)?.combinedNote || '';
   }
 
   getPatientCellStyle(shiftId: string): Record<string, boolean> {
-    const slotData = this.currentRecord.schedule[shiftId];
-    const patientForStyle = this.getArchivedOrLivePatientInfo(slotData);
-    if (!patientForStyle) return {};
-    const patientId = slotData?.patientId;
-    if (!patientId) return getUnifiedCellStyle(slotData, patientForStyle, null, []);
-    const messageTypesForPatient =
-      [...(this.taskStore.getPatientMessageTypesMapForDate(this.formatDate(this.currentDate())).get(patientId) || [])];
-    return getUnifiedCellStyle(slotData, patientForStyle, null, messageTypesForPatient);
+    return this.scheduleCellViews().get(shiftId)?.cellStyle || {};
   }
 
   getMessageTypesForPatient(patientId: string): string[] {
     if (!patientId) return [];
+    for (const view of this.scheduleCellViews().values()) {
+      if (view.patientId === patientId) return view.messageTypes;
+    }
     return this.taskStore.getPendingMessageTypesMap().get(patientId) || [];
   }
 
@@ -512,27 +561,24 @@ export class ScheduleComponent implements OnInit, OnDestroy {
 
   getPatientWardNumber(patientId: string | undefined): string {
     if (!patientId) return '';
+    for (const view of this.scheduleCellViews().values()) {
+      if (view.patientId === patientId) return view.wardNumber;
+    }
     const patient = this.patientMap().get(patientId);
     return ((patient as Record<string, unknown>)?.['wardNumber'] as string) || '';
   }
 
   isInpatientOrER(shiftId: string): boolean {
-    const slotData = this.currentRecord.schedule[shiftId];
-    const patientInfo = this.getArchivedOrLivePatientInfo(slotData);
-    const status = (patientInfo as Record<string, unknown>)?.['status'] as string;
-    return status === 'ipd' || status === 'er';
+    return this.scheduleCellViews().get(shiftId)?.isInpatientOrER || false;
   }
 
   getNurseTeam(shiftId: string, type: string): string {
-    const slot = this.currentRecord.schedule[shiftId];
-    if (!slot?.patientId) return '';
-    const shiftCode = shiftId.split('-').pop()!;
-    const key = `${slot.patientId}-${shiftCode}`;
-    const teamData = this.currentTeamsRecord().teams[key];
-    if (!teamData) return '';
-    if (type === 'single') return teamData['nurseTeam'] || '';
-    else if (type === 'in') return teamData['nurseTeamIn'] || '';
-    else if (type === 'out') return teamData['nurseTeamOut'] || '';
+    const view = this.scheduleCellViews().get(shiftId);
+    if (view) {
+      if (type === 'single') return view.nurseTeam;
+      if (type === 'in') return view.nurseTeamIn;
+      if (type === 'out') return view.nurseTeamOut;
+    }
     return '';
   }
 
@@ -1303,6 +1349,15 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   // Private methods
   // ---------------------------------------------------------------------------
 
+  private buildCombinedNote(slotData: ScheduleSlotData | undefined): string {
+    if (!slotData) return '';
+    const autoTags = (slotData.autoNote || '').split(' ').filter(Boolean);
+    const manualTags = (slotData.manualNote || '').split(' ').filter(Boolean);
+    const combinedTags = [...new Set([...autoTags, ...manualTags])];
+    const finalTags = combinedTags.filter((tag) => !['住', '急'].includes(tag));
+    return finalTags.join(' ');
+  }
+
   private getArchivedOrLivePatientInfo(slotData: ScheduleSlotData | undefined): Record<string, unknown> | null {
     if (!slotData?.patientId) return null;
     if (slotData.archivedPatientInfo) return slotData.archivedPatientInfo;
@@ -1323,12 +1378,14 @@ export class ScheduleComponent implements OnInit, OnDestroy {
 
   private setChange(): void {
     if (this.isPageLocked()) return;
+    this.scheduleRevision.update((revision) => revision + 1);
     this.hasUnsavedChanges.set(true);
     this.statusIndicator.set('有未儲存的變更');
   }
 
   private setTeamChange(): void {
     if (this.isPageLocked()) return;
+    this.scheduleRevision.update((revision) => revision + 1);
     this.hasUnsavedTeamChanges.set(true);
     this.hasUnsavedChanges.set(true);
     this.statusIndicator.set('有未儲存的變更');
@@ -1426,6 +1483,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       this.currentRecord.schedule = ((scheduleRecord as Record<string, unknown>)?.['schedule'] as Record<string, ScheduleSlotData>) || {};
       this.currentRecord.names = ((scheduleRecord as Record<string, unknown>)?.['names'] as Record<string, string>) || {};
       this.currentTeamsRecord.set(teamsData || { id: null, date: dateStr, teams: {} });
+      this.scheduleRevision.update((revision) => revision + 1);
       this.statusIndicator.set(((scheduleRecord as Record<string, unknown>)?.['id']) ? '資料已載入' : '本日無排程資料');
     } catch (error: unknown) {
       console.error(`載入 ${dateStr} 資料失敗:`, error);
@@ -1723,6 +1781,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
 
   // Helper to generate array for ngFor
   peripheralBedRange(): number[] {
-    return Array.from({ length: PERIPHERAL_BED_COUNT }, (_, i) => i + 1);
+    return PERIPHERAL_BED_RANGE;
   }
 }
