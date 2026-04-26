@@ -234,6 +234,7 @@ router.get('/range', authenticate, (req, res) => {
   }
 })
 
+router.get('/exceptions', authenticate, getExceptionsList)
 router.get('/exceptions/list', authenticate, getExceptionsList)
 router.get('/exception-tasks', authenticate, getExceptionsList)
 
@@ -554,6 +555,8 @@ async function patchBaseSchedulePatient(req, res) {
 }
 router.patch('/base/master/patient/:patientId', ...isEditor, patchBaseSchedulePatient)
 router.patch('/base/MASTER_SCHEDULE/patient/:patientId', ...isEditor, patchBaseSchedulePatient)
+router.patch('/base/master//patient/:patientId', ...isEditor, patchBaseSchedulePatient)
+router.patch('/base/MASTER_SCHEDULE//patient/:patientId', ...isEditor, patchBaseSchedulePatient)
 
 /**
  * POST /api/schedules/sync/initialize

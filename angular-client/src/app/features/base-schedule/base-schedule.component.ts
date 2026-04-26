@@ -559,10 +559,12 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
     }
     this.statusText.set('儲存中...');
     try {
+      const currentSchedule = this.masterRecord()?.schedule || {};
       await this.baseSchedulesApi.update('MASTER_SCHEDULE', {
-        [`schedule.${patientId}`]: newRuleData,
-        updatedAt: new Date(),
-        lastModifiedBy: this.authService.currentUser()?.uid || 'system_user',
+        schedule: {
+          ...currentSchedule,
+          [patientId]: newRuleData,
+        },
       });
       this.statusText.set('總表已更新');
       await this.loadAllData();

@@ -564,6 +564,9 @@
 .desktop-only {
   display: block;
 }
+.tab-content.desktop-only {
+  display: flex;
+}
 .ward-number-cell {
   width: 100%;
   height: 100%;

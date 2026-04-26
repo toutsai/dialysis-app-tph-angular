@@ -4,16 +4,16 @@ import {
   OnInit,
   OnDestroy,
   ViewChild,
-  ElementRef,
   inject,
   signal,
   computed,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FullCalendarModule } from '@fullcalendar/angular';
+import { FullCalendarComponent, FullCalendarModule } from '@fullcalendar/angular';
 import { CalendarOptions, CalendarApi } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
+import listPlugin from '@fullcalendar/list';
 import zhTwLocale from '@fullcalendar/core/locales/zh-tw';
 import { AuthService } from '@app/core/services/auth.service';
 import { PatientStoreService } from '@app/core/services/patient-store.service';
@@ -64,7 +64,7 @@ export class UpdateSchedulerComponent implements OnInit, OnDestroy {
 
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private calendarApi: CalendarApi | null = null;
-  @ViewChild('fullCalendar') fullCalendarRef!: ElementRef;
+  @ViewChild('fullCalendar') fullCalendarRef?: FullCalendarComponent;
 
   constructor() {
     this.scheduledUpdatesApi = this.apiManagerService.create<FirestoreRecord>('scheduled_updates');
@@ -107,7 +107,7 @@ export class UpdateSchedulerComponent implements OnInit, OnDestroy {
   });
 
   calendarOptions = computed<CalendarOptions>(() => ({
-    plugins: [dayGridPlugin, interactionPlugin],
+    plugins: [dayGridPlugin, interactionPlugin, listPlugin],
     initialView: 'dayGridMonth',
     locale: zhTwLocale,
     headerToolbar: false,
@@ -154,16 +154,27 @@ export class UpdateSchedulerComponent implements OnInit, OnDestroy {
   }
 
   // --- Calendar Navigation ---
+  private getCalendarApi(): CalendarApi | null {
+    if (!this.calendarApi && this.fullCalendarRef) {
+      this.calendarApi = this.fullCalendarRef.getApi();
+    }
+    return this.calendarApi;
+  }
+
   handlePrev(): void {
-    this.calendarApi?.prev();
+    this.getCalendarApi()?.prev();
   }
 
   handleNext(): void {
-    this.calendarApi?.next();
+    this.getCalendarApi()?.next();
   }
 
   handleToday(): void {
-    this.calendarApi?.today();
+    this.getCalendarApi()?.today();
+  }
+
+  handleViewChange(viewName: string): void {
+    this.getCalendarApi()?.changeView(viewName);
   }
 
   // --- Format ---
@@ -277,7 +288,7 @@ export class UpdateSchedulerComponent implements OnInit, OnDestroy {
     this.isSchedulerDialogVisible.set(false);
     try {
       if (this.isEditingUpdate() && this.currentUpdateForAction()?.id) {
-        await this.scheduledUpdatesApi.update(this.currentUpdateForAction().id, dataToSubmit);
+        await this.scheduledUpdatesApi.save(this.currentUpdateForAction().id, dataToSubmit);
         this.notificationService.createGlobalNotification('預約變更已成功更新', 'success');
       } else {
         await this.scheduledUpdatesApi.create(dataToSubmit);

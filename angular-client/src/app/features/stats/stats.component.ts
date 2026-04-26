@@ -498,30 +498,39 @@ export class StatsComponent implements OnInit, OnDestroy {
     try {
       const dateStr = this.formatDate(date).substring(0, 7);
       const physicianSchedulesApi = this.apiManager.create<FirestoreRecord>('physician_schedules');
+      const physiciansApi = this.apiManager.create<FirestoreRecord>('physicians');
       // ✅ 優化：使用預載入的 UserDirectoryService 做本地過濾，避免 Firestore 查詢
-      await this.userDirectory.fetchUsersIfNeeded();
+      const [, physicians, monthScheduleDoc] = await Promise.all([
+        this.userDirectory.fetchUsersIfNeeded(),
+        physiciansApi.fetchAll().catch(() => []),
+        physicianSchedulesApi.fetchById(dateStr),
+      ]);
       const usersSnapshot = this.userDirectory.allUsers()
         .filter(u => u.title === '主治醫師' || u.title === '專科護理師');
-      const monthScheduleDoc = await physicianSchedulesApi.fetchById(dateStr);
-      const userMap = new Map(usersSnapshot.map((u: any) => [u.id, u]));
+      const userMap = new Map([...physicians, ...usersSnapshot].map((u: any) => [u.id, u]));
+      const resolveStaff = (entry: any) => {
+        const physicianId = entry?.physicianId;
+        if (!physicianId) return null;
+        return userMap.get(physicianId) || (entry?.name ? { id: physicianId, name: entry.name } : null);
+      };
 
       const dialysisPhysiciansData: any = { early: null, noon: null, late: null };
       const consultPhysiciansData: any = { morning: null, afternoon: null, night: null };
 
       if (monthScheduleDoc) {
-        const doc = monthScheduleDoc as any;
+        const doc = ((monthScheduleDoc as any).scheduleData || monthScheduleDoc) as any;
         const dayOfMonth = date.getDate();
         const daySchedule = doc.schedule?.[dayOfMonth];
         if (daySchedule) {
-          dialysisPhysiciansData.early = userMap.get(daySchedule.early?.physicianId) || null;
-          dialysisPhysiciansData.noon = userMap.get(daySchedule.noon?.physicianId) || null;
-          dialysisPhysiciansData.late = userMap.get(daySchedule.late?.physicianId) || null;
+          dialysisPhysiciansData.early = resolveStaff(daySchedule.early);
+          dialysisPhysiciansData.noon = resolveStaff(daySchedule.noon);
+          dialysisPhysiciansData.late = resolveStaff(daySchedule.late);
         }
         const consultationDaySchedule = doc.consultationSchedule?.[dayOfMonth];
         if (consultationDaySchedule) {
-          consultPhysiciansData.morning = userMap.get(consultationDaySchedule.morning?.physicianId) || null;
-          consultPhysiciansData.afternoon = userMap.get(consultationDaySchedule.afternoon?.physicianId) || null;
-          consultPhysiciansData.night = userMap.get(consultationDaySchedule.night?.physicianId) || null;
+          consultPhysiciansData.morning = resolveStaff(consultationDaySchedule.morning);
+          consultPhysiciansData.afternoon = resolveStaff(consultationDaySchedule.afternoon);
+          consultPhysiciansData.night = resolveStaff(consultationDaySchedule.night);
         }
       }
 

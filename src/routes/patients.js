@@ -6,6 +6,7 @@ import { authenticate, isContributor, isEditor, logAudit } from '../middleware/a
 import { getTaipeiTodayString } from '../utils/dateUtils.js'
 import { validate } from '../middleware/validate.js'
 import { syncEventsToKiditLogbook } from '../services/kiditSync.js'
+import { emitExceptionChange } from '../services/eventBus.js'
 
 const router = Router()
 
@@ -103,6 +104,68 @@ function addMovementToDailyLog(db, movementData) {
   } catch (error) {
     console.error('[DailyLog] 記錄失敗:', error)
   }
+}
+
+const UNFINISHED_EXCEPTION_STATUSES = [
+  'pending',
+  'processing',
+  'conflict_requires_resolution',
+]
+
+function safeJsonParse(value, fallback = {}) {
+  try {
+    return value ? JSON.parse(value) : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function exceptionBelongsToPatient(exception, patientId) {
+  if (exception.patient_id === patientId) return true
+
+  const patient1 = safeJsonParse(exception.patient1)
+  const patient2 = safeJsonParse(exception.patient2)
+
+  return (
+    patient1?.patientId === patientId ||
+    patient1?.id === patientId ||
+    patient2?.patientId === patientId ||
+    patient2?.id === patientId
+  )
+}
+
+function deleteUnfinishedScheduleExceptionsForPatient(db, patientId) {
+  const placeholders = UNFINISHED_EXCEPTION_STATUSES.map(() => '?').join(', ')
+  const candidates = db
+    .prepare(
+      `SELECT *
+       FROM schedule_exceptions
+       WHERE status IN (${placeholders})`,
+    )
+    .all(...UNFINISHED_EXCEPTION_STATUSES)
+
+  const related = candidates.filter((exception) =>
+    exceptionBelongsToPatient(exception, patientId),
+  )
+
+  if (related.length === 0) return []
+
+  const deleteById = db.prepare(`DELETE FROM schedule_exceptions WHERE id = ?`)
+  for (const exception of related) {
+    deleteById.run(exception.id)
+    emitExceptionChange('deleted', {
+      id: exception.id,
+      type: exception.type,
+      patientId,
+      reason: 'patient_deleted',
+    })
+  }
+
+  return related.map((exception) => ({
+    id: exception.id,
+    type: exception.type,
+    status: exception.status,
+  }))
 }
 
 /**
@@ -608,9 +671,12 @@ router.put('/:id', ...isContributor, async (req, res) => {
     // 🔥 檢查刪除/復原狀態變更
     const wasDeleted = existing.is_deleted === 1
     const isNowDeleted = data.isDeleted === true || updated.is_deleted === 1
+    let deletedUnfinishedExceptions = []
 
     if (!wasDeleted && isNowDeleted) {
       // 刪除操作：從正常狀態 → 已刪除
+      deletedUnfinishedExceptions = deleteUnfinishedScheduleExceptionsForPatient(db, id)
+
       recordPatientHistory(db, id, existing.name, 'DELETE', {
         reason: data.deleteReason || '未提供原因',
         fromStatus: existing.status
@@ -697,7 +763,8 @@ router.put('/:id', ...isContributor, async (req, res) => {
 
 
     await logAudit('PATIENT_UPDATE', req.user.id, req.user.name, 'patients', id, {
-      updatedFields: Object.keys(data)
+      updatedFields: Object.keys(data),
+      deletedUnfinishedExceptions,
     })
 
     res.json(formatPatient(updated))
@@ -744,6 +811,7 @@ router.delete('/:id', ...isEditor, async (req, res) => {
       JSON.stringify({ uid: req.user.id, name: req.user.name }),
       id
     )
+    const deletedUnfinishedExceptions = deleteUnfinishedScheduleExceptionsForPatient(db, id)
 
     // 🔥 自動記錄病人歷史
     recordPatientHistory(db, id, existing.name, 'DELETE', {
@@ -767,7 +835,8 @@ router.delete('/:id', ...isEditor, async (req, res) => {
 
     await logAudit('PATIENT_DELETE', req.user.id, req.user.name, 'patients', id, {
       name: existing.name,
-      reason
+      reason,
+      deletedUnfinishedExceptions,
     })
 
     res.json({

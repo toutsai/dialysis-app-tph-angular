@@ -111,6 +111,68 @@ function prepareAdmin() {
   }
 }
 
+function cleanupDailyLogMovements(db) {
+  const rows = db
+    .prepare(
+      `SELECT date, patient_movements FROM daily_logs WHERE patient_movements LIKE ?`,
+    )
+    .all(`%${prefix}%`);
+
+  const update = db.prepare(
+    `UPDATE daily_logs
+     SET patient_movements = ?, updated_at = datetime('now', 'localtime')
+     WHERE date = ?`,
+  );
+
+  for (const row of rows) {
+    let movements = [];
+    try {
+      movements = JSON.parse(row.patient_movements || '[]');
+    } catch {
+      continue;
+    }
+
+    const cleaned = movements.filter((movement) => {
+      return !JSON.stringify(movement).includes(prefix);
+    });
+
+    if (cleaned.length !== movements.length) {
+      update.run(JSON.stringify(cleaned), row.date);
+    }
+  }
+}
+
+function cleanupKiditLogbookEvents(db) {
+  const rows = db
+    .prepare(
+      `SELECT date, events FROM kidit_logbook WHERE events LIKE ?`,
+    )
+    .all(`%${prefix}%`);
+
+  const update = db.prepare(
+    `UPDATE kidit_logbook
+     SET events = ?, updated_at = datetime('now', 'localtime')
+     WHERE date = ?`,
+  );
+
+  for (const row of rows) {
+    let events = [];
+    try {
+      events = JSON.parse(row.events || '[]');
+    } catch {
+      continue;
+    }
+
+    const cleaned = events.filter((event) => {
+      return !JSON.stringify(event).includes(prefix);
+    });
+
+    if (cleaned.length !== events.length) {
+      update.run(JSON.stringify(cleaned), row.date);
+    }
+  }
+}
+
 function restoreAdminAndCleanup() {
   const db = new Database(DB_PATH);
   try {
@@ -131,6 +193,8 @@ function restoreAdminAndCleanup() {
     db.prepare(`DELETE FROM patient_history WHERE patient_id LIKE ?`).run(
       `${prefix}%`,
     );
+    cleanupDailyLogMovements(db);
+    cleanupKiditLogbookEvents(db);
     db.prepare(`DELETE FROM patients WHERE id LIKE ? OR name LIKE ?`).run(
       `${prefix}%`,
       `${prefix}%`,

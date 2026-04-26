@@ -5,10 +5,12 @@
   flex-direction: column;
   background-color: #f8f9fa;
   padding: 0.5rem;
+  height: calc(100vh - 60px);
 }
 .page-header {
   border-bottom: 2px solid #dee2e6;
   margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
   flex-shrink: 0;
 }
 .header-toolbar {
@@ -69,7 +71,7 @@ button:disabled {
 .page-main-content {
   flex-grow: 1;
   background-color: #fff;
-  padding: 0.5rem;
+  padding: 1.5rem;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   min-height: 0;
@@ -96,7 +98,7 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 0;
+  padding-bottom: 1.5rem;
   flex-wrap: wrap;
   gap: 1rem;
   flex-shrink: 0;
@@ -138,7 +140,7 @@ button:disabled {
 }
 .calendar-wrapper {
   flex-grow: 1;
-  overflow-y: auto;
+  overflow: hidden;
   min-height: 0;
 }
 .calendar-title-text.is-clickable {
@@ -150,6 +152,13 @@ button:disabled {
 }
 ::ng-deep .fc {
   font-family: inherit;
+  height: 100%;
+}
+::ng-deep .fc-view-harness {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 ::ng-deep .fc-daygrid-event {
   cursor: pointer;

@@ -183,7 +183,7 @@ export class PatientStoreService {
 
       // Fetch patients and master schedule in parallel
       const [patients, masterScheduleDoc] = await Promise.all([
-        this.patientApi.fetchAll(),
+        this.patientApi.fetchWhere({ includeDeleted: 'true' }),
         this.baseScheduleApi.fetchById('MASTER_SCHEDULE'),
       ]);
 

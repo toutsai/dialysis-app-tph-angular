@@ -3,7 +3,6 @@ import {
   OnInit,
   OnDestroy,
   ViewChild,
-  ElementRef,
   inject,
   signal,
   computed,
@@ -11,7 +10,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, ActivatedRoute } from '@angular/router';
-import { FullCalendarModule } from '@fullcalendar/angular';
+import { FullCalendarComponent, FullCalendarModule } from '@fullcalendar/angular';
 import { CalendarOptions, CalendarApi } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
@@ -53,6 +52,7 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
 
   private readonly exceptionsApi = this.apiManager.create<FirestoreRecord>('schedule_exceptions');
+  private readonly exceptionsListApi = this.apiManager.create<FirestoreRecord>('schedule_exceptions_list');
   private readonly tasksApi = this.apiManager.create<FirestoreRecord>('tasks');
 
   readonly allPatients = this.patientStore.allPatients;
@@ -84,7 +84,7 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
   private pollingTimer: any = null;
   private eventSource: EventSource | null = null;
   private calendarApi: CalendarApi | null = null;
-  @ViewChild('fullCalendar') fullCalendarRef!: ElementRef;
+  @ViewChild('fullCalendar') fullCalendarRef?: FullCalendarComponent;
 
   statusMap: Record<string, string> = {
     pending: '待處理',
@@ -128,31 +128,13 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
       if (ex.status === 'applied') {
         finalColor = baseColorMap[ex.type] || '#6c757d';
       }
-      let baseTitle = '';
-      if (ex.type === 'SWAP') {
-        baseTitle = `${ex.patient1?.patientName || ''} <=> ${ex.patient2?.patientName || ''}`;
-      } else {
-        baseTitle = `${ex.patientName || ''} - ${this.typeMap[ex.type] || '未知'}`;
-      }
-      const title = `${style.prefix} ${baseTitle}`;
-      let description = '';
-      if (ex.type === 'MOVE' && ex.from && ex.to) {
-        description = `從 ${this.formatShiftInfo({ ...ex.from, date: ex.from.sourceDate })} 移至 ${this.formatShiftInfo({ ...ex.to, date: ex.to.goalDate })}`;
-      } else if (ex.type === 'ADD_SESSION' && ex.to) {
-        description = `新增於 ${this.formatShiftInfo({ ...ex.to, date: ex.to.goalDate })}`;
-      } else if (ex.type === 'RANGE_MOVE' && ex.to) {
-        description = `區間內移至: ${this.formatBedAndShift(ex.to)}`;
-      } else if (ex.type === 'SWAP' && ex.patient1 && ex.patient2) {
-        const from1 = this.formatBedAndShift(ex.patient1);
-        const from2 = this.formatBedAndShift(ex.patient2);
-        description = `${ex.patient1.patientName} (${from1}) 與 ${ex.patient2.patientName} (${from2}) 互換`;
-      } else {
-        description = ex.reason;
-      }
+      const patientName = this.getExceptionPatientName(ex);
+      const title = `${style.prefix} ${this.buildEventTitle(ex, patientName)}`;
+      const description = this.buildEventDescription(ex);
       if (ex.type === 'MOVE' && ex.from && ex.to) {
         const fromEvent = {
           id: `${ex.id}-from`,
-          title: `[原班] ${ex.patientName}`,
+          title: `[原班] ${patientName} ${this.formatBedAndShift(ex.from)}`,
           start: ex.from.sourceDate,
           allDay: true,
           backgroundColor: '#adb5bd',
@@ -161,7 +143,7 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
         };
         const toEvent = {
           id: ex.id,
-          title: title.replace('調班', '[新班]'),
+          title: `${style.prefix} [新班] ${patientName} ${this.formatBedAndShift(ex.to)}`,
           start: ex.to.goalDate,
           allDay: true,
           backgroundColor: finalColor,
@@ -176,11 +158,13 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
         endDateObj.setUTCDate(endDateObj.getUTCDate() + 1);
         exclusiveEndDate = endDateObj.toISOString().split('T')[0];
       }
+      const start = ex.startDate || ex.date || ex.to?.goalDate || ex.from?.sourceDate;
+      if (!start) return [];
       return [
         {
           id: ex.id,
           title: title,
-          start: ex.startDate,
+          start,
           end: exclusiveEndDate,
           allDay: true,
           backgroundColor: finalColor,
@@ -205,17 +189,14 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
       const exData = info.event.extendedProps;
       this.currentActionData.set(exData);
 
-      let patientDisplayName = exData['patientName'];
-      if (exData['type'] === 'SWAP') {
-        patientDisplayName = `${exData['patient1']?.patientName} & ${exData['patient2']?.patientName}`;
-      }
+      const patientDisplayName = this.getExceptionPatientName(exData);
 
       this.actionDialogTitle.set('調班詳細資訊');
       this.actionDialogMessage.set(
         `病患: ${patientDisplayName}\n` +
           `類型: ${this.typeMap[exData['type']] || '未知'}\n` +
           `狀態: ${this.statusMap[exData['status']] || '未知'}\n` +
-          `區間: ${exData['startDate']} ~ ${exData['endDate'] || exData['startDate']}\n` +
+          `區間: ${this.formatExceptionDateRange(exData)}\n` +
           `詳細: ${exData['formattedDetails']}\n` +
           `申請時間: ${this.formatTimestamp(exData['createdAt'])}`,
       );
@@ -266,25 +247,27 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
   }
 
   // --- Calendar Navigation ---
-  handleCalendarReady(calendarApi: any): void {
-    this.calendarApi = calendarApi;
-    this.calendarTitle.set(calendarApi.view.title);
+  private getCalendarApi(): CalendarApi | null {
+    if (!this.calendarApi && this.fullCalendarRef) {
+      this.calendarApi = this.fullCalendarRef.getApi();
+    }
+    return this.calendarApi;
   }
 
   handlePrev(): void {
-    this.calendarApi?.prev();
+    this.getCalendarApi()?.prev();
   }
 
   handleNext(): void {
-    this.calendarApi?.next();
+    this.getCalendarApi()?.next();
   }
 
   handleToday(): void {
-    this.calendarApi?.today();
+    this.getCalendarApi()?.today();
   }
 
   handleViewChange(viewName: string): void {
-    this.calendarApi?.changeView(viewName);
+    this.getCalendarApi()?.changeView(viewName);
   }
 
   openMonthPicker(): void {
@@ -292,7 +275,7 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
   }
 
   handleDateSelected(newDate: any): void {
-    this.calendarApi?.gotoDate(newDate);
+    this.getCalendarApi()?.gotoDate(newDate);
     this.isMonthPickerVisible.set(false);
   }
 
@@ -321,6 +304,63 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
       ? `外圍 ${String(bedNum).split('-')[1]}`
       : `${bedNum}床`;
     return `${bedDisplay} / ${shiftName}`;
+  }
+
+  private getExceptionPatientName(ex: any): string {
+    if (ex.type === 'SWAP') {
+      const name1 = ex.patient1?.patientName || ex.patient1?.name || '';
+      const name2 = ex.patient2?.patientName || ex.patient2?.name || '';
+      return [name1, name2].filter(Boolean).join(' ⇄ ') || '未指定病人';
+    }
+    return ex.patientName || '未指定病人';
+  }
+
+  private buildEventTitle(ex: any, patientName: string): string {
+    switch (ex.type) {
+      case 'MOVE':
+        return `${patientName} 調至 ${this.formatBedAndShift(ex.to)}`;
+      case 'ADD_SESSION': {
+        const mode = ex.to?.mode || ex.mode;
+        return `${patientName} 加洗 ${this.formatBedAndShift(ex.to)}${mode && mode !== 'HD' ? ` ${mode}` : ''}`;
+      }
+      case 'SUSPEND':
+        return `${patientName} 暫停`;
+      case 'RANGE_MOVE':
+        return `${patientName} 區間調至 ${this.formatBedAndShift(ex.to)}`;
+      case 'SWAP':
+        return `${patientName} 互調`;
+      default:
+        return `${patientName} - ${this.typeMap[ex.type] || '未知'}`;
+    }
+  }
+
+  private buildEventDescription(ex: any): string {
+    if (ex.type === 'MOVE' && ex.from && ex.to) {
+      return `從 ${this.formatShiftInfo({ ...ex.from, date: ex.from.sourceDate })} 移至 ${this.formatShiftInfo({ ...ex.to, date: ex.to.goalDate })}`;
+    }
+    if (ex.type === 'ADD_SESSION' && ex.to) {
+      const mode = ex.to?.mode || ex.mode;
+      return `新增於 ${this.formatShiftInfo({ ...ex.to, date: ex.to.goalDate })}${mode && mode !== 'HD' ? `，模式 ${mode}` : ''}`;
+    }
+    if (ex.type === 'SUSPEND') {
+      return `暫停區間: ${this.formatExceptionDateRange(ex)}${ex.reason ? `，原因: ${ex.reason}` : ''}`;
+    }
+    if (ex.type === 'RANGE_MOVE' && ex.to) {
+      return `區間內移至: ${this.formatBedAndShift(ex.to)}`;
+    }
+    if (ex.type === 'SWAP' && ex.patient1 && ex.patient2) {
+      const from1 = this.formatBedAndShift(ex.patient1);
+      const from2 = this.formatBedAndShift(ex.patient2);
+      return `${ex.patient1.patientName} (${from1}) 與 ${ex.patient2.patientName} (${from2}) 互換`;
+    }
+    return ex.reason || '';
+  }
+
+  private formatExceptionDateRange(ex: any): string {
+    const start = ex.date || ex.startDate || ex.from?.sourceDate || ex.to?.goalDate || '';
+    const end = ex.endDate || ex.to?.goalDate || start;
+    if (!start) return '未指定';
+    return start === end ? start : `${start} ~ ${end}`;
   }
 
   isCancellable(exceptionData: any): boolean {
@@ -741,7 +781,7 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
       await this.patientStore.fetchPatientsIfNeeded();
 
       const fetchExceptions = async () => {
-        const allExceptions = await this.exceptionsApi.fetchAll();
+        const allExceptions = await this.exceptionsListApi.fetchAll();
         const sorted = (allExceptions as any[]).sort((a: any, b: any) => {
           const aDate = typeof a.createdAt === 'string' ? a.createdAt : '';
           const bDate = typeof b.createdAt === 'string' ? b.createdAt : '';

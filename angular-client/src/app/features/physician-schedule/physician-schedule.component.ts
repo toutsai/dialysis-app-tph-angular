@@ -316,7 +316,8 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
     const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
     try {
       // ✅ 優化：只載入當月班表，年度排班在背景載入
-      const existingSchedule = await this.physicianSchedulesApi.fetchById(yearMonth) as any;
+      const scheduleDoc = await this.physicianSchedulesApi.fetchById(yearMonth) as any;
+      const existingSchedule = scheduleDoc?.scheduleData || scheduleDoc;
       // ✅ 先用本地變數建立完整班表，避免預設班表閃現
       const blankSchedule = this.generateBlankSchedule(year, month, this.availablePhysicians());
       const blankConsultation = this.generateBlankConsultationSchedule(year, month, this.availablePhysicians());

@@ -352,6 +352,16 @@ router.get('/notifications', authenticate, (req, res) => {
     res.json(
       notifications.map((n) => {
         const data = JSON.parse(n.data || '{}')
+        const createdBy = data.createdBy || null
+        let createdByName = null
+        if (createdBy && typeof createdBy === 'object') {
+          createdByName = createdBy.name || createdBy.displayName || null
+        } else if (typeof createdBy === 'string' && createdBy) {
+          const user = db
+            .prepare(`SELECT name, username FROM users WHERE id = ? OR username = ?`)
+            .get(createdBy, createdBy)
+          createdByName = user?.name || user?.username || null
+        }
         return {
           id: n.id,
           type: n.type,
@@ -360,7 +370,8 @@ router.get('/notifications', authenticate, (req, res) => {
           recipientId: n.recipient_id,
           isRead: n.is_read === 1,
           data,
-          createdBy: data.createdBy || null,
+          createdBy,
+          createdByName,
           metadata: data.metadata || null,
           createdAt: n.created_at,
         }
@@ -381,7 +392,7 @@ router.get('/notifications', authenticate, (req, res) => {
  */
 router.post('/notifications', authenticate, async (req, res) => {
   try {
-    const { type, title, message, recipientId, data, createdBy, metadata, expireAt } = req.body
+    const { type, title, message, recipientId, data, createdBy, createdByName, metadata, expireAt } = req.body
 
     const id = uuidv4()
     const db = getDatabase()
@@ -389,7 +400,11 @@ router.post('/notifications', authenticate, async (req, res) => {
     // 將 createdBy, metadata, expireAt 合併到 data JSON 中保存
     const enrichedData = {
       ...(data || {}),
-      createdBy: createdBy || { uid: req.user.id, name: req.user.name },
+      createdBy: createdBy
+        ? (typeof createdBy === 'string'
+          ? { uid: createdBy, name: createdByName || req.user.name }
+          : createdBy)
+        : { uid: req.user.id, name: req.user.name },
       metadata: metadata || null,
       expireAt: expireAt || null,
     }

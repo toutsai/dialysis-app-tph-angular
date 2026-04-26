@@ -177,7 +177,9 @@ export class NotificationService implements OnDestroy {
           title,
           type,
           message: message || '',
-          createdBy: currentUser?.uid || '',
+          createdBy: currentUser
+            ? { uid: currentUser.uid, name: currentUser.name }
+            : null,
           createdByName: currentUser?.name || '',
           read: false,
         }),
@@ -254,8 +256,14 @@ export class NotificationService implements OnDestroy {
           type,
           title: item.title || '',
           message: item.message || '',
-          createdBy: item.createdBy || '',
-          createdByName: item.createdByName || '',
+          createdBy: typeof item.createdBy === 'string'
+            ? item.createdBy
+            : item.createdBy?.uid || '',
+          createdByName:
+            item.createdByName ||
+            item.createdBy?.name ||
+            item.data?.createdBy?.name ||
+            '',
           createdAt,
           time: createdAt ? this.formatTime(createdAt) : '',
           config,

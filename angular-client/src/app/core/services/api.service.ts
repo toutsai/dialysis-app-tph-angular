@@ -40,6 +40,7 @@ export const COLLECTION_ROUTE_MAP: Record<string, string> = {
   medication_drafts: '/orders/medication-drafts',
   lab_reports: '/orders/lab-reports',
   schedule_exceptions: '/schedules/exceptions',
+  schedule_exceptions_list: '/schedules/exceptions/list',
   physician_schedules: '/system/physician-schedules',
   site_config: '/system/site-config',
   // 庫存管理 (TPH: 全部在 /system/inventory 下)
@@ -54,6 +55,7 @@ export const COLLECTION_ROUTE_MAP: Record<string, string> = {
   scheduled_changes: '/system/scheduled-changes',
   lab_alert_analyses: '/orders/lab-alert-analyses',
   scheduled_patient_updates: '/system/scheduled-updates',
+  physicians: '/system/physicians',
 };
 
 // ---------------------------------------------------------------------------

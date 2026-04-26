@@ -633,7 +633,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
               delete dataToUpdate.id;
               dataToUpdate.updatedAt = new Date().toISOString();
               await Promise.all([
-                this.patientsApi.update(patientData.id, dataToUpdate),
+                this.patientsApi.save(patientData.id, dataToUpdate),
                 this.patientStore.removeRuleFromMasterSchedule(patientData.id),
               ]);
               this.patientStore.updatePatientInStore(patientData.id, dataToUpdate);
@@ -661,7 +661,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
         delete dataToUpdate.id;
         dataToUpdate.updatedAt = new Date().toISOString();
 
-        const updatePromises: Promise<any>[] = [this.patientsApi.update(patientData.id, dataToUpdate)];
+        const updatePromises: Promise<any>[] = [this.patientsApi.save(patientData.id, dataToUpdate)];
 
         if (!wasFirstDialysis && isNowFirstDialysis) {
           updatePromises.push(this.createAutomatedTask(patientData, '衛教', creatorInfo));
@@ -797,7 +797,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
         originalStatus: null,
       };
       delete dataToUpdate.id;
-      await this.patientsApi.update(existingPatient.id, dataToUpdate);
+      await this.patientsApi.save(existingPatient.id, dataToUpdate);
       this.patientStore.updatePatientInStore(existingPatient.id, dataToUpdate);
       await this.recalculateStatsLocally();
       window.dispatchEvent(new CustomEvent('patient-data-updated'));
@@ -951,7 +951,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
           if ((patient.status === 'ipd' || patient.status === 'er') && newStatus === 'opd') {
             updateData.wardNumber = null;
           }
-          await this.patientsApi.update(patientId, updateData);
+          await this.patientsApi.save(patientId, updateData);
           this.patientStore.updatePatientInStore(patientId, updateData);
           await this.recalculateStatsLocally();
           window.dispatchEvent(new CustomEvent('patient-data-updated'));
@@ -1011,7 +1011,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
     this.patientToDeleteId.set(null);
 
     try {
-      await this.patientsApi.update(patientId, {
+      await this.patientsApi.save(patientId, {
         isDeleted: true,
         originalStatus: patient.status,
         deleteReason: reason,
@@ -1063,7 +1063,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
 
     try {
       const newPatientCategory = targetStatus === 'opd' ? 'opd_regular' : 'non_regular';
-      await this.patientsApi.update(patientId, {
+      await this.patientsApi.save(patientId, {
         isDeleted: false,
         status: targetStatus,
         deleteReason: null,
@@ -1112,7 +1112,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
     }
 
     try {
-      await this.patientsApi.update(patient.id, { dialysisOrders: orderData, updatedAt: new Date().toISOString() });
+      await this.patientsApi.save(patient.id, { dialysisOrders: orderData, updatedAt: new Date().toISOString() });
       this.patientStore.updatePatientInStore(patient.id, { dialysisOrders: orderData, updatedAt: new Date().toISOString() } as any);
       this.isOrderModalVisible.set(false);
       this.notificationService.createNotification(`更新醫囑：${patient.name}`, 'patient');
@@ -1141,7 +1141,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
     if (!patient?.id) return;
 
     try {
-      await this.patientsApi.update(patient.id, { wardNumber: trimmedValue, updatedAt: new Date().toISOString() });
+      await this.patientsApi.save(patient.id, { wardNumber: trimmedValue, updatedAt: new Date().toISOString() });
       this.patientStore.updatePatientInStore(patient.id, { wardNumber: trimmedValue, updatedAt: new Date().toISOString() } as any);
       this.notificationService.createNotification(
         `更新床號：${patient.name} -> ${trimmedValue || '無'}`,

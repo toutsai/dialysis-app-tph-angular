@@ -266,7 +266,34 @@
         </div>
       </div>
       <div *ngIf="activeTab() === 'deleted'">
-        <!-- Mobile deleted list placeholder -->
+        <div class="cards-container">
+          <div *ngFor="let p of displayedPatients()" class="patient-card deleted-patient-card" [ngClass]="getRowClass(p)">
+            <div class="card-header">
+              <div class="patient-name-section">
+                <span class="patient-name-text">{{ p.name }}</span>
+                <span class="freq-tag-card">{{ formatDate(p.deletedAt) || '未記錄日期' }}</span>
+              </div>
+              <div class="card-actions-header">
+                <button class="btn-icon btn-history" (click)="openHistoryModal(p.id)" title="歷程">
+                  <i class="fas fa-history"></i>
+                </button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="info-grid">
+                <div class="info-item"><span class="label">病歷號</span><span class="value">{{ p.medicalRecordNumber || '-' }}</span></div>
+                <div class="info-item"><span class="label">原分類</span><span class="value">{{ p.originalStatus === 'ipd' ? '住院' : p.originalStatus === 'er' ? '急診' : '門診' }}</span></div>
+                <div class="info-item"><span class="label">刪除原因</span><span class="value">{{ p.deleteReason || '-' }}</span></div>
+              </div>
+              <div *ngIf="p.remarks" class="remarks-section">
+                <span class="label">備註:</span> {{ p.remarks }}
+              </div>
+            </div>
+            <div class="card-footer">
+              <button class="btn btn-restore" (click)="restorePatient(p.id)" [disabled]="isPageLocked()">還原</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 

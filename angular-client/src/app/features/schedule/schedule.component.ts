@@ -241,6 +241,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   private readonly ordersHistoryApi: ApiManager<FirestoreRecord>;
   private readonly schedulesApi: ApiManager<FirestoreRecord>;
   private readonly physicianSchedulesApi: ApiManager<FirestoreRecord>;
+  private readonly physiciansApi: ApiManager<FirestoreRecord>;
 
   // Expose constants to template
   readonly ORDERED_SHIFT_CODES = ORDERED_SHIFT_CODES;
@@ -501,6 +502,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     this.ordersHistoryApi = this.apiManagerService.create<FirestoreRecord>('dialysis_orders_history');
     this.schedulesApi = this.apiManagerService.create<FirestoreRecord>('schedules');
     this.physicianSchedulesApi = this.apiManagerService.create<FirestoreRecord>('physician_schedules');
+    this.physiciansApi = this.apiManagerService.create<FirestoreRecord>('physicians');
 
     // Watch currentDate changes
     effect(() => {
@@ -1592,32 +1594,39 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   private async loadDailyStaffInfo(date: Date): Promise<void> {
     try {
       const dateStr = this.formatDate(date).substring(0, 7);
-      // ✅ 優化：使用者清單與醫師排班完全並行載入
-      const [, monthScheduleDoc] = await Promise.all([
+      // ✅ 優化：使用者、醫師清單與醫師排班完全並行載入
+      const [, physicians, monthScheduleDoc] = await Promise.all([
         this.userDirectory.fetchUsersIfNeeded(),
+        this.physiciansApi.fetchAll().catch(() => []),
         this.physicianSchedulesApi.fetchById(dateStr),
       ]);
       const usersSnapshot = this.userDirectory.allUsers()
         .filter(u => u.title === '主治醫師' || u.title === '專科護理師');
-      const userMap = new Map(usersSnapshot.map((u) => [u['id'], u]));
+      const userMap = new Map([...physicians, ...usersSnapshot].map((u) => [u['id'], u]));
+      const resolveStaff = (entry: Record<string, unknown> | undefined) => {
+        const physicianId = entry?.['physicianId'] as string | undefined;
+        if (!physicianId) return null;
+        return userMap.get(physicianId) || (entry?.['name'] ? { id: physicianId, name: entry['name'] } : null);
+      };
       const dialysisPhysiciansData: Record<string, unknown> = { early: null, noon: null, late: null };
       const consultPhysiciansData: Record<string, unknown> = { morning: null, afternoon: null, night: null };
       if (monthScheduleDoc) {
         const dayOfMonth = date.getDate();
-        const doc = monthScheduleDoc as Record<string, unknown>;
+        const monthDoc = monthScheduleDoc as Record<string, unknown>;
+        const doc = (monthDoc['scheduleData'] || monthDoc) as Record<string, unknown>;
         const schedule = doc['schedule'] as Record<string, Record<string, Record<string, unknown>>>;
         const daySchedule = schedule?.[dayOfMonth];
         if (daySchedule) {
-          dialysisPhysiciansData['early'] = userMap.get(daySchedule['early']?.['physicianId'] as string) || null;
-          dialysisPhysiciansData['noon'] = userMap.get(daySchedule['noon']?.['physicianId'] as string) || null;
-          dialysisPhysiciansData['late'] = userMap.get(daySchedule['late']?.['physicianId'] as string) || null;
+          dialysisPhysiciansData['early'] = resolveStaff(daySchedule['early']);
+          dialysisPhysiciansData['noon'] = resolveStaff(daySchedule['noon']);
+          dialysisPhysiciansData['late'] = resolveStaff(daySchedule['late']);
         }
         const consultationSchedule = doc['consultationSchedule'] as Record<string, Record<string, Record<string, unknown>>>;
         const consultationDaySchedule = consultationSchedule?.[dayOfMonth];
         if (consultationDaySchedule) {
-          consultPhysiciansData['morning'] = userMap.get(consultationDaySchedule['morning']?.['physicianId'] as string) || null;
-          consultPhysiciansData['afternoon'] = userMap.get(consultationDaySchedule['afternoon']?.['physicianId'] as string) || null;
-          consultPhysiciansData['night'] = userMap.get(consultationDaySchedule['night']?.['physicianId'] as string) || null;
+          consultPhysiciansData['morning'] = resolveStaff(consultationDaySchedule['morning']);
+          consultPhysiciansData['afternoon'] = resolveStaff(consultationDaySchedule['afternoon']);
+          consultPhysiciansData['night'] = resolveStaff(consultationDaySchedule['night']);
         }
       }
       this.dailyPhysicians.set(dialysisPhysiciansData);
