@@ -234,6 +234,8 @@ router.get('/range', authenticate, (req, res) => {
   }
 })
 
+router.get('/exceptions/list', authenticate, getExceptionsList)
+router.get('/exception-tasks', authenticate, getExceptionsList)
 
 /**
  * GET /api/schedules/:date
@@ -654,8 +656,6 @@ function getExceptionsList(req, res) {
     })
   }
 }
-router.get('/exceptions/list', authenticate, getExceptionsList)
-router.get('/exception-tasks', authenticate, getExceptionsList)
 
 /**
  * POST /api/schedules/exceptions
