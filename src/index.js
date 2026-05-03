@@ -1,4 +1,5 @@
 // 透析排程系統 - 本地伺服器
+import 'dotenv/config'   // 讀取 .env 檔案到 process.env（PM2 env_file 不可靠，改用 dotenv）
 import express from 'express'
 import cors from 'cors'
 import morgan from 'morgan'
