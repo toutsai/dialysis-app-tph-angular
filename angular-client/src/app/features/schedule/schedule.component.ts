@@ -496,6 +496,8 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   });
 
   private previousDateStr = '';
+  private exceptionEventSource: EventSource | null = null;
+  private exceptionRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.usersApi = this.apiManagerService.create<FirestoreRecord>('users');
@@ -534,11 +536,98 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       this.loadDataForDay(this.currentDate()),
       this.loadDailyStaffInfo(this.currentDate()),
     ]);
+    this.startExceptionEventStream();
     this.isLoading.set(false);
   }
 
   ngOnDestroy(): void {
-    // cleanup handled by service destroy
+    this.stopExceptionEventStream();
+  }
+
+  private startExceptionEventStream(): void {
+    const token = this.firebaseService.getToken();
+    if (!token || typeof EventSource === 'undefined') return;
+
+    this.stopExceptionEventStream();
+    try {
+      const es = new EventSource(`/api/events/exceptions?token=${encodeURIComponent(token)}`);
+      this.exceptionEventSource = es;
+
+      es.addEventListener('exception', (event: MessageEvent) => {
+        let payload: any = null;
+        try {
+          payload = JSON.parse(event.data);
+        } catch {
+          payload = null;
+        }
+        this.handleExceptionScheduleRefresh(payload);
+      });
+
+      es.onerror = () => {
+        console.warn('[Schedule] exception SSE disconnected; EventSource will retry automatically');
+      };
+    } catch (error) {
+      console.warn('[Schedule] exception SSE init failed:', error);
+    }
+  }
+
+  private stopExceptionEventStream(): void {
+    if (this.exceptionEventSource) {
+      this.exceptionEventSource.close();
+      this.exceptionEventSource = null;
+    }
+    if (this.exceptionRefreshTimer) {
+      clearTimeout(this.exceptionRefreshTimer);
+      this.exceptionRefreshTimer = null;
+    }
+  }
+
+  private handleExceptionScheduleRefresh(payload: any): void {
+    const dateStr = this.currentDateDisplay();
+    if (!this.exceptionAffectsDate(payload, dateStr)) return;
+
+    if (this.hasUnsavedChanges() || this.hasUnsavedTeamChanges()) {
+      this.statusIndicator.set('調班換床已更新；請先儲存或重新整理後查看最新床位');
+      return;
+    }
+
+    if (this.exceptionRefreshTimer) clearTimeout(this.exceptionRefreshTimer);
+    this.exceptionRefreshTimer = setTimeout(() => {
+      this.exceptionRefreshTimer = null;
+      const date = new Date(this.currentDate());
+      Promise.all([
+        this.loadDataForDay(date),
+        this.loadDailyStaffInfo(date),
+      ]).catch((error) => console.warn('[Schedule] exception refresh failed:', error));
+    }, 800);
+  }
+
+  private exceptionAffectsDate(payload: any, dateStr: string): boolean {
+    const exception = payload?.exception || payload || {};
+    const affectedDates = new Set<string>();
+
+    const addDate = (value: unknown) => {
+      if (typeof value === 'string' && value.length >= 10) {
+        affectedDates.add(value.substring(0, 10));
+      }
+    };
+
+    if (Array.isArray(exception.affectedDates)) {
+      exception.affectedDates.forEach(addDate);
+    }
+    addDate(exception.date);
+    addDate(exception.startDate);
+    addDate(exception.endDate);
+    addDate(exception.from?.sourceDate);
+    addDate(exception.to?.goalDate);
+
+    if (typeof exception.startDate === 'string' && typeof exception.endDate === 'string') {
+      const start = exception.startDate.substring(0, 10);
+      const end = exception.endDate.substring(0, 10);
+      if (dateStr >= start && dateStr <= end) return true;
+    }
+
+    return affectedDates.size === 0 || affectedDates.has(dateStr);
   }
 
   // ---------------------------------------------------------------------------

@@ -11,6 +11,16 @@ import { emitExceptionChange } from '../services/eventBus.js'
 
 const router = Router()
 
+function getExceptionAffectedDates(data) {
+  const dates = new Set()
+  if (data.date) dates.add(data.date)
+  if (data.startDate) dates.add(data.startDate)
+  if (data.endDate) dates.add(data.endDate)
+  if (data.from?.sourceDate) dates.add(data.from.sourceDate)
+  if (data.to?.goalDate) dates.add(data.to.goalDate)
+  return Array.from(dates)
+}
+
 // Angular 前端使用 PATCH 做部分更新，TPH 後端使用 PUT
 // 此 middleware 將 PATCH 請求轉為 PUT，讓既有的 PUT handler 處理
 router.use((req, res, next) => {
@@ -727,7 +737,18 @@ router.post('/exceptions', ...isEditor, async (req, res) => {
         console.error(`❌ [Schedules] 調班 ${id} 處理異常:`, err.message)
       })
 
-    emitExceptionChange('created', { id: created.id, type: created.type, patientId: data.patientId })
+    emitExceptionChange('created', {
+      id: created.id,
+      type: created.type,
+      status: created.status,
+      patientId: data.patientId,
+      affectedDates: getExceptionAffectedDates(data),
+      date: data.date,
+      startDate: data.startDate,
+      endDate: data.endDate,
+      from: data.from,
+      to: data.to,
+    })
 
     res.status(201).json({
       id: created.id,
@@ -796,7 +817,19 @@ router.patch('/exceptions/:id', ...isEditor, async (req, res) => {
       newStatus: status
     })
 
-    emitExceptionChange('updated', { id, status })
+    emitExceptionChange('updated', {
+      id,
+      status,
+      type: existing.type,
+      patientId: existing.patient_id,
+      affectedDates: getExceptionAffectedDates({
+        date: existing.date,
+        startDate: existing.start_date,
+        endDate: existing.end_date,
+        from: JSON.parse(existing.from_data || '{}'),
+        to: JSON.parse(existing.to_data || '{}'),
+      }),
+    })
 
     res.json({
       success: true,
@@ -924,7 +957,16 @@ router.delete('/exceptions/:id', ...isEditor, async (req, res) => {
       status: exData.status
     })
 
-    emitExceptionChange('deleted', { id, type: exData.type })
+    emitExceptionChange('deleted', {
+      id,
+      type: exData.type,
+      affectedDates: getExceptionAffectedDates(exData),
+      date: exData.date,
+      startDate: exData.startDate,
+      endDate: exData.endDate,
+      from: exData.from,
+      to: exData.to,
+    })
 
     res.json({
       success: true,

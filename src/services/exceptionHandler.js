@@ -1,6 +1,7 @@
 // 調班申請處理器
 import { getDatabase } from '../db/init.js'
 import { getScheduleKey } from '../utils/scheduleUtils.js'
+import { emitExceptionChange } from './eventBus.js'
 
 /**
  * 格式化日期為 YYYY-MM-DD
@@ -11,6 +12,16 @@ function formatDate(date) {
   const month = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+function getAffectedDates(data) {
+  const dates = new Set()
+  if (data.date) dates.add(data.date)
+  if (data.startDate) dates.add(data.startDate)
+  if (data.endDate) dates.add(data.endDate)
+  if (data.from?.sourceDate) dates.add(data.from.sourceDate)
+  if (data.to?.goalDate) dates.add(data.to.goalDate)
+  return Array.from(dates)
 }
 
 /**
@@ -76,6 +87,18 @@ export async function processScheduleException(exceptionId, exceptionData) {
     `).run(exceptionId)
 
     console.log(`✅ [ExceptionHandler] 調班 ${exceptionId} 已成功套用`)
+    emitExceptionChange('updated', {
+      id: exceptionId,
+      type: exceptionData.type,
+      status: 'applied',
+      patientId: exceptionData.patientId,
+      affectedDates: processedDates.length > 0 ? processedDates : getAffectedDates(exceptionData),
+      date: exceptionData.date,
+      startDate: exceptionData.startDate,
+      endDate: exceptionData.endDate,
+      from: exceptionData.from,
+      to: exceptionData.to,
+    })
     return {
       success: true,
       processedDates,
@@ -97,6 +120,20 @@ export async function processScheduleException(exceptionId, exceptionData) {
     } catch (e) {
       console.error('更新錯誤狀態失敗:', e)
     }
+
+    emitExceptionChange('updated', {
+      id: exceptionId,
+      type: exceptionData.type,
+      status: 'error',
+      patientId: exceptionData.patientId,
+      errorMessage: error.message,
+      affectedDates: getAffectedDates(exceptionData),
+      date: exceptionData.date,
+      startDate: exceptionData.startDate,
+      endDate: exceptionData.endDate,
+      from: exceptionData.from,
+      to: exceptionData.to,
+    })
 
     return { success: false, error: error.message }
   }
