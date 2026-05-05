@@ -243,6 +243,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   readonly allDailyInjections = signal<Record<string, unknown>[]>([]);
   readonly injectionDialogDate = signal('');
   readonly filterSpecificInjections = signal(false);
+  readonly lastInjectionShiftCode = signal('');
   readonly dailyDrafts = signal<Record<string, unknown>[]>([]);
   readonly draftDialogDate = signal('');
   readonly patientsForDraftDialog = signal<Record<string, unknown>[]>([]);
@@ -1017,6 +1018,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       }
     }
 
+    this.lastInjectionShiftCode.set(shiftCode);
     this.injectionDialogDate.set(this.formatDate(this.currentDate()));
     this.isInjectionDialogVisible.set(true);
     this.isInjectionLoading.set(true);
@@ -1051,6 +1053,14 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       this.isInjectionDialogVisible.set(false);
     } finally {
       this.isInjectionLoading.set(this.medicationStore.isLoading());
+    }
+  }
+
+  async refreshInjections(): Promise<void> {
+    this.medicationStore.clearCache();
+    const shiftCode = this.lastInjectionShiftCode();
+    if (shiftCode) {
+      await this.showShiftInjections(shiftCode);
     }
   }
 

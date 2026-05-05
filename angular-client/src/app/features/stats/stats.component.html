@@ -633,6 +633,7 @@
     [targetDate]="formatDate(currentDate)"
     [showFilter]="false"
     (closeEvent)="isInjectionDialogVisible = false"
+    (refreshEvent)="refreshInjections()"
   ></app-daily-injection-list-dialog>
 
   <app-dialysis-order-modal

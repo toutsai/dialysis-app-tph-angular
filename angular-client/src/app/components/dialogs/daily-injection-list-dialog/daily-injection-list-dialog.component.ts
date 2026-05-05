@@ -18,6 +18,7 @@ export class DailyInjectionListDialogComponent {
   @Input() showFilter = false;
   @Output() closeEvent = new EventEmitter<void>();
   @Output() filterActiveChange = new EventEmitter<boolean>();
+  @Output() refreshEvent = new EventEmitter<void>();
 
   get titleDate(): string {
     if (!this.targetDate) return '';

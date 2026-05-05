@@ -166,6 +166,8 @@ export class StatsComponent implements OnInit, OnDestroy {
   isInjectionDialogVisible = false;
   dailyInjections: any[] = [];
   isInjectionLoading = false;
+  lastInjectionTeamData: any = null;
+  lastInjectionShiftType: string | null = null;
 
   isOrderModalVisible = false;
   editingPatientForOrder: any = null;
@@ -879,7 +881,16 @@ export class StatsComponent implements OnInit, OnDestroy {
 
   // --- Injection List ---
 
+  async refreshInjections(): Promise<void> {
+    this.medicationStore.clearCache();
+    if (this.lastInjectionTeamData) {
+      await this.showInjectionList(this.lastInjectionTeamData, this.lastInjectionShiftType);
+    }
+  }
+
   async showInjectionList(teamData: any, shiftType: string | null = null): Promise<void> {
+    this.lastInjectionTeamData = teamData;
+    this.lastInjectionShiftType = shiftType;
     // Build patientId → {shift, bedNum} map from teamData patients
     const patientInfoMap = new Map<string, { shift: string; bedNum: string }>();
     const patientIdsToFetch = new Set<string>();

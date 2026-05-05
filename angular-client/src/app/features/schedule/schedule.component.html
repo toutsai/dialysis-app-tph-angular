@@ -726,6 +726,7 @@
     [filterActive]="filterSpecificInjections()"
     (closeEvent)="isInjectionDialogVisible.set(false)"
     (filterActiveChange)="filterSpecificInjections.set($event)"
+    (refreshEvent)="refreshInjections()"
   ></app-daily-injection-list-dialog>
 }
 
