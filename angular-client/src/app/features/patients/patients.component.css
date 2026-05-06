@@ -303,10 +303,10 @@
   word-break: break-all;
 }
 .col-updated {
-  flex: 0 0 110px;
+  flex: 0 0 130px;
 }
 .col-actions {
-  flex: 0 0 420px;
+  flex: 0 0 460px;
   justify-content: flex-start;
 }
 .flex-table-header .flex-cell {

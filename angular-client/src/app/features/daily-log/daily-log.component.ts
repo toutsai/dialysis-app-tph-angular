@@ -42,6 +42,7 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   // API Managers
   private readonly dailyLogsApi: ApiManager<FirestoreRecord>;
   private readonly schedulesApi: ApiManager<FirestoreRecord>;
+  private readonly expiredSchedulesApi: ApiManager<FirestoreRecord>;
 
   // ===================================================================
   // Core State
@@ -97,6 +98,7 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   constructor() {
     this.dailyLogsApi = this.apiManagerService.create<FirestoreRecord>('daily_logs');
     this.schedulesApi = this.apiManagerService.create<FirestoreRecord>('schedules');
+    this.expiredSchedulesApi = this.apiManagerService.create<FirestoreRecord>('expired_schedules');
     this.siteConfigApi = this.apiManagerService.create<FirestoreRecord>('site_config');
     this.handoverLogsApi = this.apiManagerService.create<FirestoreRecord>('handover_logs');
     this.dailyLog = this.initialLogState();
@@ -306,12 +308,21 @@ export class DailyLogComponent implements OnInit, OnDestroy {
 
       await patientFetchPromise;
 
-      const [logResult, handoverLogResult, allSchedules] = await Promise.all([
+      // 過去日期讀歸檔排程（含 archivedPatientInfo 病人狀態快照），其他日期讀現行排程
+      const todayStr = this.formatDate(new Date());
+      const isPast = dateStr < todayStr;
+      const schedulePromise = isPast
+        ? this.expiredSchedulesApi.fetchById(dateStr).catch(() => null)
+        : this.schedulesApi.fetchAll().catch(() => [] as any[]);
+
+      const [logResult, handoverLogResult, scheduleResp] = await Promise.all([
         this.dailyLogsApi.fetchById(dateStr),
         this.handoverLogsApi.fetchById('latest'),
-        this.schedulesApi.fetchAll(),
+        schedulePromise,
       ]);
-      const scheduleData = allSchedules.filter((s: any) => s.date === dateStr);
+      const scheduleData = isPast
+        ? (scheduleResp ? [scheduleResp] : [])
+        : ((scheduleResp as any[]) || []).filter((s: any) => s.date === dateStr);
 
       if (handoverLogResult) {
         this.handoverNotes = (handoverLogResult as any)?.content || '';
@@ -529,20 +540,23 @@ export class DailyLogComponent implements OnInit, OnDestroy {
     for (const shiftKey in scheduleRecord.schedule) {
       const slotData = scheduleRecord.schedule[shiftKey];
       if (!slotData?.patientId) continue;
+      // 歸檔排程帶有 archivedPatientInfo 快照，優先使用，避免病人之後改身分污染歷史統計
+      const archivedStatus = slotData.archivedPatientInfo?.status;
       const patient = patientMap.get(slotData.patientId);
-      if (!patient) continue;
+      const status = archivedStatus || patient?.status;
+      if (!status) continue;
       const shiftCode = shiftKey.split('-').pop()!;
       const isPeripheral = shiftKey.startsWith('peripheral');
       if (['early', 'noon', 'late'].includes(shiftCode)) {
         if (isPeripheral) {
           newStats.peripheral_beds[shiftCode].total++;
-          if (patient.status === 'ipd') newStats.peripheral_beds[shiftCode].ipd++;
-          else if (patient.status === 'er') newStats.peripheral_beds[shiftCode].er++;
+          if (status === 'ipd') newStats.peripheral_beds[shiftCode].ipd++;
+          else if (status === 'er') newStats.peripheral_beds[shiftCode].er++;
         } else {
           newStats.main_beds[shiftCode].total++;
-          if (patient.status === 'opd') newStats.main_beds[shiftCode].opd++;
-          else if (patient.status === 'ipd') newStats.main_beds[shiftCode].ipd++;
-          else if (patient.status === 'er') newStats.main_beds[shiftCode].er++;
+          if (status === 'opd') newStats.main_beds[shiftCode].opd++;
+          else if (status === 'ipd') newStats.main_beds[shiftCode].ipd++;
+          else if (status === 'er') newStats.main_beds[shiftCode].er++;
         }
       }
     }
@@ -568,20 +582,23 @@ export class DailyLogComponent implements OnInit, OnDestroy {
     for (const shiftKey in scheduleRecord.schedule) {
       const slotData = scheduleRecord.schedule[shiftKey];
       if (!slotData?.patientId) continue;
+      // 歸檔排程帶有 archivedPatientInfo 快照，優先使用，避免病人之後改身分污染歷史統計
+      const archivedStatus = slotData.archivedPatientInfo?.status;
       const patient = patientMap.get(slotData.patientId);
-      if (!patient) continue;
+      const status = archivedStatus || patient?.status;
+      if (!status) continue;
       const shiftCode = shiftKey.split('-').pop()!;
       const isPeripheral = shiftKey.startsWith('peripheral');
       if (['early', 'noon', 'late'].includes(shiftCode)) {
         if (isPeripheral) {
           stats.peripheral_beds[shiftCode].total++;
-          if (patient.status === 'ipd') stats.peripheral_beds[shiftCode].ipd++;
-          else if (patient.status === 'er') stats.peripheral_beds[shiftCode].er++;
+          if (status === 'ipd') stats.peripheral_beds[shiftCode].ipd++;
+          else if (status === 'er') stats.peripheral_beds[shiftCode].er++;
         } else {
           stats.main_beds[shiftCode].total++;
-          if (patient.status === 'opd') stats.main_beds[shiftCode].opd++;
-          else if (patient.status === 'ipd') stats.main_beds[shiftCode].ipd++;
-          else if (patient.status === 'er') stats.main_beds[shiftCode].er++;
+          if (status === 'opd') stats.main_beds[shiftCode].opd++;
+          else if (status === 'ipd') stats.main_beds[shiftCode].ipd++;
+          else if (status === 'er') stats.main_beds[shiftCode].er++;
         }
       }
     }
