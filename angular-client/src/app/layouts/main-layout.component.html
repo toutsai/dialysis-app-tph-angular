@@ -9,14 +9,31 @@
         }
       </div>
       <ul class="sidebar-nav">
+        <!-- 個人常用：每日排程 / 護理分組 / 我的病人列表 / 訊息中心 -->
         <li class="nav-section-label">個人常用</li>
         <li>
-          <a routerLink="/my-patients" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
+          <a routerLink="/schedule" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
             <div class="nav-item-content">
-              <span class="nav-title">我的病人列表</span>
+              <span class="nav-title">每日排程</span>
             </div>
           </a>
         </li>
+        <li>
+          <a routerLink="/stats" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
+            <div class="nav-item-content">
+              <span class="nav-title">護理分組</span>
+            </div>
+          </a>
+        </li>
+        @if (authService.isAdmin() || authService.isEditor()) {
+          <li>
+            <a routerLink="/my-patients" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
+              <div class="nav-item-content">
+                <span class="nav-title">我的病人列表</span>
+              </div>
+            </a>
+          </li>
+        }
         <li>
           <a routerLink="/collaboration" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
             <div class="nav-item-content">
@@ -31,26 +48,10 @@
         <!-- 組長專用 -->
         @if (authService.isAdmin() || authService.isEditor()) {
           <li class="nav-section-label">組長專用</li>
-        }
-        @if (authService.isAdmin() || authService.isEditor()) {
-          <li>
-            <a routerLink="/schedule" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
-              <div class="nav-item-content">
-                <span class="nav-title">每日排程</span>
-              </div>
-            </a>
-          </li>
-          <li>
-            <a routerLink="/stats" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
-              <div class="nav-item-content">
-                <span class="nav-title">護理分組</span>
-              </div>
-            </a>
-          </li>
           <li class="desktop-only-nav-item">
             <a routerLink="/weekly" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
               <div class="nav-item-content">
-                <span class="nav-title">周排班</span>
+                <span class="nav-title">週排班</span>
               </div>
             </a>
           </li>
@@ -97,15 +98,14 @@
             </a>
           </li>
         }
-        @if (authService.isAdmin() || authService.currentUser()?.role === 'editor' || authService.currentUser()?.role === 'viewer') {
-          <li>
-            <a routerLink="/daily-log" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
-              <div class="nav-item-content">
-                <span class="nav-title">工作日誌</span>
-              </div>
-            </a>
-          </li>
-        }
+        <!-- 工作日誌：所有角色皆可（修正：原 contributor 被遺漏） -->
+        <li>
+          <a routerLink="/daily-log" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
+            <div class="nav-item-content">
+              <span class="nav-title">工作日誌</span>
+            </div>
+          </a>
+        </li>
       </ul>
     </div>
 

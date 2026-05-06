@@ -1,6 +1,13 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
 import { adminGuard } from './core/guards/admin.guard';
+import { roleGuard } from './core/guards/role.guard';
+
+// === 角色矩陣（與 Vue 端 STAFF_ROLES / CLINICAL_ROLES 等一致）===
+const ALL_ROLES = ['admin', 'editor', 'contributor', 'viewer'];
+const STAFF_ROLES = ['admin', 'editor']; // 組長專用
+const CLINICAL_ROLES = ['admin', 'editor', 'contributor']; // 病人/檢驗類
+const DOCTOR_ROLES = ['admin', 'contributor']; // 醫囑/醫師相關
 
 export const routes: Routes = [
   {
@@ -26,7 +33,8 @@ export const routes: Routes = [
           import('./features/schedule/schedule.component').then(
             (m) => m.ScheduleComponent
           ),
-        data: { title: '每日排程表' },
+        canActivate: [roleGuard],
+        data: { title: '每日排程表', roles: ALL_ROLES },
       },
       {
         path: 'weekly',
@@ -34,7 +42,8 @@ export const routes: Routes = [
           import('./features/weekly/weekly.component').then(
             (m) => m.WeeklyComponent
           ),
-        data: { title: '週排班表' },
+        canActivate: [roleGuard],
+        data: { title: '週排班表', roles: STAFF_ROLES },
       },
       {
         path: 'base-schedule',
@@ -42,7 +51,8 @@ export const routes: Routes = [
           import('./features/base-schedule/base-schedule.component').then(
             (m) => m.BaseScheduleComponent
           ),
-        data: { title: '門急住床位總表' },
+        canActivate: [roleGuard],
+        data: { title: '門急住床位總表', roles: STAFF_ROLES },
       },
       {
         path: 'physician-schedule',
@@ -50,7 +60,8 @@ export const routes: Routes = [
           import(
             './features/physician-schedule/physician-schedule.component'
           ).then((m) => m.PhysicianScheduleComponent),
-        data: { title: '醫師排班' },
+        canActivate: [roleGuard],
+        data: { title: '醫師排班', roles: DOCTOR_ROLES },
       },
       {
         path: 'exception-manager',
@@ -58,7 +69,8 @@ export const routes: Routes = [
           import(
             './features/exception-manager/exception-manager.component'
           ).then((m) => m.ExceptionManagerComponent),
-        data: { title: '調班管理' },
+        canActivate: [roleGuard],
+        data: { title: '調班管理', roles: STAFF_ROLES },
       },
       {
         path: 'update-scheduler',
@@ -66,7 +78,8 @@ export const routes: Routes = [
           import(
             './features/update-scheduler/update-scheduler.component'
           ).then((m) => m.UpdateSchedulerComponent),
-        data: { title: '預約變更總覽' },
+        canActivate: [roleGuard],
+        data: { title: '預約變更總覽', roles: STAFF_ROLES },
       },
       {
         path: 'patients',
@@ -74,7 +87,8 @@ export const routes: Routes = [
           import('./features/patients/patients.component').then(
             (m) => m.PatientsComponent
           ),
-        data: { title: '病人管理' },
+        canActivate: [roleGuard],
+        data: { title: '病人管理', roles: CLINICAL_ROLES },
       },
       {
         path: 'stats',
@@ -82,7 +96,8 @@ export const routes: Routes = [
           import('./features/stats/stats.component').then(
             (m) => m.StatsComponent
           ),
-        data: { title: '護理分組檢視' },
+        canActivate: [roleGuard],
+        data: { title: '護理分組檢視', roles: ALL_ROLES },
       },
       {
         path: 'reporting',
@@ -90,7 +105,8 @@ export const routes: Routes = [
           import('./features/reporting/reporting.component').then(
             (m) => m.ReportingComponent
           ),
-        data: { title: '統計報表' },
+        canActivate: [roleGuard],
+        data: { title: '統計報表', roles: STAFF_ROLES },
       },
       {
         path: 'user-management',
@@ -107,7 +123,8 @@ export const routes: Routes = [
           import('./features/lab-reports/lab-reports.component').then(
             (m) => m.LabReportsComponent
           ),
-        data: { title: '檢驗報告管理' },
+        canActivate: [roleGuard],
+        data: { title: '檢驗報告管理', roles: CLINICAL_ROLES },
       },
       {
         path: 'inventory',
@@ -115,7 +132,8 @@ export const routes: Routes = [
           import('./features/inventory/inventory.component').then(
             (m) => m.InventoryComponent
           ),
-        data: { title: '庫存管理' },
+        canActivate: [roleGuard],
+        data: { title: '庫存管理', roles: STAFF_ROLES },
       },
       {
         path: 'account-settings',
@@ -131,7 +149,8 @@ export const routes: Routes = [
           import('./features/daily-log/daily-log.component').then(
             (m) => m.DailyLogComponent
           ),
-        data: { title: '工作日誌' },
+        canActivate: [roleGuard],
+        data: { title: '工作日誌', roles: ALL_ROLES },
       },
       {
         path: 'collaboration',
@@ -147,7 +166,9 @@ export const routes: Routes = [
           import('./features/orders/orders.component').then(
             (m) => m.OrdersComponent
           ),
-        data: { title: '藥囑管理' },
+        canActivate: [roleGuard],
+        // 藥囑：依新 RBAC，editor 不再有權限
+        data: { title: '藥囑管理', roles: DOCTOR_ROLES },
       },
       {
         path: 'my-patients',
@@ -155,7 +176,8 @@ export const routes: Routes = [
           import('./features/my-patients/my-patients.component').then(
             (m) => m.MyPatientsComponent
           ),
-        data: { title: '我的今日病人' },
+        canActivate: [roleGuard],
+        data: { title: '我的今日病人', roles: STAFF_ROLES },
       },
       {
         path: 'nursing-schedule',
@@ -163,7 +185,8 @@ export const routes: Routes = [
           import(
             './features/nursing-schedule/nursing-schedule.component'
           ).then((m) => m.NursingScheduleComponent),
-        data: { title: '護理班表與職責' },
+        canActivate: [roleGuard],
+        data: { title: '護理班表與職責', roles: STAFF_ROLES },
       },
       {
         path: 'kidit-report',
@@ -171,7 +194,8 @@ export const routes: Routes = [
           import('./features/kidit-report/kidit-report.component').then(
             (m) => m.KiditReportComponent
           ),
-        data: { title: 'KiDit 申報工作站' },
+        canActivate: [roleGuard],
+        data: { title: 'KiDit 申報工作站', roles: STAFF_ROLES },
       },
       {
         path: 'usage-guide',
