@@ -8,6 +8,8 @@ import {
   signal,
   computed,
   effect,
+  ViewChild,
+  ElementRef,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -291,6 +293,10 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   readonly isOrderModalVisible = signal(false);
   readonly isCRRTOrderModalVisible = signal(false);
 
+  @ViewChild('datePickerInput') datePickerInput?: ElementRef<HTMLInputElement>;
+
+  readonly currentDateInputValue = computed(() => this.formatDate(this.currentDate()));
+
   // Dialog data
   private onConfirmAction: (() => void) | null = null;
   readonly currentSlotId = signal<string | null>(null);
@@ -306,6 +312,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   readonly allDailyInjections = signal<Record<string, unknown>[]>([]);
   readonly injectionDialogDate = signal('');
   readonly filterSpecificInjections = signal(false);
+  readonly lastInjectionShiftCode = signal('');
   readonly dailyDrafts = signal<Record<string, unknown>[]>([]);
   readonly draftDialogDate = signal('');
   readonly patientsForDraftDialog = signal<Record<string, unknown>[]>([]);
@@ -738,6 +745,36 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     };
     if ((this.hasUnsavedChanges() || this.hasUnsavedTeamChanges()) && !this.isPageLocked()) {
       this.showConfirm('注意', '您有未儲存的變更，確定要切換到今天嗎？', performChange);
+    } else {
+      performChange();
+    }
+  }
+
+  openDatePicker(): void {
+    const el = this.datePickerInput?.nativeElement;
+    if (!el) return;
+    const anyEl = el as any;
+    if (typeof anyEl.showPicker === 'function') {
+      try {
+        anyEl.showPicker();
+        return;
+      } catch {
+        // 某些瀏覽器沒有使用者手勢時會 throw，退回 click()
+      }
+    }
+    el.click();
+  }
+
+  onDatePicked(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    if (!value) return;
+    const performChange = () => {
+      const newDate = new Date(`${value}T00:00:00`);
+      this.currentDate.set(newDate);
+      this.dateState.setDate(newDate.toISOString());
+    };
+    if ((this.hasUnsavedChanges() || this.hasUnsavedTeamChanges()) && !this.isPageLocked()) {
+      this.showConfirm('注意', '您有未儲存的變更，確定要切換日期嗎？', performChange);
     } else {
       performChange();
     }
@@ -1231,6 +1268,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       }
     }
 
+    this.lastInjectionShiftCode.set(shiftCode);
     this.injectionDialogDate.set(this.formatDate(this.currentDate()));
     this.isInjectionDialogVisible.set(true);
     this.isInjectionLoading.set(true);
@@ -1265,6 +1303,14 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       this.isInjectionDialogVisible.set(false);
     } finally {
       this.isInjectionLoading.set(this.medicationStore.isLoading());
+    }
+  }
+
+  async refreshInjections(): Promise<void> {
+    this.medicationStore.clearCache();
+    const shiftCode = this.lastInjectionShiftCode();
+    if (shiftCode) {
+      await this.showShiftInjections(shiftCode);
     }
   }
 

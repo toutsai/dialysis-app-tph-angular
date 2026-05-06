@@ -1,5 +1,5 @@
 // Standalone 版：已移除 Firebase
-import { Component, inject, OnInit, OnDestroy } from '@angular/core';
+import { Component, inject, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '@app/core/services/auth.service';
@@ -175,6 +175,8 @@ export class StatsComponent implements OnInit, OnDestroy {
   isInjectionDialogVisible = false;
   dailyInjections: any[] = [];
   isInjectionLoading = false;
+  lastInjectionTeamData: any = null;
+  lastInjectionShiftType: string | null = null;
 
   isOrderModalVisible = false;
   editingPatientForOrder: any = null;
@@ -983,7 +985,16 @@ export class StatsComponent implements OnInit, OnDestroy {
 
   // --- Injection List ---
 
+  async refreshInjections(): Promise<void> {
+    this.medicationStore.clearCache();
+    if (this.lastInjectionTeamData) {
+      await this.showInjectionList(this.lastInjectionTeamData, this.lastInjectionShiftType);
+    }
+  }
+
   async showInjectionList(teamData: any, shiftType: string | null = null): Promise<void> {
+    this.lastInjectionTeamData = teamData;
+    this.lastInjectionShiftType = shiftType;
     // Build patientId → {shift, bedNum} map from teamData patients
     const patientInfoMap = new Map<string, { shift: string; bedNum: string }>();
     const patientIdsToFetch = new Set<string>();
@@ -1078,6 +1089,41 @@ export class StatsComponent implements OnInit, OnDestroy {
     };
     if (this.hasUnsavedChanges && !this.isPageLocked) {
       this.confirmDialogMessage = '您有未儲存的變更，確定要切換到今天嗎？';
+      this.onConfirmAction = performChange;
+      this.isConfirmDialogVisible = true;
+    } else {
+      performChange();
+    }
+  }
+
+  @ViewChild('datePickerInput') datePickerInput?: ElementRef<HTMLInputElement>;
+
+  openDatePicker(): void {
+    const el = this.datePickerInput?.nativeElement;
+    if (!el) return;
+    const anyEl = el as any;
+    if (typeof anyEl.showPicker === 'function') {
+      try {
+        anyEl.showPicker();
+        return;
+      } catch {
+        // 部分瀏覽器無使用者手勢時會 throw，退回 click()
+      }
+    }
+    el.click();
+  }
+
+  onDatePicked(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    if (!value) return;
+    const performChange = () => {
+      const newDate = new Date(`${value}T00:00:00`);
+      this.currentDate = newDate;
+      this.dateState.setDate(newDate.toISOString());
+      this.onDateChanged();
+    };
+    if (this.hasUnsavedChanges && !this.isPageLocked) {
+      this.confirmDialogMessage = '您有未儲存的變更，確定要切換日期嗎？';
       this.onConfirmAction = performChange;
       this.isConfirmDialogVisible = true;
     } else {

@@ -60,6 +60,25 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  position: relative;
+}
+.date-clickable {
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px dashed transparent;
+  transition: border-color 0.15s;
+}
+.date-clickable:hover {
+  border-bottom-color: #007bff;
+}
+.date-picker-hidden {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .current-date-text,
