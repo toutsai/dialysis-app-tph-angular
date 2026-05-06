@@ -1704,11 +1704,12 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   private async fetchLiveSchedule(dateStr: string): Promise<Record<string, unknown>> {
-    // ✅ 優化：使用快取的 schedulesApi 實例
-    const allRecords = await this.schedulesApi.fetchAll();
-    const dailyRecords = allRecords.filter((r: any) => r.date === dateStr);
-    if (dailyRecords.length === 0) return { date: dateStr, schedule: {} };
-    const record = dailyRecords[0] as Record<string, unknown>;
+    // GET /schedules/:date can auto-generate a missing daily schedule from the master table.
+    const fetchedRecord = await this.schedulesApi.fetchById(dateStr);
+    const record = (fetchedRecord as Record<string, unknown> | null) || {
+      date: dateStr,
+      schedule: {},
+    };
     const finalSchedule: Record<string, unknown> = {};
     const schedule = record['schedule'] as Record<string, Record<string, unknown>>;
     if (schedule) {

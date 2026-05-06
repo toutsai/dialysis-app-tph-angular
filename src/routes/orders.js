@@ -3,10 +3,12 @@ import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import XLSX from 'xlsx'
 import { getDatabase } from '../db/init.js'
-import { authenticate, isContributor, isEditor, logAudit } from '../middleware/auth.js'
+import { authenticate, isContributor, isEditor, logAudit, requireAnyRole } from '../middleware/auth.js'
 import { getTaipeiMonthString } from '../utils/dateUtils.js'
 
 const router = Router()
+const isDoctorRole = [authenticate, requireAnyRole('admin', 'contributor')]
+const isInventoryRole = [authenticate, requireAnyRole('admin', 'viewer')]
 
 // ========================================
 // Excel 檔案處理工具函式
@@ -231,7 +233,7 @@ router.get('/history', authenticate, (req, res) => {
  * 批次取得多位病人的透析醫囑歷史
  * 用於解決 N+1 查詢問題
  */
-router.post('/history/batch', authenticate, (req, res) => {
+router.post('/history/batch', ...isDoctorRole, (req, res) => {
   try {
     const { patientIds, effectiveDateBefore } = req.body
 
@@ -309,7 +311,7 @@ router.post('/history/batch', authenticate, (req, res) => {
  * POST /api/orders/history
  * 新增透析醫囑記錄
  */
-router.post('/history', ...isContributor, async (req, res) => {
+router.post('/history', ...isDoctorRole, async (req, res) => {
   try {
     const { patientId, patientName, operationType, orders } = req.body
 
@@ -372,7 +374,7 @@ router.post('/history', ...isContributor, async (req, res) => {
  * DELETE /api/orders/history/:id
  * 刪除透析醫囑記錄
  */
-router.delete('/history/:id', ...isEditor, async (req, res) => {
+router.delete('/history/:id', ...isDoctorRole, async (req, res) => {
   try {
     const { id } = req.params
     const db = getDatabase()
@@ -464,7 +466,7 @@ router.get('/medications', authenticate, (req, res) => {
  * POST /api/orders/medications
  * 新增藥物訂單
  */
-router.post('/medications', ...isContributor, async (req, res) => {
+router.post('/medications', ...isDoctorRole, async (req, res) => {
   try {
     const { patientId, patientName, medications, orderDate } = req.body
 
@@ -503,7 +505,7 @@ router.post('/medications', ...isContributor, async (req, res) => {
  * PUT /api/orders/medications/:id
  * 更新藥物訂單
  */
-router.put('/medications/:id', ...isContributor, async (req, res) => {
+router.put('/medications/:id', ...isDoctorRole, async (req, res) => {
   try {
     const { id } = req.params
     const { medications, status, orderDate } = req.body
@@ -557,7 +559,7 @@ router.put('/medications/:id', ...isContributor, async (req, res) => {
  * DELETE /api/orders/medications/:id
  * 刪除藥物訂單
  */
-router.delete('/medications/:id', ...isEditor, async (req, res) => {
+router.delete('/medications/:id', ...isDoctorRole, async (req, res) => {
   try {
     const { id } = req.params
     const db = getDatabase()
@@ -637,7 +639,7 @@ router.get('/medication-drafts', authenticate, (req, res) => {
  * POST /api/orders/medication-drafts
  * 新增藥物草稿
  */
-router.post('/medication-drafts', ...isContributor, async (req, res) => {
+router.post('/medication-drafts', ...isDoctorRole, async (req, res) => {
   try {
     const draftData = req.body
     const { patientId } = draftData
@@ -678,7 +680,7 @@ router.post('/medication-drafts', ...isContributor, async (req, res) => {
  * DELETE /api/orders/medication-drafts/:id
  * 刪除藥物草稿
  */
-router.delete('/medication-drafts/:id', ...isContributor, async (req, res) => {
+router.delete('/medication-drafts/:id', ...isDoctorRole, async (req, res) => {
   try {
     const { id } = req.params
     const db = getDatabase()
@@ -766,7 +768,7 @@ router.get('/lab-reports', authenticate, (req, res) => {
  * POST /api/orders/lab-reports
  * 新增檢驗報告
  */
-router.post('/lab-reports', authenticate, async (req, res) => {
+router.post('/lab-reports', ...isDoctorRole, async (req, res) => {
   try {
     const { patientId, reportDate, reportType, results } = req.body
 
@@ -853,7 +855,7 @@ router.get('/lab-alert-analyses', authenticate, (req, res) => {
  * PUT /api/orders/lab-alert-analyses/:id
  * 新增或更新檢驗警示分析 (upsert)
  */
-router.put('/lab-alert-analyses/:id', authenticate, async (req, res) => {
+router.put('/lab-alert-analyses/:id', ...isDoctorRole, async (req, res) => {
   try {
     const { id } = req.params
     const { patientId, monthRange, abnormalityKey, analysis, suggestion } = req.body
@@ -1076,7 +1078,7 @@ router.delete('/condition-records/:id', ...isEditor, async (req, res) => {
  * 上傳並處理檢驗報告 Excel 檔案
  * 對應 Firebase: processLabReport
  */
-router.post('/lab-reports/upload', ...isContributor, async (req, res) => {
+router.post('/lab-reports/upload', ...isDoctorRole, async (req, res) => {
   try {
     const { fileName, fileContent } = req.body
 
@@ -1288,7 +1290,7 @@ router.post('/lab-reports/upload', ...isContributor, async (req, res) => {
  * 上傳並處理耗材報告 Excel 檔案
  * 對應 Firebase: processConsumables
  */
-router.post('/consumables/upload', ...isContributor, async (req, res) => {
+router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
   try {
     const { fileName, fileContent } = req.body
 
@@ -1506,7 +1508,7 @@ router.post('/consumables/upload', ...isContributor, async (req, res) => {
  * 上傳並處理藥囑 Excel 檔案
  * 對應 Firebase: processOrders
  */
-router.post('/medications/upload', ...isContributor, async (req, res) => {
+router.post('/medications/upload', ...isDoctorRole, async (req, res) => {
   try {
     const { fileName, fileContent } = req.body
 
@@ -1754,7 +1756,7 @@ router.post('/medications/upload', ...isContributor, async (req, res) => {
  * GET /api/orders/consumables
  * 取得耗材報告列表
  */
-router.get('/consumables', authenticate, (req, res) => {
+router.get('/consumables', ...isInventoryRole, (req, res) => {
   try {
     const { patientId, startDate, endDate } = req.query
     const db = getDatabase()

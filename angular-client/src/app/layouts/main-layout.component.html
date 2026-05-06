@@ -25,7 +25,7 @@
             </div>
           </a>
         </li>
-        @if (authService.isAdmin() || authService.isEditor()) {
+        @if (canAccessPage('myPatients')) {
           <li>
             <a routerLink="/my-patients" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
               <div class="nav-item-content">
@@ -46,24 +46,28 @@
         </li>
 
         <!-- 組長專用 -->
-        @if (authService.isAdmin() || authService.isEditor()) {
+        @if (canAccessPage('weekly') || canAccessPage('baseSchedule')) {
           <li class="nav-section-label">組長專用</li>
-          <li class="desktop-only-nav-item">
-            <a routerLink="/weekly" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
-              <div class="nav-item-content">
-                <span class="nav-title">週排班</span>
-              </div>
-            </a>
-          </li>
-          <li class="desktop-only-nav-item">
-            <a routerLink="/base-schedule" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
-              <div class="nav-item-content">
-                <span class="nav-title">床位總表</span>
-              </div>
-            </a>
-          </li>
+          @if (canAccessPage('weekly')) {
+            <li class="desktop-only-nav-item">
+              <a routerLink="/weekly" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
+                <div class="nav-item-content">
+                  <span class="nav-title">週排班</span>
+                </div>
+              </a>
+            </li>
+          }
+          @if (canAccessPage('baseSchedule')) {
+            <li class="desktop-only-nav-item">
+              <a routerLink="/base-schedule" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
+                <div class="nav-item-content">
+                  <span class="nav-title">床位總表</span>
+                </div>
+              </a>
+            </li>
+          }
         }
-        @if (authService.isAdmin() || authService.isEditor() || authService.isContributor()) {
+        @if (canAccessPage('patients')) {
           <li>
             <a routerLink="/patients" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
               <div class="nav-item-content">
@@ -72,7 +76,7 @@
             </a>
           </li>
         }
-        @if (authService.isAdmin() || authService.isEditor()) {
+        @if (canAccessPage('exceptionManager')) {
           <li class="desktop-only-nav-item">
             <a routerLink="/exception-manager" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
               <div class="nav-item-content">
@@ -89,6 +93,8 @@
               }
             </a>
           </li>
+        }
+        @if (canAccessPage('updateScheduler')) {
           <li class="desktop-only-nav-item">
             <a routerLink="/update-scheduler" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
               <div class="nav-item-content">
@@ -152,7 +158,7 @@
           <ul class="sidebar-nav">
 
             <!-- 2. [護理班表與職責] Admin, Editor (Nurse) -->
-            @if (authService.isAdmin() || authService.currentUser()?.role === 'editor') {
+            @if (canAccessPage('nursingSchedule')) {
               <li>
                 <a routerLink="/nursing-schedule" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
                   <div class="nav-item-content">
@@ -163,7 +169,7 @@
             }
 
             <!-- 3. [KiDit 申報] Admin, Editor (Nurse) -->
-            @if (authService.isAdmin() || authService.currentUser()?.role === 'editor') {
+            @if (canAccessPage('kiditReport')) {
               <li>
                 <a routerLink="/kidit-report" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
                   <div class="nav-item-content">
@@ -174,7 +180,7 @@
             }
 
             <!-- 4. [醫師班表] Admin, Contributor (Doc), Viewer -->
-            @if (authService.isAdmin() || authService.currentUser()?.role === 'contributor' || authService.currentUser()?.role === 'viewer') {
+            @if (canAccessPage('physicianSchedule')) {
               <li>
                 <a routerLink="/physician-schedule" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
                   <div class="nav-item-content">
@@ -185,7 +191,7 @@
             }
 
             <!-- 5. [檢驗報告] Admin, Contributor (Doc) -->
-            @if (authService.isAdmin() || authService.currentUser()?.role === 'contributor') {
+            @if (canAccessPage('labReports')) {
               <li>
                 <a routerLink="/lab-reports" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
                   <div class="nav-item-content">
@@ -196,7 +202,7 @@
             }
 
             <!-- 6. [藥囑管理] Admin, Contributor (Doc) -->
-            @if (authService.isAdmin() || authService.currentUser()?.role === 'contributor') {
+            @if (canAccessPage('orders')) {
               <li>
                 <a routerLink="/orders" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
                   <div class="nav-item-content">
@@ -207,7 +213,7 @@
             }
 
             <!-- 7. [庫存管理] Admin, Viewer -->
-            @if (authService.isAdmin() || authService.currentUser()?.role === 'viewer') {
+            @if (canAccessPage('inventory')) {
               <li>
                 <a routerLink="/inventory" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
                   <div class="nav-item-content">
@@ -218,7 +224,7 @@
             }
 
             <!-- 8. [統計報表] Admin, Editor, Contributor -->
-            @if (authService.isAdmin() || authService.currentUser()?.role === 'editor' || authService.currentUser()?.role === 'contributor') {
+            @if (canAccessPage('reporting')) {
               <li>
                 <a routerLink="/reporting" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
                   <div class="nav-item-content">
@@ -229,7 +235,7 @@
             }
 
             <!-- 9. [使用者管理] Admin Only -->
-            @if (authService.isAdmin()) {
+            @if (canAccessPage('userManagement')) {
               <li>
                 <a routerLink="/user-management" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
                   <div class="nav-item-content">

@@ -37,6 +37,10 @@ import {
 } from '@services/api-manager.service';
 import { MemoDisplayDialogComponent } from '@app/components/dialogs/memo-display-dialog/memo-display-dialog.component';
 import { getToday } from '@/utils/dateUtils';
+import {
+  canAccessPage as userCanAccessPage,
+  type PageKey,
+} from '@app/core/config/page-access';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -162,6 +166,10 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     }
     return { text: '(正式版)', class: 'env-tag-prod' };
   });
+
+  canAccessPage(pageKey: PageKey): boolean {
+    return userCanAccessPage(pageKey, this.authService.currentUser()?.role);
+  }
 
   constructor() {
     this.assignmentsApi =

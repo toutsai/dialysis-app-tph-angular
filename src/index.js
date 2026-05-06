@@ -3,6 +3,7 @@ import 'dotenv/config'   // 讀取 .env 檔案到 process.env（PM2 env_file 不
 import express from 'express'
 import cors from 'cors'
 import morgan from 'morgan'
+import { existsSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 
@@ -150,8 +151,15 @@ app.get('/api/health', (req, res) => {
 
 // 判斷靜態檔案路徑
 // - Electron 打包後：透過環境變數 STATIC_PATH 傳入
-// - 開發模式：使用相對路徑 ../../dist
-const staticPath = process.env.STATIC_PATH || join(__dirname, '../dist')
+// - Angular application builder 輸出到 dist/browser
+// - 舊版/其他 build 可能直接輸出到 dist
+const angularDistPath = join(__dirname, '../dist/browser')
+const legacyDistPath = join(__dirname, '../dist')
+const staticPath =
+  process.env.STATIC_PATH ||
+  (existsSync(join(angularDistPath, 'index.html'))
+    ? angularDistPath
+    : legacyDistPath)
 console.log(`📂 靜態檔案路徑: ${staticPath}`)
 app.use(express.static(staticPath))
 

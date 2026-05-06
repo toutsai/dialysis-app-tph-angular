@@ -377,6 +377,31 @@ export function requireRole(requiredRole) {
 }
 
 /**
+ * 權限檢查中介軟體工廠：允許任一指定角色。
+ * 用於 admin+viewer 這類非階層型頁面權限。
+ * @param {...string} allowedRoles - 允許的角色清單
+ */
+export function requireAnyRole(...allowedRoles) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({
+        error: true,
+        message: '請先登入',
+      })
+    }
+
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({
+        error: true,
+        message: '權限不足',
+      })
+    }
+
+    next()
+  }
+}
+
+/**
  * 便捷的權限中介軟體
  */
 export const isViewer = [authenticate]

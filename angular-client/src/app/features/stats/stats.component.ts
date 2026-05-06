@@ -639,10 +639,12 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   private async fetchLiveSchedule(dateStr: string): Promise<any> {
-    const localSchedulesApi = this.apiManager.create<FirestoreRecord>('schedules');
-    const allRecords = await localSchedulesApi.fetchAll();
-    const dailyRecords = allRecords.filter((r: any) => r.date === dateStr);
-    const record: any = dailyRecords.length > 0 ? dailyRecords[0] : { date: dateStr, schedule: {} };
+    // GET /schedules/:date can auto-generate a missing daily schedule from the master table.
+    const record: any =
+      (await this.schedulesApi.fetchById(dateStr)) || {
+        date: dateStr,
+        schedule: {},
+      };
 
     if (record.schedule) {
       for (const shiftId in record.schedule) {

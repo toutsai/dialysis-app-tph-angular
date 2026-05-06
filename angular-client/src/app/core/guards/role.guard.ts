@@ -23,11 +23,12 @@ export const roleGuard: CanActivateFn = async (route, state) => {
     });
   }
 
-  const allowedRoles = (route.data?.['roles'] as string[] | undefined) ?? null;
+  const allowedRoles =
+    (route.data?.['roles'] as readonly string[] | undefined) ?? null;
   if (!allowedRoles || allowedRoles.includes(user.role)) {
     return true;
   }
 
-  // 沒權限 → 退回首頁（首頁本身會依 role 再導向）
-  return router.createUrlTree(['/']);
+  // 沒權限時回到所有角色都可進入的安全頁，避免根路由重導循環。
+  return router.createUrlTree(['/schedule']);
 };

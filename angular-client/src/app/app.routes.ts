@@ -1,13 +1,7 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
-import { adminGuard } from './core/guards/admin.guard';
 import { roleGuard } from './core/guards/role.guard';
-
-// === 角色矩陣（與 Vue 端 STAFF_ROLES / CLINICAL_ROLES 等一致）===
-const ALL_ROLES = ['admin', 'editor', 'contributor', 'viewer'];
-const STAFF_ROLES = ['admin', 'editor']; // 組長專用
-const CLINICAL_ROLES = ['admin', 'editor', 'contributor']; // 病人/檢驗類
-const DOCTOR_ROLES = ['admin', 'contributor']; // 醫囑/醫師相關
+import { PAGE_ACCESS } from './core/config/page-access';
 
 export const routes: Routes = [
   {
@@ -34,7 +28,10 @@ export const routes: Routes = [
             (m) => m.ScheduleComponent
           ),
         canActivate: [roleGuard],
-        data: { title: '每日排程表', roles: ALL_ROLES },
+        data: {
+          title: PAGE_ACCESS.schedule.title,
+          roles: PAGE_ACCESS.schedule.roles,
+        },
       },
       {
         path: 'weekly',
@@ -43,7 +40,7 @@ export const routes: Routes = [
             (m) => m.WeeklyComponent
           ),
         canActivate: [roleGuard],
-        data: { title: '週排班表', roles: STAFF_ROLES },
+        data: { title: PAGE_ACCESS.weekly.title, roles: PAGE_ACCESS.weekly.roles },
       },
       {
         path: 'base-schedule',
@@ -52,7 +49,10 @@ export const routes: Routes = [
             (m) => m.BaseScheduleComponent
           ),
         canActivate: [roleGuard],
-        data: { title: '門急住床位總表', roles: STAFF_ROLES },
+        data: {
+          title: PAGE_ACCESS.baseSchedule.title,
+          roles: PAGE_ACCESS.baseSchedule.roles,
+        },
       },
       {
         path: 'physician-schedule',
@@ -61,7 +61,10 @@ export const routes: Routes = [
             './features/physician-schedule/physician-schedule.component'
           ).then((m) => m.PhysicianScheduleComponent),
         canActivate: [roleGuard],
-        data: { title: '醫師排班', roles: DOCTOR_ROLES },
+        data: {
+          title: PAGE_ACCESS.physicianSchedule.title,
+          roles: PAGE_ACCESS.physicianSchedule.roles,
+        },
       },
       {
         path: 'exception-manager',
@@ -70,7 +73,10 @@ export const routes: Routes = [
             './features/exception-manager/exception-manager.component'
           ).then((m) => m.ExceptionManagerComponent),
         canActivate: [roleGuard],
-        data: { title: '調班管理', roles: STAFF_ROLES },
+        data: {
+          title: PAGE_ACCESS.exceptionManager.title,
+          roles: PAGE_ACCESS.exceptionManager.roles,
+        },
       },
       {
         path: 'update-scheduler',
@@ -79,7 +85,10 @@ export const routes: Routes = [
             './features/update-scheduler/update-scheduler.component'
           ).then((m) => m.UpdateSchedulerComponent),
         canActivate: [roleGuard],
-        data: { title: '預約變更總覽', roles: STAFF_ROLES },
+        data: {
+          title: PAGE_ACCESS.updateScheduler.title,
+          roles: PAGE_ACCESS.updateScheduler.roles,
+        },
       },
       {
         path: 'patients',
@@ -88,7 +97,7 @@ export const routes: Routes = [
             (m) => m.PatientsComponent
           ),
         canActivate: [roleGuard],
-        data: { title: '病人管理', roles: CLINICAL_ROLES },
+        data: { title: PAGE_ACCESS.patients.title, roles: PAGE_ACCESS.patients.roles },
       },
       {
         path: 'stats',
@@ -97,7 +106,7 @@ export const routes: Routes = [
             (m) => m.StatsComponent
           ),
         canActivate: [roleGuard],
-        data: { title: '護理分組檢視', roles: ALL_ROLES },
+        data: { title: PAGE_ACCESS.stats.title, roles: PAGE_ACCESS.stats.roles },
       },
       {
         path: 'reporting',
@@ -106,7 +115,10 @@ export const routes: Routes = [
             (m) => m.ReportingComponent
           ),
         canActivate: [roleGuard],
-        data: { title: '統計報表', roles: STAFF_ROLES },
+        data: {
+          title: PAGE_ACCESS.reporting.title,
+          roles: PAGE_ACCESS.reporting.roles,
+        },
       },
       {
         path: 'user-management',
@@ -114,8 +126,11 @@ export const routes: Routes = [
           import(
             './features/user-management/user-management.component'
           ).then((m) => m.UserManagementComponent),
-        canActivate: [adminGuard],
-        data: { title: '使用者管理' },
+        canActivate: [roleGuard],
+        data: {
+          title: PAGE_ACCESS.userManagement.title,
+          roles: PAGE_ACCESS.userManagement.roles,
+        },
       },
       {
         path: 'lab-reports',
@@ -124,7 +139,10 @@ export const routes: Routes = [
             (m) => m.LabReportsComponent
           ),
         canActivate: [roleGuard],
-        data: { title: '檢驗報告管理', roles: CLINICAL_ROLES },
+        data: {
+          title: PAGE_ACCESS.labReports.title,
+          roles: PAGE_ACCESS.labReports.roles,
+        },
       },
       {
         path: 'inventory',
@@ -133,7 +151,10 @@ export const routes: Routes = [
             (m) => m.InventoryComponent
           ),
         canActivate: [roleGuard],
-        data: { title: '庫存管理', roles: STAFF_ROLES },
+        data: {
+          title: PAGE_ACCESS.inventory.title,
+          roles: PAGE_ACCESS.inventory.roles,
+        },
       },
       {
         path: 'account-settings',
@@ -141,7 +162,11 @@ export const routes: Routes = [
           import(
             './features/account-settings/account-settings.component'
           ).then((m) => m.AccountSettingsComponent),
-        data: { title: '帳號設定' },
+        canActivate: [roleGuard],
+        data: {
+          title: PAGE_ACCESS.accountSettings.title,
+          roles: PAGE_ACCESS.accountSettings.roles,
+        },
       },
       {
         path: 'daily-log',
@@ -150,7 +175,10 @@ export const routes: Routes = [
             (m) => m.DailyLogComponent
           ),
         canActivate: [roleGuard],
-        data: { title: '工作日誌', roles: ALL_ROLES },
+        data: {
+          title: PAGE_ACCESS.dailyLog.title,
+          roles: PAGE_ACCESS.dailyLog.roles,
+        },
       },
       {
         path: 'collaboration',
@@ -158,7 +186,11 @@ export const routes: Routes = [
           import('./features/collaboration/collaboration.component').then(
             (m) => m.CollaborationComponent
           ),
-        data: { title: '協作訊息中心' },
+        canActivate: [roleGuard],
+        data: {
+          title: PAGE_ACCESS.collaboration.title,
+          roles: PAGE_ACCESS.collaboration.roles,
+        },
       },
       {
         path: 'orders',
@@ -167,8 +199,7 @@ export const routes: Routes = [
             (m) => m.OrdersComponent
           ),
         canActivate: [roleGuard],
-        // 藥囑：依新 RBAC，editor 不再有權限
-        data: { title: '藥囑管理', roles: DOCTOR_ROLES },
+        data: { title: PAGE_ACCESS.orders.title, roles: PAGE_ACCESS.orders.roles },
       },
       {
         path: 'my-patients',
@@ -177,7 +208,10 @@ export const routes: Routes = [
             (m) => m.MyPatientsComponent
           ),
         canActivate: [roleGuard],
-        data: { title: '我的今日病人', roles: STAFF_ROLES },
+        data: {
+          title: PAGE_ACCESS.myPatients.title,
+          roles: PAGE_ACCESS.myPatients.roles,
+        },
       },
       {
         path: 'nursing-schedule',
@@ -186,7 +220,10 @@ export const routes: Routes = [
             './features/nursing-schedule/nursing-schedule.component'
           ).then((m) => m.NursingScheduleComponent),
         canActivate: [roleGuard],
-        data: { title: '護理班表與職責', roles: STAFF_ROLES },
+        data: {
+          title: PAGE_ACCESS.nursingSchedule.title,
+          roles: PAGE_ACCESS.nursingSchedule.roles,
+        },
       },
       {
         path: 'kidit-report',
@@ -195,7 +232,10 @@ export const routes: Routes = [
             (m) => m.KiditReportComponent
           ),
         canActivate: [roleGuard],
-        data: { title: 'KiDit 申報工作站', roles: STAFF_ROLES },
+        data: {
+          title: PAGE_ACCESS.kiditReport.title,
+          roles: PAGE_ACCESS.kiditReport.roles,
+        },
       },
       {
         path: 'usage-guide',
@@ -203,7 +243,11 @@ export const routes: Routes = [
           import('./features/usage-guide/usage-guide.component').then(
             (m) => m.UsageGuideComponent
           ),
-        data: { title: '平台使用說明' },
+        canActivate: [roleGuard],
+        data: {
+          title: PAGE_ACCESS.usageGuide.title,
+          roles: PAGE_ACCESS.usageGuide.roles,
+        },
       },
       {
         path: 'consumables',
@@ -211,7 +255,11 @@ export const routes: Routes = [
           import('./features/consumables/consumables.component').then(
             (m) => m.ConsumablesComponent
           ),
-        data: { title: '每月耗材總表' },
+        canActivate: [roleGuard],
+        data: {
+          title: PAGE_ACCESS.consumables.title,
+          roles: PAGE_ACCESS.consumables.roles,
+        },
       },
     ],
   },

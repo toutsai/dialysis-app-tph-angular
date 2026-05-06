@@ -2,9 +2,10 @@
 import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../db/init.js'
-import { authenticate, isAdmin, isEditor, isContributor, logAudit } from '../middleware/auth.js'
+import { authenticate, isAdmin, isEditor, isContributor, logAudit, requireAnyRole } from '../middleware/auth.js'
 
 const router = Router()
+const isInventoryRole = [authenticate, requireAnyRole('admin', 'viewer')]
 
 // ========================================
 // 健康檢查 API (用於 Electron 啟動檢測)
@@ -468,7 +469,7 @@ router.patch('/notifications/:id/read', authenticate, async (req, res) => {
  * GET /api/system/inventory
  * 取得庫存列表
  */
-router.get('/inventory', authenticate, (req, res) => {
+router.get('/inventory', ...isInventoryRole, (req, res) => {
   try {
     const db = getDatabase()
 
@@ -501,7 +502,7 @@ router.get('/inventory', authenticate, (req, res) => {
  * POST /api/system/inventory
  * 新增庫存項目
  */
-router.post('/inventory', authenticate, async (req, res) => {
+router.post('/inventory', ...isInventoryRole, async (req, res) => {
   try {
     const { name, category, unit, unitsPerBox, currentQuantity, minQuantity, location, notes } = req.body
 
@@ -533,7 +534,7 @@ router.post('/inventory', authenticate, async (req, res) => {
  * PUT /api/system/inventory/:id
  * 更新庫存項目
  */
-router.put('/inventory/:id', authenticate, async (req, res) => {
+router.put('/inventory/:id', ...isInventoryRole, async (req, res) => {
   try {
     const { id } = req.params
     const { name, category, unit, unitsPerBox, currentQuantity, minQuantity, location, notes } = req.body
@@ -567,7 +568,7 @@ router.put('/inventory/:id', authenticate, async (req, res) => {
  * DELETE /api/system/inventory/:id
  * 刪除庫存項目
  */
-router.delete('/inventory/:id', authenticate, async (req, res) => {
+router.delete('/inventory/:id', ...isInventoryRole, async (req, res) => {
   try {
     const { id } = req.params
     const db = getDatabase()
@@ -593,7 +594,7 @@ router.delete('/inventory/:id', authenticate, async (req, res) => {
  * GET /api/system/inventory/purchases
  * 取得進貨紀錄列表
  */
-router.get('/inventory/purchases', authenticate, (req, res) => {
+router.get('/inventory/purchases', ...isInventoryRole, (req, res) => {
   try {
     const { month, category } = req.query
     const db = getDatabase()
@@ -650,7 +651,7 @@ router.get('/inventory/purchases', authenticate, (req, res) => {
  * POST /api/system/inventory/purchases
  * 新增進貨紀錄
  */
-router.post('/inventory/purchases', authenticate, async (req, res) => {
+router.post('/inventory/purchases', ...isInventoryRole, async (req, res) => {
   try {
     const { itemId, quantity, boxQuantity, unitPrice, supplier, date, notes } = req.body
 
@@ -703,7 +704,7 @@ router.post('/inventory/purchases', authenticate, async (req, res) => {
  * PUT /api/system/inventory/purchases/:id
  * 更新進貨紀錄
  */
-router.put('/inventory/purchases/:id', authenticate, async (req, res) => {
+router.put('/inventory/purchases/:id', ...isInventoryRole, async (req, res) => {
   try {
     const { id } = req.params
     const { itemId, quantity, unitPrice, supplier, date, notes } = req.body
@@ -757,7 +758,7 @@ router.put('/inventory/purchases/:id', authenticate, async (req, res) => {
 /**
  * DELETE /api/system/inventory/purchases/:id
  */
-router.delete('/inventory/purchases/:id', authenticate, async (req, res) => {
+router.delete('/inventory/purchases/:id', ...isInventoryRole, async (req, res) => {
   try {
     const { id } = req.params
     const db = getDatabase()
@@ -781,7 +782,7 @@ router.delete('/inventory/purchases/:id', authenticate, async (req, res) => {
  * GET /api/system/inventory/monthly/calculation
  * 計算每月盤點
  */
-router.get('/inventory/monthly/calculation', authenticate, (req, res) => {
+router.get('/inventory/monthly/calculation', ...isInventoryRole, (req, res) => {
   try {
     const { startDate, endDate } = req.query
     const db = getDatabase()
@@ -903,7 +904,7 @@ router.get('/inventory/monthly/calculation', authenticate, (req, res) => {
  * POST /api/system/inventory/monthly/count
  * 儲存盤點結果
  */
-router.post('/inventory/monthly/count', authenticate, async (req, res) => {
+router.post('/inventory/monthly/count', ...isInventoryRole, async (req, res) => {
   try {
     const { countDate, counts } = req.body // counts: { category: { itemName: { adjustment, currentStock... } } }
     const db = getDatabase()
@@ -967,7 +968,7 @@ router.post('/inventory/monthly/count', authenticate, async (req, res) => {
  * GET /api/system/inventory/weekly/data
  * 取得每週訂單資料 (盤點與消耗預估)
  */
-router.get('/inventory/weekly/data', authenticate, (req, res) => {
+router.get('/inventory/weekly/data', ...isInventoryRole, (req, res) => {
   try {
     const { date, month } = req.query
     const db = getDatabase()
@@ -1046,7 +1047,7 @@ router.get('/inventory/weekly/data', authenticate, (req, res) => {
  * POST /api/system/inventory/weekly/count
  * 儲存週盤點
  */
-router.post('/inventory/weekly/count', authenticate, async (req, res) => {
+router.post('/inventory/weekly/count', ...isInventoryRole, async (req, res) => {
   try {
     const { countDate, counts } = req.body // counts: { category: { itemName: quantity } }
     const db = getDatabase()
@@ -1113,7 +1114,7 @@ router.post('/inventory/weekly/count', authenticate, async (req, res) => {
  * POST /api/system/inventory/consumables/upload
  * 上傳耗材報表
  */
-router.post('/inventory/consumables/upload', authenticate, async (req, res) => {
+router.post('/inventory/consumables/upload', ...isInventoryRole, async (req, res) => {
   try {
     const { reportDate, reportData } = req.body
     const db = getDatabase()
@@ -1145,7 +1146,7 @@ router.post('/inventory/consumables/upload', authenticate, async (req, res) => {
  * GET /api/system/inventory/consumables/query
  * 查詢耗材消耗 (從已上傳的報表中聚合)
  */
-router.get('/inventory/consumables/query', authenticate, (req, res) => {
+router.get('/inventory/consumables/query', ...isInventoryRole, (req, res) => {
   try {
     const { month, freq, shift } = req.query
     const db = getDatabase()
@@ -1208,7 +1209,7 @@ router.get('/inventory/consumables/query', authenticate, (req, res) => {
  * GET /api/system/inventory/consumption/monthly-summary
  * 取得當月消耗總量 (從已上傳的報表中聚合)
  */
-router.get('/inventory/consumption/monthly-summary', authenticate, (req, res) => {
+router.get('/inventory/consumption/monthly-summary', ...isInventoryRole, (req, res) => {
   try {
     const { month } = req.query
     const db = getDatabase()

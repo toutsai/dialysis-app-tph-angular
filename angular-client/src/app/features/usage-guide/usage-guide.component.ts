@@ -1,6 +1,7 @@
 import { Component, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import changelogData from '@/data/changelog.json';
+import { PAGE_ACCESS } from '@app/core/config/page-access';
 
 interface PageGuide {
   name: string;
@@ -41,7 +42,7 @@ export class UsageGuideComponent {
     schedule: {
       name: '每日排程',
       path: '/schedule',
-      roles: '所有使用者',
+      roles: PAGE_ACCESS.schedule.roleLabel,
       icon: 'fa-calendar-day',
       description: '查看與管理當日透析病人的排班安排',
       features: [
@@ -56,7 +57,7 @@ export class UsageGuideComponent {
     stats: {
       name: '護理分組',
       path: '/stats',
-      roles: '所有使用者',
+      roles: PAGE_ACCESS.stats.roleLabel,
       icon: 'fa-users-cog',
       description: '查看每日護理分組分配情況，進行交辦與調班申請',
       features: [
@@ -71,7 +72,7 @@ export class UsageGuideComponent {
     myPatients: {
       name: '我的今日病人',
       path: '/my-patients',
-      roles: '所有使用者（護理師專用）',
+      roles: PAGE_ACCESS.myPatients.roleLabel,
       icon: 'fa-user-nurse',
       description: '護理師專屬頁面，顯示當日分配給自己的病人清單',
       features: [
@@ -85,7 +86,7 @@ export class UsageGuideComponent {
     collaboration: {
       name: '訊息中心',
       path: '/collaboration',
-      roles: '所有使用者',
+      roles: PAGE_ACCESS.collaboration.roleLabel,
       icon: 'fa-comments',
       description: '協作訊息中心，查看和管理病人相關的交辦與留言',
       features: [
@@ -100,7 +101,7 @@ export class UsageGuideComponent {
     weekly: {
       name: '週排班',
       path: '/weekly',
-      roles: '管理員、編輯者',
+      roles: PAGE_ACCESS.weekly.roleLabel,
       icon: 'fa-calendar-week',
       description: '管理一週的透析排班總覽',
       features: [
@@ -115,7 +116,7 @@ export class UsageGuideComponent {
     baseSchedule: {
       name: '床位總表',
       path: '/base-schedule',
-      roles: '管理員、編輯者',
+      roles: PAGE_ACCESS.baseSchedule.roleLabel,
       icon: 'fa-th',
       description: '門急住床位的完整總表視圖',
       features: [
@@ -129,7 +130,7 @@ export class UsageGuideComponent {
     exceptionManager: {
       name: '調班換床',
       path: '/exception-manager',
-      roles: '管理員、編輯者',
+      roles: PAGE_ACCESS.exceptionManager.roleLabel,
       icon: 'fa-exchange-alt',
       description: '管理臨時調班、區間暫停透析、臨時加洗等例外情況',
       features: [
@@ -145,7 +146,7 @@ export class UsageGuideComponent {
     updateScheduler: {
       name: '預約變更',
       path: '/update-scheduler',
-      roles: '管理員、編輯者',
+      roles: PAGE_ACCESS.updateScheduler.roleLabel,
       icon: 'fa-clock',
       description: '預約病人屬性或排班規則的未來變更，到期自動生效',
       features: [
@@ -159,7 +160,7 @@ export class UsageGuideComponent {
     patients: {
       name: '病人清單',
       path: '/patients',
-      roles: '管理員、編輯者、貢獻者',
+      roles: PAGE_ACCESS.patients.roleLabel,
       icon: 'fa-hospital-user',
       description: '管理所有透析病人的基本資料',
       features: [
@@ -176,7 +177,7 @@ export class UsageGuideComponent {
     dailyLog: {
       name: '工作日誌',
       path: '/daily-log',
-      roles: '管理員、編輯者、查看者',
+      roles: PAGE_ACCESS.dailyLog.roleLabel,
       icon: 'fa-book',
       description: '記錄每日營運統計、病人異常事件與醫療事項',
       features: [
@@ -191,7 +192,7 @@ export class UsageGuideComponent {
     nursingSchedule: {
       name: '護理班表與職責',
       path: '/nursing-schedule',
-      roles: '管理員、編輯者',
+      roles: PAGE_ACCESS.nursingSchedule.roleLabel,
       icon: 'fa-user-clock',
       description: '管理護理師的班表與工作職責分配',
       features: [
@@ -206,7 +207,7 @@ export class UsageGuideComponent {
     kiditReport: {
       name: 'KiDit 申報',
       path: '/kidit-report',
-      roles: '管理員、編輯者',
+      roles: PAGE_ACCESS.kiditReport.roleLabel,
       icon: 'fa-file-invoice',
       description: 'KiDit 申報工作站，管理透析申報記錄',
       features: [
@@ -220,7 +221,7 @@ export class UsageGuideComponent {
     physicianSchedule: {
       name: '醫師班表',
       path: '/physician-schedule',
-      roles: '管理員、貢獻者、查看者',
+      roles: PAGE_ACCESS.physicianSchedule.roleLabel,
       icon: 'fa-user-md',
       description: '管理醫師的查房、會診與緊急出勤班表',
       features: [
@@ -234,7 +235,7 @@ export class UsageGuideComponent {
     labReports: {
       name: '檢驗報告',
       path: '/lab-reports',
-      roles: '管理員、貢獻者',
+      roles: PAGE_ACCESS.labReports.roleLabel,
       icon: 'fa-flask',
       description: '管理病人的檢驗報告資料',
       features: [
@@ -249,7 +250,7 @@ export class UsageGuideComponent {
     consumables: {
       name: '每月耗材',
       path: '/consumables',
-      roles: '管理員、查看者',
+      roles: PAGE_ACCESS.consumables.roleLabel,
       icon: 'fa-boxes',
       description: '查看每月透析耗材的使用統計',
       features: [
@@ -262,7 +263,7 @@ export class UsageGuideComponent {
     orders: {
       name: '藥囑管理',
       path: '/orders',
-      roles: '管理員、貢獻者',
+      roles: PAGE_ACCESS.orders.roleLabel,
       icon: 'fa-pills',
       description: '管理病人的口服藥與針劑藥囑',
       features: [
@@ -276,7 +277,7 @@ export class UsageGuideComponent {
     reporting: {
       name: '統計報表',
       path: '/reporting',
-      roles: '管理員、編輯者、貢獻者',
+      roles: PAGE_ACCESS.reporting.roleLabel,
       icon: 'fa-chart-bar',
       description: '生成各類統計報表',
       features: [
@@ -290,7 +291,7 @@ export class UsageGuideComponent {
     userManagement: {
       name: '使用者管理',
       path: '/user-management',
-      roles: '僅管理員',
+      roles: PAGE_ACCESS.userManagement.roleLabel,
       icon: 'fa-users-cog',
       description: '管理平台使用者帳號與權限',
       features: [
