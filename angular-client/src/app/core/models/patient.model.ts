@@ -46,8 +46,10 @@ export interface Patient extends BaseEntity {
   medicalRecordNumber: string;
   name: string;
   status?: PatientStatus;
+  originalStatus?: PatientStatus;
   isDeleted?: boolean;
   deleteReason?: string;
+  deletedAt?: string | null;
 
   // 透析相關
   dialysisOrders?: Record<string, unknown>;

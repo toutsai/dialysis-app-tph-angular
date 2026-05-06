@@ -93,7 +93,6 @@
             <div class="flex-cell col-mode">模式</div>
             <div class="flex-cell col-status" (click)="handleSort('patientStatus')">狀態</div>
             <div class="flex-cell col-hospital" (click)="handleSort('hospitalInfo')">透析院所</div>
-            <div class="flex-cell col-vasc-access">血管通路</div>
             <div class="flex-cell col-remarks">備註</div>
             <div class="flex-cell col-updated" (click)="handleSort('updatedAt')">異動日期</div>
             <div class="flex-cell col-actions">操作</div>
@@ -129,7 +128,6 @@
                   <span class="hospital-transfer-out">{{ p.hospitalInfo?.transferOut }}</span>
                 </div>
               </div>
-              <div class="flex-cell col-vasc-access">{{ p.vascAccess }}</div>
               <div class="flex-cell col-remarks">{{ p.remarks }}</div>
               <div class="flex-cell col-updated">{{ formatDate(p.updatedAt) }}</div>
               <div class="flex-cell col-actions">
@@ -228,7 +226,6 @@
               <div class="info-item"><span class="label">病歷號</span><span class="value">{{ p.medicalRecordNumber }}</span></div>
               <div class="info-item"><span class="label">醫師</span><span class="value">{{ p.physician }}</span></div>
               <div class="info-item"><span class="label">模式</span><span class="value">{{ p.mode }}</span></div>
-              <div *ngIf="activeTab() === 'opd'" class="info-item"><span class="label">血管通路</span><span class="value">{{ p.vascAccess }}</span></div>
               <div *ngIf="activeTab() !== 'opd'" class="info-item">
                 <span class="label">首透</span><span class="value">{{ p.isFirstDialysis ? '&#10003; (' + formatDate(p.firstDialysisDate) + ')' : '否' }}</span>
               </div>

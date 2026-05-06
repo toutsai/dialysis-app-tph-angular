@@ -294,9 +294,6 @@
 .col-hospital {
   flex: 0 0 160px;
 }
-.col-vasc-access {
-  flex: 0 0 110px;
-}
 .col-remarks {
   flex: 1 1 auto;
   white-space: normal;

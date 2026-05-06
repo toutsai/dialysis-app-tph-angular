@@ -120,6 +120,11 @@ function safeJsonParse(value, fallback = {}) {
   }
 }
 
+function getDialysisMode(patient) {
+  const dialysisOrders = safeJsonParse(patient?.dialysis_orders, {})
+  return dialysisOrders.mode || null
+}
+
 function exceptionBelongsToPatient(exception, patientId) {
   if (exception.patient_id === patientId) return true
 
@@ -187,6 +192,15 @@ function createPatientSnapshot(patient) {
 /**
  * 將資料庫記錄轉換為 API 回應格式
  */
+const PATIENT_SELECT_COLUMNS = `
+  p.*,
+  (
+    SELECT MAX(h.timestamp)
+    FROM patient_history h
+    WHERE h.patient_id = p.id AND h.event_type = 'DELETE'
+  ) AS history_deleted_at
+`
+
 function formatPatient(row) {
   const dialysisOrders = JSON.parse(row.dialysis_orders || '{}')
   // ✨ 從 dialysisOrders 中分離出 crrtOrders
@@ -197,7 +211,9 @@ function formatPatient(row) {
     name: row.name,
     status: row.status,
     isDeleted: row.is_deleted === 1,
+    originalStatus: row.original_status || (row.is_deleted === 1 ? row.status : null),
     deleteReason: row.delete_reason,
+    deletedAt: row.deleted_at || (row.is_deleted === 1 ? (row.history_deleted_at || row.updated_at) : null),
     dialysisOrders: dialysisOrders,
     crrtOrders: crrtOrders,  // ✨ 新增：回傳 CRRT 醫囑
     // 將 freq 和 mode 也放在頂層，方便前端使用
@@ -244,7 +260,9 @@ function toDbFormat(data, existingPatient = null) {
   if (data.name !== undefined) result.name = data.name
   if (data.status !== undefined) result.status = data.status
   if (data.isDeleted !== undefined) result.is_deleted = data.isDeleted ? 1 : 0
+  if (data.originalStatus !== undefined) result.original_status = data.originalStatus
   if (data.deleteReason !== undefined) result.delete_reason = data.deleteReason
+  if (data.deletedAt !== undefined) result.deleted_at = data.deletedAt
 
   // ✨ 核心修改：處理透析醫囑時，先讀取現有資料再合併
   // 這樣單獨更新 crrtOrders 時，不會覆蓋 freq、mode 等欄位
@@ -307,11 +325,11 @@ router.get('/', authenticate, (req, res) => {
     const db = getDatabase()
     const { includeDeleted } = req.query
 
-    let query = 'SELECT * FROM patients'
+    let query = `SELECT ${PATIENT_SELECT_COLUMNS} FROM patients p`
     if (includeDeleted !== 'true') {
-      query += ' WHERE is_deleted = 0'
+      query += ' WHERE p.is_deleted = 0'
     }
-    query += ' ORDER BY name'
+    query += ' ORDER BY p.name'
 
     const patients = db.prepare(query).all()
 
@@ -337,7 +355,7 @@ router.get('/with-rules', authenticate, (req, res) => {
 
     // 取得病人列表
     const patients = db.prepare(`
-      SELECT * FROM patients WHERE is_deleted = 0 ORDER BY name
+      SELECT ${PATIENT_SELECT_COLUMNS} FROM patients p WHERE p.is_deleted = 0 ORDER BY p.name
     `).all()
 
     // 取得總表規則
@@ -530,7 +548,7 @@ router.get('/:id', authenticate, (req, res) => {
     const { id } = req.params
     const db = getDatabase()
 
-    const patient = db.prepare(`SELECT * FROM patients WHERE id = ?`).get(id)
+    const patient = db.prepare(`SELECT ${PATIENT_SELECT_COLUMNS} FROM patients p WHERE p.id = ?`).get(id)
 
 
     if (!patient) {
@@ -591,7 +609,7 @@ router.post('/', ...isContributor, validate({
       VALUES (${placeholders})
     `).run(...values)
 
-    const newPatient = db.prepare(`SELECT * FROM patients WHERE id = ?`).get(id)
+    const newPatient = db.prepare(`SELECT ${PATIENT_SELECT_COLUMNS} FROM patients p WHERE p.id = ?`).get(id)
 
     // 🔥 自動記錄病人歷史
     recordPatientHistory(db, id, data.name, 'CREATE', {
@@ -605,6 +623,7 @@ router.post('/', ...isContributor, validate({
       name: data.name,
       patientId: id,
       medicalRecordNumber: data.medicalRecordNumber,
+      ...(data.status === 'ipd' ? { admissionDate: getTaipeiTodayString() } : {}),
       physician: data.physician || '',
       reason: data.inpatientReason || data.dialysisReason || '',
       remarks: `新增至「${STATUS_MAP[data.status] || STATUS_MAP.opd}」`,
@@ -666,7 +685,7 @@ router.put('/:id', ...isContributor, async (req, res) => {
 
     db.prepare(`UPDATE patients SET ${updates} WHERE id = ?`).run(...values, id)
 
-    const updated = db.prepare(`SELECT * FROM patients WHERE id = ?`).get(id)
+    const updated = db.prepare(`SELECT ${PATIENT_SELECT_COLUMNS} FROM patients p WHERE p.id = ?`).get(id)
 
     // 🔥 檢查刪除/復原狀態變更
     const wasDeleted = existing.is_deleted === 1
@@ -688,9 +707,12 @@ router.put('/:id', ...isContributor, async (req, res) => {
         name: existing.name,
         patientId: id,
         medicalRecordNumber: existing.medical_record_number,
+        dischargeDate: getTaipeiTodayString(),
         physician: existing.physician || '',
         reason: data.deleteReason || '',
-        remarks: `從「${STATUS_MAP[existing.status] || existing.status}」刪除`,
+        remarks: data.deleteReason
+          ? `從「${STATUS_MAP[existing.status] || existing.status}」刪除；原因：${data.deleteReason}`
+          : `從「${STATUS_MAP[existing.status] || existing.status}」刪除`,
       })
     } else if (wasDeleted && !isNowDeleted) {
       // 復原操作：從已刪除 → 正常狀態
@@ -706,6 +728,7 @@ router.put('/:id', ...isContributor, async (req, res) => {
         name: existing.name,
         patientId: id,
         medicalRecordNumber: existing.medical_record_number,
+        ...(restoreStatus === 'ipd' ? { admissionDate: getTaipeiTodayString() } : {}),
         physician: updated.physician || '',
         reason: '',
         remarks: `復原至「${STATUS_MAP[restoreStatus] || restoreStatus}」`,
@@ -730,6 +753,7 @@ router.put('/:id', ...isContributor, async (req, res) => {
           name: existing.name,
           patientId: id,
           medicalRecordNumber: existing.medical_record_number,
+          ...(toStatus === 'ipd' ? { admissionDate: getTaipeiTodayString() } : {}),
           physician: updated.physician || '',
           reason: data.inpatientReason || '',
           remarks: `從「${STATUS_MAP[fromStatus]}」轉入「${STATUS_MAP[toStatus]}」`,
@@ -747,6 +771,7 @@ router.put('/:id', ...isContributor, async (req, res) => {
           name: existing.name,
           patientId: id,
           medicalRecordNumber: existing.medical_record_number,
+          dischargeDate: getTaipeiTodayString(),
           physician: updated.physician || '',
           reason: '',
           remarks: `從「${STATUS_MAP[fromStatus]}」轉回「${STATUS_MAP[toStatus]}」`,
@@ -757,7 +782,46 @@ router.put('/:id', ...isContributor, async (req, res) => {
           fromStatus,
           toStatus,
         }, createPatientSnapshot(updated))
+
+        if (toStatus === 'ipd' || toStatus === 'opd') {
+          addMovementToDailyLog(db, {
+            id: `auto_transfer_${id}_${Date.now()}`,
+            type: '轉移',
+            name: existing.name,
+            patientId: id,
+            medicalRecordNumber: existing.medical_record_number,
+            ...(toStatus === 'ipd' ? { admissionDate: getTaipeiTodayString() } : {}),
+            ...(toStatus === 'opd' ? { dischargeDate: getTaipeiTodayString() } : {}),
+            physician: updated.physician || '',
+            reason: data.inpatientReason || '',
+            remarks:
+              toStatus === 'ipd'
+                ? `從「${STATUS_MAP[fromStatus] || fromStatus}」轉入「${STATUS_MAP[toStatus] || toStatus}」`
+                : `從「${STATUS_MAP[fromStatus] || fromStatus}」轉回「${STATUS_MAP[toStatus] || toStatus}」`,
+          })
+        }
       }
+    }
+
+    const previousMode = getDialysisMode(existing)
+    const currentMode = getDialysisMode(updated)
+    if (!wasDeleted && !isNowDeleted && previousMode !== currentMode) {
+      recordPatientHistory(db, id, existing.name, 'MODE_CHANGE', {
+        fromMode: previousMode,
+        toMode: currentMode,
+      }, createPatientSnapshot(updated))
+
+      addMovementToDailyLog(db, {
+        id: `auto_mode_${id}_${Date.now()}`,
+        type: '更改模式',
+        name: updated.name,
+        patientId: id,
+        medicalRecordNumber: updated.medical_record_number,
+        wardNumber: updated.ward_number || '',
+        physician: updated.physician || '',
+        reason: '',
+        remarks: `透析模式由「${previousMode || '未設定'}」改為「${currentMode || '未設定'}」`,
+      })
     }
 
 
@@ -802,11 +866,14 @@ router.delete('/:id', ...isEditor, async (req, res) => {
     db.prepare(`
       UPDATE patients
       SET is_deleted = 1,
+          original_status = ?,
           delete_reason = ?,
+          deleted_at = datetime('now', 'localtime'),
           last_modified_by = ?,
           updated_at = datetime('now', 'localtime')
       WHERE id = ?
     `).run(
+      existing.status,
       reason || '未提供原因',
       JSON.stringify({ uid: req.user.id, name: req.user.name }),
       id
@@ -826,9 +893,12 @@ router.delete('/:id', ...isEditor, async (req, res) => {
       name: existing.name,
       patientId: id,
       medicalRecordNumber: existing.medical_record_number,
+      dischargeDate: getTaipeiTodayString(),
       physician: existing.physician || '',
       reason: reason || '',
-      remarks: `從「${STATUS_MAP[existing.status] || existing.status}」刪除`,
+      remarks: reason
+        ? `從「${STATUS_MAP[existing.status] || existing.status}」刪除；原因：${reason}`
+        : `從「${STATUS_MAP[existing.status] || existing.status}」刪除`,
     })
 
 
@@ -878,6 +948,8 @@ router.post('/:id/restore', ...isEditor, async (req, res) => {
       UPDATE patients
       SET is_deleted = 0,
           delete_reason = NULL,
+          deleted_at = NULL,
+          original_status = NULL,
           status = ?,
           last_modified_by = ?,
           updated_at = datetime('now', 'localtime')
@@ -888,7 +960,7 @@ router.post('/:id/restore', ...isEditor, async (req, res) => {
       id
     )
 
-    const restored = db.prepare(`SELECT * FROM patients WHERE id = ?`).get(id)
+    const restored = db.prepare(`SELECT ${PATIENT_SELECT_COLUMNS} FROM patients p WHERE p.id = ?`).get(id)
     const restoreStatus = status || 'opd'
 
     // 🔥 自動記錄病人歷史
@@ -903,6 +975,7 @@ router.post('/:id/restore', ...isEditor, async (req, res) => {
       name: existing.name,
       patientId: id,
       medicalRecordNumber: existing.medical_record_number,
+      ...(restoreStatus === 'ipd' ? { admissionDate: getTaipeiTodayString() } : {}),
       physician: restored.physician || '',
       reason: '',
       remarks: `復原至「${STATUS_MAP[restoreStatus]}」`,
