@@ -49,7 +49,10 @@ export class BedChangeDialogComponent implements OnChanges {
 
     const allPossibleBeds: (number | string)[] = [
       ...Array.from({ length: 65 }, (_, i) => i + 1).filter(
-        (i) => ![4, 10, 14, 20, 24, 30, 34, 40, 50, 54, 60, 64].includes(i),
+        (i) =>
+          ![4, 10, 14, 20, 24, 30, 34, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 54, 60, 64].includes(
+            i,
+          ),
       ),
       ...Array.from({ length: 6 }, (_, i) => `peripheral-${i + 1}`),
     ];

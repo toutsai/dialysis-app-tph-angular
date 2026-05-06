@@ -230,18 +230,20 @@ export class OrdersComponent implements OnInit {
       const [year, month] = this.groupSearchParams.month
         .split('-')
         .map(Number);
-      const uploadMonthStr = `${year}-${String(month).padStart(2, '0')}`;
-      const patientIds = patientList.map((p: any) => p.patientId);
+      const effectiveMonth = `${year}-${String(month).padStart(2, '0')}`;
 
       try {
-        const allOrders: any[] = await queryWithInChunks(
-          'medication_orders',
-          'patientId',
-          patientIds,
-          []
+        // 使用 effectiveMonth：每位病人取 <= 該月份的最新上傳檔
+        // (跨月時若當月無新藥囑，自動沿用最近一次的設定)
+        const params = new URLSearchParams({ effectiveMonth });
+        const res = await fetch(
+          `${this.firebaseService.apiBaseUrl}/orders/injection-orders?${params}`,
+          { headers: this.firebaseService.getHeaders() },
         );
-        // Local filter by uploadMonth
-        const filteredOrders = allOrders.filter((o: any) => o.uploadMonth === uploadMonthStr);
+        const data = res.ok ? await res.json() : [];
+        const allOrders: any[] = Array.isArray(data) ? data : data.data || [];
+        const patientIdSet = new Set(patientList.map((p: any) => p.patientId));
+        const filteredOrders = allOrders.filter((o: any) => patientIdSet.has(o.patientId));
         filteredOrders.forEach((order: any) => {
           const patientData = patientOrdersMap.get(order.patientId);
           if (patientData) {

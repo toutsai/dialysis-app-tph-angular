@@ -190,7 +190,7 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
       heparinRinse: this.localOrderData.heparinRinse,
       physician: this.localOrderData.physician,
       mode: this.localOrderData.mode,
-      freq: this.localOrderData.freq,
+      // 不傳 freq：頻率僅能透過病人清單或床位總表修改
       dialysisHours: this.localOrderData.dialysisHours,
       dialysateFlow: this.localOrderData.dialysateFlow,
       replacementFlow: this.localOrderData.replacementFlow,

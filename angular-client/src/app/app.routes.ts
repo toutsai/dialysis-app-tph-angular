@@ -18,7 +18,8 @@ export const routes: Routes = [
       ),
     canActivate: [authGuard],
     children: [
-      { path: '', redirectTo: 'collaboration', pathMatch: 'full' },
+      // 預設先導向「我的病人」；若該使用者無權看，會自動回退到「每日排程」
+      { path: '', redirectTo: 'my-patients', pathMatch: 'full' },
       {
         path: 'schedule',
         loadComponent: () =>

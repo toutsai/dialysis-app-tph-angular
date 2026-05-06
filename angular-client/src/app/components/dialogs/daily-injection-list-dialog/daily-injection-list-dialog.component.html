@@ -9,6 +9,9 @@
           }
         </h3>
         <div class="header-actions">
+          <button (click)="refreshEvent.emit()" class="btn-refresh" title="重新載入" [disabled]="isLoading">
+            <i class="fas fa-sync-alt" [class.fa-spin]="isLoading"></i>
+          </button>
           <button (click)="handlePrint()" class="btn-primary-dialog">
             <i class="fas fa-print"></i> 匯出/列印
           </button>

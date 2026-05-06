@@ -201,9 +201,13 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
           `申請時間: ${this.formatTimestamp(exData['createdAt'])}`,
       );
 
-      if (exData['status'] === 'error' && exData['errorMessage']) {
+      if (
+        exData['errorMessage'] &&
+        (exData['status'] === 'error' || exData['status'] === 'conflict_requires_resolution')
+      ) {
+        const label = exData['status'] === 'conflict_requires_resolution' ? '衝突原因' : '錯誤訊息';
         this.actionDialogMessage.update(
-          (msg) => msg + `\n\n錯誤訊息: ${exData['errorMessage']}`,
+          (msg) => msg + `\n\n${label}: ${exData['errorMessage']}`,
         );
       }
 
