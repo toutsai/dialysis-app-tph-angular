@@ -1810,29 +1810,59 @@ router.get('/consumables', authenticate, (req, res) => {
  */
 router.get('/injection-orders', authenticate, (req, res) => {
   try {
-    const { patientId, uploadMonth, orderType } = req.query
+    const { patientId, uploadMonth, effectiveMonth, orderType } = req.query
     const db = getDatabase()
     ensureTablesExist(db)
 
-    let query = 'SELECT * FROM injection_orders WHERE 1=1'
+    let query
     const params = []
 
-    if (patientId) {
-      query += ' AND patient_id = ?'
-      params.push(patientId)
-    }
+    if (effectiveMonth) {
+      // 每位病人取 <= effectiveMonth 的最新上傳月份
+      // (跨月時若該月未上傳新藥囑，沿用最近一次的設定)
+      query = `
+        WITH latest_per_patient AS (
+          SELECT patient_id, MAX(upload_month) AS effective_month
+          FROM injection_orders
+          WHERE upload_month <= ?
+            ${patientId ? 'AND patient_id = ?' : ''}
+            ${orderType ? 'AND order_type = ?' : ''}
+          GROUP BY patient_id
+        )
+        SELECT io.* FROM injection_orders io
+        JOIN latest_per_patient lp
+          ON io.patient_id = lp.patient_id
+         AND io.upload_month = lp.effective_month
+        WHERE 1=1
+          ${patientId ? 'AND io.patient_id = ?' : ''}
+          ${orderType ? 'AND io.order_type = ?' : ''}
+        ORDER BY io.change_date DESC, io.created_at DESC
+      `
+      params.push(effectiveMonth)
+      if (patientId) params.push(patientId)
+      if (orderType) params.push(orderType)
+      if (patientId) params.push(patientId)
+      if (orderType) params.push(orderType)
+    } else {
+      query = 'SELECT * FROM injection_orders WHERE 1=1'
 
-    if (uploadMonth) {
-      query += ' AND upload_month = ?'
-      params.push(uploadMonth)
-    }
+      if (patientId) {
+        query += ' AND patient_id = ?'
+        params.push(patientId)
+      }
 
-    if (orderType) {
-      query += ' AND order_type = ?'
-      params.push(orderType)
-    }
+      if (uploadMonth) {
+        query += ' AND upload_month = ?'
+        params.push(uploadMonth)
+      }
 
-    query += ' ORDER BY change_date DESC, created_at DESC'
+      if (orderType) {
+        query += ' AND order_type = ?'
+        params.push(orderType)
+      }
+
+      query += ' ORDER BY change_date DESC, created_at DESC'
+    }
 
     const orders = db.prepare(query).all(...params)
 

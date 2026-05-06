@@ -512,13 +512,16 @@ router.get('/users/directory', authenticate, (req, res) => {
   try {
     const db = getDatabase()
     const users = db
-      .prepare(`SELECT id, name, title, role FROM users WHERE is_active = 1 ORDER BY name`)
+      .prepare(
+        `SELECT id, username, name, title, role FROM users WHERE is_active = 1 ORDER BY name`,
+      )
       .all()
 
     res.json(
       users.map((u) => ({
         id: u.id,
         uid: u.id,
+        username: u.username,
         name: u.name,
         title: u.title,
         role: u.role,

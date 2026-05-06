@@ -59,14 +59,25 @@ router.post('/daily-injections', authenticate, async (req, res) => {
     const targetMonth = targetDate.substring(0, 7)
     const db = getDatabase()
 
-    // 查詢當月針劑藥囑
+    // 查詢針劑藥囑：每位病人取「<= 目標月份」的最新一份上傳檔
+    // (修藥囑常落在月中，跨月時若該月無上傳就應沿用上一份)
     const placeholders = patientIds.map(() => '?').join(',')
     const injectionOrders = db.prepare(`
-      SELECT * FROM injection_orders
-      WHERE patient_id IN (${placeholders})
-        AND order_type = 'injection'
-        AND upload_month = ?
-      ORDER BY patient_id, order_code
+      WITH latest_per_patient AS (
+        SELECT patient_id, MAX(upload_month) AS effective_month
+        FROM injection_orders
+        WHERE patient_id IN (${placeholders})
+          AND order_type = 'injection'
+          AND upload_month <= ?
+        GROUP BY patient_id
+      )
+      SELECT io.*
+      FROM injection_orders io
+      JOIN latest_per_patient lp
+        ON io.patient_id = lp.patient_id
+       AND io.upload_month = lp.effective_month
+      WHERE io.order_type = 'injection'
+      ORDER BY io.patient_id, io.order_code
     `).all(...patientIds, targetMonth)
 
     if (injectionOrders.length === 0) {
