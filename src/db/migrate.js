@@ -192,6 +192,36 @@ export function runMigrations() {
       if (addColumnIfNotExists(db, 'daily_logs', 'other_notes', 'TEXT')) migrationsApplied++
     }
 
+    const dailyLogRevisionsExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='daily_log_revisions'")
+      .get()
+    if (!dailyLogRevisionsExists) {
+      console.log('📋 建立 daily_log_revisions 表格...')
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS daily_log_revisions (
+          id TEXT PRIMARY KEY,
+          daily_log_id TEXT NOT NULL,
+          date TEXT NOT NULL,
+          patient_movements TEXT DEFAULT '[]',
+          vascular_access_log TEXT DEFAULT '[]',
+          announcements TEXT DEFAULT '[]',
+          notes TEXT,
+          other_notes TEXT,
+          stats TEXT DEFAULT '{}',
+          leader TEXT DEFAULT '{}',
+          revision_reason TEXT,
+          created_by TEXT DEFAULT '{}',
+          created_at TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+      `)
+      db.exec('CREATE INDEX IF NOT EXISTS idx_daily_log_revisions_date ON daily_log_revisions(date)')
+      db.exec('CREATE INDEX IF NOT EXISTS idx_daily_log_revisions_log ON daily_log_revisions(daily_log_id)')
+      migrationsApplied++
+    } else {
+      db.exec('CREATE INDEX IF NOT EXISTS idx_daily_log_revisions_date ON daily_log_revisions(date)')
+      db.exec('CREATE INDEX IF NOT EXISTS idx_daily_log_revisions_log ON daily_log_revisions(daily_log_id)')
+    }
+
     // handover_logs 表格
     const handoverLogsExists = db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='handover_logs'")

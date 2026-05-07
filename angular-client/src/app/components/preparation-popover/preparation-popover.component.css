@@ -1,5 +1,5 @@
 .preparation-popover {
-  z-index: 1010;
+  z-index: 900;
   background-color: white;
   border: 1px solid #ccc;
   border-radius: 8px;

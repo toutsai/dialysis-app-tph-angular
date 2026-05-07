@@ -5,11 +5,21 @@ import { getDatabase } from '../db/init.js'
 import { authenticate, isEditor, logAudit } from '../middleware/auth.js'
 import { syncMasterScheduleToFuture, initializeFutureSchedules, mergeExceptionsIntoSchedules, generateDailyScheduleFromRules, rebuildSingleDaySchedule } from '../services/scheduleSync.js'
 import { processScheduleException } from '../services/exceptionHandler.js'
-import { getTaipeiTodayString, formatDateToYYYYMMDD, getTaipeiDayIndex } from '../utils/dateUtils.js'
+import { syncEventsToKiditLogbook } from '../services/kiditSync.js'
+import { getTaipeiTodayString, formatDateToYYYYMMDD, formatDateToTaipeiString, getTaipeiDayIndex } from '../utils/dateUtils.js'
 import { SHIFTS, FREQ_MAP_TO_DAY_INDEX, getScheduleKey } from '../utils/scheduleUtils.js'
 import { emitExceptionChange } from '../services/eventBus.js'
+import { removeAutoMovementFromDailyLog } from '../services/dailyLogMovementSync.js'
 
 const router = Router()
+
+const STATUS_MAP = {
+  opd: '門診',
+  ipd: '住院',
+  er: '急診',
+}
+
+const FIRST_DIALYSIS_ADD_REASON = '首透連續洗臨時加洗'
 
 function getExceptionAffectedDates(data) {
   const dates = new Set()
@@ -19,6 +29,182 @@ function getExceptionAffectedDates(data) {
   if (data.from?.sourceDate) dates.add(data.from.sourceDate)
   if (data.to?.goalDate) dates.add(data.to.goalDate)
   return Array.from(dates)
+}
+
+function parseJson(value, fallback = {}) {
+  try {
+    return value ? JSON.parse(value) : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function hasFrequencyConflict(freqA, freqB) {
+  const daysA = FREQ_MAP_TO_DAY_INDEX[freqA] || []
+  const daysB = FREQ_MAP_TO_DAY_INDEX[freqB] || []
+  return daysA.some(day => daysB.includes(day))
+}
+
+function buildFirstDialysisRule(patient, regularRule) {
+  const shiftIndex = SHIFTS.indexOf(regularRule.shiftCode)
+  return {
+    bedNum: regularRule.bedNum,
+    shiftIndex,
+    freq: regularRule.freq,
+    manualNote: patient.base_note || '',
+    autoNote: '',
+  }
+}
+
+function getFirstDialysisDayIndex(dateStr) {
+  if (!dateStr) return -1
+  const date = new Date(`${dateStr}T00:00:00+08:00`)
+  return Number.isNaN(date.getTime()) ? -1 : getTaipeiDayIndex(date)
+}
+
+function formatFirstDialysisPattern(regularFreq, extraSessions = [], startDate = null) {
+  const dayLabels = ['一', '二', '三', '四', '五', '六', '日']
+  const regularDays = FREQ_MAP_TO_DAY_INDEX[regularFreq] || []
+
+  if (startDate) {
+    const start = new Date(`${startDate}T00:00:00+08:00`)
+    if (!Number.isNaN(start.getTime())) {
+      const startDay = getTaipeiDayIndex(start)
+      const daysUntilSaturday = startDay >= 0 && startDay <= 5 ? 5 - startDay : 6
+      const extraDateSet = new Set(extraSessions.map(session => session?.date).filter(Boolean))
+      const firstWeekLabels = []
+
+      for (let offset = 0; offset <= daysUntilSaturday; offset += 1) {
+        const date = new Date(start.getTime() + offset * 24 * 60 * 60 * 1000)
+        const dateStr = formatDateToTaipeiString(date)
+        const dayIndex = getTaipeiDayIndex(date)
+        const isStartDate = offset === 0
+        const isRegular = regularDays.includes(dayIndex)
+        const isExtra = extraDateSet.has(dateStr)
+
+        if (dayIndex >= 0 && dayIndex < 6 && (isStartDate || isRegular || isExtra)) {
+          firstWeekLabels.push(dayLabels[dayIndex])
+        }
+      }
+
+      if (firstWeekLabels.length > 0) {
+        return regularFreq
+          ? `${firstWeekLabels.join('')}>下周${regularFreq}`
+          : firstWeekLabels.join('')
+      }
+    }
+  }
+
+  const days = new Set(regularDays)
+
+  for (const session of extraSessions) {
+    if (!session?.date) continue
+    const date = new Date(`${session.date}T00:00:00+08:00`)
+    days.add(getTaipeiDayIndex(date))
+  }
+
+  return Array.from(days)
+    .sort((a, b) => a - b)
+    .map(day => dayLabels[day])
+    .join('')
+}
+
+function syncFirstDialysisCreateMovement(db, patient, plan) {
+  if (!patient || patient.status !== 'ipd') return
+
+  const today = getTaipeiTodayString()
+  const dailyLog = db.prepare(`SELECT patient_movements FROM daily_logs WHERE date = ?`).get(today)
+  if (!dailyLog) return
+
+  let movements
+  try {
+    movements = JSON.parse(dailyLog.patient_movements || '[]')
+  } catch {
+    movements = []
+  }
+
+  const movementId = `auto_create_${patient.id}`
+  const movementIndex = movements.findIndex(item => item.id === movementId)
+  if (movementIndex < 0 || movements[movementIndex].originalAutoId) return
+
+  const firstDialysisDate = plan.startDate || patient.first_dialysis_date || null
+  const pattern = formatFirstDialysisPattern(plan.regularRule?.freq, plan.extraSessions, firstDialysisDate)
+  const remarkParts = [`新增至「${STATUS_MAP[patient.status] || STATUS_MAP.opd}」`]
+  if (firstDialysisDate) remarkParts.push(`首透日期：${firstDialysisDate}`)
+  if (pattern) remarkParts.push(`連續洗：${pattern}`)
+
+  movements[movementIndex] = {
+    ...movements[movementIndex],
+    admissionDate: today,
+    remarks: remarkParts.join('；'),
+    timestamp: movements[movementIndex].timestamp || new Date().toISOString(),
+  }
+
+  db.prepare(`
+    UPDATE daily_logs
+    SET patient_movements = ?, updated_at = datetime('now', 'localtime')
+    WHERE date = ?
+  `).run(JSON.stringify(movements), today)
+
+  const updatedLog = db.prepare(`SELECT * FROM daily_logs WHERE date = ?`).get(today)
+  if (updatedLog) {
+    syncEventsToKiditLogbook(today, {
+      patientMovements: JSON.parse(updatedLog.patient_movements || '[]'),
+      vascularAccessLog: JSON.parse(updatedLog.vascular_access_log || '[]'),
+      createdAt: updatedLog.created_at,
+    }).catch(err => console.error('[FirstDialysisPlan] Kidit sync failed:', err))
+  }
+}
+
+function cleanupFutureFirstDialysisAddSessions(db, patientId, masterRules, patientsMap, modifiedBy) {
+  const today = getTaipeiTodayString()
+  const existingSessions = db.prepare(`
+    SELECT *
+    FROM schedule_exceptions
+    WHERE patient_id = ?
+      AND type = 'ADD_SESSION'
+      AND (reason = ? OR to_data LIKE '%"firstDialysisDate"%')
+  `).all(patientId, FIRST_DIALYSIS_ADD_REASON)
+
+  const targetDates = new Set()
+  const deleteStmt = db.prepare(`DELETE FROM schedule_exceptions WHERE id = ?`)
+
+  for (const session of existingSessions) {
+    const to = parseJson(session.to_data, {})
+    const targetDate = to.goalDate
+    if (!targetDate || targetDate < today) continue
+
+    removeAutoMovementFromDailyLog(db, targetDate, `auto_add_session_${session.id}`)
+    deleteStmt.run(session.id)
+    targetDates.add(targetDate)
+    emitExceptionChange('deleted', {
+      id: session.id,
+      type: session.type,
+      patientId,
+      affectedDates: [targetDate],
+      reason: 'first_dialysis_plan_replaced',
+    })
+  }
+
+  for (const dateStr of targetDates) {
+    const finalSchedule = rebuildSingleDaySchedule(dateStr, masterRules, patientsMap)
+    db.prepare(`
+      INSERT INTO schedules (id, date, schedule, sync_method, last_modified_by, created_at, updated_at)
+      VALUES (?, ?, ?, 'first_dialysis_rebuild', ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
+      ON CONFLICT(date) DO UPDATE SET
+        schedule = excluded.schedule,
+        sync_method = excluded.sync_method,
+        last_modified_by = excluded.last_modified_by,
+        updated_at = datetime('now', 'localtime')
+    `).run(
+      dateStr,
+      dateStr,
+      JSON.stringify(finalSchedule),
+      JSON.stringify(modifiedBy),
+    )
+  }
+
+  return targetDates.size
 }
 
 // Angular 前端使用 PATCH 做部分更新，TPH 後端使用 PUT
@@ -568,6 +754,217 @@ router.patch('/base/MASTER_SCHEDULE/patient/:patientId', ...isEditor, patchBaseS
 router.patch('/base/master//patient/:patientId', ...isEditor, patchBaseSchedulePatient)
 router.patch('/base/MASTER_SCHEDULE//patient/:patientId', ...isEditor, patchBaseSchedulePatient)
 
+router.post('/first-dialysis-plan', ...isEditor, async (req, res) => {
+  try {
+    const { patientId, startDate, continuousDays, regularRule, extraSessions = [] } = req.body || {}
+    if (!patientId || !regularRule?.freq || !regularRule?.bedNum || !regularRule?.shiftCode) {
+      return res.status(400).json({
+        error: true,
+        message: '首透連續洗設定缺少病人、常規頻率或常規床位',
+      })
+    }
+
+    const regularShiftIndex = SHIFTS.indexOf(regularRule.shiftCode)
+    if (regularShiftIndex === -1) {
+      return res.status(400).json({ error: true, message: '常規班別不正確' })
+    }
+    if (!Array.isArray(extraSessions)) {
+      return res.status(400).json({ error: true, message: '臨時加洗資料格式不正確' })
+    }
+
+    for (const session of extraSessions) {
+      if (!session?.date || !session?.bedNum || !session?.shiftCode) {
+        return res.status(400).json({ error: true, message: '臨時加洗資料不完整' })
+      }
+    }
+
+    const regularDays = FREQ_MAP_TO_DAY_INDEX[regularRule.freq] || []
+    const normalizedExtraSessions = extraSessions.filter((session) => {
+      const dayIndex = getFirstDialysisDayIndex(session.date)
+      return dayIndex >= 0 && dayIndex < 6 && !regularDays.includes(dayIndex)
+    })
+
+    const db = getDatabase()
+    const patient = db.prepare(`SELECT * FROM patients WHERE id = ? AND is_deleted = 0`).get(patientId)
+    if (!patient) {
+      return res.status(404).json({ error: true, message: '找不到病人' })
+    }
+
+    const current = db.prepare(`SELECT schedule FROM base_schedules WHERE id = 'MASTER_SCHEDULE'`).get()
+    const beforeRules = current ? JSON.parse(current.schedule || '{}') : {}
+    const schedule = { ...beforeRules }
+    const activePatients = db.prepare(`SELECT * FROM patients WHERE is_deleted = 0`).all()
+    const patientsMap = new Map(activePatients.map(p => [p.id, p]))
+
+    for (const [otherPatientId, rule] of Object.entries(schedule)) {
+      if (otherPatientId === patientId) continue
+      if (
+        String(rule.bedNum) === String(regularRule.bedNum) &&
+        Number(rule.shiftIndex) === regularShiftIndex &&
+        hasFrequencyConflict(regularRule.freq, rule.freq)
+      ) {
+        const conflictPatient = db.prepare(`SELECT name FROM patients WHERE id = ?`).get(otherPatientId)
+        return res.status(409).json({
+          error: true,
+          message: `常規床位已與 ${conflictPatient?.name || '其他病人'} 的頻率衝突`,
+        })
+      }
+    }
+
+    for (const session of normalizedExtraSessions) {
+      const slotKey = getScheduleKey(session.bedNum, session.shiftCode)
+      const scheduleRow = db.prepare(`SELECT schedule FROM schedules WHERE date = ?`).get(session.date)
+      const dailySchedule = scheduleRow
+        ? JSON.parse(scheduleRow.schedule || '{}')
+        : generateDailyScheduleFromRules(beforeRules, session.date, patientsMap)
+      const occupant = dailySchedule[slotKey]
+      if (occupant?.patientId && occupant.patientId !== patientId) {
+        return res.status(409).json({
+          error: true,
+          message: `${session.date} ${slotKey} 已有 ${occupant.patientName || '其他病人'}`,
+        })
+      }
+    }
+
+    const dialysisOrders = JSON.parse(patient.dialysis_orders || '{}')
+    dialysisOrders.freq = regularRule.freq
+    dialysisOrders.firstDialysisPlan = {
+      startDate: startDate || null,
+      continuousDays: continuousDays || null,
+      regularRule: {
+        freq: regularRule.freq,
+        bedNum: regularRule.bedNum,
+        shiftCode: regularRule.shiftCode,
+      },
+      extraSessions: normalizedExtraSessions.map((session) => ({
+        date: session.date,
+        bedNum: session.bedNum,
+        shiftCode: session.shiftCode,
+        reason: session.reason || FIRST_DIALYSIS_ADD_REASON,
+      })),
+    }
+    db.prepare(`
+      UPDATE patients
+      SET dialysis_orders = ?,
+          first_dialysis_date = COALESCE(?, first_dialysis_date),
+          updated_at = datetime('now', 'localtime')
+      WHERE id = ?
+    `).run(JSON.stringify(dialysisOrders), startDate || null, patientId)
+
+    const updatedPatient = { ...patient, freq: regularRule.freq }
+    schedule[patientId] = buildFirstDialysisRule(updatedPatient, regularRule)
+
+    db.prepare(`
+      INSERT INTO base_schedules (id, schedule, updated_at)
+      VALUES ('MASTER_SCHEDULE', ?, datetime('now', 'localtime'))
+      ON CONFLICT(id) DO UPDATE SET
+        schedule = excluded.schedule,
+        updated_at = datetime('now', 'localtime')
+    `).run(JSON.stringify(schedule))
+
+    const modifiedBy = { uid: req.user.id, name: req.user.name }
+    const rebuiltOldSessionDates = cleanupFutureFirstDialysisAddSessions(db, patientId, schedule, patientsMap, modifiedBy)
+
+    await logAudit('FIRST_DIALYSIS_PLAN', req.user.id, req.user.name, 'patients', patientId, {
+      startDate,
+      continuousDays,
+      regularRule,
+      extraSessions: normalizedExtraSessions,
+      rebuiltOldSessionDates,
+    })
+
+    syncFirstDialysisCreateMovement(db, patient, {
+      startDate,
+      continuousDays,
+      regularRule,
+      extraSessions: normalizedExtraSessions,
+    })
+
+    const syncResult = await syncMasterScheduleToFuture(beforeRules, schedule, modifiedBy)
+    console.log('[FirstDialysisPlan] master sync:', syncResult.message)
+
+    const exceptionResults = []
+    const firstDialysisPattern = formatFirstDialysisPattern(regularRule.freq, normalizedExtraSessions, startDate)
+    for (const session of normalizedExtraSessions) {
+      const exceptionId = uuidv4()
+      db.prepare(`
+        INSERT INTO schedule_exceptions (
+          id, type, status, patient_id, patient_name,
+          from_data, to_data, patient1, patient2,
+          start_date, end_date, date, reason, created_by
+        ) VALUES (?, 'ADD_SESSION', 'pending', ?, ?, '{}', ?, '{}', '{}', NULL, NULL, NULL, ?, ?)
+      `).run(
+        exceptionId,
+        patientId,
+        patient.name,
+        JSON.stringify({
+          goalDate: session.date,
+          bedNum: session.bedNum,
+          shiftCode: session.shiftCode,
+          mode: session.mode || null,
+          admissionDate: getTaipeiTodayString(),
+          firstDialysisDate: startDate || null,
+          firstDialysisPattern: firstDialysisPattern || null,
+        }),
+        session.reason || FIRST_DIALYSIS_ADD_REASON,
+        JSON.stringify({ uid: req.user.id, name: req.user.name }),
+      )
+
+      const processResult = await processScheduleException(exceptionId, {
+        type: 'ADD_SESSION',
+        status: 'pending',
+        patientId,
+        patientName: patient.name,
+        to: {
+          goalDate: session.date,
+          bedNum: session.bedNum,
+          shiftCode: session.shiftCode,
+          mode: session.mode || null,
+          admissionDate: getTaipeiTodayString(),
+          firstDialysisDate: startDate || null,
+          firstDialysisPattern: firstDialysisPattern || null,
+        },
+        reason: session.reason || FIRST_DIALYSIS_ADD_REASON,
+      })
+
+      if (!processResult?.success) {
+        throw new Error(processResult?.error || processResult?.message || `${session.date} 臨時加洗套用失敗`)
+      }
+
+      exceptionResults.push({ id: exceptionId, date: session.date, ...processResult })
+      emitExceptionChange('created', {
+        id: exceptionId,
+        type: 'ADD_SESSION',
+        status: 'pending',
+        patientId,
+        affectedDates: [session.date],
+        to: {
+          goalDate: session.date,
+          bedNum: session.bedNum,
+          shiftCode: session.shiftCode,
+          mode: session.mode || null,
+          admissionDate: getTaipeiTodayString(),
+          firstDialysisDate: startDate || null,
+          firstDialysisPattern: firstDialysisPattern || null,
+        },
+      })
+    }
+
+    res.json({
+      success: true,
+      patientId,
+      regularRule: schedule[patientId],
+      extraSessions: exceptionResults,
+    })
+  } catch (error) {
+    console.error('套用首透連續洗設定失敗:', error)
+    res.status(500).json({
+      error: true,
+      message: `套用首透連續洗設定失敗：${error.message}`,
+    })
+  }
+})
+
 /**
  * POST /api/schedules/sync/initialize
  * 手動初始化未來 60 天排程（用於首次設定或重建）
@@ -722,7 +1119,8 @@ router.post('/exceptions', ...isEditor, async (req, res) => {
       patient2: data.patient2,
       startDate: data.startDate,
       endDate: data.endDate,
-      date: data.date
+      date: data.date,
+      reason: data.reason
     }
 
     processScheduleException(id, exceptionData)
@@ -770,7 +1168,7 @@ router.post('/exceptions', ...isEditor, async (req, res) => {
  * PATCH /api/schedules/exceptions/:id
  * 更新調班申請狀態
  */
-router.patch('/exceptions/:id', ...isEditor, async (req, res) => {
+async function updateExceptionStatus(req, res) {
   try {
     const { id } = req.params
     const { status, cancelReason, errorMessage } = req.body
@@ -812,6 +1210,12 @@ router.patch('/exceptions/:id', ...isEditor, async (req, res) => {
 
     db.prepare(`UPDATE schedule_exceptions SET ${updates.join(', ')} WHERE id = ?`).run(...params)
 
+    if (status === 'cancelled' && existing.type === 'ADD_SESSION') {
+      const to = JSON.parse(existing.to_data || '{}')
+      if (to?.goalDate) {
+        removeAutoMovementFromDailyLog(db, to.goalDate, `auto_add_session_${id}`)
+      }
+    }
 
     await logAudit('EXCEPTION_UPDATE', req.user.id, req.user.name, 'schedule_exceptions', id, {
       newStatus: status
@@ -843,7 +1247,10 @@ router.patch('/exceptions/:id', ...isEditor, async (req, res) => {
       message: '更新調班申請失敗'
     })
   }
-})
+}
+
+router.patch('/exceptions/:id', ...isEditor, updateExceptionStatus)
+router.put('/exceptions/:id', ...isEditor, updateExceptionStatus)
 
 /**
  * DELETE /api/schedules/exceptions/:id
@@ -873,6 +1280,10 @@ router.delete('/exceptions/:id', ...isEditor, async (req, res) => {
       from: JSON.parse(exception.from_data || '{}'),
       to: JSON.parse(exception.to_data || '{}'),
       status: exception.status,
+    }
+
+    if (exData.type === 'ADD_SESSION' && exData.to?.goalDate) {
+      removeAutoMovementFromDailyLog(db, exData.to.goalDate, `auto_add_session_${id}`)
     }
 
     // 刪除調班記錄

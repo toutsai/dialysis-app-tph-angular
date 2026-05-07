@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 import { Router } from '@angular/router';
 import { ApiConfigService } from './api-config.service';
+import { DateStateService } from './date-state.service';
 
 // ---------------------------------------------------------------------------
 // Types (保持與 cloud 版完全相同)
@@ -55,6 +56,7 @@ const ROLE_HIERARCHY: Record<UserRole, number> = {
 export class AuthService implements OnDestroy {
   private readonly firebase = inject(ApiConfigService);
   private readonly router = inject(Router);
+  private readonly dateState = inject(DateStateService);
 
   // -----------------------------------------------------------------------
   // State signals (保持與 cloud 版相同)
@@ -184,8 +186,7 @@ export class AuthService implements OnDestroy {
         headers: this.firebase.getHeaders(),
       }).catch(() => {});
     } finally {
-      this.firebase.removeToken();
-      localStorage.removeItem('auth_user');
+      await this.clearBrowserStorage();
       this.currentUser.set(null);
       this.claims.set(null);
       if (this.refreshTimer) {
@@ -193,6 +194,32 @@ export class AuthService implements OnDestroy {
         this.refreshTimer = null;
       }
       this.router.navigate(['/login']);
+    }
+  }
+
+  private async clearBrowserStorage(): Promise<void> {
+    this.firebase.removeToken();
+    this.dateState.clear();
+
+    try {
+      localStorage.clear();
+    } catch (error) {
+      console.warn('[AuthService] Failed to clear localStorage:', error);
+    }
+
+    try {
+      sessionStorage.clear();
+    } catch (error) {
+      console.warn('[AuthService] Failed to clear sessionStorage:', error);
+    }
+
+    try {
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
+      }
+    } catch (error) {
+      console.warn('[AuthService] Failed to clear Cache Storage:', error);
     }
   }
 

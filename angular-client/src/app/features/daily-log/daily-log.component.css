@@ -41,6 +41,15 @@ h1 { font-size: 2rem; margin: 0; color: #343a40; }
 .current-date-text { font-size: 1.5rem; font-weight: bold; color: #343a40; white-space: nowrap; }
 .weekday-display { font-size: 1.5rem; font-weight: bold; color: #007bff; }
 .status-indicator { font-style: italic; color: #6c757d; font-weight: 500; }
+.history-lock-banner {
+  padding: 0.55rem 0.8rem;
+  border: 1px solid #f0c36d;
+  border-radius: 6px;
+  background-color: #fff8e1;
+  color: #7a5a00;
+  font-weight: 600;
+  white-space: nowrap;
+}
 .export-pdf-btn {
   padding: 0.6rem 1.2rem; font-size: 1rem; border-radius: 6px; cursor: pointer;
   font-weight: 500; transition: all 0.2s; white-space: nowrap;
@@ -239,18 +248,38 @@ h1 { font-size: 2rem; margin: 0; color: #343a40; }
   vertical-align: middle; font-size: 0.95rem; white-space: nowrap;
 }
 .dynamic-table th { background-color: #f8f9fa; font-weight: 500; text-align: center; }
-.dynamic-table input[type='text'], .dynamic-table input[type='date'] {
+.dynamic-table input[type='text'], .dynamic-table input[type='date'], .dynamic-table select {
   width: 100%; padding: 0.5rem; border: 1px solid transparent; border-radius: 4px;
   transition: border-color 0.2s; font-size: inherit;
 }
-.dynamic-table input:focus { outline: none; border-color: #80bdff; }
+.dynamic-table .table-wrap-textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem;
+  border: 1px solid #80bdff;
+  border-radius: 4px;
+  resize: vertical;
+  font: inherit;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  box-sizing: border-box;
+}
+.dynamic-table input:focus, .dynamic-table select:focus, .dynamic-table textarea:focus { outline: none; border-color: #80bdff; }
 .dynamic-table .col-reason-wide, .dynamic-table .col-remarks-wide { white-space: normal; }
 .dynamic-table .col-reason-wide input, .dynamic-table .col-remarks-wide input { white-space: normal; }
+.dynamic-table .wrapped-cell-text {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.5;
+}
 .dynamic-table .col-type { width: 90px; }
 .dynamic-table .col-name { width: 130px; }
 .dynamic-table .col-mrn { width: 130px; }
 .dynamic-table .col-bed { width: 130px; }
-.dynamic-table .col-date { width: 200px; }
+.dynamic-table .col-date { width: 165px; }
 .dynamic-table .col-physician { width: 120px; }
 .dynamic-table .col-actions { width: 150px; }
 .dynamic-table .col-interventions-wide { width: 380px; }
@@ -356,7 +385,7 @@ h1 { font-size: 2rem; margin: 0; color: #343a40; }
 .pdf-export-mode .stats-grid { grid-template-columns: 120px 140px repeat(3, 1fr); }
 .pdf-export-mode .stats-grid > div { padding: 0.5rem; }
 .pdf-export-mode .dynamic-table th, .pdf-export-mode .dynamic-table td { padding: 0.4rem; }
-.pdf-export-mode .dynamic-table input { padding: 0.3rem; font-size: 0.9rem; background-color: #f8f9fa; }
+.pdf-export-mode .dynamic-table input, .pdf-export-mode .dynamic-table select { padding: 0.3rem; font-size: 0.9rem; background-color: #f8f9fa; }
 .pdf-export-mode .add-row-btn-header { display: none; }
 .pdf-export-mode .leader-signature-grid { gap: 1rem; }
 .pdf-export-mode .sign-btn, .pdf-export-mode .unsign-btn, .pdf-export-mode .edit-btn { box-shadow: none; border-width: 1px; }
@@ -371,6 +400,7 @@ h1 { font-size: 2rem; margin: 0; color: #343a40; }
   font-size: 0.8em; font-weight: bold; color: white; white-space: nowrap;
 }
 .movement-type-badge.type-新增 { background-color: #28a745; }
+.movement-type-badge.type-臨時加洗 { background-color: #0d6efd; }
 .movement-type-badge.type-刪除 { background-color: #dc3545; }
 .movement-type-badge.type-轉移 { background-color: #17a2b8; }
 .movement-type-badge.type-復原 { background-color: #ffc107; color: #212529; }
@@ -384,7 +414,7 @@ h1 { font-size: 2rem; margin: 0; color: #343a40; }
 .movement-type-badge.type-轉常規門診 { background-color: #df3bb6; }
 .movement-type-badge.type-其他 { background-color: #adb5bd; }
 
-.dynamic-table input:read-only, .dynamic-table input:disabled {
+.dynamic-table input:read-only, .dynamic-table input:disabled, .dynamic-table select:disabled {
   background-color: #f8f9fa; cursor: default; border-color: transparent; color: #495057;
 }
 .dynamic-table tr.is-edited-row { background-color: #fffbe3; }
@@ -422,6 +452,7 @@ h1 { font-size: 2rem; margin: 0; color: #343a40; }
 .log-entry-card { border: 1px solid #dee2e6; border-radius: 6px; overflow: hidden; }
 .entry-header { padding: 0.5rem 0.75rem; background-color: #f8f9fa; font-size: 1rem; font-weight: 500; display: flex; justify-content: space-between; align-items: center; }
 .entry-body { padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.9rem; }
+.entry-body div { white-space: pre-wrap; overflow-wrap: anywhere; }
 .entry-body strong { color: #495057; }
 .no-data-text { color: #6c757d; font-style: italic; padding: 1rem 0; text-align: center; }
 

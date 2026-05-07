@@ -125,6 +125,7 @@
 .status-text {
   font-style: italic;
   color: #6c757d;
+  font-weight: 500;
 }
 .btn,
 .btn-save,
@@ -143,18 +144,37 @@ button {
   background-color: #e9ecef;
 }
 .btn-save {
-  background-color: #28a745;
+  background-color: #63c783;
   color: white;
-  border-color: #28a745;
+  border-color: #63c783;
 }
 .btn-save:hover {
-  background-color: #218838;
+  background-color: #4fb670;
+  border-color: #4fb670;
 }
 .btn-save:disabled {
-  background-color: #6c757d;
-  border-color: #6c757d;
+  background-color: #b8dfc4;
+  border-color: #b8dfc4;
+  color: white;
   cursor: not-allowed;
-  opacity: 0.65;
+  opacity: 1;
+}
+.main-actions .btn.btn-secondary {
+  background-color: #6c757d;
+  color: white;
+  border-color: #6c757d;
+}
+.main-actions .btn.btn-secondary:hover:not(:disabled) {
+  background-color: #545b62;
+  border-color: #545b62;
+  color: white;
+}
+.main-actions .btn.btn-secondary:disabled {
+  background-color: #adb5bd;
+  color: white;
+  border-color: #adb5bd;
+  cursor: not-allowed;
+  opacity: 1;
 }
 .btn.btn-warning {
   background-color: #ffc107;

@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid'
 import XLSX from 'xlsx'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isEditor, isAdmin, logAudit } from '../middleware/auth.js'
+import { getTaipeiTodayString } from '../utils/dateUtils.js'
 import {
   syncEventsToKiditLogbook,
   getKiditLogbook,
@@ -13,6 +14,59 @@ import {
 } from '../services/kiditSync.js'
 
 const router = Router()
+
+function isPastDailyLogDate(date) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) && date < getTaipeiTodayString()
+}
+
+function canEditPastDailyLog(user) {
+  return user?.role === 'admin'
+}
+
+function isDailyLogLockedForUser(date, user) {
+  return isPastDailyLogDate(date) && !canEditPastDailyLog(user)
+}
+
+function formatDailyLog(log, user = null) {
+  return {
+    id: log.id,
+    date: log.date,
+    patientMovements: JSON.parse(log.patient_movements || '[]'),
+    vascularAccessLog: JSON.parse(log.vascular_access_log || '[]'),
+    announcements: JSON.parse(log.announcements || '[]'),
+    stats: JSON.parse(log.stats || '{}'),
+    leader: JSON.parse(log.leader || '{}'),
+    otherNotes: log.other_notes,
+    notes: log.notes,
+    isLocked: isDailyLogLockedForUser(log.date, user),
+    createdAt: log.created_at,
+    updatedAt: log.updated_at,
+  }
+}
+
+function archiveDailyLogRevision(db, log, user, revisionReason = 'before_update') {
+  const id = `dlr_${log.date}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+  db.prepare(`
+    INSERT INTO daily_log_revisions (
+      id, daily_log_id, date, patient_movements, vascular_access_log,
+      announcements, notes, other_notes, stats, leader, revision_reason, created_by
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    log.id,
+    log.date,
+    log.patient_movements || '[]',
+    log.vascular_access_log || '[]',
+    log.announcements || '[]',
+    log.notes,
+    log.other_notes,
+    log.stats || '{}',
+    log.leader || '{}',
+    revisionReason,
+    JSON.stringify({ uid: user.id, name: user.name }),
+  )
+}
 
 // Angular 前端使用 PATCH 做部分更新，TPH 後端使用 PUT
 router.use((req, res, next) => {
@@ -988,27 +1042,59 @@ router.get('/daily-logs/:date', authenticate, (req, res) => {
         leader: {},
         otherNotes: null,
         notes: null,
+        isLocked: isDailyLogLockedForUser(date, req.user),
       })
     }
 
-    res.json({
-      id: log.id,
-      date: log.date,
-      patientMovements: JSON.parse(log.patient_movements || '[]'),
-      vascularAccessLog: JSON.parse(log.vascular_access_log || '[]'),
-      announcements: JSON.parse(log.announcements || '[]'),
-      stats: JSON.parse(log.stats || '{}'),
-      leader: JSON.parse(log.leader || '{}'),
-      otherNotes: log.other_notes,
-      notes: log.notes,
-      createdAt: log.created_at,
-      updatedAt: log.updated_at,
-    })
+    res.json(formatDailyLog(log, req.user))
   } catch (error) {
     console.error('取得工作日誌錯誤:', error)
     res.status(500).json({
       error: true,
       message: '取得工作日誌失敗',
+    })
+  }
+})
+
+/**
+ * GET /api/nursing/daily-logs/:date/revisions
+ * 取得工作日誌修改快照
+ */
+router.get('/daily-logs/:date/revisions', authenticate, (req, res) => {
+  try {
+    const { date } = req.params
+    const db = getDatabase()
+
+    const revisions = db
+      .prepare(`
+        SELECT * FROM daily_log_revisions
+        WHERE date = ?
+        ORDER BY created_at DESC
+      `)
+      .all(date)
+
+    res.json(
+      revisions.map((revision) => ({
+        id: revision.id,
+        dailyLogId: revision.daily_log_id,
+        date: revision.date,
+        patientMovements: JSON.parse(revision.patient_movements || '[]'),
+        vascularAccessLog: JSON.parse(revision.vascular_access_log || '[]'),
+        announcements: JSON.parse(revision.announcements || '[]'),
+        stats: JSON.parse(revision.stats || '{}'),
+        leader: JSON.parse(revision.leader || '{}'),
+        otherNotes: revision.other_notes,
+        notes: revision.notes,
+        revisionReason: revision.revision_reason,
+        createdBy: JSON.parse(revision.created_by || '{}'),
+        createdAt: revision.created_at,
+      })),
+    )
+  } catch (error) {
+    console.error('取得工作日誌快照錯誤:', error)
+    res.status(500).json({
+      error: true,
+      message: '取得工作日誌快照失敗',
     })
   }
 })
@@ -1024,6 +1110,14 @@ router.put('/daily-logs/:date', ...isEditor, async (req, res) => {
       req.body
 
     const db = getDatabase()
+
+    if (isDailyLogLockedForUser(date, req.user)) {
+      return res.status(423).json({
+        error: true,
+        code: 'DAILY_LOG_LOCKED',
+        message: '歷史工作日誌已鎖定，無法修改',
+      })
+    }
 
     // 先查詢是否已有該日紀錄
     const existing = db.prepare('SELECT * FROM daily_logs WHERE date = ?').get(date)
@@ -1065,6 +1159,7 @@ router.put('/daily-logs/:date', ...isEditor, async (req, res) => {
       }
 
       if (setClauses.length > 0) {
+        archiveDailyLogRevision(db, existing, req.user, 'before_update')
         setClauses.push("updated_at = datetime('now', 'localtime')")
         params.push(date)
         db.prepare(`UPDATE daily_logs SET ${setClauses.join(', ')} WHERE date = ?`).run(...params)
@@ -1090,12 +1185,15 @@ router.put('/daily-logs/:date', ...isEditor, async (req, res) => {
       )
     }
 
+    const saved = db.prepare(`SELECT * FROM daily_logs WHERE date = ?`).get(date)
+    const savedLog = formatDailyLog(saved, req.user)
+
     // 同步到 Kidit 日誌本
     try {
       await syncEventsToKiditLogbook(date, {
-        patientMovements: patientMovements || [],
-        vascularAccessLog: vascularAccessLog || [],
-        createdAt: new Date().toISOString(),
+        patientMovements: savedLog.patientMovements,
+        vascularAccessLog: savedLog.vascularAccessLog,
+        createdAt: savedLog.createdAt || new Date().toISOString(),
       })
     } catch (syncError) {
       console.error('Kidit 同步失敗 (非致命錯誤):', syncError)

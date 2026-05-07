@@ -323,6 +323,26 @@ CREATE TABLE IF NOT EXISTS daily_logs (
 
 CREATE INDEX IF NOT EXISTS idx_daily_logs_date ON daily_logs(date);
 
+-- 工作日誌修改快照
+CREATE TABLE IF NOT EXISTS daily_log_revisions (
+    id TEXT PRIMARY KEY,
+    daily_log_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    patient_movements TEXT DEFAULT '[]',
+    vascular_access_log TEXT DEFAULT '[]',
+    announcements TEXT DEFAULT '[]',
+    notes TEXT,
+    other_notes TEXT,
+    stats TEXT DEFAULT '{}',
+    leader TEXT DEFAULT '{}',
+    revision_reason TEXT,
+    created_by TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_daily_log_revisions_date ON daily_log_revisions(date);
+CREATE INDEX IF NOT EXISTS idx_daily_log_revisions_log ON daily_log_revisions(daily_log_id);
+
 -- ========================================
 -- 任務與通知
 -- ========================================
