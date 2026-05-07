@@ -3,10 +3,12 @@ import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isContributor, isEditor, logAudit } from '../middleware/auth.js'
-import { getTaipeiTodayString } from '../utils/dateUtils.js'
+import { formatDateToYYYYMMDD, getTaipeiTodayString } from '../utils/dateUtils.js'
 import { validate } from '../middleware/validate.js'
 import { syncEventsToKiditLogbook } from '../services/kiditSync.js'
 import { emitExceptionChange } from '../services/eventBus.js'
+import { rebuildSingleDaySchedule } from '../services/scheduleSync.js'
+import { removeAutoMovementFromDailyLog } from '../services/dailyLogMovementSync.js'
 
 const router = Router()
 
@@ -106,12 +108,6 @@ function addMovementToDailyLog(db, movementData) {
   }
 }
 
-const UNFINISHED_EXCEPTION_STATUSES = [
-  'pending',
-  'processing',
-  'conflict_requires_resolution',
-]
-
 function safeJsonParse(value, fallback = {}) {
   try {
     return value ? JSON.parse(value) : fallback
@@ -139,38 +135,110 @@ function exceptionBelongsToPatient(exception, patientId) {
   )
 }
 
-function deleteUnfinishedScheduleExceptionsForPatient(db, patientId) {
-  const placeholders = UNFINISHED_EXCEPTION_STATUSES.map(() => '?').join(', ')
-  const candidates = db
-    .prepare(
-      `SELECT *
-       FROM schedule_exceptions
-       WHERE status IN (${placeholders})`,
-    )
-    .all(...UNFINISHED_EXCEPTION_STATUSES)
+function collectFutureExceptionDates(exception, todayStr) {
+  const dates = new Set()
+  const from = safeJsonParse(exception.from_data)
+  const to = safeJsonParse(exception.to_data)
 
-  const related = candidates.filter((exception) =>
-    exceptionBelongsToPatient(exception, patientId),
+  if (exception.type === 'SUSPEND' && exception.start_date && exception.end_date) {
+    const start = new Date(`${exception.start_date}T00:00:00Z`)
+    const end = new Date(`${exception.end_date}T00:00:00Z`)
+    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+      for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+        const dateStr = formatDateToYYYYMMDD(d)
+        if (dateStr >= todayStr) dates.add(dateStr)
+      }
+    }
+  } else {
+    [
+      exception.date,
+      exception.start_date,
+      exception.end_date,
+      from?.sourceDate,
+      to?.goalDate,
+    ].filter(Boolean).forEach((dateStr) => {
+      if (dateStr >= todayStr) dates.add(dateStr)
+    })
+  }
+
+  return Array.from(dates)
+}
+
+function rebuildSchedulesForDates(db, dates, modifiedBy) {
+  if (dates.length === 0) return
+
+  const masterDoc = db.prepare(`
+    SELECT schedule FROM base_schedules WHERE id = 'MASTER_SCHEDULE'
+  `).get()
+  const masterRules = masterDoc ? safeJsonParse(masterDoc.schedule) : {}
+  const patients = db.prepare(`SELECT * FROM patients WHERE is_deleted = 0`).all()
+  const patientsMap = new Map(patients.map(patient => [patient.id, patient]))
+  const activeMasterRules = Object.fromEntries(
+    Object.entries(masterRules).filter(([patientId]) => patientsMap.has(patientId)),
   )
+
+  for (const dateStr of dates) {
+    const finalSchedule = rebuildSingleDaySchedule(dateStr, activeMasterRules, patientsMap)
+    db.prepare(`
+      INSERT INTO schedules (id, date, schedule, sync_method, last_modified_by, created_at, updated_at)
+      VALUES (?, ?, ?, 'patient_exception_cleanup', ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
+      ON CONFLICT(date) DO UPDATE SET
+        schedule = excluded.schedule,
+        sync_method = excluded.sync_method,
+        last_modified_by = excluded.last_modified_by,
+        updated_at = datetime('now', 'localtime')
+    `).run(
+      dateStr,
+      dateStr,
+      JSON.stringify(finalSchedule),
+      JSON.stringify(modifiedBy || {}),
+    )
+  }
+}
+
+function deleteFutureScheduleExceptionsForPatient(db, patientId, reason, modifiedBy) {
+  const todayStr = getTaipeiTodayString()
+  const candidates = db.prepare(`SELECT * FROM schedule_exceptions`).all()
+  const related = candidates
+    .filter((exception) => exceptionBelongsToPatient(exception, patientId))
+    .map((exception) => ({
+      exception,
+      futureDates: collectFutureExceptionDates(exception, todayStr),
+    }))
+    .filter((item) => item.futureDates.length > 0)
 
   if (related.length === 0) return []
 
   const deleteById = db.prepare(`DELETE FROM schedule_exceptions WHERE id = ?`)
-  for (const exception of related) {
+  const datesToRebuild = new Set()
+  const deleted = []
+
+  for (const { exception, futureDates } of related) {
+    const to = safeJsonParse(exception.to_data)
+    if (exception.type === 'ADD_SESSION' && to?.goalDate && to.goalDate >= todayStr) {
+      removeAutoMovementFromDailyLog(db, to.goalDate, `auto_add_session_${exception.id}`)
+    }
+
     deleteById.run(exception.id)
+    futureDates.forEach(date => datesToRebuild.add(date))
     emitExceptionChange('deleted', {
       id: exception.id,
       type: exception.type,
       patientId,
-      reason: 'patient_deleted',
+      affectedDates: futureDates,
+      reason,
+    })
+
+    deleted.push({
+      id: exception.id,
+      type: exception.type,
+      status: exception.status,
+      affectedDates: futureDates,
     })
   }
 
-  return related.map((exception) => ({
-    id: exception.id,
-    type: exception.type,
-    status: exception.status,
-  }))
+  rebuildSchedulesForDates(db, Array.from(datesToRebuild).sort(), modifiedBy)
+  return deleted
 }
 
 /**
@@ -215,6 +283,7 @@ function formatPatient(row) {
     deleteReason: row.delete_reason,
     deletedAt: row.deleted_at || (row.is_deleted === 1 ? (row.history_deleted_at || row.updated_at) : null),
     dialysisOrders: dialysisOrders,
+    firstDialysisPlan: dialysisOrders.firstDialysisPlan || null,
     crrtOrders: crrtOrders,  // ✨ 新增：回傳 CRRT 醫囑
     // 將 freq 和 mode 也放在頂層，方便前端使用
     freq: dialysisOrders.freq || null,
@@ -690,11 +759,17 @@ router.put('/:id', ...isContributor, async (req, res) => {
     // 🔥 檢查刪除/復原狀態變更
     const wasDeleted = existing.is_deleted === 1
     const isNowDeleted = data.isDeleted === true || updated.is_deleted === 1
-    let deletedUnfinishedExceptions = []
+    const modifiedBy = { uid: req.user.id, name: req.user.name }
+    let deletedFutureExceptions = []
 
     if (!wasDeleted && isNowDeleted) {
       // 刪除操作：從正常狀態 → 已刪除
-      deletedUnfinishedExceptions = deleteUnfinishedScheduleExceptionsForPatient(db, id)
+      deletedFutureExceptions = deleteFutureScheduleExceptionsForPatient(
+        db,
+        id,
+        'patient_deleted',
+        modifiedBy,
+      )
 
       recordPatientHistory(db, id, existing.name, 'DELETE', {
         reason: data.deleteReason || '未提供原因',
@@ -760,6 +835,13 @@ router.put('/:id', ...isContributor, async (req, res) => {
         })
       } else if ((fromStatus === 'ipd' || fromStatus === 'er') && toStatus === 'opd') {
         // 住院/急診 → 門診 (轉出)
+        deletedFutureExceptions = deleteFutureScheduleExceptionsForPatient(
+          db,
+          id,
+          'patient_transferred_to_opd',
+          modifiedBy,
+        )
+
         recordPatientHistory(db, id, existing.name, 'TRANSFER', {
           fromStatus,
           toStatus,
@@ -828,7 +910,7 @@ router.put('/:id', ...isContributor, async (req, res) => {
 
     await logAudit('PATIENT_UPDATE', req.user.id, req.user.name, 'patients', id, {
       updatedFields: Object.keys(data),
-      deletedUnfinishedExceptions,
+      deletedFutureExceptions,
     })
 
     res.json(formatPatient(updated))
@@ -878,7 +960,12 @@ router.delete('/:id', ...isEditor, async (req, res) => {
       JSON.stringify({ uid: req.user.id, name: req.user.name }),
       id
     )
-    const deletedUnfinishedExceptions = deleteUnfinishedScheduleExceptionsForPatient(db, id)
+    const deletedFutureExceptions = deleteFutureScheduleExceptionsForPatient(
+      db,
+      id,
+      'patient_deleted',
+      { uid: req.user.id, name: req.user.name },
+    )
 
     // 🔥 自動記錄病人歷史
     recordPatientHistory(db, id, existing.name, 'DELETE', {
@@ -906,7 +993,7 @@ router.delete('/:id', ...isEditor, async (req, res) => {
     await logAudit('PATIENT_DELETE', req.user.id, req.user.name, 'patients', id, {
       name: existing.name,
       reason,
-      deletedUnfinishedExceptions,
+      deletedFutureExceptions,
     })
 
     res.json({

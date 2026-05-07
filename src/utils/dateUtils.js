@@ -4,15 +4,19 @@
  */
 
 /**
+ * 將 Date 物件格式化為台北時區日期字串 (YYYY-MM-DD)
+ */
+export function formatDateToTaipeiString(date = new Date()) {
+  return date.toLocaleDateString('sv-SE', {
+    timeZone: 'Asia/Taipei',
+  })
+}
+
+/**
  * 取得台北時區的今天日期字串 (YYYY-MM-DD)
  */
 export function getTaipeiTodayString() {
-  return new Date().toLocaleDateString('zh-TW', {
-    timeZone: 'Asia/Taipei',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).replace(/\//g, '-')
+  return formatDateToTaipeiString(new Date())
 }
 
 /**

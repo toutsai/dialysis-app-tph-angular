@@ -26,12 +26,21 @@
           </div>
           <div class="form-field">
             <label for="freq">透析頻率</label>
+            <div class="freq-with-action">
             <select id="freq" [(ngModel)]="form.freq" name="freq">
               <option disabled value="">請選擇</option>
               @for (f of FREQ_OPTIONS; track f) {
                 <option [value]="f">{{ f }}</option>
               }
             </select>
+            <button type="button" class="btn-inline" (click)="openFirstDialysisPlan()">首透連續洗</button>
+            </div>
+            @if (form.firstDialysisPlan) {
+              <small class="plan-summary">
+                常規 {{ form.firstDialysisPlan.regularRule?.freq }} / {{ formatAssignment(form.firstDialysisPlan.regularRule) }}，
+                加洗 {{ formatExtraSessionsSummary(form.firstDialysisPlan.extraSessions) }}
+              </small>
+            }
           </div>
           <div class="form-field">
             <label for="mode">透析模式</label>
@@ -74,7 +83,7 @@
             </div>
             <div class="form-field">
               <label for="first-dialysis-date">首次透析日期</label>
-              <input type="date" id="first-dialysis-date" [(ngModel)]="form.firstDialysisDate" name="firstDialysisDate" />
+              <input type="date" id="first-dialysis-date" [(ngModel)]="form.firstDialysisDate" name="firstDialysisDate" (ngModelChange)="handleFirstDialysisDateChange($event)" />
             </div>
             <div class="form-field">
               <label for="access-creation-date">通路建立日期</label>
@@ -166,6 +175,127 @@
           </fieldset>
         }
       </div>
+
+      @if (isFirstPlanVisible) {
+        <div class="first-plan-overlay" (click)="closeFirstDialysisPlan()">
+          <div class="first-plan-dialog" (click)="$event.stopPropagation()">
+            <div class="first-plan-header">
+              <h3>首透連續洗設定</h3>
+              <button type="button" class="close-button" (click)="closeFirstDialysisPlan()">&times;</button>
+            </div>
+
+            <div class="first-plan-controls">
+              <label>
+                開始日期
+                <input type="date" [(ngModel)]="firstPlan.startDate" name="firstPlanStartDate" />
+              </label>
+              <label>
+                連續天數
+                <input type="number" min="1" max="6" [(ngModel)]="firstPlan.continuousDays" name="firstPlanDays" />
+              </label>
+              <label>
+                常規頻率
+                <select [(ngModel)]="firstPlan.regularFreq" name="firstPlanRegularFreq">
+                  @for (f of FREQ_OPTIONS; track f) {
+                    <option [value]="f">{{ f }}</option>
+                  }
+                </select>
+              </label>
+            </div>
+
+            @if (firstPlanError) {
+              <div class="plan-error">{{ firstPlanError }}</div>
+            }
+
+            <div class="first-plan-grid">
+              <section class="plan-panel">
+                <div class="panel-title">常規床位</div>
+                <div class="selected-line">已選：{{ formatAssignment(firstPlan.regularAssignment) }}</div>
+                <div class="bed-picker">
+                  @for (shift of SHIFTS; track shift) {
+                    <div class="shift-bed-group">
+                      <h4>{{ SHIFT_LABELS[shift] }}</h4>
+                      <div class="bed-chip-list">
+                        @for (bed of regularAvailableBeds[shift]; track bed) {
+                          <button
+                            type="button"
+                            class="bed-chip"
+                            [class.selected]="firstPlan.regularAssignment?.bedNum === bed && firstPlan.regularAssignment?.shiftCode === shift"
+                            [class.hepatitis-bed]="isHepatitisBed(bed)"
+                            (click)="selectRegularBed(bed, shift)"
+                          >
+                            {{ formatBed(bed) }}
+                          </button>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              </section>
+
+              <section class="plan-panel">
+                <div class="panel-title">連續加洗</div>
+                <div class="date-chip-list">
+                  @for (item of continuousDates; track item.date) {
+                    <button
+                      type="button"
+                      class="date-chip"
+                      [class.selected]="firstPlan.selectedExtraDate === item.date"
+                      [class.regular-day]="item.isRegular"
+                      [class.disabled]="item.isRegular"
+                      [class.has-extra]="hasExtraSession(item.date)"
+                      (click)="selectExtraDate(item.date)"
+                    >
+                      <span>{{ item.weekdayLabel }}</span>
+                      <small>{{ item.date }}</small>
+                      @if (item.isRegular) {
+                        <em>常規</em>
+                      }
+                      @if (hasExtraSession(item.date)) {
+                        <i (click)="removeExtraSession(item.date, $event)">移除</i>
+                      }
+                    </button>
+                  }
+                </div>
+
+                @if (firstPlan.selectedExtraDate) {
+                  <div class="selected-line">
+                    {{ firstPlan.selectedExtraDate }} 加洗床位：{{ formatAssignment(selectedExtraSession) }}
+                  </div>
+                  <div class="bed-picker compact">
+                    @for (shift of SHIFTS; track shift) {
+                      <div class="shift-bed-group">
+                        <h4>{{ SHIFT_LABELS[shift] }}</h4>
+                        <div class="bed-chip-list">
+                          @for (bed of extraAvailableBeds[shift]; track bed) {
+                            <button
+                              type="button"
+                              class="bed-chip"
+                              [class.selected]="selectedExtraSession?.bedNum === bed && selectedExtraSession?.shiftCode === shift"
+                              [class.hepatitis-bed]="isHepatitisBed(bed)"
+                              (click)="selectExtraBed(bed, shift)"
+                            >
+                              {{ formatBed(bed) }}
+                            </button>
+                          }
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+              </section>
+            </div>
+
+            <div class="first-plan-footer">
+              @if (firstPlanLoading) {
+                <span>載入床位中...</span>
+              }
+              <button type="button" class="btn-secondary" (click)="closeFirstDialysisPlan()">取消</button>
+              <button type="button" class="btn-primary" (click)="applyFirstDialysisPlan()">套用設定</button>
+            </div>
+          </div>
+        </div>
+      }
 
       <div class="modal-footer">
         <button type="submit" class="btn-primary">儲存</button>

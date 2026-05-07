@@ -17,6 +17,9 @@
         <button (click)="changeDate(1)">下一日 &#x276F;</button>
         <button (click)="goToToday()">今日</button>
       </div>
+      <div *ngIf="isHistoricalLog" class="history-lock-banner">
+        {{ canEditHistoricalLog ? '歷史工作日誌：管理員可修改，儲存後會保留修訂紀錄。' : '歷史工作日誌已鎖定，僅供檢視與匯出。' }}
+      </div>
       <button class="btn btn-handover" (click)="isHandoverDialogVisible = true" [disabled]="isPageLocked">
         <i class="fas fa-clipboard-list"></i> 組長交班
       </button>
@@ -239,6 +242,7 @@
                   <select *ngIf="isRowInEditMode(item)" [(ngModel)]="item.type" class="type-select">
                     <option value="手動">手動</option>
                     <option value="首透">首透</option>
+                    <option value="臨時加洗">臨時加洗</option>
                     <option value="暫停透析">暫停透析</option>
                     <option value="刪除排程">刪除排程</option>
                     <option value="更改模式">更改模式</option>
@@ -278,7 +282,15 @@
                   <input type="text" [(ngModel)]="item.reason" [disabled]="!isRowInEditMode(item)" />
                 </td>
                 <td class="col-remarks-wide">
-                  <input type="text" [(ngModel)]="item.remarks" [disabled]="!isRowInEditMode(item)" />
+                  <textarea
+                    *ngIf="isRowInEditMode(item)"
+                    [(ngModel)]="item.remarks"
+                    class="table-wrap-textarea"
+                    rows="2"
+                  ></textarea>
+                  <span *ngIf="!isRowInEditMode(item)" class="wrapped-cell-text">
+                    {{ item.remarks || '' }}
+                  </span>
                 </td>
                 <td class="col-actions">
                   <button *ngIf="!isRowInEditMode(item) && !isPageLocked" (click)="unlockMovement(item)" class="edit-btn">編輯</button>
@@ -338,7 +350,10 @@
                   </div>
                 </td>
                 <td class="col-location">
-                  <input type="text" [(ngModel)]="item.location" [disabled]="isPageLocked" />
+                  <select [(ngModel)]="item.location" class="table-select" [disabled]="isPageLocked">
+                    <option value="">請選擇</option>
+                    <option *ngFor="let location of vascularAccessLocationOptions" [value]="location">{{ location }}</option>
+                  </select>
                 </td>
                 <td class="col-actions">
                   <button *ngIf="!isPageLocked" (click)="deleteRow(i, 'vascularAccessLog')" class="delete-btn">移除</button>

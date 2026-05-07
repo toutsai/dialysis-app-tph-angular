@@ -1,6 +1,16 @@
 // src/utils/dateUtils.ts (前端版本)
 
 const TIME_ZONE = 'Asia/Taipei'
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+const WEEKDAY_INDEX_BY_LABEL: Record<string, number> = {
+  Mon: 0,
+  Tue: 1,
+  Wed: 2,
+  Thu: 3,
+  Fri: 4,
+  Sat: 5,
+  Sun: 6,
+}
 
 /** Firestore 時間戳介面 */
 interface FirestoreTimestamp {
@@ -82,6 +92,35 @@ export function addDays(date: Date, days: number): Date {
   const result = new Date(date)
   result.setDate(result.getDate() + days)
   return result
+}
+
+/**
+ * 將 YYYY-MM-DD 視為台北日期，轉成 Date 物件。
+ * 避免瀏覽器把純日期字串當 UTC 解析造成日期偏移。
+ */
+export function parseTaipeiDateString(dateString: string): Date {
+  const { year, month, day } = parseDateString(dateString)
+  return new Date(`${createDateString(year, month, day)}T00:00:00+08:00`)
+}
+
+/**
+ * 對 YYYY-MM-DD 日期字串加減天數，回傳台北時區 YYYY-MM-DD。
+ */
+export function addDaysToDateString(dateString: string, days: number): string {
+  const date = parseTaipeiDateString(dateString)
+  return formatDateToYYYYMMDD(new Date(date.getTime() + days * MS_PER_DAY))
+}
+
+/**
+ * 取得台北時區星期索引 (0=週一, 6=週日)。
+ */
+export function getTaipeiWeekdayIndex(date: Date | string): number {
+  const target = typeof date === 'string' ? parseTaipeiDateString(date) : date
+  const weekday = target.toLocaleDateString('en-US', {
+    timeZone: TIME_ZONE,
+    weekday: 'short',
+  })
+  return WEEKDAY_INDEX_BY_LABEL[weekday] ?? ((target.getDay() + 6) % 7)
 }
 
 /**

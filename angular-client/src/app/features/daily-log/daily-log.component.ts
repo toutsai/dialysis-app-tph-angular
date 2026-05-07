@@ -52,6 +52,7 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   hasUnsavedChanges = signal(false);
   currentSchedule: any = {};
   dailyLog: any;
+  readonly vascularAccessLocationOptions = ['本院', '新泰', '新仁', '宏仁', '新光', '振興', '其他'];
 
   // ===================================================================
   // UI State
@@ -107,8 +108,16 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   // ===================================================================
   // Computed Properties (getters)
   // ===================================================================
+  get canEditHistoricalLog(): boolean {
+    return this.authService.isAdmin();
+  }
+
   get isPageLocked(): boolean {
-    return !this.authService.canEditSchedules();
+    return !this.authService.canEditSchedules() || (this.isHistoricalLog && !this.canEditHistoricalLog);
+  }
+
+  get isHistoricalLog(): boolean {
+    return this.selectedDate() < this.formatDate(new Date());
   }
 
   get currentUser(): any {
@@ -134,7 +143,9 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   }
 
   get statusText(): string {
+    if (this.isHistoricalLog && !this.canEditHistoricalLog) return '歷史工作日誌已鎖定';
     if (this.hasUnsavedChanges()) return '有未儲存的變更';
+    if (this.isHistoricalLog) return '管理員歷史編輯模式';
     const isSigned = Object.values(this.dailyLog.leader || {}).some((l: any) => l && l.userId);
     return isSigned ? '變更已儲存' : '尚未簽核';
   }
@@ -228,7 +239,7 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   // Change Tracking
   // ===================================================================
   markDirty(): void {
-    if (this.isLoading()) return;
+    if (this.isLoading() || this.isPageLocked) return;
     this.hasUnsavedChanges.set(true);
   }
 
@@ -440,6 +451,13 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   async saveLog(options: { successMessage?: string; showSuccessAlert?: boolean } = {}): Promise<void> {
     const { successMessage = '日誌已儲存！', showSuccessAlert = true } = options;
     if (this.isLoading()) return;
+    if (this.isPageLocked) {
+      this.showAlert(
+        this.isHistoricalLog ? '歷史日誌已鎖定' : '權限不足',
+        this.isHistoricalLog ? '今天以前的工作日誌已鎖定，無法修改。' : '您沒有權限修改工作日誌。',
+      );
+      return;
+    }
     this.isLoading.set(true);
 
     // Sync staffing totals before saving
@@ -686,12 +704,14 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   }
 
   addStaffingRow(): void {
+    if (this.isPageLocked) return;
     this.dailyLog.stats.staffing.details.push({
       id: Date.now(), label: '', count: 0, ratio1: 0, ratio2: 0, ratio3: 0, isLocked: false,
     });
   }
 
   deleteStaffingRow(index: number): void {
+    if (this.isPageLocked) return;
     this.dailyLog.stats.staffing.details.splice(index, 1);
   }
 
@@ -788,6 +808,13 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   // Dynamic Table Row Management
   // ===================================================================
   addRow(targetArrayKey: string): void {
+    if (this.isPageLocked) {
+      this.showAlert(
+        this.isHistoricalLog ? '歷史日誌已鎖定' : '權限不足',
+        this.isHistoricalLog ? '今天以前的工作日誌已鎖定，無法新增或修改動態。' : '您沒有權限修改工作日誌。',
+      );
+      return;
+    }
     if (this.newMovementId) {
       this.showAlert('提示', '請先儲存目前新增的動態，再新增下一筆。');
       return;
@@ -807,6 +834,7 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   }
 
   deleteRow(index: number, targetArrayKey: string): void {
+    if (this.isPageLocked) return;
     const item = this.dailyLog[targetArrayKey][index];
     this.showConfirm('確認移除', '您確定要移除這一行嗎？', () => {
       if (item.id === this.newMovementId) this.newMovementId = null;
@@ -819,10 +847,18 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   }
 
   unlockMovement(item: any): void {
+    if (this.isPageLocked) return;
     item.isEdited = true;
   }
 
   async saveMovement(item: any): Promise<void> {
+    if (this.isPageLocked) {
+      this.showAlert(
+        this.isHistoricalLog ? '歷史日誌已鎖定' : '權限不足',
+        this.isHistoricalLog ? '今天以前的工作日誌已鎖定，無法修改病人動態。' : '您沒有權限修改工作日誌。',
+      );
+      return;
+    }
     if (!item.name) {
       this.showAlert('資料不完整', '請至少填寫病人姓名。');
       return;
@@ -838,6 +874,13 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   }
 
   async saveJustMovements(): Promise<void> {
+    if (this.isPageLocked) {
+      this.showAlert(
+        this.isHistoricalLog ? '歷史日誌已鎖定' : '權限不足',
+        this.isHistoricalLog ? '今天以前的工作日誌已鎖定，無法修改病人動態。' : '您沒有權限修改工作日誌。',
+      );
+      return;
+    }
     this.isLoading.set(true);
     try {
       const docId = this.selectedDate();
@@ -967,6 +1010,7 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   // Ward Number Dialog
   // ===================================================================
   promptWardNumber(index: number): void {
+    if (this.isPageLocked) return;
     const patientId = this.dailyLog.patientMovements[index]?.patientId;
     if (!patientId) {
       this.showAlert('操作失敗', '請先透過「姓名」欄位選擇一位病人，才能設定床號。');
@@ -982,6 +1026,7 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   }
 
   async handleWardNumberConfirm(newWardNumber: string): Promise<void> {
+    if (this.isPageLocked) return;
     const index = this.currentEditingMovementIndex;
     if (index < 0) return;
     const patientId = this.dailyLog.patientMovements[index]?.patientId;
@@ -1007,6 +1052,13 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   // Leader Signature
   // ===================================================================
   async signAsLeader(shift: string): Promise<void> {
+    if (this.isPageLocked) {
+      this.showAlert(
+        this.isHistoricalLog ? '歷史日誌已鎖定' : '權限不足',
+        this.isHistoricalLog ? '今天以前的工作日誌已鎖定，無法簽核或修改。' : '您沒有權限修改工作日誌。',
+      );
+      return;
+    }
     if (!this.currentUser) return;
 
     const performSignAndSave = async (isOverride = false) => {
@@ -1041,6 +1093,13 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   }
 
   async unsignLeader(shift: string): Promise<void> {
+    if (this.isPageLocked) {
+      this.showAlert(
+        this.isHistoricalLog ? '歷史日誌已鎖定' : '權限不足',
+        this.isHistoricalLog ? '今天以前的工作日誌已鎖定，無法撤銷簽核。' : '您沒有權限修改工作日誌。',
+      );
+      return;
+    }
     if (!this.currentUser) return;
 
     const performUnsignAndSave = async () => {

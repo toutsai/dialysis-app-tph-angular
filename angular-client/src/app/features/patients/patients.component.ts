@@ -20,6 +20,8 @@ import {
   type ApiManager,
   type FirestoreRecord,
 } from '@services/api-manager.service';
+import { ApiService } from '@services/api.service';
+import { firstValueFrom } from 'rxjs';
 import { formatDateToYYYYMMDD, parseFirestoreTimestamp } from '@/utils/dateUtils';
 import { escapeHtml } from '@/utils/sanitize';
 
@@ -70,6 +72,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
   private readonly patientStore = inject(PatientStoreService);
   private readonly notificationService = inject(NotificationService);
   private readonly apiManagerService = inject(ApiManagerService);
+  private readonly api = inject(ApiService);
 
   private readonly tasksApi: ApiManager<FirestoreRecord>;
   private readonly schedulesApi: ApiManager<FirestoreRecord>;
@@ -604,6 +607,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
 
     const user = this.authService.currentUser();
     const creatorInfo = { uid: user!.uid, name: user!.name };
+    const firstDialysisPlan = patientData.firstDialysisPlan ? JSON.parse(JSON.stringify(patientData.firstDialysisPlan)) : null;
 
     // Edit existing
     if (patientData.id) {
@@ -631,6 +635,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
               this.closeModal();
               const dataToUpdate = { ...patientData };
               delete dataToUpdate.id;
+              delete dataToUpdate.firstDialysisPlan;
               dataToUpdate.updatedAt = new Date().toISOString();
               await Promise.all([
                 this.patientsApi.save(patientData.id, dataToUpdate),
@@ -659,6 +664,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
       try {
         const dataToUpdate = { ...patientData };
         delete dataToUpdate.id;
+        delete dataToUpdate.firstDialysisPlan;
         dataToUpdate.updatedAt = new Date().toISOString();
 
         const updatePromises: Promise<any>[] = [this.patientsApi.save(patientData.id, dataToUpdate)];
@@ -671,7 +677,22 @@ export class PatientsComponent implements OnInit, OnDestroy {
         }
 
         await Promise.all(updatePromises);
-        this.patientStore.updatePatientInStore(patientData.id, dataToUpdate);
+        if (firstDialysisPlan) {
+          await this.applyFirstDialysisPlan(patientData.id, firstDialysisPlan);
+        }
+        const localUpdate = firstDialysisPlan
+          ? {
+              ...dataToUpdate,
+              firstDialysisPlan,
+              dialysisOrders: {
+                ...(originalPatient.dialysisOrders || {}),
+                ...(dataToUpdate.dialysisOrders || {}),
+                freq: firstDialysisPlan.regularRule?.freq || dataToUpdate.freq,
+                firstDialysisPlan,
+              },
+            }
+          : dataToUpdate;
+        this.patientStore.updatePatientInStore(patientData.id, localUpdate);
         await this.recalculateStatsLocally();
         window.dispatchEvent(new CustomEvent('patient-data-updated'));
         this.notificationService.createNotification(`編輯病人：${patientData.name}`, 'patient');
@@ -716,9 +737,13 @@ export class PatientsComponent implements OnInit, OnDestroy {
         isDeleted: false,
         status: this.modalType(),
       };
+      delete dataToCreate.firstDialysisPlan;
 
       // Use ApiManager to create patient
       const savedPatient = await this.patientsApi.save(dataToCreate);
+      if (firstDialysisPlan) {
+        await this.applyFirstDialysisPlan((savedPatient as any).id, firstDialysisPlan);
+      }
 
       const automatedTaskPromises: Promise<any>[] = [];
       if ((savedPatient as any).patientStatus?.isFirstDialysis?.active) {
@@ -731,7 +756,20 @@ export class PatientsComponent implements OnInit, OnDestroy {
         await Promise.all(automatedTaskPromises);
       }
 
-      this.patientStore.addPatientInStore({ ...dataToCreate, id: (savedPatient as any).id });
+      this.patientStore.addPatientInStore({
+        ...dataToCreate,
+        id: (savedPatient as any).id,
+        ...(firstDialysisPlan
+          ? {
+              firstDialysisPlan,
+              dialysisOrders: {
+                ...(dataToCreate.dialysisOrders || {}),
+                freq: firstDialysisPlan.regularRule?.freq || dataToCreate.freq,
+                firstDialysisPlan,
+              },
+            }
+          : {}),
+      });
       await this.recalculateStatsLocally();
       const statusText: Record<string, string> = { ipd: '住院', opd: '門診', er: '急診' };
       this.notificationService.createNotification(
@@ -742,6 +780,17 @@ export class PatientsComponent implements OnInit, OnDestroy {
     } catch (err: any) {
       this.showAlert('操作失敗', `新增病人失敗！${err.message}`);
     }
+  }
+
+  private async applyFirstDialysisPlan(patientId: string, plan: any): Promise<void> {
+    if (!patientId || !plan?.regularRule) return;
+    await firstValueFrom(this.api.post('/schedules/first-dialysis-plan', {
+      patientId,
+      startDate: plan.startDate || null,
+      continuousDays: plan.continuousDays || null,
+      regularRule: plan.regularRule,
+      extraSessions: plan.extraSessions || [],
+    }));
   }
 
   private async createAutomatedTask(patientData: any, taskType: string, creatorInfo: any): Promise<void> {
@@ -788,6 +837,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
     if (!existingPatient || !newPatientData) return;
 
     try {
+      const firstDialysisPlan = newPatientData.firstDialysisPlan ? JSON.parse(JSON.stringify(newPatientData.firstDialysisPlan)) : null;
       const dataToUpdate: any = {
         ...newPatientData,
         status: this.modalType(),
@@ -797,8 +847,23 @@ export class PatientsComponent implements OnInit, OnDestroy {
         originalStatus: null,
       };
       delete dataToUpdate.id;
+      delete dataToUpdate.firstDialysisPlan;
       await this.patientsApi.save(existingPatient.id, dataToUpdate);
-      this.patientStore.updatePatientInStore(existingPatient.id, dataToUpdate);
+      if (firstDialysisPlan) {
+        await this.applyFirstDialysisPlan(existingPatient.id, firstDialysisPlan);
+      }
+      this.patientStore.updatePatientInStore(existingPatient.id, firstDialysisPlan
+        ? {
+            ...dataToUpdate,
+            firstDialysisPlan,
+            dialysisOrders: {
+              ...(existingPatient.dialysisOrders || {}),
+              ...(dataToUpdate.dialysisOrders || {}),
+              freq: firstDialysisPlan.regularRule?.freq || dataToUpdate.freq,
+              firstDialysisPlan,
+            },
+          }
+        : dataToUpdate);
       await this.recalculateStatsLocally();
       window.dispatchEvent(new CustomEvent('patient-data-updated'));
 

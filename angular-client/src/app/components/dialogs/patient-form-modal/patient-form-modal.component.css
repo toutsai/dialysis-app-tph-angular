@@ -41,4 +41,37 @@
 .radio-group { display: flex; gap: 1.5rem; padding: 8px 0; }
 .radio-group label { display: flex; align-items: center; gap: 0.5rem; font-weight: normal; cursor: pointer; }
 .radio-group input[type='radio'] { width: auto; accent-color: var(--primary-color, #007bff); }
+.freq-with-action { display: flex; gap: 0.5rem; align-items: stretch; }
+.freq-with-action select { min-width: 0; flex: 1; }
+.btn-inline { border: 1px solid #0d6efd; background: #fff; color: #0d6efd; border-radius: 6px; padding: 0 0.75rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.btn-inline:hover { background: #e7f1ff; }
+.plan-summary { margin-top: 0.35rem; color: #0d6efd; font-weight: 600; }
+.first-plan-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1010; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+.first-plan-dialog { width: min(1100px, 96vw); max-height: 90vh; overflow: auto; background: #fff; border-radius: 8px; box-shadow: 0 12px 32px rgba(0,0,0,0.24); padding: 1rem; }
+.first-plan-header, .first-plan-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-bottom: 1px solid #e9ecef; padding-bottom: 0.75rem; }
+.first-plan-header h3 { margin: 0; font-size: 1.25rem; }
+.first-plan-footer { border-bottom: 0; border-top: 1px solid #e9ecef; padding-top: 0.75rem; margin-top: 1rem; justify-content: flex-end; }
+.first-plan-controls { display: grid; grid-template-columns: repeat(3, minmax(160px, 1fr)); gap: 1rem; margin: 1rem 0; }
+.first-plan-controls label { display: flex; flex-direction: column; gap: 0.35rem; font-weight: 600; color: #495057; }
+.first-plan-controls input, .first-plan-controls select { padding: 0.5rem 0.7rem; border: 1px solid #ced4da; border-radius: 6px; }
+.first-plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.plan-panel { border: 1px solid #dee2e6; border-radius: 8px; padding: 0.8rem; background: #fafbfc; min-width: 0; }
+.panel-title { font-weight: 700; color: #212529; margin-bottom: 0.5rem; }
+.selected-line { color: #495057; font-weight: 600; margin-bottom: 0.6rem; }
+.plan-error { border: 1px solid #f5c2c7; background: #f8d7da; color: #842029; border-radius: 6px; padding: 0.6rem 0.75rem; margin-bottom: 0.75rem; }
+.bed-picker { display: grid; gap: 0.75rem; }
+.bed-picker.compact { max-height: 300px; overflow: auto; padding-right: 0.25rem; }
+.shift-bed-group h4 { margin: 0 0 0.35rem; font-size: 0.95rem; color: #495057; }
+.bed-chip-list, .date-chip-list { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.bed-chip, .date-chip { border: 1px solid #ced4da; background: #fff; color: #343a40; border-radius: 6px; padding: 0.4rem 0.55rem; cursor: pointer; font-weight: 600; }
+.bed-chip.selected, .date-chip.selected { background: #0d6efd; border-color: #0d6efd; color: #fff; }
+.bed-chip.hepatitis-bed:not(.selected) { background: #fff9c4; color: #795548; border-color: #fff176; }
+.bed-chip.hepatitis-bed:not(.selected):hover { background: #fff59d; border-color: #ffeb3b; }
+.date-chip { min-width: 92px; display: flex; flex-direction: column; align-items: center; gap: 0.2rem; position: relative; }
+.date-chip small, .date-chip em, .date-chip i { font-size: 0.75rem; font-style: normal; }
+.date-chip.regular-day { border-color: #20c997; }
+.date-chip.disabled { cursor: default; opacity: 0.82; }
+.date-chip.has-extra:not(.selected) { background: #e7f1ff; border-color: #0d6efd; }
+.date-chip i { color: #dc3545; text-decoration: underline; }
 @media (max-width: 700px) { .opd-extra-grid { grid-template-columns: 1fr; } .dialysis-reason-opd { grid-column: auto; } }
+@media (max-width: 900px) { .first-plan-grid, .first-plan-controls { grid-template-columns: 1fr; } .freq-with-action { flex-direction: column; } }

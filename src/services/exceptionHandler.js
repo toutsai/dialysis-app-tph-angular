@@ -2,6 +2,7 @@
 import { getDatabase } from '../db/init.js'
 import { getScheduleKey } from '../utils/scheduleUtils.js'
 import { emitExceptionChange } from './eventBus.js'
+import { addAutoMovementToDailyLog } from './dailyLogMovementSync.js'
 
 /**
  * 格式化日期為 YYYY-MM-DD
@@ -22,6 +23,15 @@ function getAffectedDates(data) {
   if (data.from?.sourceDate) dates.add(data.from.sourceDate)
   if (data.to?.goalDate) dates.add(data.to.goalDate)
   return Array.from(dates)
+}
+
+function formatSlotLabel(bedNum, shiftCode) {
+  const bedText = String(bedNum || '').startsWith('peripheral')
+    ? `外圍 ${String(bedNum).replace('peripheral-', '')}`
+    : `${bedNum}床`
+  const shiftLabelMap = { early: '早班', noon: '午班', late: '晚班' }
+  const shiftLabel = shiftLabelMap[shiftCode] || shiftCode || ''
+  return shiftLabel ? `${bedText} ${shiftLabel}` : bedText
 }
 
 /**
@@ -283,7 +293,7 @@ async function handleSuspend(db, exceptionId, data) {
  * 處理 ADD_SESSION 調班 (臨時加洗)
  */
 async function handleAddSession(db, exceptionId, data) {
-  const { to, patientId, patientName } = data
+  const { to, patientId, patientName, reason } = data
 
   if (!patientId || !to?.goalDate || !to?.bedNum || !to?.shiftCode) {
     throw new Error('ADD_SESSION 調班資料不完整：缺少 patientId 或目標資訊')
@@ -339,6 +349,24 @@ async function handleAddSession(db, exceptionId, data) {
   }
 
   console.log(`  └─ 新增 ${patientName} 到 ${targetDate} ${targetKey}`)
+
+  const patient = db.prepare(`
+    SELECT medical_record_number, physician
+    FROM patients
+    WHERE id = ?
+  `).get(patientId)
+
+  addAutoMovementToDailyLog(db, targetDate, {
+    id: `auto_add_session_${exceptionId}`,
+    type: '臨時加洗',
+    name: patientName,
+    patientId,
+    medicalRecordNumber: patient?.medical_record_number || '',
+    admissionDate: to.admissionDate || targetDate,
+    physician: patient?.physician || '',
+    reason: reason || '臨時加洗',
+    remarks: `臨時加洗：${formatSlotLabel(to.bedNum, to.shiftCode)}${to.firstDialysisDate ? `；首透日期：${to.firstDialysisDate}` : ''}${to.firstDialysisPattern ? `；連續洗：${to.firstDialysisPattern}` : ''}${to.mode ? `；模式：${to.mode}` : ''}`,
+  })
 
   return { processedDates: [targetDate], conflicts }
 }

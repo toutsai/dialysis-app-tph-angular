@@ -45,19 +45,20 @@
 
     <!-- Info row wrapper -->
     <div class="info-row-wrapper desktop-only">
-      <!-- Stats + Physician + Fire duty in one row -->
-      <div class="info-left">
+      <div class="info-panel info-panel-left">
         <app-stats-toolbar
           [statsData]="statsToolbarData"
           [weekdays]="statsToolbarWeekdays"
           size="compact"
         ></app-stats-toolbar>
-        <div class="info-separator"></div>
+      </div>
+      <div class="info-panel info-panel-center">
         <app-daily-staff-display
           [physicians]="dailyPhysicians"
           [consultants]="dailyConsultPhysicians"
         ></app-daily-staff-display>
-        <div class="info-separator"></div>
+      </div>
+      <div class="info-panel info-panel-right">
         <div class="duty-command-bar">
           <div class="fire-duty-panel-compact">
             <span class="duty-title-compact">消防編組:</span>
@@ -234,12 +235,6 @@
               </div>
             </ng-container>
           </div>
-          <div class="grid-footer">
-            <div class="row-header">照護人數</div>
-            <div *ngFor="let teamName of sortedEarlyTeams" class="total-count-summary">
-              門{{ effectiveStatsData.early[teamName]?.totalOpdCount || 0 }} 住{{ effectiveStatsData.early[teamName]?.totalIpdCount || 0 }} 急{{ effectiveStatsData.early[teamName]?.totalErCount || 0 }}
-            </div>
-          </div>
         </div>
       </div>
 
@@ -328,12 +323,6 @@
               </div>
             </div>
           </div>
-          <div class="grid-footer">
-            <div class="row-header">照護人數</div>
-            <div *ngFor="let teamName of sortedLateTeams" class="total-count-summary">
-              門{{ effectiveStatsData.late[teamName]?.totalOpdCount || 0 }} 住{{ effectiveStatsData.late[teamName]?.totalIpdCount || 0 }} 急{{ effectiveStatsData.late[teamName]?.totalErCount || 0 }}
-            </div>
-          </div>
         </div>
       </div>
 
@@ -389,12 +378,6 @@
                   <div class="injection-list-trigger" *ngIf="effectiveStatsData.lateTakeOff[teamName]?.lateShiftTakeOff?.patients?.length > 0" (click)="showInjectionList(effectiveStatsData.lateTakeOff[teamName], 'lateShiftTakeOff')" title="顯示本日應打針劑"><i class="fas fa-syringe"></i></div>
                 </div>
               </div>
-            </div>
-          </div>
-          <div class="grid-footer">
-            <div class="row-header">照護人數</div>
-            <div *ngFor="let teamName of sortedLateTakeOffTeams" class="total-count-summary">
-              門{{ effectiveStatsData.lateTakeOff[teamName]?.totalOpdCount || 0 }} 住{{ effectiveStatsData.lateTakeOff[teamName]?.totalIpdCount || 0 }} 急{{ effectiveStatsData.lateTakeOff[teamName]?.totalErCount || 0 }}
             </div>
           </div>
         </div>

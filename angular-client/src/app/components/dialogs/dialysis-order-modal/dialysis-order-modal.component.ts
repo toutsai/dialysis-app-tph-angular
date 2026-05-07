@@ -50,7 +50,6 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
       heparinInitial: '',
       heparinMaintenance: '',
       heparinRinse: '不可',
-      physician: '',
       mode: '',
       freq: '',
       dialysisHours: null,
@@ -90,7 +89,6 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
         bloodFlow: orders.bloodFlow || '',
         heparinInitial: heparinLM[0] || '',
         heparinMaintenance: heparinLM[1] || '',
-        physician: orders.physician || patient.physician || '',
         mode: orders.mode || patient.mode || '',
         freq: orders.freq || patient.freq || '',
         dialysisHours: orders.dialysisHours || null,
@@ -188,7 +186,6 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
       heparinInitial: this.localOrderData.heparinInitial,
       heparinMaintenance: this.localOrderData.heparinMaintenance,
       heparinRinse: this.localOrderData.heparinRinse,
-      physician: this.localOrderData.physician,
       mode: this.localOrderData.mode,
       // 不傳 freq：頻率僅能透過病人清單或床位總表修改
       dialysisHours: this.localOrderData.dialysisHours,

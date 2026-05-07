@@ -1217,6 +1217,7 @@ export class StatsComponent implements OnInit, OnDestroy {
 
   openOrderModalFromPopover(patient: any): void {
     if (patient && patient.id) {
+      this.onPrepPopoverClose();
       this.editingPatientForOrder = patient;
       this.isOrderModalVisible = true;
     }
@@ -1374,10 +1375,6 @@ export class StatsComponent implements OnInit, OnDestroy {
       }).join('\n');
     };
 
-    const formatCountCell = (teamData: any) => {
-      return `門${teamData?.totalOpdCount || 0} 住${teamData?.totalIpdCount || 0} 急${teamData?.totalErCount || 0}`;
-    };
-
     // Early shift
     const earlyHeaders = ['早班', ...this.sortedEarlyTeams.map(name =>
       name.includes('未分組') ? '未分組' : name.replace('早', '') + '組')];
@@ -1386,7 +1383,6 @@ export class StatsComponent implements OnInit, OnDestroy {
     aoa.push(['早班', ...this.sortedEarlyTeams.map(name => formatPatientCell(data.early[name]?.earlyShift.patients))]);
     aoa.push(['午班(上針)', ...this.sortedEarlyTeams.map(name => formatPatientCell(data.early[name]?.noonShiftOn.patients))]);
     aoa.push(['午班(收針)', ...this.sortedEarlyTeams.map(name => formatPatientCell(data.early[name]?.noonShiftOff.patients))]);
-    aoa.push(['照護人數', ...this.sortedEarlyTeams.map(name => formatCountCell(data.early[name]))]);
     aoa.push([]);
 
     // Late shift
@@ -1396,7 +1392,6 @@ export class StatsComponent implements OnInit, OnDestroy {
     aoa.push(['姓名', ...this.sortedLateTeams.map(name => data.late[name]?.nurseName || '-- 未指派 --')]);
     aoa.push(['午班(收針)', ...this.sortedLateTeams.map(name => formatPatientCell(data.late[name]?.noonShiftOff.patients))]);
     aoa.push(['晚班', ...this.sortedLateTeams.map(name => formatPatientCell(data.late[name]?.lateShift.patients))]);
-    aoa.push(['照護人數', ...this.sortedLateTeams.map(name => formatCountCell(data.late[name]))]);
 
     // Late takeoff
     if (this.lateShiftTakeOffExists) {
@@ -1406,7 +1401,6 @@ export class StatsComponent implements OnInit, OnDestroy {
       aoa.push(ltHeaders);
       aoa.push(['姓名', ...this.sortedLateTakeOffTeams.map(name => data.lateTakeOff[name]?.nurseName || '-- 未指派 --')]);
       aoa.push(['夜班收針', ...this.sortedLateTakeOffTeams.map(name => formatPatientCell(data.lateTakeOff[name]?.lateShiftTakeOff.patients))]);
-      aoa.push(['照護人數', ...this.sortedLateTakeOffTeams.map(name => formatCountCell(data.lateTakeOff[name]))]);
     }
 
     const ws = XLSX.utils.aoa_to_sheet(aoa);
