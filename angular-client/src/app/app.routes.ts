@@ -12,6 +12,13 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'bed-dashboard/:bedKey',
+    loadComponent: () =>
+      import('./features/bed-dashboard/bed-dashboard.component').then(
+        (m) => m.BedDashboardComponent
+      ),
+  },
+  {
     path: '',
     loadComponent: () =>
       import('./layouts/main-layout.component').then(

@@ -538,6 +538,20 @@ CREATE TABLE IF NOT EXISTS site_config (
 );
 
 -- KiDit 日誌
+CREATE TABLE IF NOT EXISTS bed_dashboard_devices (
+    id TEXT PRIMARY KEY,
+    bed_key TEXT UNIQUE NOT NULL,
+    display_name TEXT NOT NULL,
+    pin_hash TEXT NOT NULL,
+    is_active INTEGER DEFAULT 1,
+    last_login_at TEXT,
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_bed_dashboard_devices_bed_key ON bed_dashboard_devices(bed_key);
+CREATE INDEX IF NOT EXISTS idx_bed_dashboard_devices_active ON bed_dashboard_devices(is_active);
+
 CREATE TABLE IF NOT EXISTS kidit_logbook (
     id TEXT PRIMARY KEY,  -- 日期作為 ID
     date TEXT UNIQUE NOT NULL,

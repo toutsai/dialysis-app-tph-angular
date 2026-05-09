@@ -91,30 +91,22 @@ export class MedicationStoreService {
       this.isLoading.set(true);
       this.error.set(null);
 
-      // Determine which uploadMonth to query
-      const targetDate = new Date(date + 'T00:00:00');
-      const currentMonth = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`;
+      const res = await fetch(`${this.firebaseService.apiBaseUrl}/medications/daily-injections`, {
+        method: 'POST',
+        headers: this.firebaseService.getHeaders(),
+        body: JSON.stringify({ targetDate: date, patientIds }),
+      });
 
-      // Query injection orders via REST API
-      let allOrders = await this.queryInjectionOrders(patientIds, currentMonth);
-
-      // If no results, try the previous month
-      if (allOrders.length === 0) {
-        const prevDate = new Date(targetDate.getFullYear(), targetDate.getMonth() - 1, 1);
-        const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
-        allOrders = await this.queryInjectionOrders(patientIds, prevMonth);
+      if (!res.ok) {
+        throw new Error('Failed to fetch daily injections');
       }
 
-      // Deduplicate: keep only the latest order per patient+orderCode
+      const backendData = await res.json();
+      const backendRecords = (Array.isArray(backendData) ? backendData : (backendData.data || [])) as InjectionRecord[];
+      this.setCache(cacheKey, backendRecords);
+      return backendRecords;
+
       const latestMap = new Map<string, InjectionRecord>();
-      for (const order of allOrders) {
-        const key = `${order.patientId}-${order.orderCode}`;
-        const existing = latestMap.get(key);
-        if (!existing || (order.changeDate && existing.changeDate && order.changeDate > existing.changeDate)) {
-          latestMap.set(key, order);
-        }
-      }
-
       // Enrich with patient names and medication info
       const patientMap = this.patientStore.patientMap();
       const enrichedRecords = Array.from(latestMap.values())

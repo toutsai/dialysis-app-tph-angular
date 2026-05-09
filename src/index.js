@@ -17,6 +17,7 @@ import medicationsRoutes from './routes/medications.js'
 import nursingRoutes from './routes/nursing.js'
 import systemRoutes from './routes/system.js'
 import eventsRoutes from './routes/events.js'
+import dashboardRoutes from './routes/dashboard.js'
 
 // 資料庫初始化
 import { initDatabase, getDatabase, ensureDefaultAdmin, closeDatabase } from './db/init.js'
@@ -97,6 +98,7 @@ app.use('/api/medications', medicationsRoutes)
 app.use('/api/nursing', nursingRoutes)
 app.use('/api/system', systemRoutes)
 app.use('/api/events', eventsRoutes)
+app.use('/api/dashboard', dashboardRoutes)
 
 // ========================================
 // Angular 前端路由別名（Firebase 遷移相容）

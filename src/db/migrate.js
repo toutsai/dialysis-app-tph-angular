@@ -338,6 +338,28 @@ export function runMigrations() {
        if (addColumnIfNotExists(db, 'inventory_items', 'units_per_box', 'INTEGER DEFAULT 1')) migrationsApplied++
     }
 
+    const bedDashboardDevicesExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='bed_dashboard_devices'")
+      .get()
+    if (!bedDashboardDevicesExists) {
+      console.log('?? 撱箇? bed_dashboard_devices 銵冽...')
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS bed_dashboard_devices (
+          id TEXT PRIMARY KEY,
+          bed_key TEXT UNIQUE NOT NULL,
+          display_name TEXT NOT NULL,
+          pin_hash TEXT NOT NULL,
+          is_active INTEGER DEFAULT 1,
+          last_login_at TEXT,
+          created_at TEXT DEFAULT (datetime('now', 'localtime')),
+          updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+      `)
+      db.exec('CREATE INDEX IF NOT EXISTS idx_bed_dashboard_devices_bed_key ON bed_dashboard_devices(bed_key)')
+      db.exec('CREATE INDEX IF NOT EXISTS idx_bed_dashboard_devices_active ON bed_dashboard_devices(is_active)')
+      migrationsApplied++
+    }
+
     if (migrationsApplied > 0) {
       console.log(`✅ 已完成 ${migrationsApplied} 項遷移`)
     } else {

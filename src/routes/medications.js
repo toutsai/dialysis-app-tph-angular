@@ -3,6 +3,7 @@ import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isEditor, logAudit } from '../middleware/auth.js'
+import { getDailyInjections } from '../services/dailyInjectionService.js'
 
 const router = Router()
 
@@ -58,6 +59,7 @@ router.post('/daily-injections', authenticate, async (req, res) => {
 
     const targetMonth = targetDate.substring(0, 7)
     const db = getDatabase()
+    return res.json(getDailyInjections(db, targetDate, patientIds))
 
     // 查詢針劑藥囑：每位病人取「<= 目標月份」的最新一份上傳檔
     // (修藥囑常落在月中，跨月時若該月無上傳就應沿用上一份)
