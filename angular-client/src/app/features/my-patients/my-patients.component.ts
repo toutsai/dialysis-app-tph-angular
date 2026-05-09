@@ -11,6 +11,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { ApiConfigService } from '@services/api-config.service';
 import { AuthService, type AppUser } from '@services/auth.service';
 import { PatientStoreService } from '@services/patient-store.service';
@@ -26,6 +27,7 @@ import {
 } from '@services/api-manager.service';
 import { formatDateToYYYYMMDD } from '@/utils/dateUtils';
 import { handleTaskCreated } from '@/utils/taskHandlers';
+import { createDialysisOrderAndUpdatePatient } from '@/services/optimizedApiService';
 
 // Component Imports
 import { TaskCreateDialogComponent } from '@app/components/dialogs/task-create-dialog/task-create-dialog.component';
@@ -97,6 +99,7 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
   private readonly taskStore = inject(TaskStoreService);
   private readonly archiveStore = inject(ArchiveStoreService);
   private readonly medicationStore = inject(MedicationStoreService);
+  private readonly router = inject(Router);
 
   // --- State ---
   readonly selectedUserId = signal<string | null>(null);
@@ -257,6 +260,37 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
     return this.patientListByShift()[shiftCode] || [];
   }
 
+  getDashboardQuickLinks(): { key: string; label: string; patient: MyPatientItem; shiftCode: string }[] {
+    const links: { key: string; label: string; patient: MyPatientItem; shiftCode: string }[] = [];
+    const seen = new Set<string>();
+
+    for (const shiftCode of this.getShiftKeys()) {
+      for (const patient of this.getShiftPatients(shiftCode)) {
+        const key = `${shiftCode}-${patient.id}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        links.push({
+          key,
+          label: `${this.getShiftShortTitle(shiftCode)} ${patient.bedNum}床 ${patient.name}`,
+          patient,
+          shiftCode,
+        });
+      }
+    }
+
+    return links;
+  }
+
+  getShiftShortTitle(shiftCode: string): string {
+    const map: Record<string, string> = {
+      early: '早',
+      noonOn: '午上',
+      noonOff: '午收',
+      late: '晚',
+    };
+    return map[shiftCode] || shiftCode;
+  }
+
   getShiftSupplySummary(shiftCode: string): { supplies: string; medications: string } {
     const patients = this.getShiftPatients(shiftCode);
     if (patients.length === 0) return { supplies: '', medications: '' };
@@ -313,12 +347,18 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
       await this.patientStore.fetchPatientsIfNeeded();
       console.log('[MyPatients DEBUG] patients loaded, count:', this.patientStore.allPatients().length);
 
-      // 2. Look up user's name from UID
-      await this.userDirectory.ensureUsersLoaded();
-      const allUsers = this.userDirectory.allUsers();
-      const targetUser = allUsers.find((u) => u.uid === userId);
-      const userName = targetUser?.name;
-      console.log('[MyPatients DEBUG] targetUser:', targetUser?.name, 'uid:', targetUser?.uid);
+      // 2. Look up user's name from UID. The current nurse can use the login token
+      // directly; loading the whole directory is only needed when switching users.
+      const currentUser = this.currentUser();
+      const isCurrentUser = userId === currentUser?.uid || userId === currentUser?.id;
+      let userName = isCurrentUser ? currentUser?.name : undefined;
+
+      if (!userName) {
+        await this.userDirectory.ensureUsersLoaded();
+        const allUsers = this.userDirectory.allUsers();
+        const targetUser = allUsers.find((u) => u.uid === userId || u.id === userId);
+        userName = targetUser?.name;
+      }
       if (!userName) {
         console.warn('[MyPatients DEBUG] EXIT: 找不到使用者名稱 for UID:', userId);
         this.patientListByShift.set({});
@@ -342,26 +382,21 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
 
       if (isPastDate) {
         // Past dates: use archive store
-        const allTeams = await teamsApi.fetchAll();
-        const teamsResults = allTeams.filter((t: any) => t.date === targetDate);
-        const [archiveResult] = await Promise.all([
+        const [archiveResult, assignmentResult] = await Promise.all([
           this.archiveStore.fetchScheduleByDate(targetDate),
+          teamsApi.fetchById(targetDate),
         ]);
         schedule = (archiveResult as any)?.schedule || {};
-        teamsRecord = teamsResults.length > 0 ? teamsResults[0] : null;
+        teamsRecord = assignmentResult;
       } else {
         // Today/future: use live schedules
         const schedulesApi = this.apiManagerService.create<FirestoreRecord>('schedules');
-        const [allSchedules, allTeams] = await Promise.all([
-          schedulesApi.fetchAll(),
-          teamsApi.fetchAll(),
+        const [scheduleResult, assignmentResult] = await Promise.all([
+          schedulesApi.fetchById(targetDate),
+          teamsApi.fetchById(targetDate),
         ]);
-        const scheduleResults = allSchedules.filter((s: any) => s.date === targetDate);
-        const teamsResults = allTeams.filter((t: any) => t.date === targetDate);
-        if (scheduleResults.length > 0) {
-          schedule = (scheduleResults[0] as any).schedule || {};
-        }
-        teamsRecord = teamsResults.length > 0 ? teamsResults[0] : null;
+        schedule = (scheduleResult as any)?.schedule || {};
+        teamsRecord = assignmentResult;
       }
 
       console.log('[MyPatients DEBUG] schedule slots:', Object.keys(schedule).length, 'hasTeams:', !!teamsRecord);
@@ -371,12 +406,17 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
         this.patientListByShift.set({});
         return;
       }
-      const namesMap: Record<string, string> = (teamsRecord as any)?.names || {};
+      const assignmentPayload =
+        (teamsRecord as any)?.teams?.teams || (teamsRecord as any)?.teams?.names
+          ? (teamsRecord as any).teams
+          : teamsRecord;
+      const namesMap: Record<string, string> = (assignmentPayload as any)?.names || {};
 
       // 4. Find team keys assigned to this nurse
       const myTeamKeys = new Set<string>();
+      const normalizedUserName = userName.trim();
       for (const [teamKey, nurseName] of Object.entries(namesMap)) {
-        if (nurseName === userName) {
+        if (String(nurseName).trim() === normalizedUserName) {
           myTeamKeys.add(teamKey);
         }
       }
@@ -398,7 +438,7 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
 
       // 5. Apply teams data to schedule slots (same logic as stats.component.ts lines 590-600)
       // Teams use key format: ${patientId}-${shiftCode}
-      const teamsData: Record<string, any> = (teamsRecord as any)?.teams || {};
+      const teamsData: Record<string, any> = (assignmentPayload as any)?.teams || {};
 
       // Apply team info to schedule slots in memory
       for (const slotKey of Object.keys(schedule)) {
@@ -716,6 +756,20 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
     }
   }
 
+  openBedDashboard(patientFromList: MyPatientItem, shiftCode: string): void {
+    const bedKey = patientFromList.id.replace(/-(early|noon|late)$/i, '');
+    const dashboardShift = shiftCode.startsWith('noon') ? 'noon' : shiftCode;
+    const url = this.router.serializeUrl(
+      this.router.createUrlTree(['/bed-dashboard', bedKey], {
+        queryParams: {
+          date: this.selectedDate(),
+          shift: dashboardShift,
+        },
+      }),
+    );
+    window.open(url, '_blank', 'noopener');
+  }
+
   closeOrderModal(): void {
     this.isOrderModalVisible.set(false);
     this.selectedPatientForOrder.set(null);
@@ -725,22 +779,8 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
     const patient = this.selectedPatientForOrder();
     if (!patient) return;
 
-    const patientsApi = this.apiManagerService.create<FirestoreRecord>('patients');
-    const historyApi = this.apiManagerService.create<FirestoreRecord>('dialysis_orders_history');
-    const user = this.currentUser();
-
     try {
-      await patientsApi.update(patient.id, {
-        dialysisOrders: updatedOrders,
-      });
-
-      await historyApi.create({
-        patientId: patient.id,
-        patientName: patient.name,
-        orders: updatedOrders,
-        updatedBy: user?.name || '未知使用者',
-        updatedAt: new Date().toISOString(),
-      });
+      await createDialysisOrderAndUpdatePatient(patient.id, patient.name, updatedOrders);
 
       this.notificationService.createNotification(
         `${patient.name} 的醫囑已更新`,

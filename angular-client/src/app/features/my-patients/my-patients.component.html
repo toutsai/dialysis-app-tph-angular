@@ -26,6 +26,24 @@
     </div>
   </div>
 
+  <div *ngIf="!isLoading() && hasAnyPatients()" class="dashboard-quickbar">
+    <div class="dashboard-quickbar-label">
+      <i class="fas fa-desktop"></i>
+      <span>智慧儀表板</span>
+    </div>
+    <div class="dashboard-quickbar-actions">
+      <button
+        *ngFor="let link of getDashboardQuickLinks()"
+        class="dashboard-quickbar-chip"
+        type="button"
+        (click)="openBedDashboard(link.patient, link.shiftCode)"
+        [title]="'開啟 ' + link.label + ' 智慧儀表板'"
+      >
+        {{ link.label }}
+      </button>
+    </div>
+  </div>
+
   <div *ngIf="isLoading()" class="loading-state">
     <div class="spinner"></div>
     <span>正在載入您的病人...</span>
@@ -69,6 +87,13 @@
               <span class="patient-name">{{ patient.name }}</span>
             </div>
             <div class="card-header-actions">
+              <button
+                class="btn-icon btn-dashboard-icon"
+                title="床邊智慧儀表板"
+                (click)="openBedDashboard(patient, shiftCode)"
+              >
+                <i class="fas fa-desktop"></i>
+              </button>
               <button
                 class="btn-icon btn-order-icon"
                 title="編輯醫囑"

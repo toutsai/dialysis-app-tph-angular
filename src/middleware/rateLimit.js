@@ -75,8 +75,11 @@ export function apiRateLimit(req, res, next) {
   apiAttempts.set(key, record)
 
   if (record.count > maxRequests) {
+    const retryAfter = Math.ceil((record.firstAttempt + windowMs - now) / 1000)
+    res.set('Retry-After', String(retryAfter))
     return res.status(429).json({
       error: true,
+      retryAfterSeconds: retryAfter,
       message: 'API 請求過於頻繁，請稍後再試',
     })
   }

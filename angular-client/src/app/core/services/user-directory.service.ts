@@ -73,6 +73,9 @@ export class UserDirectoryService {
   // Internal state
   // -----------------------------------------------------------------------
   private hasFetched = false;
+  private fetchPromise: Promise<void> | null = null;
+  private nextRetryAt = 0;
+  private readonly failedRetryDelayMs = 30_000;
 
   // -----------------------------------------------------------------------
   // Public methods
@@ -82,12 +85,43 @@ export class UserDirectoryService {
     if (this.hasFetched && this.allUsers().length > 0) {
       return;
     }
-    await this.loadUsers();
+    if (this.fetchPromise) {
+      return this.fetchPromise;
+    }
+
+    if (Date.now() < this.nextRetryAt) {
+      return;
+    }
+
+    this.fetchPromise = this.loadUsers()
+      .catch(() => {
+        // loadUsers logs the concrete HTTP error. Swallow here so callers do
+        // not start independent retry loops when the directory is temporarily unavailable.
+      })
+      .finally(() => {
+        this.fetchPromise = null;
+      });
+
+    return this.fetchPromise;
   }
 
   async refresh(): Promise<void> {
     this.hasFetched = false;
-    await this.loadUsers();
+    this.nextRetryAt = 0;
+
+    if (this.fetchPromise) {
+      return this.fetchPromise;
+    }
+
+    this.fetchPromise = this.loadUsers()
+      .catch(() => {
+        // See fetchUsersIfNeeded().
+      })
+      .finally(() => {
+        this.fetchPromise = null;
+      });
+
+    return this.fetchPromise;
   }
 
   getUserById(id: string): DirectoryUser | undefined {
@@ -112,7 +146,9 @@ export class UserDirectoryService {
   }
 
   async clearCache(): Promise<void> {
-    return this.refresh();
+    this.hasFetched = false;
+    this.nextRetryAt = 0;
+    this.allUsers.set([]);
   }
 
   // -----------------------------------------------------------------------
@@ -125,12 +161,19 @@ export class UserDirectoryService {
     try {
       this.isLoading.set(true);
 
-      const res = await fetch(`${this.firebaseService.apiBaseUrl}/auth/users`, {
+      const res = await fetch(`${this.firebaseService.apiBaseUrl}/auth/users/directory`, {
         headers: this.firebaseService.getHeaders(),
       });
 
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        const retryAfterSeconds = Number(res.headers.get('Retry-After') || '0');
+        const error = new Error(`HTTP ${res.status}: ${res.statusText}`) as Error & {
+          retryAfterMs?: number;
+        };
+        if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+          error.retryAfterMs = retryAfterSeconds * 1000;
+        }
+        throw error;
       }
 
       const data = await res.json();
@@ -155,6 +198,11 @@ export class UserDirectoryService {
         `[UserDirectoryService] Loaded ${users.length} users`,
       );
     } catch (error) {
+      const retryAfterMs =
+        typeof (error as { retryAfterMs?: unknown })?.retryAfterMs === 'number'
+          ? (error as { retryAfterMs: number }).retryAfterMs
+          : this.failedRetryDelayMs;
+      this.nextRetryAt = Date.now() + retryAfterMs;
       console.error('[UserDirectoryService] Failed to load users:', error);
       throw error;
     } finally {
