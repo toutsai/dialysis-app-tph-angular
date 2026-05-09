@@ -55,6 +55,15 @@
       <div class="header-actions">
         <button
           *ngIf="isAdmin"
+          class="btn btn-secondary"
+          (click)="toggleDashboardPins()"
+          [disabled]="isLoadingDashboardPins()"
+        >
+          <span *ngIf="!isPinPanelVisible()">查詢床位 PIN</span>
+          <span *ngIf="isPinPanelVisible()">隱藏床位 PIN</span>
+        </button>
+        <button
+          *ngIf="isAdmin"
           class="btn btn-primary"
           (click)="handleAddUser()"
           [disabled]="isSubmitting()"
@@ -65,6 +74,74 @@
       </div>
     </div>
   </header>
+
+  <section *ngIf="isPinPanelVisible()" class="dashboard-pin-panel">
+    <div class="pin-panel-header">
+      <div>
+        <h2>床邊智慧儀表板 PIN</h2>
+        <p>
+          系統每 {{ dashboardPinMeta().rotationDays }} 天自動產生新 PIN，僅供床邊平板初次登入或重新綁定使用。
+        </p>
+      </div>
+      <button
+        class="btn btn-secondary"
+        (click)="fetchDashboardPins()"
+        [disabled]="isLoadingDashboardPins()"
+      >
+        {{ isLoadingDashboardPins() ? '更新中...' : '重新整理' }}
+      </button>
+    </div>
+
+    <div class="pin-toolbar">
+      <input
+        type="text"
+        [ngModel]="pinSearchTerm()"
+        (ngModelChange)="pinSearchTerm.set($event)"
+        placeholder="搜尋床位或 PIN"
+        class="pin-search-input"
+      />
+      <span class="pin-meta" *ngIf="dashboardPins().length > 0">
+        有效至 {{ dashboardPins()[0].validUntil }}，剩餘 {{ dashboardPins()[0].daysRemaining }} 天
+      </span>
+    </div>
+
+    <div *ngIf="isLoadingDashboardPins()" class="pin-loading">讀取床位 PIN 中...</div>
+
+    <div *ngIf="!isLoadingDashboardPins()" class="pin-table-wrapper">
+      <table class="pin-table">
+        <thead>
+          <tr>
+            <th>床位</th>
+            <th>PIN</th>
+            <th>狀態</th>
+            <th>最後登入</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let pin of filteredDashboardPins()">
+            <td>
+              <strong>{{ pin.displayName }}</strong>
+              <span class="bed-key">{{ pin.bedKey }}</span>
+            </td>
+            <td><span class="pin-code">{{ pin.pin }}</span></td>
+            <td>
+              <span class="device-status" [class.disabled]="!pin.isActive">
+                {{ pin.isActive ? '啟用' : '停用' }}
+              </span>
+            </td>
+            <td>{{ pin.lastLoginAt ? formatDate(pin.lastLoginAt) : '-' }}</td>
+            <td>
+              <button class="btn btn-small" (click)="copyDashboardPin(pin)">複製</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div *ngIf="filteredDashboardPins().length === 0" class="pin-empty">
+        沒有符合條件的床位 PIN。
+      </div>
+    </div>
+  </section>
 
   <div *ngIf="isLoading()" class="loading-container">
     <div class="loading-spinner"></div>

@@ -5,10 +5,17 @@ import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../db/init.js'
 import { isAdmin, isTokenBlacklisted, logAudit, verifyToken } from '../middleware/auth.js'
 import { getDashboardData, normalizeBedKey, formatBedLabel } from '../services/dashboardDataService.js'
+import {
+  buildDashboardPinList,
+  deriveDashboardPin,
+  isDefaultDashboardBedKey,
+  isDerivedDashboardPinValid,
+  DASHBOARD_PIN_ROTATION_DAYS,
+} from '../services/dashboardPinService.js'
 
 const router = Router()
 const JWT_SECRET = process.env.JWT_SECRET || 'dialysis-local-secret-key-change-in-production'
-const DASHBOARD_TOKEN_EXPIRES_IN = '12h'
+const DASHBOARD_TOKEN_EXPIRES_IN = process.env.DASHBOARD_TOKEN_EXPIRES_IN || '30d'
 
 function getBearerToken(req) {
   const authHeader = req.headers.authorization || ''
@@ -85,6 +92,34 @@ function mapDevice(row) {
   }
 }
 
+function createDerivedDevice(db, bedKey) {
+  const pinInfo = deriveDashboardPin(bedKey)
+  const device = {
+    id: uuidv4(),
+    bed_key: bedKey,
+    display_name: formatBedLabel(bedKey),
+    pin_hash: bcrypt.hashSync(pinInfo.pin, 10),
+    is_active: 1,
+    last_login_at: null,
+    created_at: null,
+    updated_at: null,
+  }
+
+  db.prepare(
+    `
+    INSERT INTO bed_dashboard_devices (id, bed_key, display_name, pin_hash, is_active)
+    VALUES (?, ?, ?, ?, 1)
+  `,
+  ).run(device.id, device.bed_key, device.display_name, device.pin_hash)
+
+  return db.prepare('SELECT * FROM bed_dashboard_devices WHERE id = ?').get(device.id)
+}
+
+function isValidDashboardPin(device, bedKey, pin) {
+  if (isDerivedDashboardPinValid(bedKey, pin)) return true
+  return !!device?.pin_hash && bcrypt.compareSync(String(pin || ''), device.pin_hash)
+}
+
 router.post('/bed-login', async (req, res) => {
   try {
     const bedKey = normalizeBedKey(req.body?.bedKey)
@@ -95,11 +130,19 @@ router.post('/bed-login', async (req, res) => {
     }
 
     const db = getDatabase()
-    const device = db
-      .prepare('SELECT * FROM bed_dashboard_devices WHERE bed_key = ? AND is_active = 1')
+    let device = db
+      .prepare('SELECT * FROM bed_dashboard_devices WHERE bed_key = ?')
       .get(bedKey)
 
-    if (!device || !device.pin_hash || !bcrypt.compareSync(pin, device.pin_hash)) {
+    if (device && device.is_active !== 1) {
+      return res.status(401).json({ error: true, message: '床位裝置未啟用' })
+    }
+
+    if (!device && isDefaultDashboardBedKey(bedKey) && isDerivedDashboardPinValid(bedKey, pin)) {
+      device = createDerivedDevice(db, bedKey)
+    }
+
+    if (!device || !isValidDashboardPin(device, bedKey, pin)) {
       return res.status(401).json({ error: true, message: '床位或 PIN 不正確' })
     }
 
@@ -150,6 +193,25 @@ router.get('/bed/:bedKey', (req, res) => {
   } catch (error) {
     console.error('[Dashboard] get bed data error:', error)
     res.status(500).json({ error: true, message: '讀取床邊儀表板資料失敗' })
+  }
+})
+
+router.get('/pins', ...isAdmin, (req, res) => {
+  try {
+    const db = getDatabase()
+    const devices = db
+      .prepare('SELECT * FROM bed_dashboard_devices ORDER BY bed_key COLLATE NOCASE')
+      .all()
+    const pins = buildDashboardPinList(devices)
+
+    res.json({
+      generatedAt: new Date().toISOString(),
+      rotationDays: DASHBOARD_PIN_ROTATION_DAYS,
+      pins,
+    })
+  } catch (error) {
+    console.error('[Dashboard] list pins error:', error)
+    res.status(500).json({ error: true, message: '讀取床位 PIN 失敗' })
   }
 })
 

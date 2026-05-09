@@ -21,6 +21,19 @@ interface UserRecord extends FirestoreRecord {
   updatedAt?: any;
 }
 
+interface DashboardPinRecord {
+  bedKey: string;
+  displayName: string;
+  pin: string;
+  validFrom: string;
+  validUntil: string;
+  daysRemaining: number;
+  rotationDays: number;
+  isActive: boolean;
+  lastLoginAt?: string | null;
+  status: 'auto' | 'active' | 'disabled' | string;
+}
+
 interface AlertInfo {
   isVisible: boolean;
   title: string;
@@ -70,6 +83,11 @@ export class UserManagementComponent implements OnInit {
   sortOrder = signal<'asc' | 'desc'>('asc');
   isSubmitting = signal(false);
   isDeletingUser = signal<string | null>(null);
+  isPinPanelVisible = signal(false);
+  isLoadingDashboardPins = signal(false);
+  dashboardPins = signal<DashboardPinRecord[]>([]);
+  pinSearchTerm = signal('');
+  dashboardPinMeta = signal({ rotationDays: 30, generatedAt: '' });
   // --- Dialog State ---
   alertInfo = signal<AlertInfo>({ isVisible: false, title: '', message: '' });
   confirmInfo = signal<ConfirmInfo>({
@@ -156,6 +174,18 @@ export class UserManagementComponent implements OnInit {
     return counts;
   });
 
+  filteredDashboardPins = computed(() => {
+    const search = this.pinSearchTerm().trim().toLowerCase();
+    const pins = this.dashboardPins();
+    if (!search) return pins;
+    return pins.filter(
+      (pin) =>
+        pin.bedKey.toLowerCase().includes(search) ||
+        pin.displayName.toLowerCase().includes(search) ||
+        pin.pin.includes(search),
+    );
+  });
+
   // --- Lifecycle ---
   ngOnInit(): void {
     if (this.isAdmin) {
@@ -219,6 +249,49 @@ export class UserManagementComponent implements OnInit {
       console.error('載入用戶失敗:', error);
     } finally {
       this.isLoading.set(false);
+    }
+  }
+
+  async toggleDashboardPins(): Promise<void> {
+    if (!this.isAdmin) return;
+    const nextVisible = !this.isPinPanelVisible();
+    this.isPinPanelVisible.set(nextVisible);
+    if (nextVisible && this.dashboardPins().length === 0) {
+      await this.fetchDashboardPins();
+    }
+  }
+
+  async fetchDashboardPins(): Promise<void> {
+    if (!this.isAdmin) return;
+    this.isLoadingDashboardPins.set(true);
+    try {
+      const res = await fetch(`${this.firebase.apiBaseUrl}/dashboard/pins`, {
+        method: 'GET',
+        headers: this.firebase.getHeaders(),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || `HTTP ${res.status}`);
+      }
+      this.dashboardPins.set(data.pins || []);
+      this.dashboardPinMeta.set({
+        rotationDays: data.rotationDays || 30,
+        generatedAt: data.generatedAt || '',
+      });
+    } catch (error) {
+      console.error('讀取床位 PIN 失敗:', error);
+      this.showAlert('讀取失敗', '讀取床位 PIN 清單時發生錯誤，請稍後再試。');
+    } finally {
+      this.isLoadingDashboardPins.set(false);
+    }
+  }
+
+  async copyDashboardPin(pin: DashboardPinRecord): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(pin.pin);
+      this.showAlert('已複製', `${pin.displayName} PIN 已複製。`);
+    } catch {
+      this.showAlert('床位 PIN', `${pin.displayName} PIN：${pin.pin}`);
     }
   }
 
