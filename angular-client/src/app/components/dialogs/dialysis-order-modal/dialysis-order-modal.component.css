@@ -103,6 +103,19 @@
   border-color: #007bff;
   box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
 }
+.time-inputs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.time-inputs input {
+  width: 100%;
+}
+.time-inputs span {
+  color: #555;
+  font-weight: 700;
+}
 .history-title {
   margin-top: 0;
   margin-bottom: 0.5rem;

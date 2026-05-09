@@ -7,7 +7,7 @@ import { authenticate, isContributor, isEditor, logAudit, requireAnyRole } from 
 import { getTaipeiMonthString } from '../utils/dateUtils.js'
 
 const router = Router()
-const isDoctorRole = [authenticate, requireAnyRole('admin', 'contributor')]
+const isDoctorRole = isContributor
 const isInventoryRole = [authenticate, requireAnyRole('admin', 'viewer')]
 
 // ========================================

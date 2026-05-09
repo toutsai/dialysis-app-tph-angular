@@ -204,8 +204,66 @@ export async function createDialysisOrderAndUpdatePatient(
   patientName: string,
   orderData: any,
 ): Promise<void> {
+  const coalesce = (...values: any[]): any =>
+    values.find((value) => value !== '' && value !== null && value !== undefined);
   const parseNumeric = (v: any): number | null => (v === '' || v == null ? null : Number(v));
+  const parseWholeNumber = (v: any): number | null => {
+    if (v === '' || v == null) return null;
+    const numeric = Number(v);
+    return Number.isFinite(numeric) ? Math.max(0, Math.trunc(numeric)) : null;
+  };
+  const normalizeTimeParts = (hours: number | null, minutes: number | null): { hours: number | null; minutes: number | null } => {
+    if (hours === null && minutes === null) return { hours: null, minutes: null };
+    const totalMinutes = (hours || 0) * 60 + (minutes || 0);
+    return {
+      hours: Math.floor(totalMinutes / 60),
+      minutes: totalMinutes % 60,
+    };
+  };
+  const parseDialysisTime = (data: any): { hours: number | null; minutes: number | null; decimalHours: number | null; text: string | null } => {
+    let normalized = normalizeTimeParts(
+      parseWholeNumber(coalesce(data.dialysisTimeHours, data.dialysisHour, data.dialysisHoursHour)),
+      parseWholeNumber(coalesce(data.dialysisTimeMinutes, data.dialysisMinute, data.dialysisMinutes)),
+    );
+
+    if (normalized.hours === null && normalized.minutes === null) {
+      const rawTime = coalesce(data.dialysisTimeText, data.dialysisHours, data.hours, data.duration);
+      if (rawTime !== undefined) {
+        const text = String(rawTime);
+        const hourMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:時|小時|h|hr|hour)/i);
+        const minuteMatch = text.match(/(\d+)\s*(?:分|分鐘|m|min|minute)/i);
+
+        if (hourMatch || minuteMatch) {
+          normalized = normalizeTimeParts(
+            hourMatch ? parseWholeNumber(hourMatch[1]) : null,
+            minuteMatch ? parseWholeNumber(minuteMatch[1]) : null,
+          );
+        } else {
+          const decimal = Number(rawTime);
+          if (Number.isFinite(decimal)) {
+            const hours = Math.floor(decimal);
+            const minutes = Math.round((decimal - hours) * 60);
+            normalized = normalizeTimeParts(hours, minutes);
+          }
+        }
+      }
+    }
+
+    if (normalized.hours === null && normalized.minutes === null) {
+      return { hours: null, minutes: null, decimalHours: null, text: null };
+    }
+
+    const hours = normalized.hours || 0;
+    const minutes = normalized.minutes || 0;
+    return {
+      hours,
+      minutes,
+      decimalHours: Number((hours + minutes / 60).toFixed(2)),
+      text: `${hours}時${minutes}分`,
+    };
+  };
   const now = getNowISO();
+  const dialysisTime = parseDialysisTime(orderData);
 
   const historyRecord: any = {
     patientId,
@@ -219,7 +277,7 @@ export async function createDialysisOrderAndUpdatePatient(
       heparinInitial: parseNumeric(orderData.heparinInitial),
       heparinMaintenance: parseNumeric(orderData.heparinMaintenance),
       heparinLM: `${orderData.heparinInitial || '0'}/${orderData.heparinMaintenance || '0'}`,
-      bloodFlow: parseNumeric(orderData.bloodFlow),
+      bloodFlow: parseNumeric(coalesce(orderData.bloodFlow, orderData.blood_flow)),
       dryWeight: parseNumeric(orderData.dryWeight),
       effectiveDate: orderData.effectiveDate || formatDateToYYYYMMDD(),
       vascAccess: orderData.vascAccess || '',
@@ -228,9 +286,12 @@ export async function createDialysisOrderAndUpdatePatient(
       physician: orderData.physician || '',
       mode: orderData.mode || '',
       freq: orderData.freq || '',
-      dialysisHours: parseNumeric(orderData.dialysisHours),
-      dialysateFlow: parseNumeric(orderData.dialysateFlow),
-      replacementFlow: parseNumeric(orderData.replacementFlow),
+      dialysisHours: dialysisTime.decimalHours,
+      dialysisTimeHours: dialysisTime.hours,
+      dialysisTimeMinutes: dialysisTime.minutes,
+      dialysisTimeText: dialysisTime.text,
+      dialysateFlow: parseNumeric(coalesce(orderData.dialysateFlow, orderData.dialysateFlowRate, orderData.dialysisFlow)),
+      replacementFlow: parseNumeric(coalesce(orderData.replacementFlow, orderData.replacementFlowRate)),
       dehydration: orderData.dehydration || '',
       mannitol: orderData.mannitol || '',
       heparinRinse: orderData.heparinRinse || '',

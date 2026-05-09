@@ -91,8 +91,30 @@
               </select>
             </div>
             <div class="form-group">
-              <label for="dialysisHours">透析時間 (hr)</label>
-              <input id="dialysisHours" [(ngModel)]="localOrderData.dialysisHours" name="dialysisHours" type="number" placeholder="小時" />
+              <label>透析時間</label>
+              <div class="time-inputs">
+                <input
+                  id="dialysisTimeHours"
+                  [(ngModel)]="localOrderData.dialysisTimeHours"
+                  name="dialysisTimeHours"
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="時"
+                />
+                <span>時</span>
+                <input
+                  id="dialysisTimeMinutes"
+                  [(ngModel)]="localOrderData.dialysisTimeMinutes"
+                  name="dialysisTimeMinutes"
+                  type="number"
+                  min="0"
+                  max="59"
+                  step="1"
+                  placeholder="分"
+                />
+                <span>分</span>
+              </div>
             </div>
 
             <!-- Group 4: 體重與脫水 -->
@@ -186,10 +208,8 @@
                     </td>
                     <td>{{ activeOrder.orders?.dryWeight || '–' }}</td>
                     <td>{{ activeOrder.orders?.dehydration || '–' }}</td>
-                    <td>
-                      {{ activeOrder.orders?.bloodFlow || '–' }}/{{ activeOrder.orders?.dialysateFlow || '–' }}/{{ activeOrder.orders?.replacementFlow || '–' }}
-                    </td>
-                    <td>{{ activeOrder.orders?.dialysisHours || '–' }}</td>
+                    <td>{{ flowTriple(activeOrder.orders) }}</td>
+                    <td>{{ formatDialysisTime(activeOrder.orders) }}</td>
                     <td>{{ activeOrder.orders?.ak || '–' }}</td>
                     <td>{{ activeOrder.orders?.dialysateCa || '–' }}</td>
                     <td>
@@ -213,10 +233,8 @@
                     </td>
                     <td>{{ record.orders?.dryWeight || '–' }}</td>
                     <td>{{ record.orders?.dehydration || '–' }}</td>
-                    <td>
-                      {{ record.orders?.bloodFlow || '–' }}/{{ record.orders?.dialysateFlow || '–' }}/{{ record.orders?.replacementFlow || '–' }}
-                    </td>
-                    <td>{{ record.orders?.dialysisHours || '–' }}</td>
+                    <td>{{ flowTriple(record.orders) }}</td>
+                    <td>{{ formatDialysisTime(record.orders) }}</td>
                     <td>{{ record.orders?.ak || '–' }}</td>
                     <td>{{ record.orders?.dialysateCa || '–' }}</td>
                     <td>{{ record.orders?.heparinInitial || '–' }}/{{ record.orders?.heparinMaintenance || '–' }}</td>
@@ -238,10 +256,8 @@
                     </td>
                     <td>{{ record.orders?.dryWeight || '–' }}</td>
                     <td>{{ record.orders?.dehydration || '–' }}</td>
-                    <td>
-                      {{ record.orders?.bloodFlow || '–' }}/{{ record.orders?.dialysateFlow || '–' }}/{{ record.orders?.replacementFlow || '–' }}
-                    </td>
-                    <td>{{ record.orders?.dialysisHours || '–' }}</td>
+                    <td>{{ flowTriple(record.orders) }}</td>
+                    <td>{{ formatDialysisTime(record.orders) }}</td>
                     <td>{{ record.orders?.ak || '–' }}</td>
                     <td>{{ record.orders?.dialysateCa || '–' }}</td>
                     <td>{{ record.orders?.heparinInitial || '–' }}/{{ record.orders?.heparinMaintenance || '–' }}</td>

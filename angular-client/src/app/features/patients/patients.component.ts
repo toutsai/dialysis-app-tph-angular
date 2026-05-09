@@ -24,6 +24,7 @@ import { ApiService } from '@services/api.service';
 import { firstValueFrom } from 'rxjs';
 import { formatDateToYYYYMMDD, parseFirestoreTimestamp } from '@/utils/dateUtils';
 import { escapeHtml } from '@/utils/sanitize';
+import { createDialysisOrderAndUpdatePatient } from '@/services/optimizedApiService';
 
 // Child component imports
 import { PatientFormModalComponent } from '@app/components/dialogs/patient-form-modal/patient-form-modal.component';
@@ -1177,8 +1178,9 @@ export class PatientsComponent implements OnInit, OnDestroy {
     }
 
     try {
-      await this.patientsApi.save(patient.id, { dialysisOrders: orderData, updatedAt: new Date().toISOString() });
-      this.patientStore.updatePatientInStore(patient.id, { dialysisOrders: orderData, updatedAt: new Date().toISOString() } as any);
+      await createDialysisOrderAndUpdatePatient(patient.id, patient.name, orderData);
+      await this.patientStore.forceRefreshPatients();
+      await this.recalculateStatsLocally();
       this.isOrderModalVisible.set(false);
       this.notificationService.createNotification(`更新醫囑：${patient.name}`, 'patient');
       this.showAlert('儲存成功', `已成功更新 ${patient.name} 的透析醫囑。`);

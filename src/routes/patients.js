@@ -720,7 +720,7 @@ router.post('/', ...isContributor, validate({
  * PUT /api/patients/:id
  * 更新病人
  */
-router.put('/:id', ...isContributor, async (req, res) => {
+async function updatePatientHandler(req, res) {
   try {
     const { id } = req.params
     const data = req.body
@@ -922,7 +922,10 @@ router.put('/:id', ...isContributor, async (req, res) => {
       message: '更新病人失敗'
     })
   }
-})
+}
+
+router.put('/:id', ...isContributor, updatePatientHandler)
+router.patch('/:id', ...isContributor, updatePatientHandler)
 
 /**
  * DELETE /api/patients/:id
