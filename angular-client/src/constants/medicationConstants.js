@@ -1,6 +1,6 @@
 // 檔案路徑: src/constants/medicationConstants.js (新檔案)
 
-// 此列表複製自 LabMedCorrelationView.vue 以確保一致性
+// 此列表沿用自舊版檢驗/用藥對照畫面，以確保一致性
 export const CORRELATION_GROUPS = [
   {
     title: '貧血管理 (Anemia)',

@@ -88,7 +88,7 @@ export class ScheduleTableComponent implements AfterViewInit, OnDestroy {
     window.removeEventListener('resize', this.onWindowResize);
   }
 
-  // --- Methods (ported from Vue ScheduleTable.vue) ---
+  // --- Methods (ported from the legacy schedule table implementation) ---
 
   isSlotInteractive(dayIndex: number): boolean {
     return !this.isPageLocked && !this.isDateInPast(dayIndex);

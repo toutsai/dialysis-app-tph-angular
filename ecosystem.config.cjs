@@ -1,4 +1,4 @@
-// 方案 B：與 tph 版（Vue）並排共存
+// Angular production PM2 config
 // - 不同 PM2 name (dialysis-server-angular)
 // - 不同 port (3001)
 // - 不同安裝資料夾 (D:\dialysis-app-angular)

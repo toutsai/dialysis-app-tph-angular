@@ -41,7 +41,7 @@ DB_PATH=/var/data/dialysis/dialysis.db
 BACKUP_DIR=/var/data/dialysis/backups
 
 # 靜態檔案路徑（前端 dist 目錄）
-STATIC_PATH=/var/www/dialysis/dist
+STATIC_PATH=/var/www/dialysis/dist/browser
 
 # 允許的 CORS 來源（逗號分隔）
 ALLOWED_ORIGINS=https://dialysis.example.com,https://admin.example.com
@@ -113,7 +113,7 @@ PORT=3000
 JWT_SECRET=$(openssl rand -hex 32)
 DB_PATH=/var/dialysis/data/dialysis.db
 BACKUP_DIR=/var/dialysis/data/backups
-STATIC_PATH=/var/dialysis/app/dist
+STATIC_PATH=/var/dialysis/app/dist/browser
 EOF
 
 # 設定權限（僅擁有者可讀寫）
@@ -465,7 +465,7 @@ PORT=3000
 JWT_SECRET=your-super-secure-random-jwt-secret-key-minimum-32-chars
 DB_PATH=C:\dialysis\data\dialysis.db
 BACKUP_DIR=C:\dialysis\data\backups
-STATIC_PATH=C:\dialysis\app\dist
+STATIC_PATH=C:\dialysis\app\dist\browser
 "@ | Out-File -FilePath C:\dialysis\.env -Encoding UTF8
 ```
 
@@ -521,7 +521,7 @@ module.exports = {
         JWT_SECRET: 'your-jwt-secret-here',
         DB_PATH: 'C:\\dialysis\\data\\dialysis.db',
         BACKUP_DIR: 'C:\\dialysis\\data\\backups',
-        STATIC_PATH: 'C:\\dialysis\\app\\dist',
+        STATIC_PATH: 'C:\\dialysis\\app\\dist\\browser',
       },
       error_file: 'C:\\dialysis\\logs\\error.log',
       out_file: 'C:\\dialysis\\logs\\out.log',

@@ -7,9 +7,8 @@
 - **Backend**: Node.js (ESM) + Express.js
 - **Database**: SQLite via better-sqlite3 (同步 API，全域單例連線)
 - **Auth**: JWT + bcryptjs, Token 黑名單 + 單一裝置 Session
-- **Frontend**: Vue 3.5 + Vuetify + TypeScript + Pinia 3 (原始碼在 `洗腎平台原始碼/`)
-- **Build**: Vite 6, 支援 standalone 模式 (proxy → localhost:3000)
-- **Desktop**: Electron 28 + electron-builder (Windows .exe 打包)
+- **Frontend**: Angular 19 + TypeScript (原始碼在 `angular-client/`)
+- **Build**: Angular CLI，建置輸出到 `dist/browser`
 - **排程任務**: node-cron
 - **部署**: Windows VM, PM2 process manager / Electron 離線桌面版
 - **Package**: 後端 `"type": "module"` — ES module (`import`/`export`)
@@ -58,57 +57,20 @@ src/
 
 ecosystem.config.cjs           # PM2 設定 (production)
 migrations/migrate.js          # DB 遷移腳本入口
-dist/                          # Vue 3 + Vuetify 前端預建置產出
+dist/                          # Angular 前端建置產出 (`dist/browser` 由 Express serve)
 
-洗腎平台原始碼/                   # ★ 前端完整原始碼 (Vue 3 + TS)
+angular-client/                 # ★ Angular 19 前端完整原始碼
   src/
-    main.ts                    # Vue 入口，掛載 Pinia / Quill / directives
-    App.vue                    # 根元件，監聽登入狀態觸發病人資料載入
-    router/
-      index.ts                 # 54 條路由，導航守衛 (auth + RBAC + 職稱導向)
-    views/                     # 25 個頁面 (見下方「前端頁面」)
-    components/                # 56+ 個元件 (排程表/醫囑/床位/KiDit 等)
-    stores/                    # Pinia 狀態管理
-      patientStore.ts          # 全域病人快取，避免重複 API 呼叫
-      medicationStore.ts       # 每日針劑快取，分批請求 (30人/批)
-      archiveStore.ts          # 歷史排程懶載入快取
-      taskStore.ts             # 交辦/留言/協作，30 秒輪詢，7 天保留策略
-    services/                  # API 通訊層
-      localApiClient.ts        # 主要 API 客戶端，JWT Token 管理
-      LocalApiManager.ts       # 泛用 CRUD decorator (get/create/update/delete)
-      optimizedApiService.js   # 效能層：30 秒 TTL 快取 + 50ms 批次合併
-      scheduleService.js       # 排程操作 (5 分鐘快取)
-      baseScheduleService.js   # 總表操作
-      nursingGroupConfigService.js  # 護理分組設定
-      nurseAssignmentsService.js    # 護理師分派
-      kiditService.js          # KiDit 資料操作
-      kiditExportService.js    # KiDit CSV 匯出
-      nursingDutyService.js    # 消防值班
-    composables/               # 共用邏輯 (13 個)
-      useAuth.ts               # 登入/登出/Session Timeout (30 分鐘)
-      useAuthStandalone.ts     # Standalone 模式認證
-      useScheduleAnalysis.js   # 排程缺口分析 (未排/可加洗)
-      useGroupAssigner.js      # 護理分組演算法
-      useTeamAssigner.js       # 團隊分派
-      useRealtimeNotifications.js  # 30 秒輪詢即時通知
-      useGlobalNotifier.js     # 全系統通知 (30 天過期)
-      useCache.js              # 泛用 TTL 快取
-      useErrorHandler.js       # 錯誤處理與驗證
-      useBreakpoints.js        # 響應式斷點
-      useMyPatientList.js      # 護理師每日病人清單
-      useNurseGroupSync.js     # 護理分組同步
-      useUserDirectory.js      # 使用者清單
+    main.ts                    # Angular 入口
+    app/
+      app.routes.ts            # Angular 路由與權限守衛
+      layouts/                 # 主佈局與側欄
+      features/                # 各頁面功能模組
+      components/              # 共用元件與 dialogs
+      core/                    # services / guards / models / config
     constants/                 # 常數定義
-      scheduleConstants.js     # 班別/分組代碼 (A-K + 外圍)
-      medicationConstants.js   # 藥品目錄 (代碼/商品名/單位)
-      labAlertConstants.js     # 檢驗警示閾值
-    layouts/
-      MainLayout.vue           # 主佈局：側欄導航 + 通知 + 響應式漢堡選單
-    config/                    # 環境設定
-    utils/                     # 工具函數 (日期/排程/KiDit/消毒)
-  electron/                    # Electron 桌面版設定
-  server/                      # 前端 repo 內建的 Express server 副本
-  dist/                        # 前端建置產出
+    services/                  # 舊 Firebase/standalone 相容 API 通訊層
+    utils/                     # 工具函數
 ```
 
 ## 架構重點
@@ -182,7 +144,7 @@ dist/                          # Vue 3 + Vuetify 前端預建置產出
 - **Code Splitting**: 路由懶載入 `import()`，vendor/excel/schedule/patient/admin 分離 chunk
 - **API 快取**: optimizedApiService 30 秒 TTL + pattern-based 失效
 - **批次合併**: 50ms 佇列合併多個 API 請求
-- **Pinia Store 快取**: 病人資料全域快取，避免重複載入
+- **Angular Service 快取**: 病人資料全域快取，避免重複載入
 - **防抖**: 儲存 10 秒、搜尋 300ms
 
 ### 前端關鍵元件
@@ -204,7 +166,7 @@ dist/                          # Vue 3 + Vuetify 前端預建置產出
 
 ## Angular 前端遷移計畫
 
-醫院決定從 Vue 改用 Angular 前端。相關專案：
+醫院已完成前端遷移，現行主要前端為 Angular。相關歷史專案：
 
 - `dialysis-app-angular` — Angular 19 + Firebase 原始雲端版 (67 commits)
 - `dialysis-app-angular-standalone` — Angular 19 + 自帶 Express/SQLite（已從 Firebase 遷移 95%）
@@ -319,13 +281,11 @@ Angular 前端已整合到本 repo 的 `angular-client/` 目錄，以下工作�
 npm run install:angular   # 安裝 Angular 前端依賴
 npm run build:angular     # 建置 Angular 前端 → dist/
 npm run dev:angular       # Angular 開發伺服器 (port 5173, proxy → Express:3000)
-npm run build:vue         # 建置 Vue 前端 → dist/（備用切換）
 ```
 
 ## 注意事項
 
-- **Vue 前端原始碼**在 `洗腎平台原始碼/` 目錄（備用）
-- **Angular 前端原始碼**在 `angular-client/` 目錄（主要）
+- **Angular 前端原始碼**在 `angular-client/` 目錄
 - `dist/` 是預建置產出，由 Express 靜態 serve
 - `backup.js` 被 scheduler.js 和 system.js import，修改時保持 import 不變
 - Windows 環境路徑使用反斜線 (`D:\\dialysis-app\\`)

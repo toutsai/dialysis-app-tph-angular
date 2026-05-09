@@ -12,7 +12,6 @@
     "backup": "node src/utils/backup.js",
     "import-firebase": "node scripts/firebase-to-sqlite.js",
     "build:angular": "cd angular-client && npm run build",
-    "build:vue": "cd 洗腎平台原始碼 && npm run build",
     "install:angular": "cd angular-client && npm install",
     "dev:angular": "cd angular-client && npx ng serve --configuration development --port 5173",
     "smoke:tph-angular": "node scripts/smoke-test-tph-angular.cjs"
