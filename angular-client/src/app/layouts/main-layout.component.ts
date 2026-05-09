@@ -354,17 +354,55 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     try {
       const exceptionsApi = this.apiManagerService.create<FirestoreRecord>('exception_requests');
       const allExceptions = await exceptionsApi.fetchAll();
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const today = getToday();
       const conflicts = allExceptions.filter((e: any) =>
-        e.status === 'conflict_requires_resolution' &&
-        (!e.expireAt || new Date(e.expireAt) >= today)
+        this.shouldShowConflictBadge(e, today),
       );
       this.conflictCount.set(conflicts.length);
     } catch (error) {
       console.error('Conflict polling error:', error);
       this.conflictCount.set(0);
     }
+  }
+
+  private shouldShowConflictBadge(exceptionData: any, today: string): boolean {
+    if (exceptionData?.status !== 'conflict_requires_resolution') return false;
+
+    const expireAt = this.normalizeDateString(exceptionData.expireAt);
+    if (expireAt && expireAt < today) return false;
+
+    const latestAffectedDate = this.getLatestAffectedDate(exceptionData);
+    // If the record is malformed, keep the badge visible so an active conflict
+    // is not hidden silently.
+    return !latestAffectedDate || latestAffectedDate >= today;
+  }
+
+  private getLatestAffectedDate(exceptionData: any): string | null {
+    const candidates = [
+      exceptionData?.date,
+      exceptionData?.startDate,
+      exceptionData?.endDate,
+      exceptionData?.from?.sourceDate,
+      exceptionData?.from?.date,
+      exceptionData?.to?.goalDate,
+      exceptionData?.to?.date,
+      exceptionData?.patient1?.date,
+      exceptionData?.patient2?.date,
+    ]
+      .map((value) => this.normalizeDateString(value))
+      .filter((value): value is string => !!value)
+      .sort();
+
+    return candidates[candidates.length - 1] ?? null;
+  }
+
+  private normalizeDateString(value: unknown): string | null {
+    if (!value) return null;
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return value.toISOString().slice(0, 10);
+    }
+    const match = String(value).match(/^\d{4}-\d{2}-\d{2}/);
+    return match ? match[0] : null;
   }
 
   /** Stop the conflict polling timer. */
