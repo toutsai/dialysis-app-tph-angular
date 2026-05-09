@@ -141,7 +141,8 @@ router.post('/login', loginRateLimit, validate({
 
     // 驗證密碼：Admin 使用本地 bcrypt，其他用戶使用 HIS API
     let isValidPassword = false
-    if (username === 'admin') {
+    const useLocalAuthBypass = process.env.LOCAL_AUTH_BYPASS === '1'
+    if (username === 'admin' || useLocalAuthBypass) {
       // Admin 帳號使用本地 bcrypt 驗證
       isValidPassword = bcrypt.compareSync(password, user.password_hash)
     } else {
