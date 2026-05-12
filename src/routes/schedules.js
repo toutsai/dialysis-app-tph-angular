@@ -327,6 +327,50 @@ function getExpiredSchedule(req, res) {
 router.get('/expired/:date', authenticate, getExpiredSchedule)
 
 /**
+ * GET /api/schedules/expired
+ * 取得歸檔排程列表（用於統計報表的過去日期區間）
+ * 支援 ?start=&end= 範圍篩選，未指定則回傳全部歸檔
+ * 必須放在 /:date 之前，否則會被攔截成 date='expired'
+ */
+router.get('/expired', authenticate, (req, res) => {
+  try {
+    const { start, end } = req.query
+    const db = getDatabase()
+
+    let query = 'SELECT * FROM archived_schedules'
+    const params = []
+    if (start && end) {
+      query += ' WHERE date >= ? AND date <= ?'
+      params.push(start, end)
+    } else if (start) {
+      query += ' WHERE date >= ?'
+      params.push(start)
+    } else if (end) {
+      query += ' WHERE date <= ?'
+      params.push(end)
+    }
+    query += ' ORDER BY date'
+
+    const rows = db.prepare(query).all(...params)
+    res.json(rows.map(r => ({
+      id: r.id,
+      date: r.date,
+      schedule: JSON.parse(r.schedule || '{}'),
+      lastModifiedBy: JSON.parse(r.last_modified_by || '{}'),
+      archivedAt: r.archived_at,
+      archiveMethod: r.archive_method,
+      patientCount: r.patient_count,
+      missingPatientCount: r.missing_patient_count,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    })))
+  } catch (error) {
+    console.error('取得歸檔排程列表錯誤:', error)
+    res.status(500).json({ error: true, message: '取得歸檔排程列表失敗' })
+  }
+})
+
+/**
  * POST /api/schedules/archived/batch
  * 批次取得多個日期的歸檔排程（用於週排班檢視）
  */
