@@ -518,15 +518,32 @@ router.get('/users/directory', authenticate, (req, res) => {
       )
       .all()
 
+    const physicians = db.prepare(`SELECT * FROM physicians`).all()
+    const physicianMap = {}
+    physicians.forEach((p) => {
+      physicianMap[p.id] = p
+    })
+
     res.json(
-      users.map((u) => ({
-        id: u.id,
-        uid: u.id,
-        username: u.username,
-        name: u.name,
-        title: u.title,
-        role: u.role,
-      })),
+      users.map((u) => {
+        const result = {
+          id: u.id,
+          uid: u.id,
+          username: u.username,
+          name: u.name,
+          title: u.title,
+          role: u.role,
+        }
+
+        if (u.title === '主治醫師' && physicianMap[u.id]) {
+          const p = physicianMap[u.id]
+          result.staffId = p.staff_id
+          result.phone = p.phone
+          result.clinicHours = JSON.parse(p.clinic_hours || '[]')
+        }
+
+        return result
+      }),
     )
   } catch (error) {
     console.error('取得使用者目錄錯誤:', error)
