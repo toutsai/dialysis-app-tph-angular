@@ -1457,7 +1457,7 @@ router.get('/nurse-assignments/:date', authenticate, (req, res) => {
 router.put('/:date/with-teams', ...isEditor, async (req, res) => {
   try {
     const { date } = req.params
-    const { schedule, names: scheduleNames, teams, names: teamsNames, takeoffEnabled } = req.body
+    const { schedule, teams, names, takeoffEnabled } = req.body
 
     const hasSchedule = schedule !== undefined && schedule !== null
     const hasTeams = teams !== undefined && teams !== null
@@ -1506,7 +1506,7 @@ router.put('/:date/with-teams', ...isEditor, async (req, res) => {
       if (hasTeams) {
         const teamsPayload = {
           teams: teams || {},
-          names: teamsNames || scheduleNames || {},
+          names: names || {},
           takeoffEnabled: !!takeoffEnabled,
         }
         db.prepare(`

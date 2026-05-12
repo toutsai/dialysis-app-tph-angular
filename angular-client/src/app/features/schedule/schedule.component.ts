@@ -100,6 +100,8 @@ interface TeamsRecord {
   id: string | null;
   date: string;
   teams: Record<string, Record<string, string | null>>;
+  names?: Record<string, string>;
+  takeoffEnabled?: boolean;
 }
 
 interface ScheduleCellView {
@@ -820,13 +822,14 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       }
 
       // 同時有兩種變更時使用原子性 endpoint，確保 schedule / teams 一致性
+      // names 必須來自 teamsRec.names（護理師姓名對應），不可用 currentRecord.names（病人名稱索引）
       if (scheduleDirty && teamsDirty) {
         const date = this.currentRecord.date;
         const result = await saveScheduleWithTeams(date, {
           schedule: this.currentRecord.schedule || {},
-          names: this.currentRecord.names || {},
+          names: teamsRec.names || {},
           teams: teamsRec.teams,
-          takeoffEnabled: (teamsRec as any).takeoffEnabled,
+          takeoffEnabled: teamsRec.takeoffEnabled,
         });
         if (result.schedule?.id) this.currentRecord.id = result.schedule.id;
         if (result.teams) {
@@ -845,7 +848,11 @@ export class ScheduleComponent implements OnInit, OnDestroy {
           this.currentRecord.id = saved.id;
         }
       } else if (teamsDirty) {
-        const teamsToSave = { date: teamsRec.date, teams: teamsRec.teams };
+        const teamsToSave = {
+          date: teamsRec.date,
+          teams: teamsRec.teams,
+          names: teamsRec.names || {},
+        };
         if (teamsRec.id) {
           await updateTeams(teamsRec.id, teamsToSave);
         } else {
