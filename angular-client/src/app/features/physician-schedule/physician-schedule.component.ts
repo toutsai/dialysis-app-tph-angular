@@ -46,6 +46,9 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   physicianClinicSelections: Record<string, string[]> = {};
   monthlyPdClinicSelections: Record<string, any[]> = {};
   statsViewMode = signal<'monthly' | 'ytd'>('monthly');
+  // scheduleData 是純物件不是 signal，無法觸發 computed 重算；
+  // 用版本號 signal 在資料載入/變更時強制 scheduleStats 重新計算
+  private scheduleDataRevision = signal(0);
   yearScheduleData = signal<Record<string, any>>({});
   mobileDisplayMode = signal<'day' | 'week'>('day');
   activeMobilePanel = signal<string | null>('physicians');
@@ -180,6 +183,8 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   dailyData = computed(() => this.weeklyData().flat().filter((day: any) => day.day !== null));
 
   scheduleStats = computed(() => {
+    // 註冊版本號依賴，scheduleData 更新時觸發重算
+    this.scheduleDataRevision();
     return this.availablePhysicians().map((doc: any) => {
       const stats = { name: doc.name, monthlyWeekday: 0, monthlyWeekend: 0, ytdTotal: 0, ytdHolidays: 0, ytdWeekends: 0 };
       const currentMonthData = this.scheduleData;
@@ -251,6 +256,7 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   markUnsaved(): void {
     if (!this.isLoading()) {
       this.hasUnsavedChanges.set(true);
+      this.scheduleDataRevision.update(v => v + 1);
     }
   }
 
@@ -370,12 +376,14 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
       this.reportDate2 = rp2;
       this.managedHolidays = holidays;
       this.monthlyPdClinicSelections = pdSelections;
+      this.scheduleDataRevision.update(v => v + 1);
     } catch (error: any) {
       console.error(`讀取 ${yearMonth} 班表失敗:`, error);
       this.showAlert('讀取失敗', `讀取 ${yearMonth} 班表時發生錯誤。`);
       this.scheduleData = {};
       this.consultationScheduleData = {};
       this.emergencyRecords = [];
+      this.scheduleDataRevision.update(v => v + 1);
     } finally {
       this.isLoading.set(false);
       setTimeout(() => this.hasUnsavedChanges.set(false));
