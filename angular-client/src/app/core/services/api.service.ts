@@ -17,7 +17,7 @@ export const COLLECTION_ROUTE_MAP: Record<string, string> = {
   orders: '/orders',
   tasks: '/system/tasks',
   memos: '/memos',
-  nursing_schedules: '/nursing',
+  nursing_schedules: '/nursing/schedules',
   audit_logs: '/system/audit-logs',
   daily_logs: '/nursing/daily-logs',
   config: '/system/site-config',
