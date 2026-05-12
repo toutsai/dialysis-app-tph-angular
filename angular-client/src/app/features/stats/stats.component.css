@@ -383,14 +383,14 @@
 .section-title-cell {
   font-size: 1.1em;
   color: #333;
-  background-color: #eceff1;
+  background-color: #bbdefb;
 }
 
 .team-header-cell {
   padding: 8px 4px;
   font-weight: bold;
   text-align: center;
-  background-color: #eceff1;
+  background-color: #bbdefb;
   color: #495057;
   font-size: 0.85em;
   border-bottom: 1px solid #d9dee3;
@@ -611,8 +611,8 @@
 /* === Unassigned styles === */
 /* ================================== */
 .unassigned-header {
-  background-color: #ffe0b2 !important;
-  color: #8d6e63 !important;
+  background-color: #bbdefb !important;
+  color: #495057 !important;
 }
 
 .unassigned-cell {
