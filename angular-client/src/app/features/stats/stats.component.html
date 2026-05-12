@@ -125,7 +125,7 @@
       <div class="stats-section" [class.is-locked]="isPageLocked">
         <div class="grid-container" [style.gridTemplateColumns]="uniformGridColumns">
           <div class="grid-header">
-            <div class="row-header section-title-cell"></div>
+            <div class="row-header section-title-cell">早班</div>
             <div *ngFor="let teamName of sortedEarlyTeams" class="team-header-cell" [class.unassigned-header]="teamName.includes('未分組')">
               {{ teamName.includes('未分組') ? '未分組' : teamName.replace('早', '') + '組' }}
             </div>
@@ -242,7 +242,7 @@
       <div class="stats-section" [class.is-locked]="isPageLocked">
         <div class="grid-container" [style.gridTemplateColumns]="uniformGridColumns">
           <div class="grid-header">
-            <div class="row-header section-title-cell"></div>
+            <div class="row-header section-title-cell">晚班</div>
             <div *ngFor="let teamName of sortedLateTeams" class="team-header-cell" [class.unassigned-header]="teamName.includes('未分組')">
               {{ teamName.includes('未分組') ? '未分組' : teamName.replace('晚', '') + '組' }}
             </div>
