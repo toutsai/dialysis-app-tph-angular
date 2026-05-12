@@ -198,6 +198,36 @@ router.get('/schedules', ...isEditor, (req, res) => {
 })
 
 /**
+ * GET /api/nursing/schedules/:id
+ * 取得單一月份護理排班 (path-style，配合前端 fetchById)
+ */
+router.get('/schedules/:id', ...isEditor, (req, res) => {
+  try {
+    const { id } = req.params
+    const db = getDatabase()
+    const schedule = db.prepare(`SELECT * FROM nursing_schedules WHERE id = ?`).get(id)
+
+    if (!schedule) {
+      return res.json(null)
+    }
+
+    const scheduleData = JSON.parse(schedule.schedule_data || '{}')
+    res.json({
+      id: schedule.id,
+      ...scheduleData,
+      createdAt: schedule.created_at,
+      updatedAt: schedule.updated_at,
+    })
+  } catch (error) {
+    console.error('取得護理排班錯誤:', error)
+    res.status(500).json({
+      error: true,
+      message: '取得護理排班失敗',
+    })
+  }
+})
+
+/**
  * PUT /api/nursing/schedules/:id
  * 更新護理排班，並同步護理師姓名到 nurse_assignments
  */
@@ -759,6 +789,36 @@ router.get('/group-config', authenticate, (req, res) => {
         }
       }),
     )
+  } catch (error) {
+    console.error('取得組別配置錯誤:', error)
+    res.status(500).json({
+      error: true,
+      message: '取得組別配置失敗',
+    })
+  }
+})
+
+/**
+ * GET /api/nursing/group-config/:id
+ * 取得單一月份的組別配置 (path-style，配合前端 fetchNursingGroupConfig)
+ */
+router.get('/group-config/:id', authenticate, (req, res) => {
+  try {
+    const { id } = req.params
+    const db = getDatabase()
+    const row = db.prepare(`SELECT * FROM nursing_group_config WHERE id = ?`).get(id)
+
+    if (!row) {
+      return res.json(null)
+    }
+
+    const configData = JSON.parse(row.config || '{}')
+    res.json({
+      id: row.id,
+      ...configData,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    })
   } catch (error) {
     console.error('取得組別配置錯誤:', error)
     res.status(500).json({
