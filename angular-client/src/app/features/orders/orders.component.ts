@@ -43,12 +43,13 @@ interface GroupSearchResult {
   bedNum: string;
   freq: string;
   shiftIndex: number;
-  orders: Record<string, OrderRecord>;
+  // 同一藥物（orderCode）同月可能有多筆（不同頻率/開立日期），全部保留不整併
+  orders: Record<string, OrderRecord[]>;
 }
 
 interface IndividualSearchResult {
   month: string;
-  orders: Record<string, OrderRecord>;
+  orders: Record<string, OrderRecord[]>;
 }
 
 interface UploadResult {
@@ -150,12 +151,30 @@ export class OrdersComponent implements OnInit {
     return this.SHIFT_INDEX_MAP[shiftIndex] ?? 'N/A';
   }
 
-  formatOrderCell(order: OrderRecord | undefined): string {
-    if (!order) return '-';
+  formatOrderCell(orders: OrderRecord[] | undefined): string {
+    if (!orders || orders.length === 0) return '-';
+    // 同藥同月多筆（不同頻率/開立日期）全部顯示，依開立日期排序
+    const parts = [...orders]
+      .sort(
+        (a, b) =>
+          new Date(a.changeDate || 0).getTime() -
+          new Date(b.changeDate || 0).getTime(),
+      )
+      .map((o) => ({ order: o, text: this.formatSingleOrder(o) }))
+      .filter((x) => x.text !== '-');
+    if (parts.length === 0) return '-';
+    if (parts.length === 1) return parts[0].text;
+    // 多筆時標註開立日期以利區分（例：NESP 同月 QW2 與 QW4）
+    return parts
+      .map((x) => `${x.text}〔${x.order.changeDate || ''}〕`)
+      .join('；');
+  }
+
+  private formatSingleOrder(order: OrderRecord): string {
     const dose = order.dose || '';
     if (!dose) return '-';
     const masterMed = this.allMedications().find(
-      (med) => med.code === order.orderCode
+      (med) => med.code === order.orderCode,
     );
     const unit = masterMed?.unit ? ` ${masterMed.unit}` : '';
     let details = '';
@@ -230,12 +249,12 @@ export class OrdersComponent implements OnInit {
       const [year, month] = this.groupSearchParams.month
         .split('-')
         .map(Number);
-      const effectiveMonth = `${year}-${String(month).padStart(2, '0')}`;
+      const targetMonth = `${year}-${String(month).padStart(2, '0')}`;
 
       try {
-        // 使用 effectiveMonth：每位病人取 <= 該月份的最新上傳檔
-        // (跨月時若當月無新藥囑，自動沿用最近一次的設定)
-        const params = new URLSearchParams({ effectiveMonth });
+        // 查「該月精確上傳」的藥囑：當月上傳的就是當月全部用藥，不跟前個月合併/沿用。
+        // (改用 uploadMonth 取代原 effectiveMonth；effectiveMonth 會在當月未上傳時沿用最近一次的舊資料)
+        const params = new URLSearchParams({ uploadMonth: targetMonth });
         const res = await fetch(
           `${this.firebaseService.apiBaseUrl}/orders/injection-orders?${params}`,
           { headers: this.firebaseService.getHeaders() },
@@ -244,16 +263,14 @@ export class OrdersComponent implements OnInit {
         const allOrders: any[] = Array.isArray(data) ? data : data.data || [];
         const patientIdSet = new Set(patientList.map((p: any) => p.patientId));
         const filteredOrders = allOrders.filter((o: any) => patientIdSet.has(o.patientId));
+        // 不整併：同一藥物同月的每一筆（含不同頻率/開立日期）全部保留
         filteredOrders.forEach((order: any) => {
           const patientData = patientOrdersMap.get(order.patientId);
           if (patientData) {
-            const existingOrder = patientData.orders[order.orderCode];
-            if (
-              !existingOrder ||
-              new Date(order.changeDate) > new Date(existingOrder.changeDate!)
-            ) {
-              patientData.orders[order.orderCode] = order;
+            if (!patientData.orders[order.orderCode]) {
+              patientData.orders[order.orderCode] = [];
             }
+            patientData.orders[order.orderCode].push(order);
           }
         });
       } catch (orderError) {
@@ -304,18 +321,16 @@ export class OrdersComponent implements OnInit {
       monthlyOrdersMap.set(monthKey, { month: monthKey, orders: {} });
     }
 
+    // 不整併：同一藥物同月的每一筆（含不同頻率/開立日期）全部保留
     filteredOrders.forEach((order: any) => {
       const monthKey = order.uploadMonth;
 
       const monthData = monthlyOrdersMap.get(monthKey);
       if (monthData) {
-        const existingOrder = monthData.orders[order.orderCode];
-        if (
-          !existingOrder ||
-          new Date(order.changeDate) > new Date(existingOrder.changeDate!)
-        ) {
-          monthData.orders[order.orderCode] = order;
+        if (!monthData.orders[order.orderCode]) {
+          monthData.orders[order.orderCode] = [];
         }
+        monthData.orders[order.orderCode].push(order);
       }
     });
 
