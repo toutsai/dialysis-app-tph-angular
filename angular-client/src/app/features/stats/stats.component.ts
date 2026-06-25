@@ -878,6 +878,13 @@ export class StatsComponent implements OnInit, OnDestroy {
           : SHIFT_CODES.NOON;
 
     if (newShiftCode !== oldShiftCode) {
+      // 勿動病人不可換班：在此統一擋下所有換班路徑（含未來日期轉調班申請的路徑），
+      // 避免繞過 applyTeamAndScheduleChange/openBedChangeDialog 內既有的鎖定檢查
+      const locked = this.getLockedPatient(patientDetail.id);
+      if (locked) {
+        this.showAlert('操作被鎖定', this.doNotMoveMessage(locked));
+        return;
+      }
       const shiftIdParts = oldShiftId.split('-');
       const newShiftId = `${shiftIdParts[0]}-${shiftIdParts[1]}-${newShiftCode}`;
       // 非當日換班 → 轉為調班申請（待組長於調班視窗確認後送出）
