@@ -351,7 +351,11 @@ export class StatsComponent implements OnInit, OnDestroy {
     const lateTakeOffStats = createTeamStats(lateTakeOffTeams, 'lateTakeOff');
 
     if (this.currentRecord.schedule) {
-      const messagesMap = this.taskStore.getPendingMessageTypesMap();
+      // 與每日排程一致：依「關聯日」當天起顯示（過期未讀續顯示、無關聯日續顯示、已讀隱藏），
+      // 而非舊的 getPendingMessageTypesMap（不看關聯日、所有未讀一律顯示）。
+      const messagesMap = this.taskStore.getPatientMessageTypesMapForDate(
+        this.currentRecord.date || this.formatDate(this.currentDate),
+      );
 
       for (const shiftId in this.currentRecord.schedule) {
         const shiftDetails = this.currentRecord.schedule[shiftId];
@@ -361,7 +365,7 @@ export class StatsComponent implements OnInit, OnDestroy {
         const patientDetails = this.patientMap.get(shiftDetails.patientId);
         if (!patientInfo || !patientDetails) continue;
 
-        const messageTypesForPatient = messagesMap.get(patientDetails.id) || [];
+        const messageTypesForPatient = [...(messagesMap.get(patientDetails.id) || [])]; // Map 值為 Set，展開成陣列
         const cellStyles = getUnifiedCellStyle(shiftDetails, patientInfo, null, messageTypesForPatient);
 
         const detail: any = {

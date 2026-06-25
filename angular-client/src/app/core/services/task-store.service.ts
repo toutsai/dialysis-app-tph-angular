@@ -390,8 +390,10 @@ export class TaskStoreService implements OnDestroy {
 
   private shouldShowMessageOnDate(msg: FeedMessage, dateStr: string): boolean {
     const excludedStatuses = new Set(['completed', 'resolved', 'cancelled']);
-    if (msg.status && excludedStatuses.has(msg.status)) return false;
-    if (msg.targetDate) return msg.targetDate === dateStr;
+    if (msg.status && excludedStatuses.has(msg.status)) return false; // 已讀/已解決 → 不顯示
+    // 有關聯日：關聯日「當天起」顯示（dateStr >= targetDate），過期未讀仍持續顯示；
+    // 無關聯日：持續顯示。
+    if (msg.targetDate) return dateStr >= msg.targetDate;
     return true;
   }
 
