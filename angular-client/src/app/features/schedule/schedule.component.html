@@ -778,10 +778,11 @@
 @if (isInjectionDialogVisible()) {
   <app-daily-injection-list-dialog
     [isVisible]="isInjectionDialogVisible()"
-    [injections]="allDailyInjections()"
+    [injections]="filteredDailyInjections()"
     [isLoading]="isInjectionLoading()"
     [targetDate]="injectionDialogDate()"
     [filterActive]="filterSpecificInjections()"
+    [showFilter]="true"
     (closeEvent)="isInjectionDialogVisible.set(false)"
     (filterActiveChange)="filterSpecificInjections.set($event)"
     (refreshEvent)="refreshInjections()"
