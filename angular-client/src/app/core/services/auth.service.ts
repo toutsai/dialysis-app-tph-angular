@@ -361,33 +361,17 @@ export class AuthService implements OnDestroy {
    * 定時 refresh JWT token（每 30 分鐘）。
    */
   private startTokenRefresh(): void {
+    // 清掉既有計時器（重新登入 / 恢復 session 時）
     if (this.refreshTimer) {
       clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
     }
 
-    this.refreshTimer = setInterval(async () => {
-      try {
-        const res = await fetch(
-          `${this.firebase.apiBaseUrl}/auth/refresh-token`,
-          {
-            method: 'POST',
-            headers: this.firebase.getHeaders(),
-          },
-        );
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data.token) {
-            this.firebase.setToken(data.token);
-          }
-        } else {
-          // Token refresh 失敗，可能已過期
-          console.warn('[AuthService] Token refresh failed');
-        }
-      } catch (error) {
-        console.warn('[AuthService] Token refresh error:', error);
-      }
-    }, 30 * 60 * 1000); // 30 minutes
+    // ⚠️ 2026-06-25 停用 JWT token 30 分輪替，對齊醫院原本的 Vue 版（Vue 無 token 輪替，後端也無
+    // /auth/refresh-token）。原本每 30 分呼叫 POST /api/auth/refresh-token 換新 token，但後端是
+    // 「先作廢舊 token 再回傳新 token」，中間空窗若有背景輪詢用到舊 token 會 401 被踢。
+    // 改用單純的 24h token + 30 分閒置登出（與 Vue 一致）。觀察「很快被登出」是否仍發生。
+    // 若要恢復輪替：還原本方法為每 30 分 fetch('/auth/refresh-token') 成功後 setToken(新 token)。
   }
 
   // -----------------------------------------------------------------------
