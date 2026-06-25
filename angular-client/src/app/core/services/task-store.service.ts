@@ -124,11 +124,18 @@ export class TaskStoreService implements OnDestroy {
   // Computed signals
   // -----------------------------------------------------------------------
 
-  /** Feed messages sorted newest-first. */
+  /**
+   * 病人留言板排序：依「關聯日期」(targetDate) 新→舊；
+   * 同一關聯日期再依「建立時間」(createdAt) 新→舊。
+   * 無關聯日期的留言以建立日期 fallback，避免掉到最底。
+   */
   readonly sortedFeedMessages = computed<FeedMessage[]>(() => {
-    return [...this.feedMessages()].sort(
-      (a, b) => toDate(b.createdAt).getTime() - toDate(a.createdAt).getTime(),
-    );
+    return [...this.feedMessages()].sort((a, b) => {
+      const aTarget = toDateStr(a.targetDate ?? a.createdAt);
+      const bTarget = toDateStr(b.targetDate ?? b.createdAt);
+      if (aTarget !== bTarget) return bTarget < aTarget ? -1 : 1; // 關聯日期 新→舊
+      return toDate(b.createdAt).getTime() - toDate(a.createdAt).getTime(); // 同日：建立時間 新→舊
+    });
   });
 
   /** Number of pending tasks assigned to the current user today. */
