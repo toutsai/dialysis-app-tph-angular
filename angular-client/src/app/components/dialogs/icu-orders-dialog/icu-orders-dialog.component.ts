@@ -217,9 +217,15 @@ export class IcuOrdersDialogComponent implements OnChanges {
 
   getDehydrationRateDisplay(crrtOrders: any): string {
     if (!crrtOrders) return '____';
-    if (crrtOrders.dehydrationRate !== undefined && crrtOrders.dehydrationRate !== null && crrtOrders.dehydrationRate !== '') {
-      return `${crrtOrders.dehydrationRate} ml/hr`;
-    }
+    const hasValue = (v: any) => v !== undefined && v !== null && v !== '';
+    // CRRT 醫囑單以「下限-上限」範圍儲存（dehydrationRateLower/Upper）
+    const lower = crrtOrders.dehydrationRateLower;
+    const upper = crrtOrders.dehydrationRateUpper;
+    if (hasValue(lower) && hasValue(upper)) return `${lower} - ${upper} ml/hr`;
+    if (hasValue(lower)) return `${lower} ml/hr`;
+    if (hasValue(upper)) return `${upper} ml/hr`;
+    // 向後相容舊的單一欄位
+    if (hasValue(crrtOrders.dehydrationRate)) return `${crrtOrders.dehydrationRate} ml/hr`;
     return '____';
   }
 
