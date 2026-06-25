@@ -249,12 +249,13 @@ export class OrdersComponent implements OnInit {
       const [year, month] = this.groupSearchParams.month
         .split('-')
         .map(Number);
-      const targetMonth = `${year}-${String(month).padStart(2, '0')}`;
+      const effectiveMonth = `${year}-${String(month).padStart(2, '0')}`;
 
       try {
-        // 查「該月精確上傳」的藥囑：當月上傳的就是當月全部用藥，不跟前個月合併/沿用。
-        // (改用 uploadMonth 取代原 effectiveMonth；effectiveMonth 會在當月未上傳時沿用最近一次的舊資料)
-        const params = new URLSearchParams({ uploadMonth: targetMonth });
+        // 使用 effectiveMonth：每位病人取 <= 該月份的「最新一次上傳月份」並只回該月資料。
+        // 院內流程：每月第一週抽血、第二週才依結果改藥，故當月尚未上傳時前兩週沿用上月藥物；
+        // 當月一旦有新上傳即改用當月。注意：每位病人只取單一月份，不會跨月混合（非「合併」）。
+        const params = new URLSearchParams({ effectiveMonth });
         const res = await fetch(
           `${this.firebaseService.apiBaseUrl}/orders/injection-orders?${params}`,
           { headers: this.firebaseService.getHeaders() },
