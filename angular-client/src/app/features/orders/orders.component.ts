@@ -153,21 +153,17 @@ export class OrdersComponent implements OnInit {
 
   formatOrderCell(orders: OrderRecord[] | undefined): string {
     if (!orders || orders.length === 0) return '-';
-    // 同藥同月多筆（不同頻率/開立日期）全部顯示，依開立日期排序
+    // 同藥同月多筆（不同頻率/開立日期）全部顯示，依開立日期排序。
+    // 不標日期：以各筆自帶的頻率/備註(formatSingleOrder 的括號內容)區分即可（例：NESP QW2 / QW4）
     const parts = [...orders]
       .sort(
         (a, b) =>
           new Date(a.changeDate || 0).getTime() -
           new Date(b.changeDate || 0).getTime(),
       )
-      .map((o) => ({ order: o, text: this.formatSingleOrder(o) }))
-      .filter((x) => x.text !== '-');
-    if (parts.length === 0) return '-';
-    if (parts.length === 1) return parts[0].text;
-    // 多筆時標註開立日期以利區分（例：NESP 同月 QW2 與 QW4）
-    return parts
-      .map((x) => `${x.text}〔${x.order.changeDate || ''}〕`)
-      .join('；');
+      .map((o) => this.formatSingleOrder(o))
+      .filter((text) => text !== '-');
+    return parts.length ? parts.join('；') : '-';
   }
 
   private formatSingleOrder(order: OrderRecord): string {
