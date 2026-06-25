@@ -1,6 +1,9 @@
 <div class="login-container">
   <div class="login-box">
     <h1 class="login-title">部北透析管理平台</h1>
+    @if (noticeMessage()) {
+      <div class="login-notice">{{ noticeMessage() }}</div>
+    }
     <form (submit)="$event.preventDefault(); handleLogin()" class="login-form">
       <div class="form-group">
         <label for="username">帳號</label>

@@ -18,6 +18,34 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
+// ---------------------------------------------------------------------------
+// 401 集中處理：由 AuthService 註冊 handler，收到 401 時帶上「被登出原因」觸發登出
+// ---------------------------------------------------------------------------
+export type UnauthorizedReason = 'another_device' | 'expired';
+let onUnauthorized: ((reason: UnauthorizedReason) => void) | null = null;
+
+export function setUnauthorizedHandler(fn: (reason: UnauthorizedReason) => void): void {
+  onUnauthorized = fn;
+}
+
+/**
+ * 收到 401 時判斷原因並通知 AuthService。
+ * 後端對「已被加入黑名單」的 token 回 code: 'TOKEN_BLACKLISTED'（含 duplicate_login=他處登入）；
+ * 對使用中的 session 而言，被黑名單幾乎都是「同帳號在他處登入把這台踢掉」。其餘 401 視為登入逾期。
+ */
+async function notifyIfUnauthorized(res: Response): Promise<void> {
+  if (res.status !== 401) return;
+  let code = '';
+  try {
+    const body = await res.clone().json();
+    code = body?.code || '';
+  } catch {
+    /* 非 JSON 回應，忽略 */
+  }
+  const reason: UnauthorizedReason = code === 'TOKEN_BLACKLISTED' ? 'another_device' : 'expired';
+  onUnauthorized?.(reason);
+}
+
 /**
  * 通用 REST API 客戶端
  */
@@ -31,6 +59,7 @@ export const localApi = {
     });
     if (!res.ok) {
       if (res.status === 404) return null;
+      await notifyIfUnauthorized(res);
       throw new Error(`HTTP ${res.status}: ${res.statusText}`);
     }
     return res.json();
@@ -42,7 +71,7 @@ export const localApi = {
       headers: getAuthHeaders(),
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    if (!res.ok) { await notifyIfUnauthorized(res); throw new Error(`HTTP ${res.status}: ${res.statusText}`); }
     return res.json();
   },
 
@@ -52,7 +81,7 @@ export const localApi = {
       headers: getAuthHeaders(),
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    if (!res.ok) { await notifyIfUnauthorized(res); throw new Error(`HTTP ${res.status}: ${res.statusText}`); }
     return res.json();
   },
 
@@ -62,7 +91,7 @@ export const localApi = {
       headers: getAuthHeaders(),
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    if (!res.ok) { await notifyIfUnauthorized(res); throw new Error(`HTTP ${res.status}: ${res.statusText}`); }
     return res.json();
   },
 
@@ -71,7 +100,7 @@ export const localApi = {
       method: 'DELETE',
       headers: getAuthHeaders(),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    if (!res.ok) { await notifyIfUnauthorized(res); throw new Error(`HTTP ${res.status}: ${res.statusText}`); }
     return { success: true };
   },
 };

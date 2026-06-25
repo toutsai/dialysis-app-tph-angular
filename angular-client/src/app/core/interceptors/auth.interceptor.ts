@@ -32,9 +32,11 @@ export const authInterceptor: HttpInterceptorFn = (
   return next(req).pipe(
     catchError((error) => {
       if (error.status === 401) {
-        // Token 過期或無效，清除 token 並導向登入頁
+        // Token 過期或無效，清除 token 並導向登入頁（帶上原因供登入頁顯示提示）
         localStorage.removeItem('auth_token');
-        router.navigate(['/login']);
+        const code = (error.error as { code?: string } | null)?.code;
+        const reason = code === 'TOKEN_BLACKLISTED' ? 'another_device' : 'expired';
+        router.navigate(['/login'], { queryParams: { reason } });
       }
       return throwError(() => error);
     }),

@@ -10,6 +10,7 @@ import {
 import { Router } from '@angular/router';
 import { ApiConfigService } from './api-config.service';
 import { DateStateService } from './date-state.service';
+import { setUnauthorizedHandler, type UnauthorizedReason } from '@/services/localApiClient';
 
 // ---------------------------------------------------------------------------
 // Types (保持與 cloud 版完全相同)
@@ -114,6 +115,8 @@ export class AuthService implements OnDestroy {
   private authReadyResolve: (() => void) | null = null;
   private readonly authReadyPromise: Promise<void>;
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  /** 正在執行登出流程，避免多個並行 401 重複觸發登出 */
+  private sessionEnding = false;
 
   // Session Timeout 內部狀態
   private lastActivityTime = Date.now();
@@ -126,8 +129,20 @@ export class AuthService implements OnDestroy {
       this.authReadyResolve = resolve;
     });
 
+    // 註冊 API 層 401 處理：同帳號他處登入被踢 / token 失效時帶原因導向登入頁
+    setUnauthorizedHandler((reason) => this.handleSessionEnded(reason));
+
     // 嘗試從 localStorage 恢復登入狀態
     this.restoreSession();
+  }
+
+  /**
+   * 由 API 層收到 401 時呼叫：帶上原因執行登出（避免並行 401 重複觸發）。
+   * 已登出狀態則略過。
+   */
+  handleSessionEnded(reason: UnauthorizedReason): void {
+    if (this.sessionEnding || !this.currentUser()) return;
+    this.logout(reason);
   }
 
   ngOnDestroy(): void {
@@ -209,7 +224,13 @@ export class AuthService implements OnDestroy {
   /**
    * Sign out and redirect to /login.
    */
-  async logout(): Promise<void> {
+  /**
+   * 登出並導向 /login。
+   * @param reason 被登出原因（idle=閒置逾時 / another_device=他處登入被踢 / expired=登入逾期）；
+   *               有值時帶 queryParam 給登入頁顯示提示。使用者主動登出則不帶。
+   */
+  async logout(reason?: 'idle' | UnauthorizedReason): Promise<void> {
+    this.sessionEnding = true;
     try {
       // 通知 server
       await fetch(`${this.firebase.apiBaseUrl}/auth/logout`, {
@@ -225,7 +246,8 @@ export class AuthService implements OnDestroy {
         this.refreshTimer = null;
       }
       this.stopSessionTimeoutCheck();
-      this.router.navigate(['/login']);
+      this.router.navigate(['/login'], reason ? { queryParams: { reason } } : {});
+      this.sessionEnding = false;
     }
   }
 
@@ -434,7 +456,7 @@ export class AuthService implements OnDestroy {
       if (remaining <= 0) {
         console.warn('[AuthService] 閒置逾時，自動登出');
         this.stopSessionTimeoutCheck();
-        this.logout();
+        this.logout('idle');
         return;
       }
 

@@ -2,7 +2,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '@app/core/services/auth.service';
 
 @Component({
@@ -15,12 +15,33 @@ import { AuthService } from '@app/core/services/auth.service';
 export class LoginComponent {
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   username = signal('');
   password = signal('');
   errorMessage = signal('');
   isLoading = signal(false);
   isPasswordVisible = signal(false);
+  /** 被登出原因提示（由上一頁帶 ?reason= 進來） */
+  noticeMessage = signal('');
+
+  constructor() {
+    const reason = this.route.snapshot.queryParamMap.get('reason');
+    if (reason) this.noticeMessage.set(this.reasonToMessage(reason));
+  }
+
+  private reasonToMessage(reason: string): string {
+    switch (reason) {
+      case 'idle':
+        return '因閒置逾時，系統已自動將您登出，請重新登入。';
+      case 'another_device':
+        return '您的帳號已在其他裝置登入，此處連線已被登出。若非本人操作請通知管理員。';
+      case 'expired':
+        return '登入已逾期，請重新登入。';
+      default:
+        return '';
+    }
+  }
 
   togglePasswordVisibility(): void {
     this.isPasswordVisible.update((v) => !v);
