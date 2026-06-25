@@ -999,8 +999,12 @@ export class StatsComponent implements OnInit, OnDestroy {
 
   openBedChangeDialog(patientDetail: any): void {
     if (this.isPageLocked) return;
+    const currentShiftCode = patientDetail.shiftId?.split('-')[2];
     const locked = this.getLockedPatient(patientDetail.id);
-    if (locked) {
+    // 勿動病人：禁止「換班」(跨班別)，但允許「換床」(同班別)。
+    // 跨班別只可能由拖放路徑帶入 bedChangeTargetShift（且已於 onDrop 先擋下），
+    // 此處僅在目標班別與現行班別不同時再保險擋一次；同班換床／未來同班調班申請放行。
+    if (locked && this.bedChangeTargetShift && this.bedChangeTargetShift !== currentShiftCode) {
       // 清掉拖放路徑可能已預設的待處理狀態，避免殘留影響下次操作
       this.pendingChangeInfo = null;
       this.bedChangeTargetShift = null;
@@ -1014,7 +1018,6 @@ export class StatsComponent implements OnInit, OnDestroy {
       return;
     }
     if (!this.bedChangeTargetShift) {
-      const currentShiftCode = patientDetail.shiftId.split('-')[2];
       this.bedChangeTargetShift = currentShiftCode;
     }
     this.editingPatientInfo = patientDetail;
