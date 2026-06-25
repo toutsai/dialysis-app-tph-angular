@@ -1,0 +1,877 @@
+import {
+  Component,
+  OnInit,
+  OnDestroy,
+  ViewChild,
+  inject,
+  signal,
+  computed,
+  effect,
+} from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { Router, ActivatedRoute } from '@angular/router';
+import { FullCalendarComponent, FullCalendarModule } from '@fullcalendar/angular';
+import { CalendarOptions, CalendarApi } from '@fullcalendar/core';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import interactionPlugin from '@fullcalendar/interaction';
+import listPlugin from '@fullcalendar/list';
+import zhTwLocale from '@fullcalendar/core/locales/zh-tw';
+// Standalone 版：已移除 Firebase
+import { AuthService } from '@app/core/services/auth.service';
+import { ApiConfigService } from '@app/core/services/api-config.service';
+import { ApiManagerService, type FirestoreRecord } from '@app/core/services/api-manager.service';
+import { ApiService } from '@app/core/services/api.service';
+import { firstValueFrom } from 'rxjs';
+import { PatientStoreService } from '@app/core/services/patient-store.service';
+import { NotificationService } from '@app/core/services/notification.service';
+import { AlertDialogComponent } from '@app/components/dialogs/alert-dialog/alert-dialog.component';
+import { ConfirmDialogComponent } from '@app/components/dialogs/confirm-dialog/confirm-dialog.component';
+import { ExceptionCreateDialogComponent } from '@app/components/dialogs/exception-create-dialog/exception-create-dialog.component';
+import { MonthYearPickerComponent } from '@app/components/dialogs/month-year-picker/month-year-picker.component';
+import { formatDateTimeToLocal, parseFirestoreTimestamp } from '@/utils/dateUtils';
+
+@Component({
+  selector: 'app-exception-manager',
+  standalone: true,
+  imports: [
+    CommonModule,
+    FullCalendarModule,
+    AlertDialogComponent,
+    ConfirmDialogComponent,
+    ExceptionCreateDialogComponent,
+    MonthYearPickerComponent,
+  ],
+  templateUrl: './exception-manager.component.html',
+  styleUrl: './exception-manager.component.css',
+})
+export class ExceptionManagerComponent implements OnInit, OnDestroy {
+  private readonly authService = inject(AuthService);
+  private readonly firebase = inject(ApiConfigService);
+  private readonly apiManager = inject(ApiManagerService);
+  private readonly api = inject(ApiService);
+  private readonly patientStore = inject(PatientStoreService);
+  private readonly notificationService = inject(NotificationService);
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+
+  private readonly exceptionsApi = this.apiManager.create<FirestoreRecord>('schedule_exceptions');
+  private readonly exceptionsListApi = this.apiManager.create<FirestoreRecord>('schedule_exceptions_list');
+  private readonly tasksApi = this.apiManager.create<FirestoreRecord>('tasks');
+
+  readonly allPatients = this.patientStore.allPatients;
+  readonly currentUser = this.authService.currentUser;
+
+  isPageLocked = computed(() => !this.authService.canEditSchedules());
+
+  exceptions = signal<any[]>([]);
+  isLoading = signal(true);
+  isCreateDialogVisible = signal(false);
+  exceptionToReEdit = signal<any>(null);
+  isAlertDialogVisible = signal(false);
+  alertDialogTitle = signal('');
+  alertDialogMessage = signal('');
+  calendarTitle = signal('');
+  isMonthPickerVisible = signal(false);
+
+  isActionDialogVisible = signal(false);
+  actionDialogTitle = signal('');
+  actionDialogMessage = signal('');
+  currentActionData = signal<any>(null);
+
+  // Merge dialog state
+  isMergeDialogVisible = signal(false);
+  mergeDialogMessage = signal('');
+  pendingFormData = signal<any>(null);
+  existingExceptionsToMerge = signal<any[]>([]);
+
+  private pollingTimer: any = null;
+  private eventSource: EventSource | null = null;
+  private calendarApi: CalendarApi | null = null;
+  @ViewChild('fullCalendar') fullCalendarRef?: FullCalendarComponent;
+
+  statusMap: Record<string, string> = {
+    pending: '待處理',
+    processing: '處理中',
+    applied: '已生效',
+    error: '錯誤',
+    expired: '已過期',
+    conflict_requires_resolution: '衝突待解決',
+    cancelled: '已撤銷',
+  };
+  typeMap: Record<string, string> = {
+    MOVE: '臨時調班',
+    SUSPEND: '區間暫停',
+    ADD_SESSION: '臨時加洗',
+    RANGE_MOVE: '區間調班',
+    SWAP: '同日互調',
+  };
+  shiftMap: Record<string, string> = { early: '早班', noon: '午班', late: '晚班' };
+
+  calendarEvents = computed(() => {
+    const exList = this.exceptions();
+    if (!exList) return [];
+    return exList.flatMap((ex: any) => {
+      const statusStyles: Record<string, { color: string; prefix: string }> = {
+        pending: { color: '#ffc107', prefix: '[待]' },
+        processing: { color: '#0dcaf0', prefix: '[中]' },
+        applied: { color: '#198754', prefix: '[✓]' },
+        error: { color: '#dc3545', prefix: '[!] ' },
+        conflict_requires_resolution: { color: '#fd7e14', prefix: '[衝突]' },
+        cancelled: { color: '#6c757d', prefix: '[撤銷]' },
+      };
+      const baseColorMap: Record<string, string> = {
+        MOVE: '#17a2b8',
+        SUSPEND: '#6610f2',
+        ADD_SESSION: '#20c997',
+        RANGE_MOVE: '#e83e8c',
+        SWAP: '#fd7e14',
+      };
+      const style = statusStyles[ex.status] || { color: '#6c757d', prefix: '[?]' };
+      let finalColor = style.color;
+      if (ex.status === 'applied') {
+        finalColor = baseColorMap[ex.type] || '#6c757d';
+      }
+      const patientName = this.getExceptionPatientName(ex);
+      const title = `${style.prefix} ${this.buildEventTitle(ex, patientName)}`;
+      const description = this.buildEventDescription(ex);
+      if (ex.type === 'MOVE' && ex.from && ex.to) {
+        const fromEvent = {
+          id: `${ex.id}-from`,
+          title: `[原班] ${patientName} ${this.formatBedAndShift(ex.from)}`,
+          start: ex.from.sourceDate,
+          allDay: true,
+          backgroundColor: '#adb5bd',
+          borderColor: '#adb5bd',
+          extendedProps: { ...ex, formattedDetails: description },
+        };
+        const toEvent = {
+          id: ex.id,
+          title: `${style.prefix} [新班] ${patientName} ${this.formatBedAndShift(ex.to)}`,
+          start: ex.to.goalDate,
+          allDay: true,
+          backgroundColor: finalColor,
+          borderColor: finalColor,
+          extendedProps: { ...ex, formattedDetails: description },
+        };
+        return [fromEvent, toEvent];
+      }
+      let exclusiveEndDate: string | null = null;
+      if (ex.endDate && ex.endDate !== ex.startDate) {
+        const endDateObj = new Date(ex.endDate + 'T00:00:00Z');
+        endDateObj.setUTCDate(endDateObj.getUTCDate() + 1);
+        exclusiveEndDate = endDateObj.toISOString().split('T')[0];
+      }
+      const start = ex.startDate || ex.date || ex.to?.goalDate || ex.from?.sourceDate;
+      if (!start) return [];
+      return [
+        {
+          id: ex.id,
+          title: title,
+          start,
+          end: exclusiveEndDate,
+          allDay: true,
+          backgroundColor: finalColor,
+          borderColor: finalColor,
+          extendedProps: { ...ex, formattedDetails: description },
+        },
+      ];
+    });
+  });
+
+  calendarOptions = computed<CalendarOptions>(() => ({
+    plugins: [dayGridPlugin, interactionPlugin, listPlugin],
+    initialView: 'dayGridWeek',
+    locale: zhTwLocale,
+    headerToolbar: false,
+    dayMaxEvents: true,
+    events: this.calendarEvents(),
+    datesSet: (arg) => {
+      this.calendarTitle.set(arg.view.title);
+    },
+    eventClick: (info) => {
+      const exData = info.event.extendedProps;
+      this.currentActionData.set(exData);
+
+      const patientDisplayName = this.getExceptionPatientName(exData);
+
+      this.actionDialogTitle.set('調班詳細資訊');
+      this.actionDialogMessage.set(
+        `病患: ${patientDisplayName}\n` +
+          `類型: ${this.typeMap[exData['type']] || '未知'}\n` +
+          `狀態: ${this.statusMap[exData['status']] || '未知'}\n` +
+          `區間: ${this.formatExceptionDateRange(exData)}\n` +
+          `詳細: ${exData['formattedDetails']}\n` +
+          `申請時間: ${this.formatTimestamp(exData['createdAt'])}`,
+      );
+
+      if (
+        exData['errorMessage'] &&
+        (exData['status'] === 'error' || exData['status'] === 'conflict_requires_resolution')
+      ) {
+        const label = exData['status'] === 'conflict_requires_resolution' ? '衝突原因' : '錯誤訊息';
+        this.actionDialogMessage.update(
+          (msg) => msg + `\n\n${label}: ${exData['errorMessage']}`,
+        );
+      }
+
+      this.isActionDialogVisible.set(true);
+    },
+  }));
+
+  currentCalendarDate = computed(() =>
+    this.calendarApi ? this.calendarApi.getDate() : new Date(),
+  );
+
+  ngOnInit(): void {
+    const user = this.currentUser();
+    if (user) {
+      this.initializePageData();
+    }
+
+    // Watch for route query param resolveConflict
+    this.route.queryParams.subscribe((params) => {
+      const conflictId = params['resolveConflict'];
+      if (conflictId) {
+        const conflictException = this.exceptions().find((ex: any) => ex.id === conflictId);
+        if (conflictException) {
+          this.exceptionToReEdit.set(conflictException);
+          this.isCreateDialogVisible.set(true);
+          this.router.navigate([], { queryParams: {} });
+        }
+      }
+    });
+  }
+
+  ngOnDestroy(): void {
+    if (this.pollingTimer) {
+      clearInterval(this.pollingTimer);
+      this.pollingTimer = null;
+    }
+    if (this.eventSource) {
+      this.eventSource.close();
+      this.eventSource = null;
+    }
+  }
+
+  // --- Calendar Navigation ---
+  private getCalendarApi(): CalendarApi | null {
+    if (!this.calendarApi && this.fullCalendarRef) {
+      this.calendarApi = this.fullCalendarRef.getApi();
+    }
+    return this.calendarApi;
+  }
+
+  handlePrev(): void {
+    this.getCalendarApi()?.prev();
+  }
+
+  handleNext(): void {
+    this.getCalendarApi()?.next();
+  }
+
+  handleToday(): void {
+    this.getCalendarApi()?.today();
+  }
+
+  handleViewChange(viewName: string): void {
+    this.getCalendarApi()?.changeView(viewName);
+  }
+
+  openMonthPicker(): void {
+    this.isMonthPickerVisible.set(true);
+  }
+
+  handleDateSelected(newDate: any): void {
+    this.getCalendarApi()?.gotoDate(newDate);
+    this.isMonthPickerVisible.set(false);
+  }
+
+  // --- Helper Functions ---
+  formatTimestamp(ts: any): string {
+    if (!ts) return 'N/A';
+    return formatDateTimeToLocal(parseFirestoreTimestamp(ts));
+  }
+
+  formatShiftInfo(shiftData: any): string {
+    if (!shiftData) return '';
+    const shiftName = this.shiftMap[shiftData.shiftCode] || shiftData.shiftCode;
+    const bedDisplay = String(shiftData.bedNum).startsWith('peripheral-')
+      ? `外圍 ${String(shiftData.bedNum).split('-')[1]}`
+      : `${shiftData.bedNum}床`;
+    return `${shiftData.date || ''} (${shiftName} ${bedDisplay})`;
+  }
+
+  formatBedAndShift(targetData: any): string {
+    if (!targetData) return 'N/A';
+    const bedNum = targetData.fromBedNum || targetData.bedNum;
+    const shiftCode = targetData.fromShiftCode || targetData.shiftCode;
+    if (!bedNum || !shiftCode) return 'N/A';
+    const shiftName = this.shiftMap[shiftCode] || shiftCode;
+    const bedDisplay = String(bedNum).startsWith('peripheral-')
+      ? `外圍 ${String(bedNum).split('-')[1]}`
+      : `${bedNum}床`;
+    return `${bedDisplay} / ${shiftName}`;
+  }
+
+  private getExceptionPatientName(ex: any): string {
+    if (ex.type === 'SWAP') {
+      const name1 = ex.patient1?.patientName || ex.patient1?.name || '';
+      const name2 = ex.patient2?.patientName || ex.patient2?.name || '';
+      return [name1, name2].filter(Boolean).join(' ⇄ ') || '未指定病人';
+    }
+    return ex.patientName || '未指定病人';
+  }
+
+  private buildEventTitle(ex: any, patientName: string): string {
+    switch (ex.type) {
+      case 'MOVE':
+        return `${patientName} 調至 ${this.formatBedAndShift(ex.to)}`;
+      case 'ADD_SESSION': {
+        const mode = ex.to?.mode || ex.mode;
+        return `${patientName} 加洗 ${this.formatBedAndShift(ex.to)}${mode && mode !== 'HD' ? ` ${mode}` : ''}`;
+      }
+      case 'SUSPEND':
+        return `${patientName} 暫停`;
+      case 'RANGE_MOVE':
+        return `${patientName} 區間調至 ${this.formatBedAndShift(ex.to)}`;
+      case 'SWAP':
+        return `${patientName} 互調`;
+      default:
+        return `${patientName} - ${this.typeMap[ex.type] || '未知'}`;
+    }
+  }
+
+  private buildEventDescription(ex: any): string {
+    if (ex.type === 'MOVE' && ex.from && ex.to) {
+      return `從 ${this.formatShiftInfo({ ...ex.from, date: ex.from.sourceDate })} 移至 ${this.formatShiftInfo({ ...ex.to, date: ex.to.goalDate })}`;
+    }
+    if (ex.type === 'ADD_SESSION' && ex.to) {
+      const mode = ex.to?.mode || ex.mode;
+      return `新增於 ${this.formatShiftInfo({ ...ex.to, date: ex.to.goalDate })}${mode && mode !== 'HD' ? `，模式 ${mode}` : ''}`;
+    }
+    if (ex.type === 'SUSPEND') {
+      return `暫停區間: ${this.formatExceptionDateRange(ex)}${ex.reason ? `，原因: ${ex.reason}` : ''}`;
+    }
+    if (ex.type === 'RANGE_MOVE' && ex.to) {
+      return `區間內移至: ${this.formatBedAndShift(ex.to)}`;
+    }
+    if (ex.type === 'SWAP' && ex.patient1 && ex.patient2) {
+      const from1 = this.formatBedAndShift(ex.patient1);
+      const from2 = this.formatBedAndShift(ex.patient2);
+      return `${ex.patient1.patientName} (${from1}) 與 ${ex.patient2.patientName} (${from2}) 互換`;
+    }
+    return ex.reason || '';
+  }
+
+  private formatExceptionDateRange(ex: any): string {
+    const start = ex.date || ex.startDate || ex.from?.sourceDate || ex.to?.goalDate || '';
+    const end = ex.endDate || ex.to?.goalDate || start;
+    if (!start) return '未指定';
+    return start === end ? start : `${start} ~ ${end}`;
+  }
+
+  isCancellable(exceptionData: any): boolean {
+    if (
+      !exceptionData ||
+      exceptionData.status === 'cancelled' ||
+      exceptionData.status === 'expired' ||
+      exceptionData.status === 'error'
+    ) {
+      return false;
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let latestDateStr =
+      exceptionData.endDate || exceptionData.startDate || exceptionData.date;
+    if (exceptionData.type === 'MOVE' && exceptionData.to && exceptionData.from) {
+      latestDateStr =
+        exceptionData.to.goalDate > exceptionData.from.sourceDate
+          ? exceptionData.to.goalDate
+          : exceptionData.from.sourceDate;
+    }
+    if (!latestDateStr) return false;
+    const latestDate = new Date(latestDateStr + 'T00:00:00');
+    return latestDate >= today;
+  }
+
+  // --- Dialog Functions ---
+  openCreateDialog(): void {
+    if (this.isPageLocked()) return;
+    this.exceptionToReEdit.set(null);
+    this.isCreateDialogVisible.set(true);
+  }
+
+  closeCreateDialog(): void {
+    this.isCreateDialogVisible.set(false);
+    setTimeout(() => {
+      this.exceptionToReEdit.set(null);
+    }, 300);
+  }
+
+  handleEdit(): void {
+    const data = this.currentActionData();
+    if (!data) return;
+    if (
+      this.isCancellable(data) ||
+      data.status === 'conflict_requires_resolution'
+    ) {
+      this.exceptionToReEdit.set({ ...data });
+      this.isActionDialogVisible.set(false);
+      setTimeout(() => {
+        this.isCreateDialogVisible.set(true);
+      }, 150);
+    }
+  }
+
+  async handleDelete(): Promise<void> {
+    const data = this.currentActionData();
+    if (!data?.id) return;
+    const exceptionId = data.id;
+    this.isActionDialogVisible.set(false);
+
+    try {
+      await this.deleteOldExceptionMessages(data);
+      await this.exceptionsApi.delete(exceptionId);
+
+      let message = '';
+      if (data.type === 'SWAP') {
+        message = `成功撤銷調班申請: ${data.patient1.patientName}與${data.patient2.patientName}`;
+      } else {
+        const typeText = this.typeMap[data.type] || '調班';
+        message = `成功撤銷調班申請: ${data.patientName} (${typeText})`;
+      }
+      this.notificationService.createGlobalNotification(message, 'success');
+    } catch (error: any) {
+      console.error('撤銷失敗:', error);
+      this.alertDialogTitle.set('撤銷失敗');
+      this.alertDialogMessage.set(`執行撤銷操作時發生錯誤: ${error.message}`);
+      this.isAlertDialogVisible.set(true);
+    } finally {
+      this.currentActionData.set(null);
+    }
+  }
+
+  handleDeleteFromChild(id: any): void {
+    this.notificationService.createGlobalNotification('成功撤銷衝突的調班申請', 'success');
+  }
+
+  /**
+   * 解決「總表修正後病人不在原床位」衝突
+   * @param choice keep_base=取消調班回歸新常規 / keep_exception=維持調班後床位
+   */
+  async resolveSourceConflict(choice: 'keep_base' | 'keep_exception'): Promise<void> {
+    const data = this.currentActionData();
+    if (!data?.id) return;
+    this.isActionDialogVisible.set(false);
+    try {
+      await firstValueFrom(
+        this.api.post(`/schedules/exceptions/${data.id}/resolve-conflict`, { choice }),
+      );
+      const msg =
+        choice === 'keep_base'
+          ? `已維持新常規床位，原調班已取消: ${data.patientName}`
+          : `已維持調班後床位: ${data.patientName}`;
+      this.notificationService.createGlobalNotification(msg, 'success');
+    } catch (error: any) {
+      console.error('解決衝突失敗:', error);
+      this.alertDialogTitle.set('解決衝突失敗');
+      this.alertDialogMessage.set(`執行解決衝突時發生錯誤: ${error.message}`);
+      this.isAlertDialogVisible.set(true);
+    } finally {
+      this.currentActionData.set(null);
+    }
+  }
+
+  // --- Merge Logic ---
+  findMergeableExceptions(formData: any): any[] {
+    if (formData.id) return [];
+    let targetDate: string | null = null;
+    if (formData.type === 'MOVE') targetDate = formData.to?.goalDate;
+    else if (formData.type === 'ADD_SESSION') targetDate = formData.to?.goalDate;
+    else if (formData.type === 'SUSPEND') targetDate = formData.startDate;
+    else if (formData.type === 'SWAP') targetDate = formData.date;
+    if (!targetDate) return [];
+
+    const isNewSameDayMove =
+      formData.type === 'MOVE' && formData.from?.sourceDate === formData.to?.goalDate;
+
+    return this.exceptions().filter((ex: any) => {
+      if (ex.patientId !== formData.patientId) return false;
+      if (ex.type !== formData.type) return false;
+      if (!['pending', 'applied'].includes(ex.status)) return false;
+
+      let existingTargetDate: string | null = null;
+      if (ex.type === 'MOVE') existingTargetDate = ex.to?.goalDate;
+      else if (ex.type === 'ADD_SESSION') existingTargetDate = ex.to?.goalDate;
+      else if (ex.type === 'SUSPEND') existingTargetDate = ex.startDate;
+      else if (ex.type === 'SWAP') existingTargetDate = ex.date;
+      if (existingTargetDate !== targetDate) return false;
+
+      if (formData.type === 'MOVE') {
+        const isExistingSameDayMove = ex.from?.sourceDate === ex.to?.goalDate;
+        if (!isNewSameDayMove || !isExistingSameDayMove) return false;
+      }
+      return true;
+    });
+  }
+
+  findChainHead(existingExceptions: any[], newFormData: any): any {
+    const allMoves = [
+      ...existingExceptions.map((ex: any) => ({
+        fromKey: `${ex.from?.bedNum}-${ex.from?.shiftCode}`,
+        toKey: `${ex.to?.bedNum}-${ex.to?.shiftCode}`,
+        from: ex.from,
+      })),
+      {
+        fromKey: `${newFormData.from?.bedNum}-${newFormData.from?.shiftCode}`,
+        toKey: `${newFormData.to?.bedNum}-${newFormData.to?.shiftCode}`,
+        from: newFormData.from,
+      },
+    ];
+    const allToKeys = new Set(allMoves.map((m) => m.toKey));
+    const chainHead = allMoves.find((m) => !allToKeys.has(m.fromKey));
+    return chainHead?.from || existingExceptions[0]?.from;
+  }
+
+  generateMergeMessage(existingExceptions: any[], newFormData: any): string {
+    const shiftDisplayMap: Record<string, string> = { early: '早班', noon: '午班', late: '晚班' };
+    const formatBed = (bedNum: any, shiftCode: string) => {
+      const bedText = String(bedNum).startsWith('peripheral')
+        ? `外圍${String(bedNum).split('-')[1]}`
+        : `${bedNum}床`;
+      const shiftText = shiftDisplayMap[shiftCode] || shiftCode;
+      return `${bedText}${shiftText}`;
+    };
+    const count = existingExceptions.length;
+    const firstEx = existingExceptions[0];
+
+    if (firstEx.type === 'MOVE') {
+      const existingPaths = existingExceptions
+        .map((ex: any) => {
+          const from = formatBed(ex.from?.bedNum, ex.from?.shiftCode);
+          const to = formatBed(ex.to?.bedNum, ex.to?.shiftCode);
+          return `【${from} → ${to}】`;
+        })
+        .join('\n');
+      const chainHeadFrom = this.findChainHead(existingExceptions, newFormData);
+      const chainHeadText = formatBed(chainHeadFrom?.bedNum, chainHeadFrom?.shiftCode);
+      const newTo = formatBed(newFormData.to?.bedNum, newFormData.to?.shiftCode);
+      return (
+        `${firstEx.patientName} 在 ${firstEx.to?.goalDate} 已有 ${count} 筆臨時調班申請：\n` +
+        `${existingPaths}\n\n` +
+        `是否全部整併為：\n` +
+        `【${chainHeadText} → ${newTo}】？`
+      );
+    } else if (firstEx.type === 'ADD_SESSION') {
+      const existingBeds = existingExceptions
+        .map((ex: any) => `【${formatBed(ex.to?.bedNum, ex.to?.shiftCode)}】`)
+        .join('\n');
+      const newBed = formatBed(newFormData.to?.bedNum, newFormData.to?.shiftCode);
+      return (
+        `${firstEx.patientName} 在 ${firstEx.to?.goalDate} 已有 ${count} 筆臨時加洗申請：\n` +
+        `${existingBeds}\n\n` +
+        `是否全部整併為：\n` +
+        `【${newBed}】？`
+      );
+    } else if (firstEx.type === 'SUSPEND') {
+      const existingRanges = existingExceptions
+        .map((ex: any) => `【${ex.startDate} ~ ${ex.endDate}】`)
+        .join('\n');
+      return (
+        `${firstEx.patientName} 已有 ${count} 筆區間暫停申請：\n` +
+        `${existingRanges}\n\n` +
+        `是否全部整併為：\n` +
+        `【${newFormData.startDate} ~ ${newFormData.endDate}】？`
+      );
+    } else if (firstEx.type === 'SWAP') {
+      return (
+        `${firstEx.patient1?.patientName} 在 ${firstEx.date} 已有 ${count} 筆同日互調申請\n\n` +
+        `是否全部整併為新的互調設定？`
+      );
+    }
+    return `發現 ${count} 筆相同類型的調班申請，是否全部整併？`;
+  }
+
+  async handleCreateException(formData: any): Promise<void> {
+    try {
+      const isUpdating = !!formData.id;
+      if (!isUpdating) {
+        const existing = this.findMergeableExceptions(formData);
+        if (existing.length > 0) {
+          this.closeCreateDialog();
+          this.existingExceptionsToMerge.set(existing);
+          this.pendingFormData.set(formData);
+          this.mergeDialogMessage.set(this.generateMergeMessage(existing, formData));
+          this.isMergeDialogVisible.set(true);
+          return;
+        }
+      }
+      await this.processExceptionSubmission(formData, isUpdating);
+    } catch (error: any) {
+      console.error('提交調班申請失敗:', error);
+    }
+  }
+
+  async processExceptionSubmission(formData: any, isUpdating: boolean): Promise<void> {
+    try {
+      if (isUpdating) {
+        await this.exceptionsApi.delete(formData.id);
+      }
+      const dataToSave: any = {
+        patientId: formData.patientId,
+        patientName: formData.patientName,
+        type: formData.type,
+        reason: formData.reason,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        from: formData.from,
+        to: formData.to,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      };
+      if (formData.type === 'SWAP') {
+        dataToSave.date = formData.date;
+        dataToSave.patient1 = formData.patient1;
+        dataToSave.patient2 = formData.patient2;
+      }
+      if (formData.mode) {
+        dataToSave.mode = formData.mode;
+      }
+      await this.exceptionsApi.save(dataToSave);
+      this.closeCreateDialog();
+      const actionText = isUpdating ? '重新提交' : '新增';
+      let message = '';
+      if (formData.type === 'SWAP') {
+        message = `${actionText}申請: ${formData.patient1.patientName} 與 ${formData.patient2.patientName}`;
+      } else {
+        const typeText = this.typeMap[formData.type] || '調班';
+        message = `${actionText}申請: ${formData.patientName} (${typeText})`;
+      }
+      this.notificationService.createGlobalNotification(message, 'success');
+
+      // Create message tasks
+      let messageContent = '';
+      const reasonText = `\n原因: ${formData.reason}`;
+      switch (formData.type) {
+        case 'MOVE':
+          messageContent =
+            `【${isUpdating ? '更新-臨時調班' : '臨時調班'}】\n原排班: ${formData.from.sourceDate} (${this.formatBedAndShift(formData.from)})\n新排班: ${formData.to.goalDate} (${this.formatBedAndShift(formData.to)})` +
+            reasonText;
+          break;
+        case 'SUSPEND':
+          messageContent =
+            `【區間暫停】\n從 ${formData.startDate} 至 ${formData.endDate}` + reasonText;
+          break;
+        case 'ADD_SESSION': {
+          const modeText = formData.mode && formData.mode !== 'HD' ? ` [${formData.mode}]` : '';
+          messageContent =
+            `【臨時加洗${modeText}】\n日期: ${formData.to.goalDate} (${this.formatBedAndShift(formData.to)})` +
+            reasonText;
+          break;
+        }
+        case 'SWAP':
+          messageContent =
+            `【同日互調】\n日期: ${formData.date}\n${formData.patient1.patientName} (${this.formatBedAndShift(formData.patient1)}) <=> ${formData.patient2.patientName} (${this.formatBedAndShift(formData.patient2)})` +
+            reasonText;
+          break;
+      }
+
+      const user = this.currentUser();
+      if (messageContent && user) {
+        const createMessageTask = (patientInfo: any) => ({
+          category: 'message',
+          type: '常規',
+          content: messageContent,
+          patientId: patientInfo.id,
+          patientName: patientInfo.name,
+          targetDate: formData.date || formData.startDate,
+          status: 'pending',
+          creator: {
+            uid: user.uid,
+            name: user.name,
+            title: user.title,
+          },
+          createdAt: new Date().toISOString(),
+          expireAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          assignee: null,
+        });
+        if (formData.type === 'SWAP') {
+          const task1 = createMessageTask({
+            id: formData.patient1.patientId,
+            name: formData.patient1.patientName,
+          });
+          const task2 = createMessageTask({
+            id: formData.patient2.patientId,
+            name: formData.patient2.patientName,
+          });
+          await Promise.all([this.tasksApi.save(task1), this.tasksApi.save(task2)]);
+        } else {
+          const task = createMessageTask({
+            id: formData.patientId,
+            name: formData.patientName,
+          });
+          await this.tasksApi.save(task);
+        }
+      }
+    } catch (error: any) {
+      console.error('提交調班申請失敗:', error);
+    }
+  }
+
+  private async deleteOldExceptionMessages(existingEx: any): Promise<void> {
+    try {
+      const targetDate = existingEx.date || existingEx.startDate;
+      if (!targetDate) return;
+
+      const typeKeywords: Record<string, string> = {
+        MOVE: '臨時調班',
+        SUSPEND: '區間暫停',
+        ADD_SESSION: '臨時加洗',
+        SWAP: '同日互調',
+      };
+      const keyword = typeKeywords[existingEx.type];
+      if (!keyword) return;
+
+      // 後端支援 patientId + targetDate 篩選，避免全量載入
+      const matchingTasks = (await this.tasksApi.fetchWhere({
+        patientId: existingEx.patientId,
+        targetDate,
+      })) as any[];
+
+      // 註：TPH memos 表結構僅有 date/content/author，無 patientId/targetDate 欄位，
+      // 因此 Firebase 版的 memo 清理邏輯在此後端無對應資料可匹配，故移除該段 dead code。
+
+      const deletePromises: Promise<any>[] = [];
+
+      matchingTasks.forEach((task: any) => {
+        if (task.content && task.content.includes(keyword)) {
+          deletePromises.push(this.tasksApi.delete(task.id));
+        }
+      });
+
+      if (deletePromises.length > 0) {
+        await Promise.all(deletePromises);
+      }
+    } catch (error) {
+      console.error('刪除舊訊息失敗:', error);
+    }
+  }
+
+  async handleMergeConfirm(): Promise<void> {
+    this.isMergeDialogVisible.set(false);
+    const existingExceptions = this.existingExceptionsToMerge();
+    const newFormData = this.pendingFormData();
+    if (existingExceptions.length === 0 || !newFormData) return;
+
+    try {
+      const firstEx = existingExceptions[0];
+      for (const ex of existingExceptions) {
+        await this.deleteOldExceptionMessages(ex);
+      }
+      for (let i = 1; i < existingExceptions.length; i++) {
+        await this.exceptionsApi.delete(existingExceptions[i].id);
+      }
+      const mergedData: any = {
+        ...newFormData,
+        id: firstEx.id,
+      };
+      if (firstEx.type === 'MOVE') {
+        const chainHeadFrom = this.findChainHead(existingExceptions, newFormData);
+        if (chainHeadFrom) {
+          mergedData.from = { ...chainHeadFrom };
+          mergedData.startDate = chainHeadFrom.sourceDate;
+        }
+      }
+      await this.processExceptionSubmission(mergedData, true);
+      this.notificationService.createGlobalNotification(
+        `已整併 ${existingExceptions.length} 筆調班申請`,
+        'success',
+      );
+    } catch (error: any) {
+      console.error('合併調班申請失敗:', error);
+    } finally {
+      this.existingExceptionsToMerge.set([]);
+      this.pendingFormData.set(null);
+    }
+  }
+
+  handleMergeCancel(): void {
+    this.isMergeDialogVisible.set(false);
+    this.existingExceptionsToMerge.set([]);
+    this.pendingFormData.set(null);
+  }
+
+  private async initializePageData(): Promise<void> {
+    if (this.pollingTimer) {
+      clearInterval(this.pollingTimer);
+      this.pollingTimer = null;
+    }
+    if (this.eventSource) {
+      this.eventSource.close();
+      this.eventSource = null;
+    }
+    this.isLoading.set(true);
+    try {
+      await this.patientStore.fetchPatientsIfNeeded();
+
+      const fetchExceptions = async () => {
+        const allExceptions = await this.exceptionsListApi.fetchAll();
+        const sorted = (allExceptions as any[]).sort((a: any, b: any) => {
+          const aDate = typeof a.createdAt === 'string' ? a.createdAt : '';
+          const bDate = typeof b.createdAt === 'string' ? b.createdAt : '';
+          return bDate.localeCompare(aDate);
+        });
+        this.exceptions.set(sorted);
+        this.isLoading.set(false);
+      };
+      await fetchExceptions();
+
+      // 優先使用 SSE 即時推播；SSE 失敗時回退到 30 秒輪詢
+      this.startExceptionEventStream(fetchExceptions);
+    } catch (error) {
+      console.error('載入資料失敗:', error);
+      this.isLoading.set(false);
+    }
+  }
+
+  private startExceptionEventStream(refetch: () => Promise<void>): void {
+    const token = this.firebase.getToken();
+    const startPolling = () => {
+      if (this.pollingTimer) return;
+      this.pollingTimer = setInterval(refetch, 30000);
+    };
+
+    if (!token || typeof EventSource === 'undefined') {
+      startPolling();
+      return;
+    }
+
+    try {
+      const url = `/api/events/exceptions?token=${encodeURIComponent(token)}`;
+      const es = new EventSource(url);
+      this.eventSource = es;
+
+      es.addEventListener('exception', () => {
+        refetch().catch((err) => console.warn('[SSE] refetch failed:', err));
+      });
+
+      es.onerror = () => {
+        console.warn('[SSE] connection error, falling back to polling');
+        es.close();
+        this.eventSource = null;
+        startPolling();
+      };
+    } catch (err) {
+      console.warn('[SSE] init failed:', err);
+      startPolling();
+    }
+  }
+
+  closeActionDialog(): void {
+    this.isActionDialogVisible.set(false);
+  }
+
+  closeAlertDialog(): void {
+    this.isAlertDialogVisible.set(false);
+  }
+}

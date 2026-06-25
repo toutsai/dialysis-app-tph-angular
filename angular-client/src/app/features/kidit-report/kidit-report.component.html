@@ -1,0 +1,207 @@
+<div class="report-container">
+  <!-- Header -->
+  <header class="page-header">
+    <div class="header-left">
+      <h2 class="page-title"><i class="fas fa-file-medical-alt icon"></i> KiDit 申報工作站</h2>
+    </div>
+
+    <div class="month-navigator">
+      <button class="nav-btn" (click)="changeMonth(-1)">
+        <i class="fas fa-chevron-left"></i>
+      </button>
+      <span class="current-month">
+        {{ currentYear() }} 年 <span class="month-number">{{ currentMonth() }}</span> 月
+      </span>
+      <button class="nav-btn" (click)="changeMonth(1)">
+        <i class="fas fa-chevron-right"></i>
+      </button>
+    </div>
+
+    <div class="header-right">
+      <button class="action-btn export-btn" (click)="exportToExcel()" [disabled]="isLoading()">
+        <i class="fas fa-file-export"></i> 匯出本月資料
+      </button>
+      <button class="action-btn vascular-btn" (click)="openVascularList()" [disabled]="isLoading()">
+        <i class="fas fa-syringe"></i> 當月血管通路事件清單
+      </button>
+      <button class="action-btn firstdia-btn" (click)="openFirstDialysisList()" [disabled]="isLoading()">
+        <i class="fas fa-user-plus"></i> 當月初次透析名單
+      </button>
+    </div>
+  </header>
+
+  <!-- Calendar -->
+  <div class="calendar-wrapper" *ngIf="!isLoading()">
+    <div class="weekdays-header">
+      <div *ngFor="let day of weekDays" class="weekday">{{ day }}</div>
+    </div>
+
+    <div class="calendar-grid">
+      <div *ngFor="let n of emptySlots()" class="day-cell empty"></div>
+
+      <div
+        *ngFor="let day of daysData()"
+        class="day-cell"
+        [class.has-data]="day.events.length > 0"
+        [class.is-today]="isToday(day.dateStr)"
+        [class.has-alert]="day.unregistered > 0"
+        (click)="openModal(day)"
+      >
+        <div class="cell-header">
+          <span class="day-number">{{ day.dayNum }}</span>
+          <span class="today-badge" *ngIf="isToday(day.dateStr)">今天</span>
+        </div>
+
+        <div class="cell-content">
+          <div *ngIf="day.events.length > 0" class="event-indicator">
+            <div class="stat-row">
+              <span class="count-badge primary">
+                <i class="fas fa-list-ul"></i> {{ day.events.length }} 筆
+              </span>
+            </div>
+            <div class="stat-row" *ngIf="day.unregistered > 0">
+              <span class="count-badge danger">
+                <i class="fas fa-exclamation-circle"></i> {{ day.unregistered }} 未
+              </span>
+            </div>
+          </div>
+          <div *ngIf="day.events.length === 0" class="no-event">
+            <span class="dot"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div *ngIf="isLoading()" class="loading-container">
+    <div class="spinner"></div>
+    <p>正在讀取申報資料...</p>
+  </div>
+
+  <!-- 血管通路事件清單彈窗 -->
+  <div class="va-modal-overlay" *ngIf="showVascularModal()" (click)="closeVascularModal()">
+    <div class="va-modal" (click)="$event.stopPropagation()">
+      <div class="va-modal-header">
+        <h3>
+          <i class="fas fa-syringe"></i>
+          {{ currentYear() }} 年 {{ currentMonth() }} 月 血管通路事件清單
+          <span class="va-count" *ngIf="!isLoadingVascular()">（{{ vascularRows().length }} 筆）</span>
+        </h3>
+        <div class="va-modal-actions">
+          <button class="action-btn export-btn" (click)="exportVascularRows()"
+                  [disabled]="isLoadingVascular() || vascularRows().length === 0">
+            <i class="fas fa-file-export"></i> 匯出 Excel
+          </button>
+          <button class="va-close-btn" (click)="closeVascularModal()" title="關閉">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="va-modal-body">
+        <div *ngIf="isLoadingVascular()" class="va-loading">
+          <div class="spinner"></div>
+          <p>正在彙整本月血管通路事件...</p>
+        </div>
+
+        <div *ngIf="!isLoadingVascular() && vascularRows().length === 0" class="va-empty">
+          本月份尚無任何血管通路事件紀錄。
+        </div>
+
+        <table *ngIf="!isLoadingVascular() && vascularRows().length > 0" class="va-table">
+          <thead>
+            <tr>
+              <th>姓名</th>
+              <th>病歷號</th>
+              <th>日期</th>
+              <th>處置</th>
+              <th>處置院所</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let r of vascularRows()">
+              <td>{{ r.name || '—' }}</td>
+              <td>{{ r.medicalRecordNumber || '—' }}</td>
+              <td>{{ r.date || '—' }}</td>
+              <td>{{ r.interventions || '—' }}</td>
+              <td>{{ r.location || '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 初次透析名單彈窗 -->
+  <div class="va-modal-overlay" *ngIf="showFirstDialysisModal()" (click)="closeFirstDialysisModal()">
+    <div class="va-modal" (click)="$event.stopPropagation()">
+      <div class="va-modal-header">
+        <h3>
+          <i class="fas fa-user-plus"></i>
+          {{ currentYear() }} 年 {{ currentMonth() }} 月 初次透析名單
+          <span class="va-count" *ngIf="!isLoadingFirstDialysis()">（{{ firstDialysisRows().length }} 人）</span>
+        </h3>
+        <div class="va-modal-actions">
+          <button class="action-btn export-btn" (click)="exportFirstDialysisRows()"
+                  [disabled]="isLoadingFirstDialysis() || firstDialysisRows().length === 0">
+            <i class="fas fa-file-export"></i> 匯出 Excel
+          </button>
+          <button class="va-close-btn" (click)="closeFirstDialysisModal()" title="關閉">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="va-modal-body">
+        <div *ngIf="isLoadingFirstDialysis()" class="va-loading">
+          <div class="spinner"></div>
+          <p>正在彙整本月初次透析名單...</p>
+        </div>
+
+        <div *ngIf="!isLoadingFirstDialysis() && firstDialysisRows().length === 0" class="va-empty">
+          本月份尚無初次透析病人。
+        </div>
+
+        <table *ngIf="!isLoadingFirstDialysis() && firstDialysisRows().length > 0" class="va-table">
+          <thead>
+            <tr>
+              <th>姓名</th>
+              <th>病歷號</th>
+              <th>首透日期</th>
+              <th>透析模式</th>
+              <th>狀態</th>
+              <th>主治醫師</th>
+              <th>刪除原因</th>
+              <th>刪除日期</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let r of firstDialysisRows()" [class.va-row-deleted]="r.isDeleted">
+              <td>{{ r.name || '—' }}</td>
+              <td>{{ r.medicalRecordNumber || '—' }}</td>
+              <td>{{ r.firstDialysisDate || '—' }}</td>
+              <td>{{ r.mode || '—' }}</td>
+              <td>
+                {{ r.statusLabel || '—' }}
+                <span class="va-deleted-tag" *ngIf="r.isDeleted">已刪除</span>
+              </td>
+              <td>{{ r.physician || '—' }}</td>
+              <td>{{ r.isDeleted ? (r.deleteReason || '—') : '' }}</td>
+              <td>{{ r.isDeleted ? (r.deletedDate || '—') : '' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail Modal -->
+  <app-kidit-detail-modal
+    *ngIf="showModal()"
+    [date]="selectedDate()"
+    [events]="selectedEvents()"
+    (closeEvent)="closeModal()"
+    (refreshEvent)="onModalRefresh()"
+  ></app-kidit-detail-modal>
+</div>

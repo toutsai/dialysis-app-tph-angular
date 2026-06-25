@@ -1,0 +1,130 @@
+<div class="summary-wrapper">
+  <!-- 病人選擇器 -->
+  <div class="picker">
+    <div class="picker-search">
+      <input
+        type="text"
+        [ngModel]="searchTerm()"
+        (ngModelChange)="searchTerm.set($event)"
+        placeholder="輸入姓名或病歷號查詢病人..."
+      />
+      <button *ngIf="patient()" class="btn-clear" (click)="clearSelection()">清除</button>
+    </div>
+    <div *ngIf="filteredPatients().length > 0" class="picker-results">
+      <button
+        *ngFor="let p of filteredPatients()"
+        class="picker-item"
+        (click)="selectPatient(p)"
+      >
+        <span class="pi-name">{{ p.name }}</span>
+        <span class="pi-mrn">{{ p.medicalRecordNumber }}</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- 未選擇時提示 -->
+  <div *ngIf="!patient()" class="empty-hint">請於上方查詢並選擇一位病人，檢視病歷摘要。</div>
+
+  <!-- 摘要卡 -->
+  <div *ngIf="patient() as p" class="summary-card">
+    <div class="card-header">
+      <div class="ch-name">{{ p.name }}</div>
+      <div class="ch-mrn">病歷號 {{ p.medicalRecordNumber }}</div>
+      <div class="ch-spacer"></div>
+      <span *ngIf="loading()" class="loading-tag">載入中…</span>
+    </div>
+
+    <!-- 基本醫療資訊 -->
+    <div class="section">
+      <div class="grid-2">
+        <div class="field"><span class="label">初透日期</span><span class="value">{{ firstDialysisDate() || '—' }}</span></div>
+        <div class="field">
+          <span class="label">血管通路</span>
+          <span class="value">
+            {{ p['vascAccess'] || '—' }}
+            <span *ngIf="p['accessCreationDate']" class="sub">（{{ p['accessCreationDate'] }} 建立）</span>
+          </span>
+        </div>
+        <div class="field">
+          <span class="label">收案/會診醫師</span><span class="value">{{ p['physician'] || '—' }}</span>
+        </div>
+        <div class="field">
+          <span class="label">透析院所</span>
+          <span class="value">
+            <ng-container *ngIf="hospitalInfo().source || hospitalInfo().transferOut; else noHosp">
+              <span *ngIf="hospitalInfo().source">原院所：{{ hospitalInfo().source }}</span>
+              <span *ngIf="hospitalInfo().transferOut" class="sub">　轉出：{{ hospitalInfo().transferOut }}</span>
+            </ng-container>
+            <ng-template #noHosp><span class="sub">—</span></ng-template>
+          </span>
+        </div>
+        <div class="field">
+          <span class="label">感染標記</span>
+          <span class="value tags">
+            <ng-container *ngIf="infectionTags().length > 0; else noTag">
+              <span
+                *ngFor="let t of infectionTags()"
+                class="infect-tag"
+                [class.hbv]="t === 'HBV'"
+                [class.hcv]="t === 'HCV'"
+                >{{ t }}</span
+              >
+            </ng-container>
+            <ng-template #noTag><span class="sub">無</span></ng-template>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 目前透析醫囑 -->
+    <div class="section">
+      <div class="section-title">目前透析醫囑</div>
+      <div *ngIf="orderSummary(currentOrder()) as cur; else noCur" class="order-line">
+        {{ cur }}
+        <span *ngIf="currentOrder()['effectiveDate']" class="sub">（{{ currentOrder()['effectiveDate'] }} 生效）</span>
+      </div>
+      <ng-template #noCur><div class="sub">尚無透析醫囑</div></ng-template>
+    </div>
+
+    <!-- 近一年本院透析日期 -->
+    <div class="section">
+      <div class="section-title">
+        近一年本院透析
+        <span class="count-badge">{{ dialysisDates()?.count ?? 0 }} 次</span>
+        <span *ngIf="dialysisDates() as dd" class="sub">（{{ dd.from }} ~ {{ dd.to }}）</span>
+        <button
+          *ngIf="(dialysisDates()?.count ?? 0) > 0"
+          class="btn-toggle"
+          (click)="datesExpanded.set(!datesExpanded())"
+        >
+          {{ datesExpanded() ? '收合日期' : '展開日期' }}
+        </button>
+      </div>
+      <div *ngIf="datesExpanded()" class="dates-list">
+        <div *ngFor="let g of datesByMonth()" class="month-group">
+          <div class="month-label">{{ g.month }}　<span class="sub">{{ g.items.length }} 次</span></div>
+          <div class="date-chips">
+            <span *ngFor="let d of g.items" class="date-chip">
+              {{ d.date.slice(8) }}<span *ngIf="d.shift" class="chip-shift">{{ shiftLabel[d.shift] || d.shift }}</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 歷史透析醫囑 -->
+    <div class="section">
+      <div class="section-title">歷史透析醫囑 <span class="sub">({{ orderHistory().length }} 筆)</span></div>
+      <div *ngIf="orderHistory().length > 0; else noHist" class="history-list">
+        <div *ngFor="let h of orderHistory()" class="history-item">
+          <div class="hi-date">{{ h.orders?.['effectiveDate'] || (h.createdAt || '').slice(0, 10) || '—' }}</div>
+          <div class="hi-body">
+            <span class="hi-op" [class.create]="h.operationType === 'CREATE'">{{ h.operationType || 'MODIFY' }}</span>
+            <span class="hi-summary">{{ orderSummary(h.orders || {}) || '（無摘要）' }}</span>
+          </div>
+        </div>
+      </div>
+      <ng-template #noHist><div class="sub">無歷史醫囑紀錄</div></ng-template>
+    </div>
+  </div>
+</div>

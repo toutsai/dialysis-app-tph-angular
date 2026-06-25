@@ -1,0 +1,46 @@
+{
+  "name": "dialysis-app-tph-angular-client",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "ng": "npx ng",
+    "dev": "npx ng serve --open",
+    "start": "npx ng serve",
+    "build": "npx ng build --configuration production"
+  },
+  "dependencies": {
+    "@angular/animations": "^19.0.0",
+    "@angular/common": "^19.0.0",
+    "@angular/compiler": "^19.0.0",
+    "@angular/core": "^19.0.0",
+    "@angular/forms": "^19.0.0",
+    "@angular/platform-browser": "^19.0.0",
+    "@angular/platform-browser-dynamic": "^19.0.0",
+    "@angular/router": "^19.0.0",
+    "@fortawesome/fontawesome-free": "^5.15.4",
+    "@fullcalendar/angular": "^6.1.19",
+    "@fullcalendar/core": "^6.1.19",
+    "@fullcalendar/daygrid": "^6.1.19",
+    "@fullcalendar/interaction": "^6.1.19",
+    "@fullcalendar/list": "^6.1.19",
+    "axios": "^1.11.0",
+    "chart.js": "^4.5.1",
+    "dompurify": "^3.3.2",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^3.0.1",
+    "ngx-quill": "^27.0.0",
+    "quill": "^2.0.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.6.0",
+    "xlsx": "^0.18.5",
+    "zone.js": "~0.15.0"
+  },
+  "devDependencies": {
+    "@angular-devkit/build-angular": "^19.0.0",
+    "@angular/cli": "^19.0.0",
+    "@angular/compiler-cli": "^19.0.0",
+    "@types/dompurify": "^3.0.5",
+    "@types/node": "^20.17.10",
+    "typescript": "~5.6.3"
+  }
+}

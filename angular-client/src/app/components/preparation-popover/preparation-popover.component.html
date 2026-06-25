@@ -1,0 +1,53 @@
+@if (isVisible) {
+  <div class="prep-overlay" (click)="close()">
+    <div class="prep-modal" (click)="$event.stopPropagation()">
+      <div class="prep-header">
+        <h3><i class="fas fa-clipboard-list"></i> 備物清單</h3>
+        <button class="prep-close" (click)="close()" title="關閉"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="prep-body">
+        @if (hasPatients) {
+          <table>
+            <thead>
+              <tr>
+                <th>姓名</th>
+                <th>AK</th>
+                <th>Ca</th>
+                <th>Heparin</th>
+                <th>BF</th>
+                <th>通路/穿刺針</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (patient of patients; track patient.id) {
+                <tr>
+                  <td class="name-cell" (click)="handleNameClick(patient)" title="點擊以編輯此病人醫囑">
+                    {{ patient.name }}
+                  </td>
+                  <td>{{ patient.dialysisOrders?.ak || '–' }}</td>
+                  <td>{{ patient.dialysisOrders?.dialysateCa || '–' }}</td>
+                  <td>
+                    {{ patient.dialysisOrders?.heparinInitial ?? '–' }}/{{ patient.dialysisOrders?.heparinMaintenance ?? '–' }}
+                  </td>
+                  <td>{{ patient.dialysisOrders?.bloodFlow ?? '–' }}</td>
+                  <td>
+                    {{ patient.dialysisOrders?.vascAccess || '–' }}
+                    @if (
+                        patient.dialysisOrders?.arterialNeedle || patient.dialysisOrders?.venousNeedle
+                      ) {
+                      <span>
+                        ({{ patient.dialysisOrders?.arterialNeedle || 'N/A' }}/{{ patient.dialysisOrders?.venousNeedle || 'N/A' }})
+                      </span>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        } @else {
+          <div class="empty-state">沒有需要備物的病人</div>
+        }
+      </div>
+    </div>
+  </div>
+}

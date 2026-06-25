@@ -1,0 +1,61 @@
+<div class="edu-overlay" (click)="onClose()">
+  <div class="edu-modal" (click)="$event.stopPropagation()">
+    <div class="edu-header">
+      <h3>
+        <i class="fas fa-chalkboard-teacher"></i>
+        初透病人衛教紀錄
+        <span class="edu-sub" *ngIf="patientName">— {{ patientName }}</span>
+      </h3>
+      <div class="edu-header-actions">
+        <span class="edu-progress" *ngIf="!isLoading()">已完成 {{ completedCount }}/12</span>
+        <button class="edu-btn edu-btn-light" (click)="print()" [disabled]="isLoading()">
+          <i class="fas fa-print"></i> 列印
+        </button>
+        <button class="edu-btn edu-btn-primary" *ngIf="canEdit" (click)="save()" [disabled]="isLoading() || isSaving()">
+          <i class="fas fa-save"></i> {{ isSaving() ? '儲存中...' : '儲存' }}
+        </button>
+        <button class="edu-close" (click)="onClose()" title="關閉"><i class="fas fa-times"></i></button>
+      </div>
+    </div>
+
+    <div class="edu-meta" *ngIf="firstDialysisDate">首透日期：{{ firstDialysisDate }}</div>
+
+    <div class="edu-body">
+      <div *ngIf="isLoading()" class="edu-loading">
+        <div class="spinner"></div><p>載入中...</p>
+      </div>
+
+      <table *ngIf="!isLoading()" class="edu-table">
+        <thead>
+          <tr>
+            <th class="col-idx">次數</th>
+            <th>主題</th>
+            <th class="col-mid">衛教者</th>
+            <th class="col-mid">衛教日期</th>
+            <th class="col-sign">被衛教者簽名</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let s of sessions()">
+            <td class="col-idx">{{ s.index }}</td>
+            <td>
+              <input type="text" [(ngModel)]="s.topic" [disabled]="!canEdit"
+                     list="eduTopicList" placeholder="選擇或輸入主題" />
+            </td>
+            <td class="col-mid"><input type="text" [(ngModel)]="s.educator" [disabled]="!canEdit" /></td>
+            <td class="col-mid"><input type="date" [(ngModel)]="s.educatedDate" [disabled]="!canEdit" /></td>
+            <td class="col-sign"><input type="text" [(ngModel)]="s.signature" [disabled]="!canEdit" /></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <datalist id="eduTopicList">
+        <option *ngFor="let t of topics()" [value]="t"></option>
+      </datalist>
+
+      <p class="edu-hint" *ngIf="!isLoading() && topics().length === 0">
+        （主題下拉選項尚未設定，目前可直接輸入；日後於設定建立主題清單後會出現下拉建議）
+      </p>
+    </div>
+  </div>
+</div>

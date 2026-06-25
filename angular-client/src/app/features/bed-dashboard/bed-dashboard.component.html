@@ -1,0 +1,214 @@
+<div class="dashboard-shell">
+  <div *ngIf="needsPin()" class="pin-screen">
+    <section class="pin-panel">
+      <div class="pin-title">
+        <span class="bed-chip">床位 {{ bedKey() }}</span>
+        <h1>床邊智慧儀表板</h1>
+      </div>
+
+      <form (ngSubmit)="login()" class="pin-form">
+        <label for="dashboard-pin">床位 PIN</label>
+        <input
+          id="dashboard-pin"
+          type="password"
+          inputmode="numeric"
+          autocomplete="off"
+          [ngModel]="pin()"
+          (ngModelChange)="pin.set($event)"
+          name="pin"
+          autofocus
+        />
+        <button type="submit" [disabled]="isLoggingIn()">
+          <i class="fas fa-lock-open"></i>
+          {{ isLoggingIn() ? '登入中' : '登入' }}
+        </button>
+      </form>
+
+      <p *ngIf="errorMessage()" class="error-text">{{ errorMessage() }}</p>
+    </section>
+  </div>
+
+  <ng-container *ngIf="!needsPin()">
+    <header class="dashboard-header">
+      <div>
+        <div class="header-meta">
+          <span>床位 {{ data()?.context?.bedLabel || bedKey() }}</span>
+          <span>{{ selectedDate() }}</span>
+          <span>{{ data()?.context?.selectedShiftLabel || '-' }}</span>
+        </div>
+        <h1>{{ headerTitle() }}</h1>
+      </div>
+
+      <div class="header-actions">
+        <input
+          type="date"
+          [ngModel]="selectedDate()"
+          (ngModelChange)="changeDate($event)"
+          aria-label="日期"
+        />
+        <button class="ghost-button" (click)="loadDashboard()" [disabled]="isLoading()">
+          <i class="fas fa-sync-alt"></i>
+          重新整理
+        </button>
+        <button class="ghost-button" (click)="lockDevice()">
+          <i class="fas fa-lock"></i>
+          鎖定
+        </button>
+        <button class="ghost-button" (click)="goBack()">
+          <i class="fas fa-arrow-left"></i>
+          返回
+        </button>
+      </div>
+    </header>
+
+    <nav class="shift-tabs" *ngIf="data()">
+      <button
+        type="button"
+        [class.active]="selectedShift() === 'auto'"
+        (click)="changeShift('auto')"
+      >
+        自動
+        <span>{{ data()?.context?.autoShiftLabel }}</span>
+      </button>
+      <button
+        type="button"
+        *ngFor="let candidate of data()?.shiftCandidates"
+        [class.active]="candidate.isSelected && selectedShift() !== 'auto'"
+        [class.has-patient]="candidate.hasPatient"
+        (click)="changeShift(candidate.shift)"
+      >
+        {{ candidate.label }}
+        <span>{{ maskPatientName(candidate.patientName) || '空床' }}</span>
+      </button>
+    </nav>
+
+    <div *ngIf="errorMessage()" class="banner error-banner">
+      <i class="fas fa-exclamation-triangle"></i>
+      {{ errorMessage() }}
+    </div>
+
+    <div *ngIf="isLoading()" class="loading-overlay">
+      <div class="spinner"></div>
+      <span>讀取床邊資料</span>
+    </div>
+
+    <main *ngIf="data() && !isLoading()" class="dashboard-main">
+      <section *ngIf="!hasPatient()" class="empty-bed-panel">
+        <i class="fas fa-procedures"></i>
+        <h2>{{ data()?.dashboardStatus?.message }}</h2>
+        <p>可切換上一班或下一班查看同床位候選病人。</p>
+      </section>
+
+      <ng-container *ngIf="hasPatient()">
+        <section class="top-grid">
+          <article class="order-panel">
+            <div class="panel-title">透析醫囑</div>
+            <div class="clinical-grid">
+              <div class="order-cell">
+                <span>模式</span>
+                <strong>{{ value(data()?.dialysisOrder?.mode) }}</strong>
+              </div>
+              <div class="order-cell">
+                <span>透析時間</span>
+                <strong>{{ value(data()?.dialysisOrder?.dialysisHours) }}</strong>
+              </div>
+              <div class="order-cell">
+                <span>AK</span>
+                <strong>{{ value(data()?.dialysisOrder?.ak) }}</strong>
+              </div>
+              <div class="order-cell">
+                <span>血管通路</span>
+                <strong>{{ value(data()?.dialysisOrder?.vascAccess) }}</strong>
+              </div>
+              <div class="order-cell">
+                <span>透析A液Ca</span>
+                <strong>{{ value(data()?.dialysisOrder?.dialysateCa) }}</strong>
+              </div>
+              <div class="order-cell compact-value">
+                <span>抗凝劑</span>
+                <strong>{{ formatHeparinOrder(data()?.dialysisOrder || null) }}</strong>
+              </div>
+              <div class="order-cell">
+                <span>血液流速</span>
+                <strong>{{ value(data()?.dialysisOrder?.bloodFlow) }}</strong>
+              </div>
+              <div class="order-cell">
+                <span>透析液流速</span>
+                <strong>{{ value(data()?.dialysisOrder?.dialysateFlow) }}</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="weight-panel">
+            <div class="panel-title">體重評估</div>
+            <div class="weight-list">
+              <div>
+                <span>今日體重</span>
+                <strong>{{ value(data()?.weightAssessment?.todayWeight) }}</strong>
+              </div>
+              <div>
+                <span>乾體重</span>
+                <strong>{{ value(data()?.weightAssessment?.dryWeight) }}</strong>
+              </div>
+              <div class="target-uf">
+                <span>應脫水</span>
+                <strong>{{ value(data()?.weightAssessment?.targetUf) }}</strong>
+              </div>
+            </div>
+            <p class="panel-note" *ngIf="data()?.weightAssessment?.note">
+              {{ data()?.weightAssessment?.note }}
+            </p>
+          </article>
+        </section>
+
+        <section class="bottom-grid">
+          <article class="handover-panel">
+            <div class="panel-title">交班事項</div>
+            <div class="handover-list">
+              <div *ngIf="(data()?.handoverItems?.length || 0) === 0" class="empty-list">
+                目前無未結案交班事項
+              </div>
+              <div *ngFor="let item of data()?.handoverItems" class="handover-item">
+                <div class="handover-item-head">
+                  <span>
+                    {{ itemSourceLabel(item.source) }}
+                    <small class="handover-date" *ngIf="formatItemDate(item)">{{ formatItemDate(item) }}</small>
+                  </span>
+                  <button
+                    *ngIf="canManage() && item.source === 'task'"
+                    type="button"
+                    class="handover-done-btn"
+                    [disabled]="completingId() === item.id"
+                    (click)="completeHandoverItem(item)"
+                  >
+                    <i class="fas fa-check"></i>
+                    {{ completingId() === item.id ? '處理中' : '已讀' }}
+                  </button>
+                </div>
+                <p>{{ item.content }}</p>
+              </div>
+            </div>
+          </article>
+
+          <article class="med-panel">
+            <div class="panel-title">今日應施打藥物</div>
+            <div *ngIf="(data()?.medicationsToday?.length || 0) === 0" class="empty-list">
+              今日無系統判定應施打針劑
+            </div>
+            <ul class="med-list">
+              <li *ngFor="let med of data()?.medicationsToday">
+                <i class="fas fa-syringe"></i>
+                {{ formatMedication(med) }}
+              </li>
+            </ul>
+          </article>
+        </section>
+      </ng-container>
+    </main>
+
+    <footer class="dashboard-footer">
+      <span>最後更新 {{ lastRefreshLabel() || '-' }}</span>
+      <span>低血壓預測模型未啟用</span>
+    </footer>
+  </ng-container>
+</div>

@@ -1,0 +1,89 @@
+.prep-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+.prep-modal {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  width: 100%;
+  max-width: 640px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.prep-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid #e9ecef;
+}
+.prep-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #2c3e50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.prep-close {
+  border: none;
+  background: #ecf0f1;
+  color: #555;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 15px;
+}
+.prep-close:hover {
+  background: #dfe6e9;
+}
+.prep-body {
+  padding: 0.5rem;
+  overflow: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+th,
+td {
+  border: 1px solid #e0e0e0;
+  padding: 8px 10px;
+  text-align: center;
+}
+th {
+  background-color: #f5f5f5;
+  font-weight: bold;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+td:first-child {
+  text-align: left;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.name-cell {
+  cursor: pointer;
+  color: #007bff;
+  text-decoration: underline;
+}
+.name-cell:hover {
+  background-color: #f0f8ff;
+}
+.empty-state {
+  padding: 1.5rem;
+  text-align: center;
+  color: #666;
+}

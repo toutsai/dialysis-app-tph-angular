@@ -1,0 +1,312 @@
+<div class="modal-overlay" (click)="closeModal()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>{{ isEditing ? '編輯' : '新增' }} {{ patientTypeText }}病人</h2>
+      <button class="close-button" (click)="closeModal()" aria-label="關閉彈窗">&times;</button>
+    </div>
+    <form class="modal-body" (ngSubmit)="handleSave()">
+      <div class="form-section">
+        <div class="form-grid-3-col">
+          <div class="form-field">
+            <label for="name">姓名</label>
+            <input type="text" id="name" [(ngModel)]="form.name" name="name" required />
+          </div>
+          <div class="form-field">
+            <label for="medical-record-number">病歷號</label>
+            <input type="text" id="medical-record-number" [(ngModel)]="form.medicalRecordNumber" name="mrn" required />
+          </div>
+          <div class="form-field">
+            <label>{{ patientType === 'opd' ? '收案醫師' : '會診醫師' }}</label>
+            <select [(ngModel)]="form.physician" name="physician">
+              <option disabled value="">請選擇</option>
+              @for (p of PHYSICIANS; track p) {
+                <option [value]="p">{{ p }}</option>
+              }
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="freq">透析頻率</label>
+            <div class="freq-with-action">
+            <select id="freq" [(ngModel)]="form.freq" name="freq">
+              <option disabled value="">請選擇</option>
+              @for (f of FREQ_OPTIONS; track f) {
+                <option [value]="f">{{ f }}</option>
+              }
+            </select>
+            <button type="button" class="btn-inline" (click)="openFirstDialysisPlan()">首透連續洗</button>
+            </div>
+            @if (form.firstDialysisPlan) {
+              <small class="plan-summary">
+                常規 {{ form.firstDialysisPlan.regularRule?.freq }} / {{ formatAssignment(form.firstDialysisPlan.regularRule) }}，
+                加洗 {{ formatExtraSessionsSummary(form.firstDialysisPlan.extraSessions) }}
+              </small>
+            }
+          </div>
+          <div class="form-field">
+            <label for="mode">透析模式</label>
+            <select id="mode" [(ngModel)]="form.mode" name="mode">
+              <option disabled value="">請選擇</option>
+              @for (m of MODES; track m) {
+                <option [value]="m">{{ m }}</option>
+              }
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="status">病人狀態</label>
+            <select id="status" [(ngModel)]="form.status" name="status" [disabled]="isEditing">
+              <option value="er">急診</option>
+              <option value="ipd">住院</option>
+              <option value="opd">門診</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>病人身份</label>
+            <div class="radio-group">
+              <label><input type="radio" [(ngModel)]="form.patientCategory" name="patientCategory" value="opd_regular" /><span>常規門診病人</span></label>
+              <label><input type="radio" [(ngModel)]="form.patientCategory" name="patientCategory" value="non_regular" /><span>非固定病人</span></label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      @if (patientType === 'opd') {
+        <div class="form-section">
+          <div class="opd-extra-grid">
+            <div class="form-field">
+              <label for="vasc-access">目前血管通路</label>
+              <select id="vasc-access" [(ngModel)]="form.vascAccess" name="vascAccess">
+                <option disabled value="">請選擇</option>
+                @for (va of VASC_ACCESSES; track va) {
+                  <option [value]="va">{{ va }}</option>
+                }
+              </select>
+            </div>
+            <div class="form-field">
+              <label for="first-dialysis-date">首次透析日期</label>
+              <input type="date" id="first-dialysis-date" [(ngModel)]="form.firstDialysisDate" name="firstDialysisDate" (ngModelChange)="handleFirstDialysisDateChange($event)" />
+            </div>
+            <div class="form-field">
+              <label for="access-creation-date">通路建立日期</label>
+              <input type="date" id="access-creation-date" [(ngModel)]="form.accessCreationDate" name="accessCreationDate" />
+            </div>
+            <div class="form-field">
+              <label>透析院所</label>
+              <div class="hospital-input-group">
+                <input type="text" [(ngModel)]="form.hospitalInfo.source" name="hospitalSource" placeholder="原透析院所" />
+                <div class="divider-line"></div>
+                <input type="text" [(ngModel)]="form.hospitalInfo.transferOut" name="hospitalTransferOut" placeholder="轉出院所" />
+              </div>
+            </div>
+            <div class="form-field dialysis-reason-opd">
+              <label for="dialysis-reason">透析原因</label>
+              <input type="text" id="dialysis-reason" [(ngModel)]="form.dialysisReason" name="dialysisReason" />
+            </div>
+            <div class="form-field remarks-opd">
+              <label for="remarks">備註</label>
+              <textarea id="remarks" rows="2" [(ngModel)]="form.remarks" name="remarks"></textarea>
+            </div>
+          </div>
+        </div>
+      } @else {
+        <div class="form-section">
+          <div class="form-field">
+            <label>透析院所</label>
+            <div class="hospital-input-group">
+              <input type="text" [(ngModel)]="form.hospitalInfo.source" name="hospitalSource" placeholder="原透析院所" />
+              <div class="divider-line"></div>
+              <input type="text" [(ngModel)]="form.hospitalInfo.transferOut" name="hospitalTransferOut" placeholder="轉出院所" />
+            </div>
+          </div>
+        </div>
+        <div class="form-section">
+          <div class="form-grid-2-col">
+            <div class="form-field">
+              <label for="inpatient-reason">住院原因</label>
+              <input type="text" id="inpatient-reason" [(ngModel)]="form.inpatientReason" name="inpatientReason" />
+            </div>
+            <div class="form-field">
+              <label for="dialysis-reason">透析原因</label>
+              <input type="text" id="dialysis-reason" [(ngModel)]="form.dialysisReason" name="dialysisReason" />
+            </div>
+          </div>
+          <div class="form-field">
+            <label for="remarks">備註</label>
+            <textarea id="remarks" rows="2" [(ngModel)]="form.remarks" name="remarks"></textarea>
+          </div>
+        </div>
+      }
+
+      <div class="form-section">
+        <fieldset class="form-group">
+          <legend>須注意疾病</legend>
+          <div class="custom-checkbox-container">
+            @for (d of DISEASES; track d) {
+              <div class="custom-checkbox" [class.selected]="isDiseaseSelected(d)" (click)="toggleDisease(d)">
+                {{ d }}
+              </div>
+            }
+          </div>
+        </fieldset>
+        @if (form.patientStatus) {
+          <fieldset class="form-group">
+            <legend>狀態標記</legend>
+            <div class="custom-checkbox-container">
+              <div class="status-date-tag" [class.active]="form.patientStatus.isFirstDialysis?.active" (click)="toggleStatus('isFirstDialysis')">
+                <span>首透</span>
+                @if (form.patientStatus.isFirstDialysis?.active) {
+                  <input type="date" [(ngModel)]="form.patientStatus.isFirstDialysis.date" name="firstDialysisStatusDate" (click)="$event.stopPropagation()" />
+                }
+              </div>
+              <div class="status-date-tag" [class.active]="form.patientStatus.isPaused?.active" (click)="toggleStatus('isPaused')">
+                <span>暫停透析</span>
+                @if (form.patientStatus.isPaused?.active) {
+                  <input type="date" [(ngModel)]="form.patientStatus.isPaused.date" name="pausedStatusDate" (click)="$event.stopPropagation()" />
+                }
+              </div>
+              @if (patientType !== 'opd') {
+                <div class="status-date-tag" [class.active]="form.patientStatus.hasBloodDraw?.active" (click)="toggleStatus('hasBloodDraw')">
+                  <span>已抽血</span>
+                  @if (form.patientStatus.hasBloodDraw?.active) {
+                    <input type="date" [(ngModel)]="form.patientStatus.hasBloodDraw.date" name="bloodDrawStatusDate" (click)="$event.stopPropagation()" />
+                  }
+                </div>
+              }
+              <div class="status-date-tag do-not-move-tag" [class.active]="form.patientStatus.doNotMove?.active" (click)="toggleDoNotMove()">
+                <span><i class="fas fa-lock"></i> 勿動</span>
+                @if (form.patientStatus.doNotMove?.active) {
+                  <input type="text" [(ngModel)]="form.patientStatus.doNotMove.reason" name="doNotMoveReason" placeholder="勿動原因…" (click)="$event.stopPropagation()" />
+                }
+              </div>
+            </div>
+          </fieldset>
+        }
+      </div>
+
+      @if (isFirstPlanVisible) {
+        <div class="first-plan-overlay" (click)="closeFirstDialysisPlan()">
+          <div class="first-plan-dialog" (click)="$event.stopPropagation()">
+            <div class="first-plan-header">
+              <h3>首透連續洗設定</h3>
+              <button type="button" class="close-button" (click)="closeFirstDialysisPlan()">&times;</button>
+            </div>
+
+            <div class="first-plan-controls">
+              <label>
+                開始日期
+                <input type="date" [(ngModel)]="firstPlan.startDate" name="firstPlanStartDate" />
+              </label>
+              <label>
+                連續天數
+                <input type="number" min="1" max="6" [(ngModel)]="firstPlan.continuousDays" name="firstPlanDays" />
+              </label>
+              <label>
+                常規頻率
+                <select [(ngModel)]="firstPlan.regularFreq" name="firstPlanRegularFreq">
+                  @for (f of FREQ_OPTIONS; track f) {
+                    <option [value]="f">{{ f }}</option>
+                  }
+                </select>
+              </label>
+            </div>
+
+            @if (firstPlanError) {
+              <div class="plan-error">{{ firstPlanError }}</div>
+            }
+
+            <div class="first-plan-grid">
+              <section class="plan-panel">
+                <div class="panel-title">常規床位</div>
+                <div class="selected-line">已選：{{ formatAssignment(firstPlan.regularAssignment) }}</div>
+                <div class="bed-picker">
+                  @for (shift of SHIFTS; track shift) {
+                    <div class="shift-bed-group">
+                      <h4>{{ SHIFT_LABELS[shift] }}</h4>
+                      <div class="bed-chip-list">
+                        @for (bed of regularAvailableBeds[shift]; track bed) {
+                          <button
+                            type="button"
+                            class="bed-chip"
+                            [class.selected]="firstPlan.regularAssignment?.bedNum === bed && firstPlan.regularAssignment?.shiftCode === shift"
+                            [class.hepatitis-bed]="isHepatitisBed(bed)"
+                            (click)="selectRegularBed(bed, shift)"
+                          >
+                            {{ formatBed(bed) }}
+                          </button>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              </section>
+
+              <section class="plan-panel">
+                <div class="panel-title">連續加洗</div>
+                <div class="date-chip-list">
+                  @for (item of continuousDates; track item.date) {
+                    <button
+                      type="button"
+                      class="date-chip"
+                      [class.selected]="firstPlan.selectedExtraDate === item.date"
+                      [class.regular-day]="item.isRegular"
+                      [class.disabled]="item.isRegular"
+                      [class.has-extra]="hasExtraSession(item.date)"
+                      (click)="selectExtraDate(item.date)"
+                    >
+                      <span>{{ item.weekdayLabel }}</span>
+                      <small>{{ item.date }}</small>
+                      @if (item.isRegular) {
+                        <em>常規</em>
+                      }
+                      @if (hasExtraSession(item.date)) {
+                        <i (click)="removeExtraSession(item.date, $event)">移除</i>
+                      }
+                    </button>
+                  }
+                </div>
+
+                @if (firstPlan.selectedExtraDate) {
+                  <div class="selected-line">
+                    {{ firstPlan.selectedExtraDate }} 加洗床位：{{ formatAssignment(selectedExtraSession) }}
+                  </div>
+                  <div class="bed-picker compact">
+                    @for (shift of SHIFTS; track shift) {
+                      <div class="shift-bed-group">
+                        <h4>{{ SHIFT_LABELS[shift] }}</h4>
+                        <div class="bed-chip-list">
+                          @for (bed of extraAvailableBeds[shift]; track bed) {
+                            <button
+                              type="button"
+                              class="bed-chip"
+                              [class.selected]="selectedExtraSession?.bedNum === bed && selectedExtraSession?.shiftCode === shift"
+                              [class.hepatitis-bed]="isHepatitisBed(bed)"
+                              (click)="selectExtraBed(bed, shift)"
+                            >
+                              {{ formatBed(bed) }}
+                            </button>
+                          }
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+              </section>
+            </div>
+
+            <div class="first-plan-footer">
+              @if (firstPlanLoading) {
+                <span>載入床位中...</span>
+              }
+              <button type="button" class="btn-secondary" (click)="closeFirstDialysisPlan()">取消</button>
+              <button type="button" class="btn-primary" (click)="applyFirstDialysisPlan()">套用設定</button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <div class="modal-footer">
+        <button type="submit" class="btn-primary">儲存</button>
+        <button type="button" class="btn-secondary" (click)="closeModal()">取消</button>
+      </div>
+    </form>
+  </div>
+</div>

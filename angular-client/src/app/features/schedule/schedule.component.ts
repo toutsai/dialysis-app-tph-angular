@@ -1,0 +1,2379 @@
+// Standalone 版：已移除 Firebase
+import {
+  Component,
+  ChangeDetectionStrategy,
+  OnInit,
+  OnDestroy,
+  inject,
+  signal,
+  computed,
+  effect,
+  ViewChild,
+  ElementRef,
+} from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
+import * as XLSX from 'xlsx';
+
+import { AuthService } from '@app/core/services/auth.service';
+import { ApiConfigService } from '@app/core/services/api-config.service';
+import { PatientStoreService } from '@app/core/services/patient-store.service';
+import { TaskStoreService } from '@app/core/services/task-store.service';
+import { ArchiveStoreService } from '@app/core/services/archive-store.service';
+import { MedicationStoreService } from '@app/core/services/medication-store.service';
+import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@app/core/services/api-manager.service';
+import { NotificationService } from '@app/core/services/notification.service';
+import { DateStateService } from '@app/core/services/date-state.service';
+import { UserDirectoryService } from '@app/core/services/user-directory.service';
+import { fetchEffectiveOrders } from '@/services/effectiveOrdersService';
+import { InpatientSidebarComponent } from '@app/components/inpatient-sidebar/inpatient-sidebar.component';
+import { BedAssignmentDialogComponent } from '@app/components/dialogs/bed-assignment-dialog/bed-assignment-dialog.component';
+import { DailyStaffDisplayComponent } from '@app/components/daily-staff-display/daily-staff-display.component';
+import { StatsToolbarComponent } from '@app/components/stats-toolbar/stats-toolbar.component';
+import { WardNumberDialogComponent } from '@app/components/dialogs/ward-number-dialog/ward-number-dialog.component';
+import { InpatientRoundsDialogComponent } from '@app/components/dialogs/inpatient-rounds-dialog/inpatient-rounds-dialog.component';
+import { IcuOrdersDialogComponent } from '@app/components/dialogs/icu-orders-dialog/icu-orders-dialog.component';
+import { DialysisOrderModalComponent } from '@app/components/dialogs/dialysis-order-modal/dialysis-order-modal.component';
+import { CrrtOrderModalComponent } from '@app/components/dialogs/crrt-order-modal/crrt-order-modal.component';
+import { DailyRecordsSummaryDialogComponent } from '@app/components/dialogs/daily-records-summary-dialog/daily-records-summary-dialog.component';
+import { DailyInjectionListDialogComponent } from '@app/components/dialogs/daily-injection-list-dialog/daily-injection-list-dialog.component';
+import { DailyDraftListDialogComponent } from '@app/components/dialogs/daily-draft-list-dialog/daily-draft-list-dialog.component';
+import { PatientDetailModalComponent } from '@app/components/dialogs/patient-detail-modal/patient-detail-modal.component';
+import { PatientMessagesIconComponent } from '@app/components/patient-messages-icon/patient-messages-icon.component';
+import { MemoDisplayDialogComponent } from '@app/components/dialogs/memo-display-dialog/memo-display-dialog.component';
+import { ConditionRecordDisplayDialogComponent } from '@app/components/dialogs/condition-record-display-dialog/condition-record-display-dialog.component';
+import { AutoAssignConfigDialogComponent } from '@app/components/dialogs/auto-assign-config-dialog/auto-assign-config-dialog.component';
+import { AutoAssignConfigService, type AutoAssignConfig } from '@app/core/services/auto-assign-config.service';
+
+import {
+  SHIFT_CODES,
+  ORDERED_SHIFT_CODES,
+  getShiftDisplayName,
+  earlyTeams,
+  lateTeams,
+  allTeams,
+} from '@/constants/scheduleConstants';
+import {
+  createEmptySlotData,
+  generateAutoNote,
+  getUnifiedCellStyle,
+} from '@/utils/scheduleUtils';
+import {
+  formatDateToYYYYMMDD,
+} from '@/utils/dateUtils';
+import {
+  fetchTeamsByDate,
+  saveTeams,
+  updateTeams,
+  saveScheduleWithTeams,
+} from '@/services/nurseAssignmentsService';
+import {
+  fetchAllSchedules as optimizedFetchAllSchedules,
+  saveSchedule as optimizedSaveSchedule,
+  updateSchedule as optimizedUpdateSchedule,
+  updatePatient as optimizedUpdatePatient,
+  createDialysisOrderAndUpdatePatient,
+} from '@/services/optimizedApiService';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface ScheduleSlotData {
+  patientId?: string;
+  autoNote?: string;
+  manualNote?: string;
+  shiftId?: string;
+  transportMethod?: string;
+  archivedPatientInfo?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+interface ScheduleRecord {
+  id: string | null;
+  date: string;
+  schedule: Record<string, ScheduleSlotData>;
+  names: Record<string, string>;
+}
+
+interface TeamsRecord {
+  id: string | null;
+  date: string;
+  teams: Record<string, Record<string, string | null>>;
+  names?: Record<string, string>;
+  takeoffEnabled?: boolean;
+}
+
+interface ScheduleCellView {
+  patientId: string;
+  patientName: string;
+  medicalRecordNumber: string;
+  mode: string | null;
+  combinedNote: string;
+  cellStyle: Record<string, boolean>;
+  messageTypes: string[];
+  wardNumber: string;
+  isInpatientOrER: boolean;
+  nurseTeam: string;
+  nurseTeamIn: string;
+  nurseTeamOut: string;
+}
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const LAYOUT_DATA = {
+  leftWingRows: [
+    ['空', 32, 31],
+    [33, 35, 36],
+    [39, 38, 37],
+    [51, 52, 53],
+    [57, 56, 55],
+    [58, 59, 61],
+    [65, 63, 62],
+  ] as (string | number)[][],
+  rightWingRows: [
+    [29, 28, 27],
+    [23, 25, 26],
+    [22, 21, 19],
+    [16, 17, 18],
+    [15, 13, 12],
+    [8, 9, 11],
+    [7, 6, 5],
+    [1, 2, 3],
+  ] as number[][],
+};
+
+const ALL_BED_NUMBERS: (string | number)[] = [
+  ...LAYOUT_DATA.leftWingRows.flat(),
+  ...LAYOUT_DATA.rightWingRows.flat(),
+].filter((b) => b !== '空');
+
+const HEPATITIS_BEDS: (string | number)[] = ['空', 31, 32, 33, 35, 36];
+const AISLE_SIDE_BEDS: number[] = [1, 7, 8, 15, 16, 22, 23, 29, 31, 36, 37, 53, 55, 61, 62, 65];
+const PERIPHERAL_BED_COUNT = 6;
+const DEFAULT_TEAM_CAPACITY = 4;
+
+type BedSpatialPoint = {
+  side: 'left' | 'right';
+  zone: number;
+  row: number;
+  col: number;
+  x: number;
+  y: number;
+  aisleAffinity: number;
+};
+
+const BED_COORDINATES = (() => {
+  const map = new Map<string, BedSpatialPoint>();
+  LAYOUT_DATA.leftWingRows.forEach((row, rowIndex) => {
+    row.forEach((bed, colIndex) => {
+      if (typeof bed === 'number') {
+        map.set(String(bed), { side: 'left', zone: Math.floor(rowIndex / 2), row: rowIndex, col: colIndex, x: colIndex, y: rowIndex, aisleAffinity: AISLE_SIDE_BEDS.includes(bed) ? 1 : 0 });
+      }
+    });
+  });
+  LAYOUT_DATA.rightWingRows.forEach((row, rowIndex) => {
+    row.forEach((bed, colIndex) => {
+      map.set(String(bed), { side: 'right', zone: Math.floor(rowIndex / 2), row: rowIndex, col: colIndex, x: 4 + colIndex, y: rowIndex, aisleAffinity: AISLE_SIDE_BEDS.includes(bed) ? 1 : 0 });
+    });
+  });
+  return map;
+})();
+
+const BED_ZONE_PATH = (() => {
+  const beds: number[] = [];
+  const zoneCount = Math.max(
+    Math.ceil(LAYOUT_DATA.leftWingRows.length / 2),
+    Math.ceil(LAYOUT_DATA.rightWingRows.length / 2)
+  );
+  for (let zone = 0; zone < zoneCount; zone++) {
+    for (let offset = 0; offset < 2; offset++) {
+      const rowIndex = zone * 2 + offset;
+      beds.push(...(LAYOUT_DATA.leftWingRows[rowIndex] || []).filter((bed): bed is number => typeof bed === 'number'));
+      beds.push(...(LAYOUT_DATA.rightWingRows[rowIndex] || []));
+    }
+  }
+  return beds.map((bed) => String(bed));
+})();
+
+const FREQ_TO_DAYS: Record<string, number[]> = {
+  '一三五': [1, 3, 5],
+  '二四六': [2, 4, 6],
+  '一四': [1, 4],
+  '二五': [2, 5],
+  '三六': [3, 6],
+  '一五': [1, 5],
+  '二六': [2, 6],
+  '每周一次': [0, 1, 2, 3, 4, 5, 6],
+  '臨時': [],
+};
+
+const BASE_TEAMS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'];
+const PERIPHERAL_BED_RANGE = Array.from({ length: PERIPHERAL_BED_COUNT }, (_, i) => i + 1);
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
+@Component({
+  selector: 'app-schedule',
+  standalone: true,
+  imports: [CommonModule, FormsModule, InpatientSidebarComponent, BedAssignmentDialogComponent, DailyStaffDisplayComponent, StatsToolbarComponent, WardNumberDialogComponent, InpatientRoundsDialogComponent, IcuOrdersDialogComponent, DialysisOrderModalComponent, CrrtOrderModalComponent, DailyRecordsSummaryDialogComponent, DailyInjectionListDialogComponent, DailyDraftListDialogComponent, PatientDetailModalComponent, PatientMessagesIconComponent, MemoDisplayDialogComponent, ConditionRecordDisplayDialogComponent, AutoAssignConfigDialogComponent],
+  templateUrl: './schedule.component.html',
+  styleUrl: './schedule.component.css',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class ScheduleComponent implements OnInit, OnDestroy {
+  // Services
+  readonly auth = inject(AuthService);
+  private readonly firebaseService = inject(ApiConfigService);
+  private readonly patientStore = inject(PatientStoreService);
+  private readonly taskStore = inject(TaskStoreService);
+  private readonly archiveStore = inject(ArchiveStoreService);
+  private readonly medicationStore = inject(MedicationStoreService);
+  private readonly apiManagerService = inject(ApiManagerService);
+  private readonly notificationService = inject(NotificationService);
+  private readonly dateState = inject(DateStateService);
+  private readonly userDirectory = inject(UserDirectoryService);
+  private readonly router = inject(Router);
+  private readonly autoAssignConfig = inject(AutoAssignConfigService);
+
+  // API managers (cached — avoid re-creating per call)
+  private readonly usersApi: ApiManager<FirestoreRecord>;
+  private readonly ordersHistoryApi: ApiManager<FirestoreRecord>;
+  private readonly schedulesApi: ApiManager<FirestoreRecord>;
+  private readonly physicianSchedulesApi: ApiManager<FirestoreRecord>;
+  private readonly physiciansApi: ApiManager<FirestoreRecord>;
+
+  // Expose constants to template
+  readonly ORDERED_SHIFT_CODES = ORDERED_SHIFT_CODES;
+  readonly SHIFT_CODES = SHIFT_CODES;
+  readonly layoutData = LAYOUT_DATA;
+  readonly allBedNumbers = ALL_BED_NUMBERS;
+  readonly hepatitisBeds = HEPATITIS_BEDS;
+  readonly aisleSideBeds = AISLE_SIDE_BEDS;
+  readonly peripheralBedCount = PERIPHERAL_BED_COUNT;
+  readonly earlyTeams = earlyTeams;
+  readonly lateTeams = lateTeams;
+  readonly allTeams = allTeams;
+  readonly freqToDays = FREQ_TO_DAYS;
+
+  // Reactive state
+  readonly currentDate = signal(new Date());
+  private readonly scheduleRevision = signal(0);
+  readonly hasUnsavedChanges = signal(false);
+  readonly statusIndicator = signal('');
+  currentRecord: ScheduleRecord = { id: null, date: '', schedule: {}, names: {} };
+  readonly currentTeamsRecord = signal<TeamsRecord>({ id: null, date: '', teams: {} });
+  readonly hasUnsavedTeamChanges = signal(false);
+  readonly isLoading = signal(true);
+  readonly isAutoAssignConfigVisible = signal(false);
+
+  // Dialog visibility
+  readonly isAlertDialogVisible = signal(false);
+  readonly alertDialogTitle = signal('');
+  readonly alertDialogMessage = signal('');
+  readonly isAssignmentDialogVisible = signal(false);
+  readonly isPatientSelectDialogVisible = signal(false);
+  readonly isConfirmDialogVisible = signal(false);
+  readonly confirmDialogMessage = signal('');
+  readonly isSimplifiedViewVisible = signal(false);
+  readonly isMemoDialogVisible = signal(false);
+  readonly isConditionRecordDialogVisible = signal(false);
+  readonly isDetailModalVisible = signal(false);
+  readonly isWardDialogVisible = signal(false);
+  readonly isInpatientRoundsDialogVisible = signal(false);
+  readonly isRecordsSummaryDialogVisible = signal(false);
+  readonly isInjectionDialogVisible = signal(false);
+  readonly isInjectionLoading = signal(false);
+  readonly isDraftDialogVisible = signal(false);
+  readonly isDraftLoading = signal(false);
+  readonly isIcuOrdersDialogVisible = signal(false);
+  readonly isIcuSaving = signal(false);
+  readonly icuEffectiveOrders = signal<Record<string, any>>({});
+  readonly isOrderModalVisible = signal(false);
+  readonly isCRRTOrderModalVisible = signal(false);
+
+  @ViewChild('datePickerInput') datePickerInput?: ElementRef<HTMLInputElement>;
+
+  readonly currentDateInputValue = computed(() => this.formatDate(this.currentDate()));
+
+  // Dialog data
+  private onConfirmAction: (() => void) | null = null;
+  readonly currentSlotId = signal<string | null>(null);
+  readonly selectedPatientForDetail = signal<Record<string, unknown> | null>(null);
+  readonly shiftForDetailModal = signal<string | null>(null);
+  readonly patientIdForDialog = signal<string | null>(null);
+  readonly patientNameForDialog = signal('');
+  readonly currentWardNumber = signal('');
+  readonly currentEditingShiftId = signal<string | null>(null);
+  readonly shiftCodeForDialog = signal<string | null>(null);
+  readonly patientIdsForDialog = signal<string[]>([]);
+  readonly patientInfoMapForDialog = signal<Record<string, Record<string, string>>>({});
+  readonly allDailyInjections = signal<Record<string, unknown>[]>([]);
+  readonly injectionDialogDate = signal('');
+  readonly filterSpecificInjections = signal(false);
+  readonly lastInjectionShiftCode = signal('');
+  readonly dailyDrafts = signal<Record<string, unknown>[]>([]);
+  readonly draftDialogDate = signal('');
+  readonly patientsForDraftDialog = signal<Record<string, unknown>[]>([]);
+  readonly sortedSlotsForModal = signal<Record<string, unknown>[]>([]);
+  readonly currentPatientIndexForModal = signal(0);
+  readonly editingPatientForOrder = signal<any>(null);
+  readonly editingPatientForCRRT = signal<any>(null);
+  readonly crrtOrderHistory = signal<Record<string, unknown>[]>([]);
+  readonly noonTakeoffVisibility = signal({ early: false, late: false });
+
+  readonly dailyPhysicians = signal<Record<string, unknown | null>>({ early: null, noon: null, late: null });
+  readonly dailyConsultPhysicians = signal<Record<string, unknown | null>>({ morning: null, afternoon: null, night: null });
+
+  // Computed properties
+  readonly allPatients = this.patientStore.allPatients;
+  readonly patientMap = this.patientStore.patientMap;
+
+  readonly isPageLocked = computed(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const currentDay = new Date(this.currentDate());
+    currentDay.setHours(0, 0, 0, 0);
+    return currentDay < today;
+  });
+
+  readonly sortedBedNumbers = computed(() => {
+    const numericBeds = ALL_BED_NUMBERS.filter((b): b is number => typeof b === 'number');
+    return [...numericBeds].sort((a, b) => a - b);
+  });
+
+  readonly currentDateDisplay = computed(() => this.formatDate(this.currentDate()));
+  readonly weekdayDisplay = computed(
+    () => ['日', '一', '二', '三', '四', '五', '六'][this.currentDate().getDay()],
+  );
+  readonly dayOfWeek = computed(() => {
+    const day = this.currentDate().getDay();
+    return day === 0 ? 7 : day;
+  });
+
+  readonly scheduleCellViews = computed(() => {
+    this.scheduleRevision();
+    const patients = this.patientMap();
+    const teams = this.currentTeamsRecord().teams;
+    const dailyMessageTypes = this.taskStore.getPatientMessageTypesMapForDate(this.currentDateDisplay());
+    const views = new Map<string, ScheduleCellView>();
+
+    for (const [shiftId, slotData] of Object.entries(this.currentRecord.schedule || {})) {
+      if (!slotData?.patientId) continue;
+      const patientInfo = this.getArchivedOrLivePatientInfo(slotData);
+      const patient = patients.get(slotData.patientId) as Record<string, unknown> | undefined;
+      if (!patientInfo && !patient) continue;
+
+      const patientId = slotData.patientId;
+      const shiftCode = shiftId.split('-').pop() || '';
+      const teamData = teams[`${patientId}-${shiftCode}`] || {};
+      const modeOverride = slotData.modeOverride as string | undefined;
+      const patientMode = (patient?.['mode'] as string | undefined) || null;
+      const mode = modeOverride && modeOverride !== 'HD'
+        ? modeOverride
+        : patientMode && patientMode !== 'HD'
+          ? patientMode
+          : null;
+      const dailyTypes = [...(dailyMessageTypes.get(patientId) || [])];
+      const pendingTypes = [...(dailyMessageTypes.get(patientId) || [])];
+      const status = (patientInfo?.['status'] as string) || '';
+
+      views.set(shiftId, {
+        patientId,
+        patientName: ((patient?.['name'] || patientInfo?.['name']) as string) || '',
+        medicalRecordNumber: ((patient?.['medicalRecordNumber'] || patientInfo?.['medicalRecordNumber']) as string) || '',
+        mode,
+        combinedNote: this.buildCombinedNote(slotData),
+        cellStyle: getUnifiedCellStyle(slotData, patientInfo, null, dailyTypes),
+        messageTypes: pendingTypes,
+        wardNumber: ((patient?.['wardNumber'] || patientInfo?.['wardNumber']) as string) || '',
+        isInpatientOrER: status === 'ipd' || status === 'er',
+        nurseTeam: (teamData['nurseTeam'] as string) || '',
+        nurseTeamIn: (teamData['nurseTeamIn'] as string) || '',
+        nurseTeamOut: (teamData['nurseTeamOut'] as string) || '',
+      });
+    }
+
+    return views;
+  });
+
+  readonly scheduledPatientIdsComputed = computed(() => {
+    this.scheduleRevision();
+    const ids = new Set<string>();
+    if (this.currentRecord.schedule) {
+      for (const [, slot] of Object.entries(this.currentRecord.schedule)) {
+        if (slot?.patientId) ids.add(slot.patientId);
+      }
+    }
+    return ids;
+  });
+
+  get scheduledPatientIds(): Set<string> {
+    return this.scheduledPatientIdsComputed();
+  }
+
+  get statsToolbarData() {
+    const counts: Record<string, Record<string, number>> = {};
+    ORDERED_SHIFT_CODES.forEach((shiftCode: string) => {
+      counts[shiftCode] = { total: 0, opd: 0, ipd: 0, er: 0 };
+    });
+    const dailyData = { counts, total: 0 };
+    if (this.currentRecord.schedule) {
+      for (const [shiftKey, slotData] of Object.entries(this.currentRecord.schedule)) {
+        if (slotData?.patientId) {
+          const patient = this.patientMap().get(slotData.patientId);
+          if (!patient) continue;
+          const shiftCode = shiftKey.split('-').pop()!;
+          if (shiftCode && dailyData.counts[shiftCode]) {
+            const shiftStats = dailyData.counts[shiftCode];
+            shiftStats['total']++;
+            dailyData.total++;
+            const status = (patient as Record<string, unknown>)['status'] as string;
+            if (status === 'opd') shiftStats['opd']++;
+            else if (status === 'ipd') shiftStats['ipd']++;
+            else if (status === 'er') shiftStats['er']++;
+          }
+        }
+      }
+    }
+    return [dailyData];
+  }
+
+  readonly statsToolbarWeekdays = ['本日'];
+
+  get todayInpatients() {
+    const inpatientsMap = new Map<string, Record<string, unknown>>();
+    if (this.currentRecord?.schedule) {
+      for (const shiftId in this.currentRecord.schedule) {
+        const slot = this.currentRecord.schedule[shiftId];
+        if (slot?.patientId && !shiftId.startsWith('peripheral')) {
+          const patientInfo = this.getArchivedOrLivePatientInfo(slot);
+          const patientDetails = this.patientMap().get(slot.patientId);
+          if (patientInfo && patientDetails) {
+            const status = (patientInfo as Record<string, unknown>)['status'] as string;
+            if (status === 'ipd' || status === 'er') {
+              let shiftCode: string;
+              let dialysisBed: string;
+              if (shiftId.startsWith('peripheral-')) {
+                const parts = shiftId.split('-');
+                dialysisBed = `外圍${parts[1]}`;
+                shiftCode = parts[2];
+              } else {
+                const parts = shiftId.split('-');
+                dialysisBed = parts[1] || 'N/A';
+                shiftCode = parts[2];
+              }
+              if (!inpatientsMap.has((patientDetails as Record<string, unknown>)['id'] as string)) {
+                inpatientsMap.set((patientDetails as Record<string, unknown>)['id'] as string, {
+                  id: `${(patientDetails as Record<string, unknown>)['id']}-${shiftId}`,
+                  shiftId,
+                  dialysisBed,
+                  medicalRecordNumber: (patientDetails as Record<string, unknown>)['medicalRecordNumber'],
+                  name: (patientDetails as Record<string, unknown>)['name'],
+                  wardNumber: (patientInfo as Record<string, unknown>)['wardNumber'] || '未登錄',
+                  shift: shiftCode,
+                  transportMethod: slot.transportMethod,
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+    const inpatients = Array.from(inpatientsMap.values());
+    const shiftOrder: Record<string, number> = { early: 1, noon: 2, late: 3, unknown: 4 };
+    inpatients.sort((a, b) => {
+      const sa = shiftOrder[a['shift'] as string] || 4;
+      const sb = shiftOrder[b['shift'] as string] || 4;
+      if (sa !== sb) return sa - sb;
+      const bedA = a['dialysisBed'] === '未排床' ? 1000 : parseInt(a['dialysisBed'] as string);
+      const bedB = b['dialysisBed'] === '未排床' ? 1000 : parseInt(b['dialysisBed'] as string);
+      return bedA - bedB;
+    });
+    return inpatients;
+  }
+
+  readonly filteredDailyInjections = computed(() => {
+    if (!this.filterSpecificInjections()) return this.allDailyInjections();
+    const specificMedCodes = ['ICAC', 'IFER2', 'IPAR1'];
+    return this.allDailyInjections().filter((injection) =>
+      specificMedCodes.includes(injection['orderCode'] as string),
+    );
+  });
+
+  private previousDateStr = '';
+  private exceptionEventSource: EventSource | null = null;
+  private exceptionRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor() {
+    this.usersApi = this.apiManagerService.create<FirestoreRecord>('users');
+    this.ordersHistoryApi = this.apiManagerService.create<FirestoreRecord>('dialysis_orders_history');
+    this.schedulesApi = this.apiManagerService.create<FirestoreRecord>('schedules');
+    this.physicianSchedulesApi = this.apiManagerService.create<FirestoreRecord>('physician_schedules');
+    this.physiciansApi = this.apiManagerService.create<FirestoreRecord>('physicians');
+
+    // Watch currentDate changes
+    effect(() => {
+      const newDate = this.currentDate();
+      const newDateStr = this.formatDate(newDate);
+      if (this.previousDateStr && newDateStr !== this.previousDateStr) {
+        this.medicationStore.clearCache();
+        this.noonTakeoffVisibility.set({ early: false, late: false });
+        this.loadDataForDay(newDate);
+        this.loadDailyStaffInfo(newDate);
+      }
+      this.previousDateStr = newDateStr;
+    });
+  }
+
+  // Lifecycle
+  async ngOnInit(): Promise<void> {
+    this.isLoading.set(true);
+    // Restore shared date if available
+    const sharedDate = this.dateState.selectedDate;
+    if (sharedDate) {
+      this.currentDate.set(new Date(sharedDate));
+    }
+    await this.auth.waitForAuthInit();
+    if (this.auth.currentUser()) {
+      this.taskStore.startRealtimeUpdates(this.auth.currentUser()!.uid);
+    }
+    await Promise.all([
+      this.loadDataForDay(this.currentDate()),
+      this.loadDailyStaffInfo(this.currentDate()),
+    ]);
+    this.startExceptionEventStream();
+    this.isLoading.set(false);
+  }
+
+  ngOnDestroy(): void {
+    this.stopExceptionEventStream();
+  }
+
+  private startExceptionEventStream(): void {
+    const token = this.firebaseService.getToken();
+    if (!token || typeof EventSource === 'undefined') return;
+
+    this.stopExceptionEventStream();
+    try {
+      const es = new EventSource(`/api/events/exceptions?token=${encodeURIComponent(token)}`);
+      this.exceptionEventSource = es;
+
+      es.addEventListener('exception', (event: MessageEvent) => {
+        let payload: any = null;
+        try {
+          payload = JSON.parse(event.data);
+        } catch {
+          payload = null;
+        }
+        this.handleExceptionScheduleRefresh(payload);
+      });
+
+      es.onerror = () => {
+        console.warn('[Schedule] exception SSE disconnected; EventSource will retry automatically');
+      };
+    } catch (error) {
+      console.warn('[Schedule] exception SSE init failed:', error);
+    }
+  }
+
+  private stopExceptionEventStream(): void {
+    if (this.exceptionEventSource) {
+      this.exceptionEventSource.close();
+      this.exceptionEventSource = null;
+    }
+    if (this.exceptionRefreshTimer) {
+      clearTimeout(this.exceptionRefreshTimer);
+      this.exceptionRefreshTimer = null;
+    }
+  }
+
+  private handleExceptionScheduleRefresh(payload: any): void {
+    const dateStr = this.currentDateDisplay();
+    if (!this.exceptionAffectsDate(payload, dateStr)) return;
+
+    if (this.hasUnsavedChanges() || this.hasUnsavedTeamChanges()) {
+      this.statusIndicator.set('調班換床已更新；請先儲存或重新整理後查看最新床位');
+      return;
+    }
+
+    if (this.exceptionRefreshTimer) clearTimeout(this.exceptionRefreshTimer);
+    this.exceptionRefreshTimer = setTimeout(() => {
+      this.exceptionRefreshTimer = null;
+      const date = new Date(this.currentDate());
+      Promise.all([
+        this.loadDataForDay(date),
+        this.loadDailyStaffInfo(date),
+      ]).catch((error) => console.warn('[Schedule] exception refresh failed:', error));
+    }, 800);
+  }
+
+  private exceptionAffectsDate(payload: any, dateStr: string): boolean {
+    const exception = payload?.exception || payload || {};
+    const affectedDates = new Set<string>();
+
+    const addDate = (value: unknown) => {
+      if (typeof value === 'string' && value.length >= 10) {
+        affectedDates.add(value.substring(0, 10));
+      }
+    };
+
+    if (Array.isArray(exception.affectedDates)) {
+      exception.affectedDates.forEach(addDate);
+    }
+    addDate(exception.date);
+    addDate(exception.startDate);
+    addDate(exception.endDate);
+    addDate(exception.from?.sourceDate);
+    addDate(exception.to?.goalDate);
+
+    if (typeof exception.startDate === 'string' && typeof exception.endDate === 'string') {
+      const start = exception.startDate.substring(0, 10);
+      const end = exception.endDate.substring(0, 10);
+      if (dateStr >= start && dateStr <= end) return true;
+    }
+
+    return affectedDates.size === 0 || affectedDates.has(dateStr);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Public methods (used in template)
+  // ---------------------------------------------------------------------------
+
+  getShiftDisplayName(shiftCode: string): string {
+    return getShiftDisplayName(shiftCode);
+  }
+
+  formatDate(date: Date): string {
+    if (!date) return '';
+    return formatDateToYYYYMMDD(date);
+  }
+
+  getPatientName(shiftId: string): string {
+    return this.scheduleCellViews().get(shiftId)?.patientName || '';
+  }
+
+  getPatientMode(shiftId: string): string | null {
+    return this.scheduleCellViews().get(shiftId)?.mode || null;
+  }
+
+  getCombinedNote(shiftId: string): string {
+    return this.scheduleCellViews().get(shiftId)?.combinedNote || '';
+  }
+
+  getPatientCellStyle(shiftId: string): Record<string, boolean> {
+    return this.scheduleCellViews().get(shiftId)?.cellStyle || {};
+  }
+
+  getMessageTypesForPatient(patientId: string): string[] {
+    if (!patientId) return [];
+    for (const view of this.scheduleCellViews().values()) {
+      if (view.patientId === patientId) return view.messageTypes;
+    }
+    return this.taskStore.getPendingMessageTypesMap().get(patientId) || [];
+  }
+
+  // --- Message Icon Dialog ---
+  selectedPatientForDialog = signal<{ id: string; name: string } | null>(null);
+
+  handleIconClick(event: { patientId: string; context: string; type: string }): void {
+    const { patientId, type } = event;
+    const patient = this.patientMap().get(patientId);
+    if (patient) {
+      this.selectedPatientForDialog.set({ id: patientId, name: (patient as any).name });
+      if (type === 'record') {
+        this.isConditionRecordDialogVisible.set(true);
+      } else {
+        this.isMemoDialogVisible.set(true);
+      }
+    }
+  }
+
+  closeMemoDialog(): void {
+    this.isMemoDialogVisible.set(false);
+    this.selectedPatientForDialog.set(null);
+  }
+
+  closeConditionRecordDialog(): void {
+    this.isConditionRecordDialogVisible.set(false);
+    this.selectedPatientForDialog.set(null);
+  }
+
+  getPatientWardNumber(patientId: string | undefined): string {
+    if (!patientId) return '';
+    for (const view of this.scheduleCellViews().values()) {
+      if (view.patientId === patientId) return view.wardNumber;
+    }
+    const patient = this.patientMap().get(patientId);
+    return ((patient as Record<string, unknown>)?.['wardNumber'] as string) || '';
+  }
+
+  isInpatientOrER(shiftId: string): boolean {
+    return this.scheduleCellViews().get(shiftId)?.isInpatientOrER || false;
+  }
+
+  getNurseTeam(shiftId: string, type: string): string {
+    const view = this.scheduleCellViews().get(shiftId);
+    if (view) {
+      if (type === 'single') return view.nurseTeam;
+      if (type === 'in') return view.nurseTeamIn;
+      if (type === 'out') return view.nurseTeamOut;
+    }
+    return '';
+  }
+
+  changeDate(days: number): void {
+    const performChange = () => {
+      const newDate = new Date(this.currentDate());
+      newDate.setDate(newDate.getDate() + days);
+      this.currentDate.set(newDate);
+      this.dateState.setDate(newDate.toISOString());
+    };
+    if ((this.hasUnsavedChanges() || this.hasUnsavedTeamChanges()) && !this.isPageLocked()) {
+      this.showConfirm('注意', '您有未儲存的變更，確定要切換日期嗎？', performChange);
+    } else {
+      performChange();
+    }
+  }
+
+  goToToday(): void {
+    const performChange = () => {
+      const today = new Date();
+      this.currentDate.set(today);
+      this.dateState.setDate(today.toISOString());
+    };
+    if ((this.hasUnsavedChanges() || this.hasUnsavedTeamChanges()) && !this.isPageLocked()) {
+      this.showConfirm('注意', '您有未儲存的變更，確定要切換到今天嗎？', performChange);
+    } else {
+      performChange();
+    }
+  }
+
+  openDatePicker(): void {
+    const el = this.datePickerInput?.nativeElement;
+    if (!el) return;
+    const anyEl = el as any;
+    if (typeof anyEl.showPicker === 'function') {
+      try {
+        anyEl.showPicker();
+        return;
+      } catch {
+        // 某些瀏覽器沒有使用者手勢時會 throw，退回 click()
+      }
+    }
+    el.click();
+  }
+
+  onDatePicked(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    if (!value) return;
+    const performChange = () => {
+      const newDate = new Date(`${value}T00:00:00`);
+      this.currentDate.set(newDate);
+      this.dateState.setDate(newDate.toISOString());
+    };
+    if ((this.hasUnsavedChanges() || this.hasUnsavedTeamChanges()) && !this.isPageLocked()) {
+      this.showConfirm('注意', '您有未儲存的變更，確定要切換日期嗎？', performChange);
+    } else {
+      performChange();
+    }
+  }
+
+  handleSlotClick(shiftId: string): void {
+    const slotData = this.currentRecord.schedule[shiftId];
+    if (this.isPageLocked()) return;
+    if (!slotData?.patientId) {
+      this.currentSlotId.set(shiftId);
+      this.isPatientSelectDialogVisible.set(true);
+      return;
+    }
+    // 勿動病人不可從排程移除
+    const locked = this.getLockedPatient(slotData.patientId);
+    if (locked) {
+      this.showAlert('操作被鎖定', this.doNotMoveMessage(locked));
+      return;
+    }
+    const patient = this.patientMap().get(slotData.patientId);
+    const name = (patient as Record<string, unknown>)?.['name'] as string || '未知';
+    this.showConfirm(`確認移除`, `確定要將「${name}」從此班次中移除嗎？`, () => {
+      this.handleSlotUpdate(shiftId, null);
+    });
+  }
+
+  handleSimplifiedCellClick(shiftId: string): void {
+    const patientId = this.currentRecord.schedule[shiftId]?.patientId;
+    if (patientId) {
+      this.openDetailModalForPatient(patientId, shiftId);
+    }
+  }
+
+  async saveDataToCloud(): Promise<void> {
+    if (this.isPageLocked()) {
+      this.showAlert('操作失敗', '操作被鎖定：權限不足或日期已過。');
+      return;
+    }
+    this.statusIndicator.set('儲存中...');
+    try {
+      const scheduleDirty = this.hasUnsavedChanges();
+      const teamsRec = this.currentTeamsRecord();
+      const teamsDirty =
+        this.hasUnsavedTeamChanges() && Object.keys(teamsRec.teams).length > 0;
+
+      if (!scheduleDirty && !teamsDirty) {
+        this.statusIndicator.set('無變更可儲存');
+        return;
+      }
+
+      // 同時有兩種變更時使用原子性 endpoint，確保 schedule / teams 一致性
+      // names 必須來自 teamsRec.names（護理師姓名對應），不可用 currentRecord.names（病人名稱索引）
+      if (scheduleDirty && teamsDirty) {
+        const date = this.currentRecord.date;
+        const result = await saveScheduleWithTeams(date, {
+          schedule: this.currentRecord.schedule || {},
+          names: teamsRec.names || {},
+          teams: teamsRec.teams,
+          takeoffEnabled: teamsRec.takeoffEnabled,
+        });
+        if (result.schedule?.id) this.currentRecord.id = result.schedule.id;
+        if (result.teams) {
+          this.currentTeamsRecord.update((r) => ({ ...r, id: r.id || date }));
+        }
+      } else if (scheduleDirty) {
+        const dataToSave = {
+          date: this.currentRecord.date,
+          schedule: this.currentRecord.schedule || {},
+          names: this.currentRecord.names || {},
+        };
+        if (this.currentRecord.id) {
+          await optimizedUpdateSchedule(this.currentRecord.id, dataToSave);
+        } else if (Object.keys(dataToSave.schedule).length > 0) {
+          const saved = (await optimizedSaveSchedule(dataToSave)) as { id: string };
+          this.currentRecord.id = saved.id;
+        }
+      } else if (teamsDirty) {
+        const teamsToSave = {
+          date: teamsRec.date,
+          teams: teamsRec.teams,
+          names: teamsRec.names || {},
+        };
+        if (teamsRec.id) {
+          await updateTeams(teamsRec.id, teamsToSave);
+        } else {
+          const saved = (await saveTeams(teamsToSave)) as { id: string };
+          this.currentTeamsRecord.update((r) => ({ ...r, id: saved.id }));
+        }
+      }
+
+      this.hasUnsavedChanges.set(false);
+      this.hasUnsavedTeamChanges.set(false);
+      this.statusIndicator.set('儲存成功！');
+      this.showAlert('操作成功', '排程已成功儲存！');
+    } catch (error: unknown) {
+      console.error('儲存失敗:', error);
+      this.statusIndicator.set('儲存失敗');
+      const msg = error instanceof Error ? error.message : '未知錯誤';
+      this.showAlert('操作失敗', `儲存失敗: ${msg}`);
+    }
+  }
+
+  runScheduleCheck(): void {
+    const warnings: string[] = [];
+    const statusMap: Record<string, string> = { opd: '門診', ipd: '住院', er: '急診' };
+    const today = this.dayOfWeek();
+    // Build scheduled IDs directly (not from computed signal, since currentRecord is not a signal)
+    const scheduledIds = new Set<string>();
+    if (this.currentRecord.schedule) {
+      for (const [, slot] of Object.entries(this.currentRecord.schedule)) {
+        if (slot?.patientId) scheduledIds.add(slot.patientId);
+      }
+    }
+
+    // 1. 重複排班 — same patient appears more than once today
+    const duplicateNames = new Set<string>();
+    const tempScheduled: Record<string, boolean> = {};
+    Object.values(this.currentRecord.schedule).forEach((slot) => {
+      if (slot?.patientId) {
+        if (tempScheduled[slot.patientId]) {
+          const patient = this.patientMap().get(slot.patientId);
+          const name = (patient as Record<string, unknown>)?.['name'] as string;
+          if (name) duplicateNames.add(name);
+        }
+        tempScheduled[slot.patientId] = true;
+      }
+    });
+    if (duplicateNames.size > 0) {
+      warnings.push(`【重複排班】:\n- ${Array.from(duplicateNames).join('\n- ')}`);
+    }
+
+    // 2. 頻率不符 — scheduled patients whose freq does NOT include today
+    const freqMismatch: string[] = [];
+    for (const [, slot] of Object.entries(this.currentRecord.schedule)) {
+      if (!slot?.patientId) continue;
+      const patient = this.patientMap().get(slot.patientId) as Record<string, unknown> | undefined;
+      if (!patient || patient['isDeleted'] || patient['status'] !== 'opd') continue;
+      const freq = patient['freq'] as string;
+      if (!freq) continue;
+      const expectedDays = this.freqToDays[freq];
+      if (expectedDays && !expectedDays.includes(today)) {
+        freqMismatch.push(`${patient['name']} (頻率: ${freq})`);
+      }
+    }
+    if (freqMismatch.length > 0) {
+      warnings.push(`【頻率不符】(排入但非當日頻率):\n- ${freqMismatch.join('\n- ')}`);
+    }
+
+    // 3. 重要未排 — IPD/ER patients whose freq includes today but not scheduled
+    const unassignedCritical = this.allPatients()
+      .filter((p: any) => {
+        if (p.isDeleted || p.isDiscontinued || scheduledIds.has(p.id)) return false;
+        if (p.status !== 'ipd' && p.status !== 'er') return false;
+        if (!p.freq) return false;
+        const days = this.freqToDays[p.freq as string];
+        return days ? days.includes(today) : false;
+      });
+    if (unassignedCritical.length > 0) {
+      const names = unassignedCritical
+        .map((p: any) => `${p.name} (${statusMap[p.status] || p.status}, ${p.freq})`)
+        .join('\n- ');
+      warnings.push(`【重要病人未排班】(住院/急診):\n- ${names}`);
+    }
+
+    // 4. 當日應排但未排 — patients whose freq includes today but not scheduled (OPD only, excluding already listed IPD/ER)
+    const unassignedToday = this.allPatients()
+      .filter((p: any) => {
+        if (p.isDeleted || p.isDiscontinued || scheduledIds.has(p.id)) return false;
+        if (p.status === 'ipd' || p.status === 'er') return false; // already in category 3
+        if (!p.freq) return false;
+        const days = this.freqToDays[p.freq as string];
+        return days ? days.includes(today) : false;
+      });
+    if (unassignedToday.length > 0) {
+      const names = unassignedToday
+        .map((p: any) => `${p.name} (${p.freq})`)
+        .join('\n- ');
+      warnings.push(`【當日應排但未排】(門診):\n- ${names}`);
+    }
+
+    if (warnings.length > 0) {
+      this.showAlert('排班檢查結果', warnings.join('\n\n'));
+    } else {
+      this.showAlert('排班檢視完畢', '未發現明顯的排班或遺漏問題。');
+    }
+  }
+
+  updateNurseTeam(event: Event, shiftId: string, type: string): void {
+    const target = event.target as HTMLSelectElement;
+    if (this.isPageLocked()) {
+      target.value = this.getNurseTeam(shiftId, type);
+      return;
+    }
+    const slot = this.currentRecord.schedule[shiftId];
+    if (!slot?.patientId) {
+      target.value = '';
+      return;
+    }
+    const value = target.value;
+    const shiftCode = shiftId.split('-').pop()!;
+    const key = `${slot.patientId}-${shiftCode}`;
+    const teamsRec = { ...this.currentTeamsRecord() };
+    if (!teamsRec.teams[key]) {
+      teamsRec.teams[key] = {};
+    }
+    const teamData = teamsRec.teams[key];
+    const isPeripheralNoon = shiftId.startsWith('peripheral') && shiftId.endsWith(SHIFT_CODES.NOON);
+    if (type === 'single' && isPeripheralNoon) {
+      teamData['nurseTeamIn'] = value || null;
+      teamData['nurseTeamOut'] = value || null;
+      teamData['nurseTeam'] = null;
+    } else if (type === 'single') {
+      teamData['nurseTeam'] = value || null;
+    } else if (type === 'in') {
+      teamData['nurseTeamIn'] = value || null;
+    } else if (type === 'out') {
+      teamData['nurseTeamOut'] = value || null;
+    }
+    if (!teamData['nurseTeam'] && !teamData['nurseTeamIn'] && !teamData['nurseTeamOut']) {
+      delete teamsRec.teams[key];
+    }
+    this.currentTeamsRecord.set(teamsRec);
+    this.setTeamChange();
+  }
+
+  updateNote(event: Event, shiftId: string): void {
+    const target = event.target as HTMLElement;
+    if (this.isPageLocked()) {
+      target.textContent = this.getCombinedNote(shiftId);
+      return;
+    }
+    if (!this.currentRecord.schedule[shiftId]) {
+      this.currentRecord.schedule[shiftId] = createEmptySlotData(shiftId);
+    }
+    this.currentRecord.schedule[shiftId].manualNote = (target.textContent || '').trim();
+    this.setChange();
+  }
+
+  async copyMedicalRecordNumber(mrn: string | undefined): Promise<void> {
+    if (!mrn) return;
+    try {
+      await navigator.clipboard.writeText(mrn);
+    } catch (err) {
+      console.error('複製失敗:', err);
+      this.showAlert('複製失敗', '無法將病歷號複製到剪貼簿，您的瀏覽器可能不支援或未授予權限。');
+    }
+  }
+
+  promptWardNumber(shiftId: string): void {
+    if (this.isPageLocked()) return;
+    const slot = this.currentRecord.schedule[shiftId];
+    if (!slot?.patientId) return;
+    const patient = this.patientMap().get(slot.patientId);
+    const patientInfo = this.getArchivedOrLivePatientInfo(slot);
+    const status = (patientInfo as Record<string, unknown>)?.['status'] as string;
+    if (!patient || !patientInfo || (status !== 'ipd' && status !== 'er')) {
+      this.showAlert('提示', '只有住院或急診病人才能設定床號');
+      return;
+    }
+    this.currentEditingShiftId.set(shiftId);
+    this.currentWardNumber.set(((patient as Record<string, unknown>)['wardNumber'] as string) || '');
+    this.isWardDialogVisible.set(true);
+  }
+
+  async handleWardNumberConfirm(value: string): Promise<void> {
+    if (!this.currentEditingShiftId()) return;
+    const slot = this.currentRecord.schedule[this.currentEditingShiftId()!];
+    if (!slot?.patientId) return;
+    try {
+      await optimizedUpdatePatient(slot.patientId, { wardNumber: value });
+      await this.patientStore.forceRefreshPatients();
+      this.showAlert('操作成功', '床號已更新');
+    } catch (error: unknown) {
+      console.error('更新床號失敗:', error);
+      this.showAlert('操作失敗', '更新床號失敗');
+    }
+    this.isWardDialogVisible.set(false);
+    this.currentEditingShiftId.set(null);
+    this.currentWardNumber.set('');
+  }
+
+  handleInpatientRoundsSave(patients: any[]): void {
+    // Update transport methods in schedule slots
+    for (const patient of patients) {
+      if (patient.shiftId && this.currentRecord.schedule[patient.shiftId]) {
+        this.currentRecord.schedule[patient.shiftId].transportMethod = patient.transportMethod;
+      }
+    }
+    this.hasUnsavedChanges.set(true);
+    this.statusIndicator.set('住院趴趴走已更新，請儲存');
+  }
+
+  async handleIcuOrdersSaveAndPrint(data: { localNotes: Record<string, string>; crrtEmergencyData: Record<string, any> }): Promise<void> {
+    try {
+      const updates: Promise<void>[] = [];
+      // Save ICU notes to patients
+      for (const [patientId, note] of Object.entries(data.localNotes)) {
+        updates.push(optimizedUpdatePatient(patientId, { icuNote: note }));
+      }
+      // Save CRRT emergency data
+      for (const [patientId, emergency] of Object.entries(data.crrtEmergencyData)) {
+        updates.push(optimizedUpdatePatient(patientId, {
+          crrtEmergencyWithdraw: emergency.withdraw,
+          crrtEmergencyNote: emergency.note,
+        }));
+      }
+      await Promise.all(updates);
+      await this.patientStore.forceRefreshPatients();
+    } catch (error) {
+      console.error('ICU資料儲存失敗:', error);
+      this.showAlert('操作失敗', 'ICU資料儲存失敗');
+    }
+  }
+
+  /** 開啟 ICU 醫囑單：先載入依選取日期生效的醫囑再顯示 */
+  async openIcuOrders(): Promise<void> {
+    this.isIcuOrdersDialogVisible.set(true);
+    await this.loadIcuEffectiveOrders();
+  }
+
+  /** 取 ipd/er + CVVHDF 病人在當前日期生效的醫囑（涵蓋 ICU 醫囑單會用到的對象） */
+  private async loadIcuEffectiveOrders(): Promise<void> {
+    try {
+      const ids = Array.from(this.patientMap().values())
+        .filter((p: any) => !p.isDeleted && (p.status === 'ipd' || p.status === 'er' || p.mode === 'CVVHDF'))
+        .map((p: any) => p.id);
+      const dateStr = this.formatDate(this.currentDate());
+      this.icuEffectiveOrders.set(await fetchEffectiveOrders(ids, dateStr));
+    } catch (error) {
+      console.error('[ScheduleView] 取 ICU 生效醫囑失敗:', error);
+    }
+  }
+
+  handleIcuDateChange(dateString: string): void {
+    const newDate = new Date(dateString + 'T00:00:00');
+    if (!isNaN(newDate.getTime())) {
+      this.currentDate.set(newDate);
+      // 換日後重抓對應生效日醫囑（依日期即可，不需等排程重載）
+      this.loadIcuEffectiveOrders();
+    }
+  }
+
+  async handleIcuOrdersSave(payload: { localNotes: Record<string, string>; crrtEmergencyData: Record<string, any> }): Promise<void> {
+    if (this.isPageLocked()) {
+      this.showAlert('操作失敗', '無法修改ICU醫囑單資料，請確認權限或日期。');
+      return;
+    }
+    this.isIcuSaving.set(true);
+    const { localNotes: notes, crrtEmergencyData: crrtEmergency } = payload;
+    const updatePromises: Promise<void>[] = [];
+
+    // Save notes to each patient's dialysisOrders.memo
+    for (const patientId in notes) {
+      const note = notes[patientId];
+      const patient = this.patientMap().get(patientId);
+      if (patient) {
+        const newDialysisOrders = { ...(patient.dialysisOrders || {}) };
+        newDialysisOrders.memo = note;
+        updatePromises.push(optimizedUpdatePatient(patientId, { dialysisOrders: newDialysisOrders }));
+      }
+    }
+
+    // Save CRRT emergency data
+    for (const patientId in crrtEmergency) {
+      const { withdraw, note } = crrtEmergency[patientId];
+      updatePromises.push(
+        optimizedUpdatePatient(patientId, {
+          emergencyWithdraw: withdraw,
+          emergencyWithdrawNote: note || '',
+        }),
+      );
+    }
+
+    try {
+      if (updatePromises.length > 0) {
+        await Promise.all(updatePromises);
+        await this.patientStore.forceRefreshPatients();
+      }
+      this.showAlert('儲存成功', '醫囑單資料已儲存');
+    } catch (error: any) {
+      console.error('儲存 ICU 醫囑單資料發生錯誤：', error);
+      this.showAlert('儲存失敗', `儲存 ICU 醫囑單資料發生錯誤: ${error.message}`);
+    } finally {
+      this.isIcuSaving.set(false);
+    }
+  }
+
+  openOrderModalFromIcu(patient: any): void {
+    if (patient && patient.id) {
+      this.editingPatientForOrder.set(JSON.parse(JSON.stringify(patient)));
+      this.isOrderModalVisible.set(true);
+    }
+  }
+
+  openCrrtOrderModalFromIcu(patient: any): void {
+    if (patient && patient.id) {
+      this.editingPatientForCRRT.set(JSON.parse(JSON.stringify(patient)));
+      this.isCRRTOrderModalVisible.set(true);
+    }
+  }
+
+  async handleSaveOrder(orderData: any): Promise<void> {
+    if (this.isPageLocked()) {
+      this.showAlert('操作失敗', '過去的排程無法修改。');
+      return;
+    }
+    const patient = this.editingPatientForOrder();
+    if (!patient?.id) {
+      this.showAlert('儲存失敗', '找不到目標病人資訊。');
+      return;
+    }
+    const patientName = patient.name || '（未命名病人）';
+    try {
+      await createDialysisOrderAndUpdatePatient(patient.id, patient.name, orderData);
+      await this.patientStore.forceRefreshPatients();
+      await this.loadDataForDay(this.currentDate());
+      this.isOrderModalVisible.set(false);
+      this.showAlert('儲存成功', `已更新病人 ${patientName} 的醫囑。`);
+    } catch (error: any) {
+      console.error('儲存醫囑失敗:', error);
+      this.showAlert('儲存失敗', `儲存醫囑發生錯誤: ${error.message}`);
+    }
+  }
+
+  async handleSaveCrrtOrder(orderData: any): Promise<void> {
+    const patient = this.editingPatientForCRRT();
+    if (!patient?.id) {
+      this.showAlert('儲存失敗', '找不到目標病人資訊。');
+      return;
+    }
+    try {
+      await optimizedUpdatePatient(patient.id, { crrtOrders: orderData });
+      await this.patientStore.forceRefreshPatients();
+      this.isCRRTOrderModalVisible.set(false);
+      this.showAlert('儲存成功', `已更新病人 ${patient.name} 的CRRT醫囑。`);
+    } catch (error: any) {
+      console.error('儲存 CRRT 醫囑失敗:', error);
+      this.showAlert('儲存失敗', `儲存 CRRT 醫囑發生錯誤: ${error.message}`);
+    }
+  }
+
+  exportScheduleToExcel(): void {
+    if (this.isLoading()) {
+      this.showAlert('提示', '資料正在載入中，請稍後再試。');
+      return;
+    }
+    const data: unknown[][] = [];
+    const stats = this.statsToolbarData[0];
+    const statsString = `總計: ${stats.total}人 (早: ${stats.counts['early']?.['total']}, 午: ${stats.counts['noon']?.['total']}, 晚: ${stats.counts['late']?.['total']})`;
+    data.push(['部立台北醫院 每日排程表']);
+    data.push(['日期:', this.currentDateDisplay()]);
+    data.push(['人數統計:', statsString]);
+    data.push([]);
+    const headers = ['床號', getShiftDisplayName('early'), getShiftDisplayName('noon'), getShiftDisplayName('late')];
+    data.push(headers);
+
+    const views = this.scheduleCellViews();
+    const allBedsToExport: (string | number)[] = [...this.sortedBedNumbers()];
+    for (let i = 1; i <= PERIPHERAL_BED_COUNT; i++) {
+      allBedsToExport.push(`外圍 ${i}`);
+    }
+    allBedsToExport.forEach((bedKey) => {
+      const row: unknown[] = [bedKey];
+      ORDERED_SHIFT_CODES.forEach((shiftCode: string) => {
+        const bedNum = String(bedKey).replace('外圍 ', '');
+        const shiftId = String(bedKey).startsWith('外圍')
+          ? `peripheral-${bedNum}-${shiftCode}`
+          : `bed-${bedNum}-${shiftCode}`;
+        const slot = this.currentRecord.schedule[shiftId];
+        if (!slot?.patientId) {
+          row.push('');
+          return;
+        }
+
+        const view = views.get(shiftId);
+        const patient = this.patientMap().get(slot.patientId) as Record<string, unknown> | undefined;
+        const patientInfo = this.getArchivedOrLivePatientInfo(slot) || patient;
+        const status = (patientInfo?.['status'] || patient?.['status']) as string | undefined;
+        const wardNumber = view?.wardNumber || ((patientInfo?.['wardNumber'] || patient?.['wardNumber']) as string) || '';
+        const admissionInfo = status === 'ipd'
+          ? `住院${wardNumber ? `(${wardNumber})` : ''}`
+          : status === 'er'
+            ? `急診${wardNumber ? `(${wardNumber})` : ''}`
+            : '';
+        const lines = [
+          view?.medicalRecordNumber || patient?.['medicalRecordNumber'] || '',
+          view?.patientName || patient?.['name'] || '',
+          admissionInfo,
+          view?.mode || '',
+          view?.combinedNote || this.getCombinedNote(shiftId),
+        ].filter((line) => String(line).trim().length > 0);
+        row.push(lines.join('\n'));
+      });
+      data.push(row);
+    });
+
+    const worksheet = XLSX.utils.aoa_to_sheet(data);
+    worksheet['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
+      { s: { r: 1, c: 1 }, e: { r: 1, c: 3 } },
+      { s: { r: 2, c: 1 }, e: { r: 2, c: 3 } },
+    ];
+    worksheet['!cols'] = [{ wch: 10 }, { wch: 30 }, { wch: 30 }, { wch: 30 }];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, '每日排程');
+    XLSX.writeFile(workbook, `每日排程表_${this.formatDate(this.currentDate())}.xlsx`);
+  }
+
+  async showShiftInjections(shiftCode: string): Promise<void> {
+    if (!shiftCode) return;
+
+    // Build patientId → {shift, bedNum} map from schedule
+    const patientInfoMap = new Map<string, { shift: string; bedNum: string }>();
+    const patientIds: string[] = [];
+    for (const [shiftId, slot] of Object.entries(this.currentRecord.schedule)) {
+      if (slot?.patientId && shiftId.endsWith(`-${shiftCode}`)) {
+        patientIds.push(slot.patientId);
+        const parts = shiftId.split('-');
+        const bedNum = parts[0] === 'peripheral'
+          ? `外${parts[1]}`
+          : parts[1];
+        patientInfoMap.set(slot.patientId, { shift: shiftCode, bedNum });
+      }
+    }
+
+    this.lastInjectionShiftCode.set(shiftCode);
+    this.injectionDialogDate.set(this.formatDate(this.currentDate()));
+    this.isInjectionDialogVisible.set(true);
+    this.isInjectionLoading.set(true);
+    this.allDailyInjections.set([]);
+    this.filterSpecificInjections.set(false);
+    try {
+      const injectionsForShift = await this.medicationStore.fetchDailyInjections(
+        this.injectionDialogDate(),
+        patientIds,
+      );
+      // Enrich with shift/bed info from schedule
+      const enriched = injectionsForShift.map((inj: any) => {
+        const info = patientInfoMap.get(inj.patientId);
+        return {
+          ...inj,
+          shift: info?.shift || shiftCode,
+          bedNum: info?.bedNum || '',
+        };
+      });
+      // Sort by bed number
+      enriched.sort((a: any, b: any) => {
+        const bedA = String(a.bedNum).startsWith('外') ? 1000 + parseInt(String(a.bedNum).substring(1)) : parseInt(a.bedNum) || 999;
+        const bedB = String(b.bedNum).startsWith('外') ? 1000 + parseInt(String(b.bedNum).substring(1)) : parseInt(b.bedNum) || 999;
+        if (bedA !== bedB) return bedA - bedB;
+        return (a.patientName || '').localeCompare(b.patientName || '');
+      });
+      this.allDailyInjections.set(enriched);
+    } catch (error: unknown) {
+      console.error('[ScheduleView] 獲取應打針劑失敗:', error);
+      const msg = error instanceof Error ? error.message : '未知錯誤';
+      this.showAlert('查詢失敗', `獲取應打針劑清單時發生錯誤: ${msg}`);
+      this.isInjectionDialogVisible.set(false);
+    } finally {
+      this.isInjectionLoading.set(this.medicationStore.isLoading());
+    }
+  }
+
+  async refreshInjections(): Promise<void> {
+    this.medicationStore.clearCache();
+    const shiftCode = this.lastInjectionShiftCode();
+    if (shiftCode) {
+      await this.showShiftInjections(shiftCode);
+    }
+  }
+
+  async showShiftMedicationDrafts(shiftCode: string): Promise<void> {
+    if (!shiftCode) return;
+    const patientsInShift = Object.entries(this.currentRecord.schedule)
+      .filter(([shiftId, slot]) => slot?.patientId && shiftId.endsWith(`-${shiftCode}`))
+      .map(([shiftId, slot]) => {
+        const patientData = this.patientMap().get(slot.patientId!) as Record<string, unknown>;
+        if (!patientData) return null;
+        const bedNum = shiftId.startsWith('peripheral') ? `外${shiftId.split('-')[1]}` : shiftId.split('-')[1];
+        const shift = shiftId.split('-')[2];
+        return { ...patientData, bedNum, shift };
+      })
+      .filter(Boolean)
+      .sort((a: any, b: any) => {
+        const bedA = String(a.bedNum).startsWith('外') ? 1000 + parseInt(String(a.bedNum).substring(1)) : parseInt(a.bedNum);
+        const bedB = String(b.bedNum).startsWith('外') ? 1000 + parseInt(String(b.bedNum).substring(1)) : parseInt(b.bedNum);
+        return bedA - bedB;
+      });
+    this.patientsForDraftDialog.set(patientsInShift as Record<string, unknown>[]);
+    const patientIds = patientsInShift.map((p: any) => p['id'] as string);
+    this.draftDialogDate.set(this.formatDate(this.currentDate()));
+    this.isDraftDialogVisible.set(true);
+    this.isDraftLoading.set(true);
+    this.dailyDrafts.set([]);
+    if (patientIds.length === 0) {
+      this.isDraftLoading.set(false);
+      return;
+    }
+    try {
+      const CHUNK_SIZE = 30;
+      const combinedDrafts: Record<string, unknown>[] = [];
+      for (let i = 0; i < patientIds.length; i += CHUNK_SIZE) {
+        const chunk = patientIds.slice(i, i + CHUNK_SIZE);
+        const payload = { targetDate: this.draftDialogDate(), patientIds: chunk };
+        const res = await fetch(`${this.firebaseService.apiBaseUrl}/medications/daily-drafts`, {
+          method: 'POST',
+          headers: this.firebaseService.getHeaders(),
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.success && Array.isArray(data.drafts)) {
+            combinedDrafts.push(...data.drafts);
+          }
+        }
+      }
+      this.dailyDrafts.set(combinedDrafts);
+    } catch (error: unknown) {
+      console.error(`獲取 ${shiftCode} 班藥囑草稿失敗:`, error);
+      const msg = error instanceof Error ? error.message : '獲取藥囑草稿時發生未知錯誤';
+      this.showAlert('查詢失敗', `獲取藥囑草稿清單時發生錯誤: ${msg}`);
+      this.isDraftDialogVisible.set(false);
+    } finally {
+      this.isDraftLoading.set(false);
+    }
+  }
+
+  showShiftRecordsSummary(shiftCode: string): void {
+    const patientIds = new Set<string>();
+    const patientInfoMap: Record<string, Record<string, string>> = {};
+    for (const shiftId in this.currentRecord.schedule) {
+      if (shiftId.endsWith(`-${shiftCode}`)) {
+        const slot = this.currentRecord.schedule[shiftId];
+        if (slot?.patientId) {
+          patientIds.add(slot.patientId);
+          const parts = shiftId.split('-');
+          const bedNum = parts[0] === 'peripheral' ? `外${parts[1]}` : parts[1];
+          const patient = this.patientMap().get(slot.patientId) as Record<string, unknown>;
+          patientInfoMap[slot.patientId] = {
+            bedNum,
+            patientName: (patient?.['name'] as string) || '',
+            medicalRecordNumber: (patient?.['medicalRecordNumber'] as string) || '',
+          };
+        }
+      }
+    }
+    this.shiftCodeForDialog.set(shiftCode);
+    this.patientIdsForDialog.set(Array.from(patientIds));
+    this.patientInfoMapForDialog.set(patientInfoMap);
+    this.isRecordsSummaryDialogVisible.set(true);
+  }
+
+  closeRecordsSummaryDialog(): void {
+    this.isRecordsSummaryDialogVisible.set(false);
+    this.shiftCodeForDialog.set(null);
+    this.patientIdsForDialog.set([]);
+    this.patientInfoMapForDialog.set({});
+  }
+
+  async autoAssignNurseTeams(): Promise<void> {
+    if (this.isPageLocked()) {
+      this.showAlert('操作失敗', '頁面已鎖定，無法執行自動分組。');
+      return;
+    }
+    // Load latest config before executing
+    await this.autoAssignConfig.fetchConfig();
+    this.showConfirm('確認操作', '此操作將會覆蓋現有的護理師分組，您確定要繼續嗎？', () => {
+      this.executeAutoAssignment();
+    });
+  }
+
+  async autoAssignNurseTeamsExperimental(): Promise<void> {
+    if (this.isPageLocked()) {
+      this.showAlert('操作失敗', '頁面已鎖定，無法執行新版自動分組。');
+      return;
+    }
+    await this.autoAssignConfig.fetchConfig();
+    this.showConfirm('確認操作', '此操作將會以新版邏輯覆蓋現有的護理師分組，您確定要繼續嗎？', () => {
+      this.executeAutoAssignment(true);
+    });
+  }
+
+
+  handleConfirm(): void {
+    if (typeof this.onConfirmAction === 'function') this.onConfirmAction();
+    this.isConfirmDialogVisible.set(false);
+    this.onConfirmAction = null;
+  }
+
+  handleCancel(): void {
+    this.isConfirmDialogVisible.set(false);
+    this.onConfirmAction = null;
+  }
+
+  // Drag and drop
+  // 行為規格：
+  // - 床位 → 床位：目標空床 = 刪舊換新；目標有病人 = 互換
+  // - 側欄 → 床位：目標空床 + 病人當日未排班 = 寫入；
+  //                目標有病人 或 病人當日已有排班 = 提示並禁止
+  /** 若病人被標記「勿動」則回傳該病人，否則 null */
+  private getLockedPatient(patientId: string): any | null {
+    const p = this.patientMap().get(patientId) as any;
+    return p?.patientStatus?.doNotMove?.active ? p : null;
+  }
+
+  /** 病人是否標記勿動（供模板顯示鎖定圖示） */
+  isDoNotMove(patientId: string | null | undefined): boolean {
+    return !!patientId && !!this.getLockedPatient(patientId);
+  }
+
+  doNotMoveReasonText(patientId: string | null | undefined): string {
+    if (!patientId) return '無原因說明';
+    return (this.patientMap().get(patientId) as any)?.patientStatus?.doNotMove?.reason || '無原因說明';
+  }
+
+  private doNotMoveMessage(p: any): string {
+    return (
+      `病人 ${p?.name || ''} 已標記為「勿動」，無法調動。\n` +
+      `原因：${p?.patientStatus?.doNotMove?.reason || '未提供'}\n` +
+      `如需移動，請先至病人清單解除勿動。`
+    );
+  }
+
+  onDrop(event: DragEvent, targetShiftId: string): void {
+    if (this.isPageLocked()) return;
+    event.preventDefault();
+    document.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'));
+
+    const sourceShiftId = event.dataTransfer?.getData('sourceShiftId') || '';
+    const jsonData = event.dataTransfer?.getData('application/json');
+    if (!jsonData) return;
+
+    const droppedSlotData = JSON.parse(jsonData);
+    const droppedPatientId = droppedSlotData?.patientId;
+    if (!droppedPatientId) return;
+
+    const patient = this.patientMap().get(droppedPatientId) as Record<string, unknown>;
+    if (!patient) return;
+
+    const targetSlotData = this.currentRecord.schedule[targetShiftId];
+    const targetIsOccupied = !!targetSlotData?.patientId;
+    const fromSidebar = sourceShiftId === 'sidebar';
+
+    // 勿動鎖定：移動已排床的勿動病人、或互換時會 displace 勿動病人 → 擋下
+    if (!fromSidebar) {
+      const lockedSelf = this.getLockedPatient(droppedPatientId);
+      if (lockedSelf) {
+        this.showAlert('操作被鎖定', this.doNotMoveMessage(lockedSelf));
+        return;
+      }
+      if (targetIsOccupied) {
+        const lockedTarget = this.getLockedPatient(targetSlotData.patientId);
+        if (lockedTarget) {
+          this.showAlert('操作被鎖定', this.doNotMoveMessage(lockedTarget));
+          return;
+        }
+      }
+    }
+
+    if (fromSidebar) {
+      // 側欄拖入：嚴格禁止重複排班，也不允許覆蓋已佔用床位
+      if (this.scheduledPatientIds.has(droppedPatientId)) {
+        this.showAlert(
+          '操作失敗',
+          `病人 ${patient['name']} 本日已有排班，無法重複排班。`,
+        );
+        return;
+      }
+      if (targetIsOccupied) {
+        this.showAlert('操作失敗', '目標床位已被佔用，無法從側邊欄拖曳至此。');
+        return;
+      }
+      this.handleSlotUpdate(targetShiftId, droppedPatientId, droppedSlotData);
+      return;
+    }
+
+    // 床位 → 床位：互換或搬移
+    if (targetIsOccupied) {
+      this.handleSlotUpdate(targetShiftId, droppedPatientId, droppedSlotData);
+      this.handleSlotUpdate(sourceShiftId, targetSlotData.patientId, targetSlotData);
+    } else {
+      this.handleSlotUpdate(targetShiftId, droppedPatientId, droppedSlotData);
+      if (sourceShiftId) {
+        this.handleSlotUpdate(sourceShiftId, null);
+      }
+    }
+  }
+
+  onBedDragStart(event: DragEvent, sourceShiftId: string): void {
+    if (this.isPageLocked()) {
+      event.preventDefault();
+      return;
+    }
+    const slotData = this.currentRecord.schedule[sourceShiftId];
+    if (!slotData?.patientId) {
+      event.preventDefault();
+      return;
+    }
+    event.dataTransfer?.setData('sourceShiftId', sourceShiftId);
+    event.dataTransfer?.setData('application/json', JSON.stringify(slotData));
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+  }
+
+  onDragOver(event: DragEvent): void {
+    if (this.isPageLocked()) return;
+    event.preventDefault();
+    const targetCell = (event.target as HTMLElement).closest('.patient-name, .peripheral-patient-name');
+    if (targetCell) targetCell.classList.add('drag-over');
+  }
+
+  onDragLeave(event: DragEvent): void {
+    (event.target as HTMLElement).closest('.patient-name, .peripheral-patient-name')?.classList.remove('drag-over');
+  }
+
+  handlePatientSelect(data: { patientId: string }): void {
+    if (!data.patientId || !this.currentSlotId()) return;
+    this.isPatientSelectDialogVisible.set(false);
+    if (this.scheduledPatientIds.has(data.patientId)) {
+      const patient = this.patientMap().get(data.patientId) as Record<string, unknown>;
+      this.showAlert('重複排班警告', `病人 ${patient?.['name']} 在本日已有排班，無法重複排入。`);
+      this.currentSlotId.set(null);
+      return;
+    }
+    this.handleSlotUpdate(this.currentSlotId()!, data.patientId);
+    this.currentSlotId.set(null);
+  }
+
+  handleAssignBed(data: { patientId: string; shiftId: string }): void {
+    if (!data.patientId || !data.shiftId || this.isPageLocked()) return;
+    if (this.scheduledPatientIds.has(data.patientId)) {
+      const patient = this.patientMap().get(data.patientId) as Record<string, unknown>;
+      this.showConfirm('重複排班警告', `病人 ${patient?.['name']} 在本日已有排班，您確定要重複排班嗎？`, () => {
+        if (this.currentRecord.schedule[data.shiftId]?.patientId) {
+          this.showAlert('錯誤', '目標床位已被佔用！');
+          return;
+        }
+        this.handleSlotUpdate(data.shiftId, data.patientId);
+      });
+      return;
+    }
+    this.handleSlotUpdate(data.shiftId, data.patientId);
+  }
+
+  // Sidebar drag start
+  onSidebarDragStart(event: DragEvent, patient: any): void {
+    if (this.isPageLocked()) return;
+    const slotData = { patientId: patient.id };
+    event.dataTransfer?.setData('sourceShiftId', 'sidebar');
+    event.dataTransfer?.setData('application/json', JSON.stringify(slotData));
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private methods
+  // ---------------------------------------------------------------------------
+
+  private buildCombinedNote(slotData: ScheduleSlotData | undefined): string {
+    if (!slotData) return '';
+    const autoTags = (slotData.autoNote || '').split(' ').filter(Boolean);
+    const manualTags = (slotData.manualNote || '').split(' ').filter(Boolean);
+    const combinedTags = [...new Set([...autoTags, ...manualTags])];
+    const finalTags = combinedTags.filter((tag) => !['住', '急'].includes(tag));
+    return finalTags.join(' ');
+  }
+
+  private getArchivedOrLivePatientInfo(slotData: ScheduleSlotData | undefined): Record<string, unknown> | null {
+    if (!slotData?.patientId) return null;
+    if (slotData.archivedPatientInfo) return slotData.archivedPatientInfo;
+    return (this.patientMap().get(slotData.patientId) as Record<string, unknown>) || null;
+  }
+
+  private showAlert(title: string, message: string): void {
+    this.alertDialogTitle.set(title);
+    this.alertDialogMessage.set(message);
+    this.isAlertDialogVisible.set(true);
+  }
+
+  private showConfirm(title: string, message: string, onConfirm: () => void): void {
+    this.confirmDialogMessage.set(message);
+    this.onConfirmAction = onConfirm;
+    this.isConfirmDialogVisible.set(true);
+  }
+
+  private setChange(): void {
+    if (this.isPageLocked()) return;
+    this.scheduleRevision.update((revision) => revision + 1);
+    this.hasUnsavedChanges.set(true);
+    this.statusIndicator.set('有未儲存的變更');
+  }
+
+  private setTeamChange(): void {
+    if (this.isPageLocked()) return;
+    this.scheduleRevision.update((revision) => revision + 1);
+    this.hasUnsavedTeamChanges.set(true);
+    this.hasUnsavedChanges.set(true);
+    this.statusIndicator.set('有未儲存的變更');
+  }
+
+  private handleSlotUpdate(shiftId: string, patientId: string | null, fullSlotData?: ScheduleSlotData): void {
+    if (this.isPageLocked()) return;
+    if (patientId) {
+      const patient = this.patientMap().get(patientId) as Record<string, unknown>;
+      if (!patient) return;
+      const correctShiftCode = shiftId.split('-').pop()!;
+      let newSlotData: ScheduleSlotData;
+      if (fullSlotData) {
+        newSlotData = { ...fullSlotData, patientId };
+      } else {
+        newSlotData = { patientId, manualNote: patient['status'] === 'ipd' ? '住' : '' };
+      }
+      newSlotData.autoNote = generateAutoNote(patient);
+      newSlotData.shiftId = correctShiftCode;
+      this.currentRecord.schedule[shiftId] = newSlotData;
+    } else {
+      delete this.currentRecord.schedule[shiftId];
+    }
+    this.setChange();
+  }
+
+  private openDetailModalForPatient(patientId: string, clickedShiftId?: string): void {
+    const patient = this.patientMap().get(patientId) as Record<string, unknown>;
+    if (!patient) return;
+
+    // 班別代碼為 shiftId 最後一段 (e.g. 'main-1-early' → 'early')
+    const shiftOf = (sid: string) => sid.split('-').pop() || '';
+
+    // 上下一床限定在「同一班」病人：以點選的格子決定班別，
+    // 若無 (理論上不會) 則退回該病人第一個出現的班別
+    let targetShift = clickedShiftId ? shiftOf(clickedShiftId) : '';
+    if (!targetShift) {
+      const hit = Object.entries(this.currentRecord.schedule).find(
+        ([, slot]) => slot?.patientId === patientId,
+      );
+      if (hit) targetShift = shiftOf(hit[0]);
+    }
+
+    const slotList = Object.entries(this.currentRecord.schedule)
+      .filter(([sid, slot]) => slot?.patientId && shiftOf(sid) === targetShift)
+      .map(([shiftId, slot]) => {
+        const p = this.patientMap().get(slot.patientId) as Record<string, unknown>;
+        if (!p) return null;
+        const parts = shiftId.split('-');
+        const bedNum = parts[0] === 'peripheral' ? `外${parts[1]}` : parts[1];
+        return { ...p, shiftId, bedNum };
+      })
+      .filter(Boolean)
+      .sort((a: any, b: any) => {
+        const getKey = (sid: string) => {
+          const parts = sid.split('-');
+          if (parts[0] === 'peripheral') return 1000 + parseInt(parts[1], 10);
+          return parseInt(parts[1], 10) || 999;
+        };
+        return getKey(a.shiftId) - getKey(b.shiftId);
+      });
+
+    // 優先用點選的 shiftId 定位，避免同病人跨多班次時跳錯床
+    let idx = clickedShiftId
+      ? slotList.findIndex((s: any) => s.shiftId === clickedShiftId)
+      : -1;
+    if (idx < 0) idx = slotList.findIndex((s: any) => s['id'] === patientId);
+
+    this.sortedSlotsForModal.set(slotList as any);
+    this.currentPatientIndexForModal.set(idx >= 0 ? idx : 0);
+    this.selectedPatientForDetail.set(patient);
+    this.isDetailModalVisible.set(true);
+  }
+
+  switchPatient(newIndex: number): void {
+    const slots = this.sortedSlotsForModal();
+    if (newIndex >= 0 && newIndex < slots.length) {
+      this.currentPatientIndexForModal.set(newIndex);
+      this.selectedPatientForDetail.set(slots[newIndex]);
+    }
+  }
+
+  private async loadDataForDay(date: Date): Promise<void> {
+    this.hasUnsavedChanges.set(false);
+    this.hasUnsavedTeamChanges.set(false);
+    this.statusIndicator.set('讀取中...');
+    this.isLoading.set(true);
+    let dateStr: string;
+    try {
+      dateStr = this.formatDate(date);
+    } catch (err) {
+      console.error('日期格式化失敗:', err);
+      this.statusIndicator.set('日期錯誤');
+      this.isLoading.set(false);
+      return;
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const targetDate = new Date(date);
+    targetDate.setHours(0, 0, 0, 0);
+    try {
+      const isPastDate = targetDate < today;
+      // ✅ 優化：病人、排程、護理分組三者完全並行載入
+      const [, scheduleRecord, teamsData] = await Promise.all([
+        isPastDate ? Promise.resolve() : this.patientStore.fetchPatientsIfNeeded(),
+        isPastDate
+          ? this.archiveStore.fetchScheduleByDate(dateStr)
+          : this.fetchLiveSchedule(dateStr),
+        fetchTeamsByDate(dateStr),
+      ]);
+      this.currentRecord.id = ((scheduleRecord as Record<string, unknown>)?.['id'] as string) || null;
+      this.currentRecord.date = dateStr;
+      this.currentRecord.schedule = ((scheduleRecord as Record<string, unknown>)?.['schedule'] as Record<string, ScheduleSlotData>) || {};
+      this.currentRecord.names = ((scheduleRecord as Record<string, unknown>)?.['names'] as Record<string, string>) || {};
+      this.currentTeamsRecord.set(teamsData || { id: null, date: dateStr, teams: {} });
+      this.scheduleRevision.update((revision) => revision + 1);
+      this.statusIndicator.set(((scheduleRecord as Record<string, unknown>)?.['id']) ? '資料已載入' : '本日無排程資料');
+    } catch (error: unknown) {
+      console.error(`載入 ${dateStr} 資料失敗:`, error);
+      this.statusIndicator.set('讀取失敗');
+    } finally {
+      this.isLoading.set(false);
+    }
+  }
+
+  private async fetchLiveSchedule(dateStr: string): Promise<Record<string, unknown>> {
+    // GET /schedules/:date can auto-generate a missing daily schedule from the master table.
+    const fetchedRecord = await this.schedulesApi.fetchById(dateStr);
+    const record = (fetchedRecord as Record<string, unknown> | null) || {
+      date: dateStr,
+      schedule: {},
+    };
+    const finalSchedule: Record<string, unknown> = {};
+    const schedule = record['schedule'] as Record<string, Record<string, unknown>>;
+    if (schedule) {
+      for (const shiftId in schedule) {
+        const dbSlotData = schedule[shiftId];
+        if (dbSlotData?.['patientId'] && this.patientMap().has(dbSlotData['patientId'] as string)) {
+          const patient = this.patientMap().get(dbSlotData['patientId'] as string) as Record<string, unknown>;
+          const mergedSlot = { ...createEmptySlotData(shiftId), ...dbSlotData };
+          if (patient) mergedSlot['autoNote'] = generateAutoNote(patient);
+          finalSchedule[shiftId] = mergedSlot;
+        }
+      }
+    }
+    record['schedule'] = finalSchedule;
+    return record;
+  }
+
+  private async loadDailyStaffInfo(date: Date): Promise<void> {
+    try {
+      const dateStr = this.formatDate(date).substring(0, 7);
+      // ✅ 優化：使用者、醫師清單與醫師排班完全並行載入
+      const [, physicians, monthScheduleDoc] = await Promise.all([
+        this.userDirectory.fetchUsersIfNeeded(),
+        this.physiciansApi.fetchAll().catch(() => []),
+        this.physicianSchedulesApi.fetchById(dateStr),
+      ]);
+      const usersSnapshot = this.userDirectory.allUsers()
+        .filter(u => u.title === '主治醫師' || u.title === '專科護理師');
+      const userMap = new Map([...physicians, ...usersSnapshot].map((u) => [u['id'], u]));
+      const resolveStaff = (entry: Record<string, unknown> | undefined) => {
+        const physicianId = entry?.['physicianId'] as string | undefined;
+        if (!physicianId) return null;
+        return userMap.get(physicianId) || (entry?.['name'] ? { id: physicianId, name: entry['name'] } : null);
+      };
+      const dialysisPhysiciansData: Record<string, unknown> = { early: null, noon: null, late: null };
+      const consultPhysiciansData: Record<string, unknown> = { morning: null, afternoon: null, night: null };
+      if (monthScheduleDoc) {
+        const dayOfMonth = date.getDate();
+        const monthDoc = monthScheduleDoc as Record<string, unknown>;
+        const doc = (monthDoc['scheduleData'] || monthDoc) as Record<string, unknown>;
+        const schedule = doc['schedule'] as Record<string, Record<string, Record<string, unknown>>>;
+        const daySchedule = schedule?.[dayOfMonth];
+        if (daySchedule) {
+          dialysisPhysiciansData['early'] = resolveStaff(daySchedule['early']);
+          dialysisPhysiciansData['noon'] = resolveStaff(daySchedule['noon']);
+          dialysisPhysiciansData['late'] = resolveStaff(daySchedule['late']);
+        }
+        const consultationSchedule = doc['consultationSchedule'] as Record<string, Record<string, Record<string, unknown>>>;
+        const consultationDaySchedule = consultationSchedule?.[dayOfMonth];
+        if (consultationDaySchedule) {
+          consultPhysiciansData['morning'] = resolveStaff(consultationDaySchedule['morning']);
+          consultPhysiciansData['afternoon'] = resolveStaff(consultationDaySchedule['afternoon']);
+          consultPhysiciansData['night'] = resolveStaff(consultationDaySchedule['night']);
+        }
+      }
+      this.dailyPhysicians.set(dialysisPhysiciansData);
+      this.dailyConsultPhysicians.set(consultPhysiciansData);
+    } catch (error: unknown) {
+      console.error('載入每日負責人資訊失敗:', error);
+      this.dailyPhysicians.set({ early: null, noon: null, late: null });
+      this.dailyConsultPhysicians.set({ morning: null, afternoon: null, night: null });
+    }
+  }
+
+  private executeAutoAssignment(useExperimentalLogic = false): void {
+    // Clear existing teams
+    const teamsRec = { ...this.currentTeamsRecord(), teams: {} as Record<string, any> };
+
+    // Helper: get patients for a given shift code from current schedule
+    const getRichPatientList = (shiftCode: string) => {
+      return Object.entries(this.currentRecord.schedule)
+        .filter(([shiftId, slot]) => slot?.patientId && shiftId.endsWith(shiftCode))
+        .map(([shiftId, slot]) => {
+          const patientData = this.patientMap().get(slot.patientId) as Record<string, unknown> | undefined;
+          if (!patientData) return null;
+          const bedNumberStr = shiftId.split('-')[1];
+          const bedNumber = parseInt(bedNumberStr, 10);
+          return {
+            id: slot.patientId,
+            shiftId,
+            shiftCode,
+            status: patientData['status'] as string,
+            isHepatitis: !isNaN(bedNumber) && HEPATITIS_BEDS.includes(bedNumber),
+            isPeripheral: shiftId.startsWith('peripheral'),
+          };
+        })
+        .filter(Boolean) as { id: string; shiftId: string; shiftCode: string; status: string; isHepatitis: boolean; isPeripheral: boolean }[];
+    };
+
+    const mainArea = (list: any[]) => list.filter(p => !p.isPeripheral);
+    const peripheral = (list: any[]) => list.filter(p => p.isPeripheral);
+    const buildRegularTeamCapacity = (teams: string[]) =>
+      Object.fromEntries(teams.map((team) => [team, DEFAULT_TEAM_CAPACITY]));
+    const sortByBed = (list: any[]) => [...list].sort((a, b) => {
+      const getKey = (id: string) => {
+        const parts = id.split('-');
+        if (parts[0] === 'peripheral') return 100 + parseInt(parts[1], 10);
+        const num = parseInt(parts[1], 10);
+        return isNaN(num) ? 999 : num;
+      };
+      return getKey(a.shiftId) - getKey(b.shiftId);
+    });
+
+    // distributePatients function (ported from Vue useTeamAssigner)
+    const distributePatients = (
+      allPatients: any[],
+      teams: string[],
+      rules: { priorityTeams: any; mainDistribution: any; teamMaxCapacity?: Record<string, number> }
+    ) => {
+      const assignments: Record<string, any[]> = {};
+      teams.forEach(t => assignments[t] = []);
+      const assignedIds = new Set<string>();
+      const addPatient = (team: string, patient: any) => {
+        if (patient && assignments[team] && !assignedIds.has(patient.id)) {
+          assignments[team].push(patient);
+          assignedIds.add(patient.id);
+          return true;
+        }
+        return false;
+      };
+      const bedSortKey = (patient: any) => {
+        const parts = String(patient.shiftId || '').split('-');
+        if (parts[0] === 'peripheral') return 1000 + (parseInt(parts[1], 10) || 999);
+        return parseInt(parts[1], 10) || 999;
+      };
+      const leaderPriorityKey = (patient: any) => {
+        const key = bedSortKey(patient);
+        if (key === 62 || key === 63) return 0;
+        if (key >= 1 && key <= 7) return 1;
+        return 2;
+      };
+      const spatialPathIndex = (patient: any) => {
+        const bedKey = String(bedSortKey(patient));
+        const index = BED_ZONE_PATH.indexOf(bedKey);
+        return index >= 0 ? index : 999;
+      };
+      const bedCoord = (patient: any) => BED_COORDINATES.get(String(bedSortKey(patient)));
+      const averageCoord = (patients: any[]) => {
+        const coords = patients.map(bedCoord).filter(Boolean) as BedSpatialPoint[];
+        if (coords.length === 0) return null;
+        const leftCount = coords.filter(c => c.side === 'left').length;
+        const side: 'left' | 'right' = leftCount >= coords.length - leftCount ? 'left' : 'right';
+        return {
+          side,
+          zone: Math.round(coords.reduce((sum, coord) => sum + coord.zone, 0) / coords.length),
+          x: coords.reduce((sum, coord) => sum + coord.x, 0) / coords.length,
+          y: coords.reduce((sum, coord) => sum + coord.y, 0) / coords.length,
+          aisleAffinity: coords.reduce((sum, coord) => sum + coord.aisleAffinity, 0) / coords.length,
+        };
+      };
+      const teamCenter = (team: string) => averageCoord(assignments[team] || []);
+      const distanceScore = (patient: any, center: { side: 'left' | 'right'; zone: number; x: number; y: number; aisleAffinity?: number } | null) => {
+        const coord = bedCoord(patient);
+        if (!coord || !center) return 999;
+        const dx = Math.abs(coord.x - center.x);
+        const dy = Math.abs(coord.y - center.y);
+        const zoneDiff = Math.abs(coord.zone - center.zone);
+        const crossWallAisleBonus = zoneDiff > 0 ? (coord.aisleAffinity + (center.aisleAffinity ?? 0)) * 1.2 : 0;
+        const wallPenalty = zoneDiff === 0 ? 0 : Math.max(2.2, (zoneDiff === 1 ? 4.2 : zoneDiff * 6.5) - crossWallAisleBonus);
+        const corridorPenalty = coord.side === center.side ? 0 : 0.35;
+        return wallPenalty + (dy * 0.8) + (dx * 0.25) + corridorPenalty;
+      };
+      const patientDistanceScore = (a: any, b: any) => {
+        const coord = bedCoord(b);
+        if (!coord) return Math.abs(bedSortKey(a) - bedSortKey(b));
+        return distanceScore(a, coord);
+      };
+      const teamDispersionScore = (patients: any[]) => {
+        if (patients.length <= 1) return 0;
+        let pairScore = 0;
+        let maxPairScore = 0;
+        let pairCount = 0;
+        for (let i = 0; i < patients.length; i++) {
+          for (let j = i + 1; j < patients.length; j++) {
+            const score = patientDistanceScore(patients[i], patients[j]);
+            pairScore += score;
+            maxPairScore = Math.max(maxPairScore, score);
+            pairCount++;
+          }
+        }
+        return (pairScore / Math.max(1, pairCount)) + (maxPairScore * 0.7);
+      };
+      const buildTeamAnchors = (patients: any[], orderedTeams: string[], targets: Record<string, number>) => {
+        const anchors: Record<string, { side: 'left' | 'right'; zone: number; x: number; y: number; aisleAffinity?: number } | null> = {};
+        const sorted = [...patients].sort((a, b) => spatialPathIndex(a) - spatialPathIndex(b));
+        let cursor = 0;
+        for (const team of orderedTeams) {
+          const remainingQuota = Math.max(0, (targets[team] || 0) - (assignments[team]?.length || 0));
+          const slice = sorted.slice(cursor, cursor + remainingQuota);
+          anchors[team] = averageCoord(slice);
+          cursor += remainingQuota;
+        }
+        return anchors;
+      };
+      const unassignedByBed = () =>
+        allPatients
+          .filter(p => !assignedIds.has(p.id))
+          .sort((a, b) => bedSortKey(a) - bedSortKey(b));
+      const unassignedBySpatial = () =>
+        allPatients
+          .filter(p => !assignedIds.has(p.id))
+          .sort((a, b) => {
+            const spatialDiff = spatialPathIndex(a) - spatialPathIndex(b);
+            return spatialDiff !== 0 ? spatialDiff : bedSortKey(a) - bedSortKey(b);
+          });
+      const assignByQuota = (patients: any[], orderedTeams: string[], targets: Record<string, number>) => {
+        let patientIndex = 0;
+        for (const team of orderedTeams) {
+          while ((assignments[team]?.length || 0) < (targets[team] || 0) && patientIndex < patients.length) {
+            addPatient(team, patients[patientIndex]);
+            patientIndex++;
+          }
+        }
+      };
+      const assignSpatialByQuota = (patients: any[], orderedTeams: string[], targets: Record<string, number>) => {
+        const anchors = buildTeamAnchors(patients, orderedTeams, targets);
+        const teamOrder = new Map(orderedTeams.map((team, index) => [team, index]));
+        for (const patient of [...patients].sort((a, b) => spatialPathIndex(a) - spatialPathIndex(b))) {
+          if (assignedIds.has(patient.id)) continue;
+          const candidates = orderedTeams.filter(team => (assignments[team]?.length || 0) < (targets[team] || 0));
+          if (candidates.length === 0) break;
+          const bestTeam = candidates
+            .map(team => {
+              const center = teamCenter(team) || anchors[team];
+              const load = (assignments[team]?.length || 0) / Math.max(1, targets[team] || 1);
+              return {
+                team,
+                score: distanceScore(patient, center) + (load * 0.35) + ((teamOrder.get(team) || 0) * 0.01),
+              };
+            })
+            .sort((a, b) => a.score - b.score)[0]?.team;
+          if (bestTeam) addPatient(bestTeam, patient);
+        }
+      };
+      const assignResponsibilityZoneByQuota = (patients: any[], orderedTeams: string[], targets: Record<string, number>) => {
+        const remaining = [...patients].sort((a, b) => {
+          const spatialDiff = spatialPathIndex(a) - spatialPathIndex(b);
+          return spatialDiff !== 0 ? spatialDiff : bedSortKey(a) - bedSortKey(b);
+        });
+        const takePatient = (patient: any, team: string) => {
+          if (!addPatient(team, patient)) return false;
+          const index = remaining.findIndex(p => p.id === patient.id);
+          if (index >= 0) remaining.splice(index, 1);
+          return true;
+        };
+
+        for (const team of orderedTeams) {
+          let quota = Math.max(0, (targets[team] || 0) - (assignments[team]?.length || 0));
+          if (quota <= 0) continue;
+
+          const currentCenter = teamCenter(team);
+          if (currentCenter) {
+            const candidates = [...remaining]
+              .sort((a, b) => {
+                const distanceDiff = distanceScore(a, currentCenter) - distanceScore(b, currentCenter);
+                return distanceDiff !== 0 ? distanceDiff : spatialPathIndex(a) - spatialPathIndex(b);
+              })
+              .slice(0, quota);
+            candidates.forEach(patient => {
+              if (quota > 0 && takePatient(patient, team)) quota--;
+            });
+            continue;
+          }
+
+          const slice = remaining.slice(0, quota);
+          slice.forEach(patient => {
+            if (quota > 0 && takePatient(patient, team)) quota--;
+          });
+        }
+
+        if (remaining.length > 0) {
+          assignSpatialByQuota(remaining, orderedTeams, targets);
+        }
+      };
+      const improveSpatialAssignmentsBySwap = (orderedTeams: string[]) => {
+        const isMovable = (patient: any) =>
+          patient?.status === 'opd' && !patient.isHepatitis && !patient.isPeripheral;
+        for (let pass = 0; pass < 4; pass++) {
+          let improved = false;
+          for (let i = 0; i < orderedTeams.length; i++) {
+            for (let j = i + 1; j < orderedTeams.length; j++) {
+              const teamA = orderedTeams[i];
+              const teamB = orderedTeams[j];
+              const patientsA = assignments[teamA] || [];
+              const patientsB = assignments[teamB] || [];
+              const currentScore = teamDispersionScore(patientsA) + teamDispersionScore(patientsB);
+              let bestSwap: { indexA: number; indexB: number; score: number } | null = null;
+
+              patientsA.forEach((patientA, indexA) => {
+                if (!isMovable(patientA)) return;
+                patientsB.forEach((patientB, indexB) => {
+                  if (!isMovable(patientB)) return;
+                  const nextA = [...patientsA];
+                  const nextB = [...patientsB];
+                  nextA[indexA] = patientB;
+                  nextB[indexB] = patientA;
+                  const nextScore = teamDispersionScore(nextA) + teamDispersionScore(nextB);
+                  if (nextScore + 0.5 < currentScore && (!bestSwap || nextScore < bestSwap.score)) {
+                    bestSwap = { indexA, indexB, score: nextScore };
+                  }
+                });
+              });
+
+              if (bestSwap) {
+                const patientA = patientsA[bestSwap.indexA];
+                patientsA[bestSwap.indexA] = patientsB[bestSwap.indexB];
+                patientsB[bestSwap.indexB] = patientA;
+                improved = true;
+              }
+            }
+          }
+          if (!improved) break;
+        }
+      };
+      const buildBalancedRegularTargets = (
+        orderedTeams: string[],
+        totalTargetCount: number,
+        perTeamSoftLimit: Record<string, number>
+      ) => {
+        const targets: Record<string, number> = {};
+        const teamOrder = new Map(orderedTeams.map((team, index) => [team, index]));
+        orderedTeams.forEach(team => {
+          targets[team] = assignments[team]?.length || 0;
+        });
+        let targetSum = orderedTeams.reduce((sum, team) => sum + (targets[team] || 0), 0);
+        while (targetSum < totalTargetCount && orderedTeams.length > 0) {
+          const candidates = orderedTeams
+            .filter(team => (targets[team] || 0) < (perTeamSoftLimit[team] ?? Number.MAX_SAFE_INTEGER));
+          const pool = candidates.length > 0 ? candidates : orderedTeams;
+          const team = [...pool].sort((a, b) => {
+            const countDiff = (targets[a] || 0) - (targets[b] || 0);
+            return countDiff !== 0 ? countDiff : (teamOrder.get(a) || 0) - (teamOrder.get(b) || 0);
+          })[0];
+          targets[team] = (targets[team] || 0) + 1;
+          targetSum++;
+        }
+        return targets;
+      };
+
+      // Step 1: Priority teams (hepatitis, IPD/ER)
+      const { hepatitis, inPatientTeams, inPatientCapacity } = rules.priorityTeams;
+      if (hepatitis) {
+        allPatients.filter(p => p.isHepatitis).forEach(p => addPatient(hepatitis, p));
+      }
+      if (inPatientTeams && inPatientCapacity) {
+        const unassignedIPD = allPatients.filter(p => (p.status === 'ipd' || p.status === 'er') && !assignedIds.has(p.id));
+        if (useExperimentalLogic) {
+          [...unassignedIPD].sort((a, b) => spatialPathIndex(a) - spatialPathIndex(b)).forEach(patient => {
+            const candidates = inPatientTeams.filter((team: string) => {
+              const used = (assignments[team] || []).filter((p: any) => p.status === 'ipd' || p.status === 'er').length;
+              return used < (inPatientCapacity[team] ?? 0);
+            });
+            const bestTeam = candidates
+              .map((team: string, index: number) => {
+                const center = teamCenter(team);
+                const distance = center ? distanceScore(patient, center) : 0;
+                const totalLoad = assignments[team]?.length || 0;
+                const ipdLoad = (assignments[team] || []).filter((p: any) => p.status === 'ipd' || p.status === 'er').length;
+                return { team, score: distance + (ipdLoad * 2) + (totalLoad * 0.25) + (index * 0.01) };
+              })
+              .sort((a, b) => a.score - b.score)[0]?.team;
+            if (bestTeam) {
+              addPatient(bestTeam, patient);
+            }
+          });
+        } else {
+          unassignedIPD.forEach(patient => {
+            for (const team of inPatientTeams) {
+              if ((assignments[team]?.length || 0) < inPatientCapacity[team]) {
+                if (addPatient(team, patient)) break;
+              }
+            }
+          });
+        }
+      }
+
+      const { specialTeam, regularTeams } = rules.mainDistribution;
+      const maxCap = rules.teamMaxCapacity || {};
+      const participating = regularTeams;
+
+      // Step 2: Calculate final quotas before assigning remaining patients.
+      let leaderCount = 0;
+      let regularTargets: Record<string, number> = {};
+      if (useExperimentalLogic) {
+        const regularSoftLimit = Object.fromEntries(
+          participating.map((team: string) => [team, maxCap[team] ?? DEFAULT_TEAM_CAPACITY])
+        );
+        const regularBaseCapacity = participating.reduce(
+          (sum: number, team: string) => sum + (regularSoftLimit[team] ?? DEFAULT_TEAM_CAPACITY),
+          0
+        );
+        leaderCount = specialTeam
+          ? Math.min(specialTeam.capacity || 0, Math.max(0, allPatients.length - regularBaseCapacity))
+          : 0;
+        const regularTargetCount = Math.max(0, allPatients.length - leaderCount);
+        regularTargets = buildBalancedRegularTargets(participating, regularTargetCount, regularSoftLimit);
+      } else {
+        let regularOpenSlots = 0;
+        for (const team of participating) {
+          const baseCapacity = maxCap[team] ?? DEFAULT_TEAM_CAPACITY;
+          const currentCount = assignments[team]?.length || 0;
+          regularTargets[team] = Math.max(currentCount, baseCapacity);
+          regularOpenSlots += Math.max(0, baseCapacity - currentCount);
+        }
+
+        let remainingCount = allPatients.length - assignedIds.size;
+        leaderCount = specialTeam
+          ? Math.min(specialTeam.capacity || 0, Math.max(0, remainingCount - regularOpenSlots))
+          : 0;
+        remainingCount -= leaderCount;
+
+        let extraRegularCount = Math.max(0, remainingCount - regularOpenSlots);
+        let quotaRound = DEFAULT_TEAM_CAPACITY;
+        while (extraRegularCount > 0 && participating.length > 0) {
+          let assignedThisRound = false;
+          for (const team of participating) {
+            if (extraRegularCount <= 0) break;
+            if ((regularTargets[team] || 0) <= quotaRound) {
+              regularTargets[team] = (regularTargets[team] || 0) + 1;
+              extraRegularCount--;
+              assignedThisRound = true;
+            }
+          }
+          if (!assignedThisRound) quotaRound++;
+        }
+      }
+
+      // Step 3: Reserve leader patients first, then fill regular quotas.
+      if (leaderCount > 0 && specialTeam) {
+        const leaderPatients = unassignedByBed()
+          .filter(p => p.status === 'opd' && !p.isHepatitis)
+          .sort((a, b) => {
+            const priorityDiff = leaderPriorityKey(a) - leaderPriorityKey(b);
+            return priorityDiff !== 0 ? priorityDiff : bedSortKey(a) - bedSortKey(b);
+          })
+          .slice(0, leaderCount);
+        leaderPatients.forEach((patient) => addPatient(specialTeam.name, patient));
+      }
+
+      if (useExperimentalLogic) {
+        assignResponsibilityZoneByQuota(unassignedBySpatial(), participating, regularTargets);
+        improveSpatialAssignmentsBySwap(participating);
+      } else {
+        assignByQuota(unassignedByBed(), participating, regularTargets);
+      }
+
+      // Step 4: Extreme fallback for unexpected config/data gaps.
+      assignByQuota(unassignedByBed(), participating, Object.fromEntries(
+        participating.map((team: string) => [team, Number.MAX_SAFE_INTEGER])
+      ));
+      return assignments;
+    };
+
+    // Collect patients per shift
+    const allEarlyPatients = getRichPatientList(SHIFT_CODES.EARLY);
+    const allNoonPatients = getRichPatientList(SHIFT_CODES.NOON);
+    const allLatePatients = getRichPatientList(SHIFT_CODES.LATE);
+
+    // Read config
+    const cfg = this.autoAssignConfig.config();
+    const earlyCfg = cfg.earlyShift;
+    const lateCfg = cfg.lateShift;
+
+    // --- Early shift ---
+    const earlyMain = mainArea(allEarlyPatients);
+    const useEarlyLeader = earlyMain.length > earlyCfg.leaderThreshold;
+    const earlyTeamsToUse = BASE_TEAMS.filter(t => t !== 'L' && t !== '外圍').map(t => `早${t}`);
+    const earlyRegularTeams = earlyCfg.regularTeams.map(t => `早${t}`);
+    const earlyInpatientTeams = earlyCfg.inpatientTeams.map(t => `早${t}`);
+    const earlyInpatientCap: Record<string, number> = {};
+    for (const [k, v] of Object.entries(earlyCfg.inpatientCapacity)) earlyInpatientCap[`早${k}`] = v;
+
+    const earlyTeamMaxCap = buildRegularTeamCapacity(earlyRegularTeams);
+
+    const earlyRules = {
+      priorityTeams: { hepatitis: `早${earlyCfg.hepatitisTeam}`, inPatientTeams: earlyInpatientTeams, inPatientCapacity: earlyInpatientCap },
+      mainDistribution: { specialTeam: useEarlyLeader ? { name: `早${earlyCfg.leaderTeam}`, capacity: earlyCfg.leaderCapacity } : null, regularTeams: earlyRegularTeams },
+      teamMaxCapacity: earlyTeamMaxCap,
+    };
+
+    const earlyAssignments = distributePatients(sortByBed(earlyMain), earlyTeamsToUse, earlyRules);
+    earlyAssignments['早外圍'] = peripheral(allEarlyPatients);
+
+    // Count early shift inpatients per inpatient team (for cross-shift cap)
+    const earlyInpatientCounts: Record<string, number> = {};
+    for (const team of earlyInpatientTeams) {
+      earlyInpatientCounts[team] = (earlyAssignments[team] || []).filter(
+        (p: any) => p.status === 'ipd' || p.status === 'er'
+      ).length;
+    }
+
+    // --- Noon shift (on = early teams, off = late teams) ---
+    const noonMain = mainArea(allNoonPatients);
+    const useNoonLeader = noonMain.length > earlyCfg.leaderThreshold;
+
+    // Adjust noon inpatient capacity by the configured IPD/ER max per inpatient group.
+    const noonInpatientCap: Record<string, number> = {};
+    for (const [k, v] of Object.entries(earlyCfg.inpatientCapacity)) {
+      const teamKey = `早${k}`;
+      const usedInEarly = earlyInpatientCounts[teamKey] || 0;
+      noonInpatientCap[teamKey] = Math.max(0, v - usedInEarly);
+    }
+
+    const noonOnRules = {
+      priorityTeams: { hepatitis: `早${earlyCfg.hepatitisTeam}`, inPatientTeams: earlyInpatientTeams, inPatientCapacity: noonInpatientCap },
+      mainDistribution: { specialTeam: useNoonLeader ? { name: `早${earlyCfg.leaderTeam}`, capacity: earlyCfg.leaderCapacity } : null, regularTeams: earlyRegularTeams },
+      teamMaxCapacity: earlyTeamMaxCap,
+    };
+    const noonOnAssignments = distributePatients(sortByBed(noonMain), earlyTeamsToUse, noonOnRules);
+    noonOnAssignments['早外圍'] = peripheral(allNoonPatients);
+
+    // --- Late shift ---
+    const lateTeamsToUse = lateCfg.regularTeams.map(t => `晚${t}`);
+    const lateInpatientTeams = lateCfg.inpatientTeams.map(t => `晚${t}`);
+    const lateInpatientCap: Record<string, number> = {};
+    for (const [k, v] of Object.entries(lateCfg.inpatientCapacity)) lateInpatientCap[`晚${k}`] = v;
+    const lateTeamMaxCap = buildRegularTeamCapacity(lateTeamsToUse);
+
+    const lateRules = {
+      priorityTeams: { hepatitis: `晚${lateCfg.hepatitisTeam}`, inPatientTeams: lateInpatientTeams, inPatientCapacity: lateInpatientCap },
+      mainDistribution: { specialTeam: null, regularTeams: lateTeamsToUse },
+      teamMaxCapacity: lateTeamMaxCap,
+    };
+
+    const noonOffAssignments = distributePatients(sortByBed(noonMain), lateTeamsToUse, lateRules);
+    noonOffAssignments['晚外圍'] = peripheral(allNoonPatients);
+
+    const lateMain = mainArea(allLatePatients);
+    const lateAssignments = distributePatients(sortByBed(lateMain), lateTeamsToUse, lateRules);
+    lateAssignments['晚外圍'] = peripheral(allLatePatients);
+
+    // Write results to teams record
+    for (const team in earlyAssignments) {
+      for (const patient of earlyAssignments[team]) {
+        const key = `${patient.id}-${SHIFT_CODES.EARLY}`;
+        if (!teamsRec.teams[key]) teamsRec.teams[key] = {};
+        teamsRec.teams[key].nurseTeam = team;
+      }
+    }
+    for (const team in noonOnAssignments) {
+      for (const patient of noonOnAssignments[team]) {
+        const key = `${patient.id}-${SHIFT_CODES.NOON}`;
+        if (!teamsRec.teams[key]) teamsRec.teams[key] = {};
+        teamsRec.teams[key].nurseTeamIn = team;
+      }
+    }
+    for (const team in noonOffAssignments) {
+      for (const patient of noonOffAssignments[team]) {
+        const key = `${patient.id}-${SHIFT_CODES.NOON}`;
+        if (!teamsRec.teams[key]) teamsRec.teams[key] = {};
+        teamsRec.teams[key].nurseTeamOut = team;
+      }
+    }
+    for (const team in lateAssignments) {
+      for (const patient of lateAssignments[team]) {
+        const key = `${patient.id}-${SHIFT_CODES.LATE}`;
+        if (!teamsRec.teams[key]) teamsRec.teams[key] = {};
+        teamsRec.teams[key].nurseTeam = team;
+      }
+    }
+
+    this.currentTeamsRecord.set(teamsRec);
+    this.setTeamChange();
+    this.hasUnsavedChanges.set(true);
+    this.statusIndicator.set('自動分組完成，請確認並儲存');
+    this.showAlert('操作成功', '四個班次的自動分組已全部完成！請檢視結果並點擊「儲存」。');
+  }
+
+  // Helper to generate array for ngFor
+  peripheralBedRange(): number[] {
+    return PERIPHERAL_BED_RANGE;
+  }
+}
