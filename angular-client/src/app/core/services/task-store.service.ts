@@ -125,12 +125,18 @@ export class TaskStoreService implements OnDestroy {
   // -----------------------------------------------------------------------
 
   /**
-   * 病人留言板排序：依「關聯日期」(targetDate) 新→舊；
-   * 同一關聯日期再依「建立時間」(createdAt) 新→舊。
-   * 無關聯日期的留言以建立日期 fallback，避免掉到最底。
+   * 病人留言板排序：
+   * 1) 先依是否已讀分兩群——未讀(含未生效/逾期，status 非 completed/resolved)在上、已讀(completed/resolved)在下。
+   * 2) 群內再依「關聯日期」(targetDate) 新→舊。
+   * 3) 同一關聯日期再依「建立時間」(createdAt) 新→舊。
+   * 無關聯日期的留言以建立日期 fallback。
    */
   readonly sortedFeedMessages = computed<FeedMessage[]>(() => {
+    const isRead = (m: FeedMessage) => m.status === 'completed' || m.status === 'resolved';
     return [...this.feedMessages()].sort((a, b) => {
+      const ra = isRead(a) ? 1 : 0;
+      const rb = isRead(b) ? 1 : 0;
+      if (ra !== rb) return ra - rb; // 未讀(0)在上、已讀(1)在下
       const aTarget = toDateStr(a.targetDate ?? a.createdAt);
       const bTarget = toDateStr(b.targetDate ?? b.createdAt);
       if (aTarget !== bTarget) return bTarget < aTarget ? -1 : 1; // 關聯日期 新→舊
