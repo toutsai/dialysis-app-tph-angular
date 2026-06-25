@@ -70,6 +70,23 @@ export function shouldAdministerOnDate(note, targetDate) {
     if (parsed === targetDate) dateRuleMatched = true
   }
 
+  // 民國年日期：1150605（7 碼 = 民國年YYY+MM+DD）或 115/06/05、115-06-05（3 碼民國年）。
+  // 民國年 + 1911 = 西元年。限民國 100~200 年，避免誤判一般數字。
+  // 放在 mmddRegex 之前，因為 7 碼民國日期不會被 mmddRegex（需 4 碼且前後為非數字）匹配。
+  const rocRegex = /(?:^|[^\d])(\d{3})[/-]?(\d{2})[/-]?(\d{2})(?=[^\d]|$)/g
+  let rocMatch
+  while ((rocMatch = rocRegex.exec(normalized)) !== null) {
+    const rocYear = parseInt(rocMatch[1], 10)
+    if (rocYear < 100 || rocYear > 200) continue
+    const month = parseInt(rocMatch[2], 10)
+    const day = parseInt(rocMatch[3], 10)
+    if (!isValidDate(month, day)) continue
+
+    hasDateRule = true
+    const parsed = `${rocYear + 1911}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    if (parsed === targetDate) dateRuleMatched = true
+  }
+
   const mmddRegex = /(?:^|[^\d])(\d{2})(\d{2})(?=[^\d]|$)/g
   let mmddMatch
   while ((mmddMatch = mmddRegex.exec(normalized)) !== null) {
@@ -136,20 +153,20 @@ export function getDailyInjections(db, targetDate, patientIds) {
 
   const orders = queryLatestInjectionOrders(db, uniquePatientIds, targetDate.slice(0, 7))
 
-  const latestByPatientAndCode = new Map()
+  // 不再以「病人+藥碼」只留最新一筆 —— 同藥同月可能有多個頻率（例 NESP QW2 與 QW4，
+  // note/開立日期不同），各自決定施打日，全部保留。只去除「完全相同」的重複列。
+  const seenKeys = new Set()
+  const distinctOrders = []
   for (const order of orders) {
-    const key = `${order.patient_id}-${order.order_code || ''}`
-    const existing = latestByPatientAndCode.get(key)
-    const currentSort = `${order.change_date || ''}|${order.created_at || ''}`
-    const existingSort = existing ? `${existing.change_date || ''}|${existing.created_at || ''}` : ''
-    if (!existing || currentSort > existingSort) {
-      latestByPatientAndCode.set(key, order)
-    }
+    const key = `${order.patient_id}|${order.order_code || ''}|${order.note || ''}|${order.dose || ''}|${order.frequency || ''}`
+    if (seenKeys.has(key)) continue
+    seenKeys.add(key)
+    distinctOrders.push(order)
   }
 
   const patientNameMap = getPatientNameMap(db, uniquePatientIds)
 
-  return Array.from(latestByPatientAndCode.values())
+  return distinctOrders
     .filter((order) => hasMeaningfulDose(order.dose))
     .filter((order) => shouldAdministerOnDate(order.note || '', targetDate))
     .map((order) => {
