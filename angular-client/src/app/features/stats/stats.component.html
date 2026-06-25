@@ -18,13 +18,13 @@
           />
           <button class="btn" (click)="changeDate(1)">下一天 &raquo;</button>
           <button class="btn btn-today-ghost" (click)="goToToday()">回到今日</button>
-          <button class="btn btn-primary" (click)="isCreateTaskModalVisible = true" [disabled]="!hasPermission('viewer')">
+          <button class="btn btn-primary desktop-only" (click)="isCreateTaskModalVisible = true" [disabled]="!hasPermission('viewer')">
             <i class="fas fa-plus"></i> 新增交辦
           </button>
-          <button class="btn btn-info" (click)="exceptionPrefill = null; exceptionToEdit = null; isExceptionDialogVisible = true" [disabled]="isPageLocked">
+          <button class="btn btn-info desktop-only" (click)="exceptionPrefill = null; exceptionToEdit = null; isExceptionDialogVisible = true" [disabled]="isPageLocked">
             <i class="fas fa-exchange-alt"></i> 調班申請
           </button>
-          <button class="btn btn-warning" (click)="isNewUpdateTypeDialogVisible = true" [disabled]="isPageLocked">
+          <button class="btn btn-warning desktop-only" (click)="isNewUpdateTypeDialogVisible = true" [disabled]="isPageLocked">
             <i class="fas fa-calendar-plus"></i> 預約變更
           </button>
           <button *ngIf="!lateShiftTakeOffExists" (click)="promptDuplicateLateShift()" class="btn duplicate-shift-btn desktop-only" title="為晚班建立獨立的收針分組" [disabled]="isPageLocked">

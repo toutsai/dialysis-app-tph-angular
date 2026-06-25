@@ -919,6 +919,10 @@ button:disabled {
     padding: 0.4rem 0.6rem;
     font-size: 0.8rem;
   }
+  /* 行動版：前一天/後一天只留箭頭圖示 */
+  .btn-label {
+    display: none;
+  }
   .page-title {
     text-align: left;
   }
