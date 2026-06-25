@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, inject } from '@angular
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@app/core/services/api-manager.service';
+import { UserDirectoryService } from '@app/core/services/user-directory.service';
 import { addDaysToDateString, getTaipeiWeekdayIndex, getToday } from '@/utils/dateUtils';
 
 @Component({
@@ -13,6 +14,7 @@ import { addDaysToDateString, getTaipeiWeekdayIndex, getToday } from '@/utils/da
 })
 export class PatientFormModalComponent implements OnInit {
   private readonly apiManager = inject(ApiManagerService);
+  private readonly userDirectory = inject(UserDirectoryService);
   private readonly baseSchedulesApi: ApiManager<FirestoreRecord>;
   private readonly schedulesApi: ApiManager<FirestoreRecord>;
 
@@ -36,7 +38,10 @@ export class PatientFormModalComponent implements OnInit {
     extraSessions: [],
   };
 
-  readonly PHYSICIANS = ['廖丁瑩', '蔡宜潔', '蘇哲弘', '蔡亨政'];
+  /** 主治醫師偏好排序；未列名者依姓名排在其後。後備清單（使用者目錄載入失敗時沿用）。 */
+  private readonly PHYSICIAN_ORDER = ['廖丁瑩', '蔡宜潔', '蘇哲弘', '蔡亨政', '林天佑', '陳怡汝'];
+  /** 會診/收案醫師選單：連動使用者管理「職稱=主治醫師」名單（見 loadPhysicians）。 */
+  PHYSICIANS: string[] = [...this.PHYSICIAN_ORDER];
   readonly FREQ_OPTIONS = [
     '一三五', '二四六', '一四', '二五', '三六',
     '一五', '二六', '每日',
@@ -105,6 +110,32 @@ export class PatientFormModalComponent implements OnInit {
     this.form = data;
     this.ensurePatientStatus();
     this.syncFirstDialysisStatus(this.form.firstDialysisDate);
+    this.loadPhysicians();
+  }
+
+  /** 從使用者管理載入「職稱=主治醫師」名單作為會診/收案醫師選項，依偏好順序排序。 */
+  private async loadPhysicians(): Promise<void> {
+    try {
+      await this.userDirectory.fetchUsersIfNeeded();
+      const names = this.userDirectory.allUsers()
+        .filter((u) => u.title === '主治醫師' && u.isActive !== false)
+        .map((u) => u.name)
+        .filter((name): name is string => !!name);
+      // 保留目前病人已選但已不在名單中的醫師，避免選單顯示空白
+      const current = this.form?.physician;
+      if (current && !names.includes(current)) names.push(current);
+      names.sort((a, b) => {
+        const ia = this.PHYSICIAN_ORDER.indexOf(a);
+        const ib = this.PHYSICIAN_ORDER.indexOf(b);
+        if (ia === -1 && ib === -1) return a.localeCompare(b);
+        if (ia === -1) return 1;
+        if (ib === -1) return -1;
+        return ia - ib;
+      });
+      if (names.length > 0) this.PHYSICIANS = Array.from(new Set(names));
+    } catch {
+      // 使用者目錄載入失敗時保留初始後備清單
+    }
   }
 
   toggleDisease(disease: string): void {
