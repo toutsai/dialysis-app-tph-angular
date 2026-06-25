@@ -167,6 +167,7 @@
                           <div class="patient-mrn-name">
                             <span
                               class="medical-record-number"
+                              title="點擊以複製病歷號"
                               (click)="$event.stopPropagation(); copyMedicalRecordNumber($any(patientMap().get(patientId))?.medicalRecordNumber)"
                             >
                               {{ $any(patientMap().get(patientId))?.medicalRecordNumber }}
@@ -227,6 +228,7 @@
                           <div class="patient-mrn-name">
                             <span
                               class="medical-record-number"
+                              title="點擊以複製病歷號"
                               (click)="$event.stopPropagation(); copyMedicalRecordNumber($any(patientMap().get(patientId))?.medicalRecordNumber)"
                             >
                               {{ $any(patientMap().get(patientId))?.medicalRecordNumber }}

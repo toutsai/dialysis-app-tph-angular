@@ -1020,7 +1020,19 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   async copyMedicalRecordNumber(mrn: string | undefined): Promise<void> {
     if (!mrn) return;
     try {
-      await navigator.clipboard.writeText(mrn);
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(mrn);
+      } else {
+        // 正式站走 HTTP（非 secure context），navigator.clipboard 不可用，改用 execCommand fallback
+        const textArea = document.createElement('textarea');
+        textArea.value = mrn;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-9999px';
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
     } catch (err) {
       console.error('複製失敗:', err);
       this.showAlert('複製失敗', '無法將病歷號複製到剪貼簿，您的瀏覽器可能不支援或未授予權限。');
