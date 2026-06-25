@@ -262,6 +262,41 @@ const PATIENT_SELECT_COLUMNS = `
   ) AS history_deleted_at
 `
 
+/**
+ * 把資料庫時間字串正規化成 UTC 毫秒，用於跨欄位比較「誰最新」。
+ * - 含 Z / 時區偏移（如 ISO `2026-06-24T02:09:05.492Z`）：直接當帶時區解析。
+ * - naive 字串（如 `2026-06-24 13:23:54`，由 SQLite datetime('now','localtime') 產生）：視為台北時間 (+08:00)。
+ * 回傳 null 表示無法解析。
+ */
+function timeStringToMs(s) {
+  if (!s) return null
+  const str = String(s).trim()
+  if (!str) return null
+  const hasTz = /[zZ]$|[+\-]\d\d:?\d\d$/.test(str)
+  const d = hasTz ? new Date(str) : new Date(str.replace(' ', 'T') + '+08:00')
+  const t = d.getTime()
+  return Number.isNaN(t) ? null : t
+}
+
+/**
+ * 取已刪除病人「最新的刪除/異動時間」。
+ * deleted_at / history_deleted_at(DELETE 歷史 MAX) / updated_at 三者各有可能殘留舊值，
+ * 取時間最新者並回傳其「原始字串」（保留原本記錄值，交給前端 formatDate 顯示）。
+ */
+function pickLatestDeletedAt(row) {
+  const candidates = [row.deleted_at, row.history_deleted_at, row.updated_at]
+  let best = null
+  let bestMs = -Infinity
+  for (const c of candidates) {
+    const ms = timeStringToMs(c)
+    if (ms != null && ms > bestMs) {
+      bestMs = ms
+      best = c
+    }
+  }
+  return best
+}
+
 function formatPatient(row) {
   const dialysisOrders = JSON.parse(row.dialysis_orders || '{}')
   // ✨ 從 dialysisOrders 中分離出 crrtOrders
@@ -274,7 +309,12 @@ function formatPatient(row) {
     isDeleted: row.is_deleted === 1,
     originalStatus: row.original_status || (row.is_deleted === 1 ? row.status : null),
     deleteReason: row.delete_reason,
-    deletedAt: row.deleted_at || (row.is_deleted === 1 ? (row.history_deleted_at || row.updated_at) : null),
+    // 已刪除病人的「刪除/異動時間」：取 deleted_at、DELETE 歷史(history_deleted_at)、updated_at 三者中「最新」者。
+    // 三個欄位各有殘留舊值的情形（deleted_at 可能 NULL 或殘留前次刪除；history 可能漏寫；updated_at 可能早於刪除），
+    // 任一單獨取用都會顯示到舊日期，故取最新值才正確。見 pickLatestDeletedAt。
+    deletedAt: row.is_deleted === 1
+      ? pickLatestDeletedAt(row)
+      : (row.deleted_at || null),
     dialysisOrders: dialysisOrders,
     firstDialysisPlan: dialysisOrders.firstDialysisPlan || null,
     crrtOrders: crrtOrders,  // ✨ 新增：回傳 CRRT 醫囑
