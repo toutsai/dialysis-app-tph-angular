@@ -320,6 +320,28 @@ export class PatientsComponent implements OnInit, OnDestroy {
     return formatDateToYYYYMMDD(date);
   }
 
+  /** 已抽血狀態日期顯示用：YYYY-MM-DD -> MM/DD（純字串切割，避免時區位移）。無日期回空字串。 */
+  formatBloodDrawMonthDay(dateStr: string | null | undefined): string {
+    if (!dateStr || typeof dateStr !== 'string') return '';
+    const parts = dateStr.split('-');
+    if (parts.length < 3) return '';
+    return `${parts[1]}/${parts[2]}`;
+  }
+
+  /** 已抽血日期距今是否已超過 3 個月（復原時用來判斷該紀錄是否過期應清除）。無有效日期一律回 false。 */
+  private isBloodDrawExpired(dateStr: string | null | undefined): boolean {
+    if (!dateStr || typeof dateStr !== 'string') return false;
+    const [y, m, d] = dateStr.split('-').map(Number);
+    if (![y, m, d].every((n) => Number.isFinite(n))) return false;
+    const drawDate = new Date(y, m - 1, d);
+    if (isNaN(drawDate.getTime())) return false;
+    const threshold = new Date(drawDate);
+    threshold.setMonth(threshold.getMonth() + 3); // 抽血日 + 3 個月 = 到期界線
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today.getTime() > threshold.getTime();
+  }
+
   getRowClass(p: any): string {
     if (p.patientStatus?.isPaused?.active) return 'status-discontinued';
     if (p.isDeleted) return 'status-deleted';
@@ -1152,7 +1174,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
 
     try {
       const newPatientCategory = targetStatus === 'opd' ? 'opd_regular' : 'non_regular';
-      await this.patientsApi.save(patientId, {
+      const updatePayload: any = {
         isDeleted: false,
         status: targetStatus,
         deleteReason: null,
@@ -1160,12 +1182,21 @@ export class PatientsComponent implements OnInit, OnDestroy {
         originalStatus: null,
         patientCategory: newPatientCategory,
         updatedAt: new Date().toISOString(),
-      });
-      this.patientStore.updatePatientInStore(patientId, {
-        isDeleted: false, status: targetStatus, deleteReason: null,
-        deletedAt: null, originalStatus: null,
-        patientCategory: newPatientCategory, updatedAt: new Date().toISOString(),
-      } as any);
+      };
+
+      // 復原時若「已抽血」日期距今已超過 3 個月，視為過期，自動清除以恢復抽血提醒；
+      // 其餘 patientStatus（首透/暫停/勿動）保留不動。
+      const bloodDraw = patient.patientStatus?.hasBloodDraw;
+      const clearedBloodDraw = bloodDraw?.active && this.isBloodDrawExpired(bloodDraw?.date);
+      if (clearedBloodDraw) {
+        updatePayload.patientStatus = {
+          ...patient.patientStatus,
+          hasBloodDraw: { active: false, date: null },
+        };
+      }
+
+      await this.patientsApi.save(patientId, updatePayload);
+      this.patientStore.updatePatientInStore(patientId, updatePayload as any);
       await this.recalculateStatsLocally();
       this.notificationService.createNotification(
         `復原病人：${patient.name} 至 ${targetStatusText}`,
@@ -1173,7 +1204,8 @@ export class PatientsComponent implements OnInit, OnDestroy {
       );
       this.showAlert(
         '復原成功',
-        `${patient.name} 已復原並移至「${targetStatusText}」清單。如需排班，請至總床位表設定。`
+        `${patient.name} 已復原並移至「${targetStatusText}」清單。如需排班，請至總床位表設定。` +
+          (clearedBloodDraw ? '\n\n（原「已抽血」紀錄已超過 3 個月，已自動清除，請記得重新抽透析品質血。）' : '')
       );
     } catch (err) {
       this.showAlert('操作失敗', '復原病人時發生錯誤！');

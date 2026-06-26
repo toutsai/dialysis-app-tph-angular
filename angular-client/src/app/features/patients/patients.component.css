@@ -348,6 +348,15 @@
 .status-icon-blood {
   color: #3b82f6;
 }
+.status-blood-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.status-blood-date {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
 .status-icon-do-not-move {
   color: #dc3545;
 }

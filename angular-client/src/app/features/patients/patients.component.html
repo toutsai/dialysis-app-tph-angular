@@ -122,7 +122,10 @@
                 <div class="status-icon-container">
                   <i *ngIf="p.patientStatus?.isFirstDialysis?.active" class="fas fa-star status-icon-first" [title]="'首透: ' + (p.patientStatus.isFirstDialysis.date || '無日期')"></i>
                   <i *ngIf="p.patientStatus?.isPaused?.active" class="fas fa-pause-circle status-icon-paused" [title]="'暫停透析: ' + (p.patientStatus.isPaused.date || '無日期')"></i>
-                  <i *ngIf="p.patientStatus?.hasBloodDraw?.active" class="fas fa-vial status-icon-blood" [title]="'已抽血: ' + (p.patientStatus.hasBloodDraw.date || '無日期')"></i>
+                  <span *ngIf="p.patientStatus?.hasBloodDraw?.active" class="status-icon-blood status-blood-tag" [title]="'已抽血: ' + (p.patientStatus.hasBloodDraw.date || '無日期')">
+                    <i class="fas fa-syringe"></i>
+                    <span *ngIf="p.patientStatus.hasBloodDraw.date" class="status-blood-date">{{ formatBloodDrawMonthDay(p.patientStatus.hasBloodDraw.date) }}</span>
+                  </span>
                   <i *ngIf="p.patientStatus?.doNotMove?.active" class="fas fa-lock status-icon-do-not-move" [title]="'勿動：' + (p.patientStatus.doNotMove.reason || '無原因說明')"></i>
                 </div>
               </div>
@@ -252,7 +255,10 @@
                 <div class="status-icon-container">
                   <i *ngIf="p.patientStatus?.isFirstDialysis?.active" class="fas fa-star status-icon-first" [title]="'首透: ' + (p.patientStatus.isFirstDialysis.date || '無日期')"></i>
                   <i *ngIf="p.patientStatus?.isPaused?.active" class="fas fa-pause-circle status-icon-paused" [title]="'暫停透析: ' + (p.patientStatus.isPaused.date || '無日期')"></i>
-                  <i *ngIf="p.patientStatus?.hasBloodDraw?.active" class="fas fa-vial status-icon-blood" [title]="'已抽血: ' + (p.patientStatus.hasBloodDraw.date || '無日期')"></i>
+                  <span *ngIf="p.patientStatus?.hasBloodDraw?.active" class="status-icon-blood status-blood-tag" [title]="'已抽血: ' + (p.patientStatus.hasBloodDraw.date || '無日期')">
+                    <i class="fas fa-syringe"></i>
+                    <span *ngIf="p.patientStatus.hasBloodDraw.date" class="status-blood-date">{{ formatBloodDrawMonthDay(p.patientStatus.hasBloodDraw.date) }}</span>
+                  </span>
                   <i *ngIf="p.patientStatus?.doNotMove?.active" class="fas fa-lock status-icon-do-not-move" [title]="'勿動：' + (p.patientStatus.doNotMove.reason || '無原因說明')"></i>
                 </div>
               </div>
