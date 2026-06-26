@@ -208,6 +208,53 @@ export class IcuOrdersDialogComponent implements OnChanges {
     };
   }
 
+  /**
+   * 透析時間顯示為「X時Y分」。
+   * 與 DialysisOrderModal 的解析規則對齊：優先讀新的 dialysisTimeHours/dialysisTimeMinutes 兩欄，
+   * 舊資料再回退到 dialysisTimeText / dialysisHours(十進位) / hours / duration。
+   * 修正先前只印 dialysisHours（只帶到「時」、漏掉「分」）的問題。
+   */
+  getDialysisTimeDisplay(orders: any): string {
+    if (!orders) return '____';
+    const time = this.parseDialysisTime(orders);
+    if (time.hours === null && time.minutes === null) return '____';
+    return `${time.hours || 0}時${time.minutes || 0}分`;
+  }
+
+  private parseDialysisTime(orders: any): { hours: number | null; minutes: number | null } {
+    const toWhole = (v: any): number | null => {
+      if (v === null || v === undefined || v === '') return null;
+      const n = Number(v);
+      return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : null;
+    };
+    const first = (...vals: any[]) =>
+      vals.find((v) => v !== null && v !== undefined && v !== '');
+    const fromTotal = (total: number) => ({ hours: Math.floor(total / 60), minutes: total % 60 });
+
+    // 新格式：明確的時 / 分 兩欄
+    const h = toWhole(first(orders?.dialysisTimeHours, orders?.dialysisHour));
+    const m = toWhole(first(orders?.dialysisTimeMinutes, orders?.dialysisMinute, orders?.dialysisMinutes));
+    if (h !== null || m !== null) {
+      return fromTotal((h || 0) * 60 + (m || 0));
+    }
+
+    // 舊格式：文字（4時30分 / 4hr）或十進位小時（4.5）
+    const raw = first(orders?.dialysisTimeText, orders?.dialysisHours, orders?.hours, orders?.duration);
+    if (raw === null || raw === undefined || raw === '') return { hours: null, minutes: null };
+    const text = String(raw);
+    const hourMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:時|小時|h|hr|hour)/i);
+    const minuteMatch = text.match(/(\d+)\s*(?:分|分鐘|m|min|minute)/i);
+    if (hourMatch || minuteMatch) {
+      const hh = hourMatch ? Math.trunc(Number(hourMatch[1])) : 0;
+      const mm = minuteMatch ? Math.trunc(Number(minuteMatch[1])) : 0;
+      return fromTotal(hh * 60 + mm);
+    }
+    const dec = Number(raw);
+    if (!Number.isFinite(dec)) return { hours: null, minutes: null };
+    const hours = Math.floor(dec);
+    return { hours, minutes: Math.round((dec - hours) * 60) };
+  }
+
   getCRRTMode(patient: any): string {
     if (patient?.crrtOrders?.mode) {
       return patient.crrtOrders.mode;

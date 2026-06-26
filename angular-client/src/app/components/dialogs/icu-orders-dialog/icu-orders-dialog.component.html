@@ -369,7 +369,7 @@
             <span><strong>藥水:</strong> {{ p.dialysisOrders?.dialysate || '____' }}</span>
           </div>
           <div class="highlight-field">
-            <span><strong>時間(hr):</strong> {{ p.dialysisOrders?.dialysisHours || '____' }}</span>
+            <span><strong>時間:</strong> {{ getDialysisTimeDisplay(p.dialysisOrders) }}</span>
           </div>
           <div>
             <strong>Heparin:</strong> {{ p.dialysisOrders?.heparinRinse || '____' }} /
