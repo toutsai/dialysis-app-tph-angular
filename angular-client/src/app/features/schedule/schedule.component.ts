@@ -1811,7 +1811,12 @@ export class ScheduleComponent implements OnInit, OnDestroy {
 
   private async fetchLiveSchedule(dateStr: string): Promise<Record<string, unknown>> {
     // GET /schedules/:date can auto-generate a missing daily schedule from the master table.
-    const fetchedRecord = await this.schedulesApi.fetchById(dateStr);
+    // 排程與病人清單在 loadDataForDay 是並行載入；過濾要用 patientMap 比對，
+    // 必須先確保病人快取就緒，否則登入首載時 map 為空會把整批 slot 濾光 → grid 全空。
+    const [fetchedRecord] = await Promise.all([
+      this.schedulesApi.fetchById(dateStr),
+      this.patientStore.fetchPatientsIfNeeded(),
+    ]);
     const record = (fetchedRecord as Record<string, unknown> | null) || {
       date: dateStr,
       schedule: {},
@@ -1821,11 +1826,15 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     if (schedule) {
       for (const shiftId in schedule) {
         const dbSlotData = schedule[shiftId];
-        if (dbSlotData?.['patientId'] && this.patientMap().has(dbSlotData['patientId'] as string)) {
-          const patient = this.patientMap().get(dbSlotData['patientId'] as string) as Record<string, unknown>;
+        const patientId = dbSlotData?.['patientId'] as string | undefined;
+        if (patientId && this.patientMap().has(patientId)) {
+          const patient = this.patientMap().get(patientId) as Record<string, unknown>;
           const mergedSlot = { ...createEmptySlotData(shiftId), ...dbSlotData };
           if (patient) mergedSlot['autoNote'] = generateAutoNote(patient);
           finalSchedule[shiftId] = mergedSlot;
+        } else if (patientId) {
+          // 排程有病人但 patientMap 對不到（多為已刪除病人，或快取尚未就緒的競態殘留）
+          console.warn(`[schedule] ${dateStr} slot ${shiftId} 的病人 ${patientId} 不在 patientMap，已略過`);
         }
       }
     }
