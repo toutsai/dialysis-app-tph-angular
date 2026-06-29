@@ -91,6 +91,27 @@ function getActiveCrossDayMoveLandingOn(db, dateStr, patientId) {
   )
 }
 
+/**
+ * 本病人是否有「跨日移出本日」的生效 MOVE（from 在本日、to 落在他日）。
+ * 若有，代表他在本日的常規床其實已被搬空 —— 不能再把他當成可互換的常規主人。
+ */
+function hasActiveCrossDayMoveAwayFrom(db, dateStr, patientId) {
+  const placeholders = ACTIVE_STATUSES.map(() => '?').join(',')
+  const rows = db
+    .prepare(
+      `SELECT * FROM schedule_exceptions WHERE type = 'MOVE' AND patient_id = ? AND status IN (${placeholders})`,
+    )
+    .all(patientId, ...ACTIVE_STATUSES)
+  return rows
+    .map(parseExceptionRow)
+    .some(
+      (ex) =>
+        ex.from?.sourceDate === dateStr &&
+        ex.to?.goalDate &&
+        ex.to.goalDate !== dateStr,
+    )
+}
+
 function cancelException(db, id) {
   db.prepare(`
     UPDATE schedule_exceptions
@@ -237,8 +258,11 @@ export function reconcileMoveLedger(db, data, masterRules, createdBy = {}) {
         sw.patient1?.patientId !== patientId &&
         sw.patient2?.patientId !== patientId,
     )
+    // 常規主人若已被「跨日調班」移出本日，其常規床其實已空 —— 不能當互換對象，
+    // 否則收斂出的 SWAP 會在 rebuild 時因「來源床位已空」而被取消（調班失敗）。
+    const qMovedAwayCrossDay = hasActiveCrossDayMoveAwayFrom(db, dateStr, qId)
     const qBase = getPatientBasePosition(masterRules, qId, dateStr)
-    if (!qHasMove && !qHasSwap && qBase) {
+    if (!qHasMove && !qHasSwap && !qMovedAwayCrossDay && qBase) {
       const swapId = insertSwap(
         db,
         dateStr,
