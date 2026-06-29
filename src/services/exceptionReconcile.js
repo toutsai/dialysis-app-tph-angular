@@ -91,43 +91,6 @@ function getActiveCrossDayMoveLandingOn(db, dateStr, patientId) {
   )
 }
 
-/**
- * 本病人是否有「跨日移出本日」的生效 MOVE（from 在本日、to 落在他日）。
- * 若有，代表他在本日的常規床其實已被搬空 —— 不能再把他當成可互換的常規主人。
- */
-function hasActiveCrossDayMoveAwayFrom(db, dateStr, patientId) {
-  const placeholders = ACTIVE_STATUSES.map(() => '?').join(',')
-  const rows = db
-    .prepare(
-      `SELECT * FROM schedule_exceptions WHERE type = 'MOVE' AND patient_id = ? AND status IN (${placeholders})`,
-    )
-    .all(patientId, ...ACTIVE_STATUSES)
-  return rows
-    .map(parseExceptionRow)
-    .some(
-      (ex) =>
-        ex.from?.sourceDate === dateStr &&
-        ex.to?.goalDate &&
-        ex.to.goalDate !== dateStr,
-    )
-}
-
-/**
- * 本病人是否有「涵蓋本日」的生效 SUSPEND（暫停透析）。
- * 若有，代表他本日不出席、常規床其實空著 —— 同樣不能當互換對象。
- */
-function hasActiveSuspendCovering(db, dateStr, patientId) {
-  const placeholders = ACTIVE_STATUSES.map(() => '?').join(',')
-  const rows = db
-    .prepare(
-      `SELECT start_date, end_date FROM schedule_exceptions WHERE type = 'SUSPEND' AND patient_id = ? AND status IN (${placeholders})`,
-    )
-    .all(patientId, ...ACTIVE_STATUSES)
-  return rows.some(
-    (r) => r.start_date && r.end_date && r.start_date <= dateStr && dateStr <= r.end_date,
-  )
-}
-
 function cancelException(db, id) {
   db.prepare(`
     UPDATE schedule_exceptions
@@ -149,15 +112,6 @@ function getActiveSwapsForDate(db, dateStr) {
     patient1: r.patient1 ? JSON.parse(r.patient1) : {},
     patient2: r.patient2 ? JSON.parse(r.patient2) : {},
   }))
-}
-
-/** 找出「常規上」該床位是哪位病人（沒疊調班時誰睡這張床） */
-function basePatientAt(masterRules, dateStr, key) {
-  for (const pid in masterRules) {
-    const pos = getPatientBasePosition(masterRules, pid, dateStr)
-    if (pos && getScheduleKey(pos.bedNum, pos.shiftCode) === key) return pid
-  }
-  return null
 }
 
 /** 寫入一筆已生效的 SWAP，回傳 id */
@@ -263,36 +217,11 @@ export function reconcileMoveLedger(db, data, masterRules, createdBy = {}) {
     return { action: 'swapped', ids: [swapId], swappedWith: mirror.id }
   }
 
-  // Case B2：目標床的「常規主人」沒在動（無調班）→ 直接收斂成 SWAP，
-  // 免組長再拖第二步，消除一來一往之間的暫時衝突。
-  const qId = basePatientAt(masterRules, dateStr, toKey)
-  if (qId && qId !== patientId) {
-    const qHasMove = activeMoves.some((ex) => ex.patientId === qId)
-    const qHasSwap = activeSwaps.some(
-      (sw) =>
-        (sw.patient1?.patientId === qId || sw.patient2?.patientId === qId) &&
-        sw.patient1?.patientId !== patientId &&
-        sw.patient2?.patientId !== patientId,
-    )
-    // 常規主人若本日其實不在席（被「跨日調班」移出本日，或被 SUSPEND 暫停），
-    // 其常規床已空 —— 不能當互換對象，否則收斂出的 SWAP 會在 rebuild 時
-    // 因「來源床位已空」而被取消（調班失敗）。
-    const qMovedAwayCrossDay = hasActiveCrossDayMoveAwayFrom(db, dateStr, qId)
-    const qSuspended = hasActiveSuspendCovering(db, dateStr, qId)
-    const qBase = getPatientBasePosition(masterRules, qId, dateStr)
-    if (!qHasMove && !qHasSwap && !qMovedAwayCrossDay && !qSuspended && qBase) {
-      const swapId = insertSwap(
-        db,
-        dateStr,
-        { patientId, patientName: data.patientName, fromBedNum: fromData.bedNum, fromShiftCode: fromData.shiftCode },
-        { patientId: qId, patientName: masterRules[qId]?.patientName || null, fromBedNum: qBase.bedNum, fromShiftCode: qBase.shiftCode },
-        `${data.patientName || ''} 與 ${masterRules[qId]?.patientName || ''} 互換床位`,
-        createdBy,
-      )
-      if (existingForPatient) cancelException(db, existingForPatient.id)
-      return { action: 'swapped', ids: [swapId] }
-    }
-  }
+  // ⚠️ 已移除 Case B2（單拖即猜測互換）：原本「拖到某床、該床常規主人沒在動 →
+  // 自動收斂成 SWAP」會把使用者單純的 MOVE 在後台變成雙邊、依賴套用順序的 SWAP，
+  // 主人若其實不在席（跨日移出/暫停）會產生必敗互換而卡死（2026-06-29 林芳杏案）。
+  // 決議：單拖一律走純 MOVE；要對調請走 Case B（雙方都已下反向 MOVE）或手動互換表單。
+  // 拖到「在席主人」的床會如實顯示衝突，交由人決定誰去誰留。勿再加回 B2。
 
   // Case C：同病人已有調班 → 就地更新 to（保留原始 from = 常規原位）
   if (existingForPatient) {
