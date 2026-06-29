@@ -112,6 +112,22 @@ function hasActiveCrossDayMoveAwayFrom(db, dateStr, patientId) {
     )
 }
 
+/**
+ * 本病人是否有「涵蓋本日」的生效 SUSPEND（暫停透析）。
+ * 若有，代表他本日不出席、常規床其實空著 —— 同樣不能當互換對象。
+ */
+function hasActiveSuspendCovering(db, dateStr, patientId) {
+  const placeholders = ACTIVE_STATUSES.map(() => '?').join(',')
+  const rows = db
+    .prepare(
+      `SELECT start_date, end_date FROM schedule_exceptions WHERE type = 'SUSPEND' AND patient_id = ? AND status IN (${placeholders})`,
+    )
+    .all(patientId, ...ACTIVE_STATUSES)
+  return rows.some(
+    (r) => r.start_date && r.end_date && r.start_date <= dateStr && dateStr <= r.end_date,
+  )
+}
+
 function cancelException(db, id) {
   db.prepare(`
     UPDATE schedule_exceptions
@@ -258,11 +274,13 @@ export function reconcileMoveLedger(db, data, masterRules, createdBy = {}) {
         sw.patient1?.patientId !== patientId &&
         sw.patient2?.patientId !== patientId,
     )
-    // 常規主人若已被「跨日調班」移出本日，其常規床其實已空 —— 不能當互換對象，
-    // 否則收斂出的 SWAP 會在 rebuild 時因「來源床位已空」而被取消（調班失敗）。
+    // 常規主人若本日其實不在席（被「跨日調班」移出本日，或被 SUSPEND 暫停），
+    // 其常規床已空 —— 不能當互換對象，否則收斂出的 SWAP 會在 rebuild 時
+    // 因「來源床位已空」而被取消（調班失敗）。
     const qMovedAwayCrossDay = hasActiveCrossDayMoveAwayFrom(db, dateStr, qId)
+    const qSuspended = hasActiveSuspendCovering(db, dateStr, qId)
     const qBase = getPatientBasePosition(masterRules, qId, dateStr)
-    if (!qHasMove && !qHasSwap && !qMovedAwayCrossDay && qBase) {
+    if (!qHasMove && !qHasSwap && !qMovedAwayCrossDay && !qSuspended && qBase) {
       const swapId = insertSwap(
         db,
         dateStr,
