@@ -549,6 +549,18 @@ function recalculateDailySchedule(dateStr, masterRules, todaysExceptions, patien
 }
 
 /**
+ * 此調班是否「只影響本日」——用來安全地把衝突已解除的調班收回 applied。
+ * 跨日 MOVE（源/目標不同日）與 SUSPEND（多日區間）排除：它們在其他日可能仍衝突，
+ * 單日重算成功不足以斷定整筆已無衝突。
+ */
+function exceptionAffectsOnlyDay(ex, dateStr) {
+  if (ex.type === 'MOVE') return ex.from?.sourceDate === dateStr && ex.to?.goalDate === dateStr
+  if (ex.type === 'ADD_SESSION') return ex.to?.goalDate === dateStr
+  if (ex.type === 'SWAP') return ex.date === dateStr
+  return false
+}
+
+/**
  * 重建單一天的排程（含調班整合）
  * @param {string} dateStr - 目標日期
  * @param {object} masterRules - 總表規則
@@ -617,6 +629,29 @@ function rebuildSingleDaySchedule(dateStr, masterRules, patientsMap) {
     conflictingExceptions.forEach(({ ex, reason }) => {
       console.log(`[Engine] 將調班 ${ex.id} 標記為衝突：${reason}`)
       conflictStmt.run(reason || '系統重建排程時發現衝突，請重新安排。', ex.id)
+    })
+  }
+
+  // 反向收回：先前被標衝突、但本次重算已能乾淨套用的「單日」調班 → 改回 applied、清錯誤。
+  // 引擎原為單向閂鎖（只標衝突、衝突自動解除後不收回），會殘留「人已在新床卻仍顯示衝突」的殭屍旗。
+  // 僅限「只影響本日」的調班（exceptionAffectsOnlyDay），跨日/暫停不在此自動收回。
+  const conflictIds = new Set(conflictingExceptions.map(({ ex }) => ex.id))
+  const resolvedExceptions = todaysExceptions.filter(
+    (ex) =>
+      ex.status === 'conflict_requires_resolution' &&
+      !conflictIds.has(ex.id) &&
+      exceptionAffectsOnlyDay(ex, dateStr),
+  )
+  if (resolvedExceptions.length > 0) {
+    const resolveStmt = db.prepare(`
+      UPDATE schedule_exceptions
+      SET status = 'applied', error_message = NULL,
+          updated_at = datetime('now', 'localtime')
+      WHERE id = ?
+    `)
+    resolvedExceptions.forEach((ex) => {
+      console.log(`[Engine] 調班 ${ex.id} 衝突已解除，重算成功，收回為 applied`)
+      resolveStmt.run(ex.id)
     })
   }
 
