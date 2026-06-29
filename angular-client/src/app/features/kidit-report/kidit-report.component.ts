@@ -215,12 +215,15 @@ export class KiditReportComponent implements OnInit {
       await this.patientStore.fetchPatientsIfNeeded();
       const patients = this.patientStore.allPatients();
 
+      // 本院首次透析名單：來源為狀態標記「首透」(patientStatus.isFirstDialysis.date)。
+      // 注意：頂層 firstDialysisDate 是「他院初次透析日期」(來自洗腎摘要)，語意不同，不可採用。
       const rows: FirstDialysisRow[] = patients
-        .filter((p: any) => typeof p.firstDialysisDate === 'string' && p.firstDialysisDate.slice(0, 7) === ym)
-        .map((p: any) => ({
+        .map((p: any) => ({ p, fd: p?.patientStatus?.isFirstDialysis?.date || '' }))
+        .filter(({ fd }: any) => typeof fd === 'string' && fd.slice(0, 7) === ym)
+        .map(({ p, fd }: any) => ({
           name: p.name || '',
           medicalRecordNumber: p.medicalRecordNumber || '',
-          firstDialysisDate: p.firstDialysisDate || '',
+          firstDialysisDate: String(fd).slice(0, 10),
           mode: p.mode || '',
           statusLabel: this.statusLabelMap[p.status] || p.status || '',
           physician: p.physician || '',
