@@ -27,24 +27,36 @@ export class PatientHistoryModalComponent implements OnInit, OnDestroy {
     er: '急診',
   };
 
+  /**
+   * 統一解析歷史時間戳。
+   * - Firestore Timestamp（toDate）相容保留。
+   * - 後端有兩種字串：ISO「…Z」(UTC) 與 legacy「YYYY-MM-DD HH:MM:SS」(空格、無 Z)。
+   *   兩者實際都是 UTC，但 JS 對空格格式會誤判為本地時間 → 補成 UTC 再解析，否則早 8 小時。
+   */
+  private parseTimestamp(input: any): Date {
+    if (input && typeof input.toDate === 'function') return input.toDate();
+    if (typeof input === 'string') {
+      let s = input.trim();
+      if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(s)) s = s.replace(' ', 'T') + 'Z';
+      return new Date(s);
+    }
+    return new Date(input);
+  }
+
   get groupedHistory(): any[][] {
     if (!this.history || this.history.length === 0) return [];
 
     const episodes: any[][] = [];
     let currentEpisode: any[] = [];
 
-    const sortedHistory = [...this.history].sort((a, b) => {
-      const timeA = a.timestamp?.toDate
-        ? a.timestamp.toDate().getTime()
-        : new Date(a.timestamp).getTime();
-      const timeB = b.timestamp?.toDate
-        ? b.timestamp.toDate().getTime()
-        : new Date(b.timestamp).getTime();
-      return timeA - timeB;
-    });
+    const sortedHistory = [...this.history].sort(
+      (a, b) => this.parseTimestamp(a.timestamp).getTime() - this.parseTimestamp(b.timestamp).getTime()
+    );
 
     sortedHistory.forEach((entry: any) => {
-      const isStartEvent = entry.eventType === 'CREATE' || entry.eventType === 'RESTORE_AND_TRANSFER';
+      const isStartEvent = entry.eventType === 'CREATE'
+        || entry.eventType === 'RESTORE_AND_TRANSFER'
+        || entry.eventType === 'RESTORE';
 
       if (isStartEvent && currentEpisode.length > 0) {
         episodes.push(currentEpisode);
@@ -83,11 +95,10 @@ export class PatientHistoryModalComponent implements OnInit, OnDestroy {
       const allHistory = await this.historyApi.fetchAll();
       this.history = (allHistory as any[]).filter(
         (h: any) => h.patientId === this.patientId
-      ).sort((a: any, b: any) => {
-        const timeA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : new Date(a.timestamp || 0).getTime();
-        const timeB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : new Date(b.timestamp || 0).getTime();
-        return timeA - timeB;
-      });
+      ).sort(
+        (a: any, b: any) =>
+          this.parseTimestamp(a.timestamp).getTime() - this.parseTimestamp(b.timestamp).getTime()
+      );
     } catch (error) {
       console.error('讀取歷史紀錄失敗:', error);
       this.history = [];
@@ -97,23 +108,15 @@ export class PatientHistoryModalComponent implements OnInit, OnDestroy {
   }
 
   formatTimestamp(timestampInput: any): string {
-    if (!timestampInput) return 'Invalid Date';
+    if (!timestampInput) return '—';
 
-    let date: Date;
-
-    if (timestampInput && typeof timestampInput.toDate === 'function') {
-      date = timestampInput.toDate();
-    } else if (typeof timestampInput === 'string') {
-      date = new Date(timestampInput);
-    } else {
-      date = new Date(timestampInput);
-    }
-
+    const date = this.parseTimestamp(timestampInput);
     if (isNaN(date.getTime())) {
-      return 'Invalid Date';
+      return '—';
     }
 
     return date.toLocaleString('zh-TW', {
+      timeZone: 'Asia/Taipei',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -123,20 +126,31 @@ export class PatientHistoryModalComponent implements OnInit, OnDestroy {
   }
 
   formatEvent(entry: any): string {
-    const details = entry.eventDetails;
-    const getStatus = (s: string) => `<strong>${escapeHtml(this.statusMap[s] || s)}</strong>`;
+    const details = entry.eventDetails || {};
+    const getStatus = (s: string) => `<strong>${escapeHtml(this.statusMap[s] || s || '—')}</strong>`;
+    const getMode = (m: string) => `<strong>${escapeHtml(m || '—')}</strong>`;
 
     switch (entry.eventType) {
       case 'CREATE':
         return `建立資料 ➝ ${getStatus(details.status)}`;
-      case 'TRANSFER':
+      case 'TRANSFER': {
+        // key 形狀並存：legacy 用 from/to（含 note=衝突轉入），現行用 fromStatus/toStatus（含 reason）
+        const from = details.fromStatus ?? details.from;
+        const to = details.toStatus ?? details.to;
         if (details.note) {
-          return `衝突轉入 ➝ ${getStatus(details.to)}`;
+          return `衝突轉入 ➝ ${getStatus(to)}`;
         }
-        return `${getStatus(details.from)} ➝ ${getStatus(details.to)}`;
+        const base = `${getStatus(from)} ➝ ${getStatus(to)}`;
+        return details.reason ? `${base}（${escapeHtml(details.reason)}）` : base;
+      }
+      case 'STATUS_CHANGE':
+        return `${getStatus(details.fromStatus ?? details.from)} ➝ ${getStatus(details.toStatus ?? details.to)}`;
+      case 'MODE_CHANGE':
+        return `模式變更 ${getMode(details.fromMode)} ➝ ${getMode(details.toMode)}`;
       case 'DELETE':
         return `<strong>結案 (${escapeHtml(details.reason || '未說明')})</strong>`;
       case 'RESTORE_AND_TRANSFER':
+      case 'RESTORE':
         return `資料復原 ➝ ${getStatus(details.restoredTo)}`;
       default:
         return `未知操作: ${escapeHtml(entry.eventType)}`;
