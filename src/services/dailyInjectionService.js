@@ -111,6 +111,12 @@ function queryLatestInjectionOrders(db, patientIds, targetMonth) {
   const placeholders = patientIds.map(() => '?').join(',')
   // 每位病人取「<= 目標月份」的最新一份上傳檔。
   // 同月上傳為整月覆蓋，故每個 upload_month 僅一份權威資料；跨月時自動沿用最近一份。
+  //
+  // ⚠️ 有效月份的判定「不限 order_type」：只要病人有出現在該月上傳（針劑或口服皆算），
+  // 該月就是其權威月份。否則某月已上傳、但該病人當月「只有口服、無針劑」
+  // （如 NESP 已停，洗腎醫囑檔「不含停止日」故不含該筆），會被誤判成「當月無針劑資料」
+  // 而沿用上月、復活已停的針劑。主查詢仍只回 order_type='injection' 的列，
+  // 故有效月份若無針劑列 → 正確顯示「無針劑」；真正整月未上傳者才沿用上月。
   return db
     .prepare(
       `
@@ -118,7 +124,6 @@ function queryLatestInjectionOrders(db, patientIds, targetMonth) {
         SELECT patient_id, MAX(upload_month) AS effective_month
         FROM injection_orders
         WHERE patient_id IN (${placeholders})
-          AND order_type = 'injection'
           AND upload_month <= ?
         GROUP BY patient_id
       )
