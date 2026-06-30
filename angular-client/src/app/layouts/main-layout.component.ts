@@ -449,22 +449,34 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
         this.todayMyPatientIds.set([]);
         return;
       }
-      const { names, teams } = assignmentsSnapshot[0];
+      // names/teams 巢狀包在 teams JSON 欄位 (schema 只有 teams)，需解包；同時相容扁平結構。
+      const record = assignmentsSnapshot[0] as Record<string, any>;
+      const rawTeams = record['teams'] as Record<string, any> | undefined;
+      const payload =
+        rawTeams && (rawTeams['names'] || rawTeams['teams']) ? rawTeams : record;
+      const names = payload['names'] as Record<string, string> | undefined;
+      const teams = payload['teams'] as
+        | Record<string, { nurseTeam?: string; nurseTeamIn?: string; nurseTeamOut?: string }>
+        | undefined;
       const myAssignedIds = new Set<string>();
       if (names && teams) {
+        const userName = (currentUser.name || '').trim();
+        // 找出指派給此護理師的隊名 (早A/早B/午C...)
+        const myTeamNames = new Set<string>();
         for (const teamName in names) {
-          if (names[teamName] === currentUser.name) {
-            for (const key in teams) {
-              const [patientId] = key.split('-');
-              const teamAssignment = teams[key];
-              if (
-                teamAssignment.nurseTeam === teamName ||
-                teamAssignment.nurseTeamIn === teamName ||
-                teamAssignment.nurseTeamOut === teamName
-              ) {
-                myAssignedIds.add(patientId);
-              }
-            }
+          if ((names[teamName] || '').trim() === userName) myTeamNames.add(teamName);
+        }
+        for (const key in teams) {
+          const ta = teams[key] || {};
+          if (
+            myTeamNames.has(ta.nurseTeam as string) ||
+            myTeamNames.has(ta.nurseTeamIn as string) ||
+            myTeamNames.has(ta.nurseTeamOut as string)
+          ) {
+            // key = `${patientId}-${shift}`；patientId 可能是含「-」的 UUID，
+            // 故取最後一個「-」之前的整段，避免被截斷。
+            const patientId = key.substring(0, key.lastIndexOf('-'));
+            if (patientId) myAssignedIds.add(patientId);
           }
         }
       }
