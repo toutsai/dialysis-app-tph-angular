@@ -50,8 +50,11 @@
               <input type="date" [(ngModel)]="s.dialysisDate" [disabled]="!canEdit" />
             </td>
             <td>
-              <input type="text" [(ngModel)]="s.topic" [disabled]="!canEdit"
-                     list="eduTopicList" placeholder="選擇或輸入主題" />
+              <select class="topic-select" [(ngModel)]="s.topic" [disabled]="!canEdit">
+                <option value="">（請選擇主題）</option>
+                <option *ngFor="let t of topics()" [value]="t">{{ t }}</option>
+                <option *ngIf="s.topic && !topics().includes(s.topic)" [value]="s.topic">{{ s.topic }}</option>
+              </select>
             </td>
             <td class="col-sign-cell">
               <button type="button" class="sign-cell" [class.signed]="s.educatorSign" [disabled]="!canEdit"
@@ -78,14 +81,6 @@
           </tr>
         </tbody>
       </table>
-
-      <datalist id="eduTopicList">
-        <option *ngFor="let t of topics()" [value]="t"></option>
-      </datalist>
-
-      <p class="edu-hint" *ngIf="!isLoading() && topics().length === 0">
-        （主題下拉選項尚未設定，目前可直接輸入；日後於設定建立主題清單後會出現下拉建議）
-      </p>
     </div>
   </div>
 </div>

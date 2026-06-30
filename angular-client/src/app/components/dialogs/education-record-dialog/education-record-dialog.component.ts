@@ -23,6 +23,22 @@ interface EducationSession {
 
 type SignField = 'educatorSign' | 'returnDemoSign' | 'passSign';
 
+/** 初透衛教主題預設 12 項（可由 site_config education_topics 覆蓋） */
+const DEFAULT_EDUCATION_TOPICS = [
+  '環境介紹/股靜脈導管置入術護理指導',
+  '血液透析治療護理指導',
+  '動靜脈瘻管護理指導',
+  '洗腎病人水分攝取原則護理指導/體重控制注意事項護理指導',
+  '高低血鉀症護理指導',
+  '磷離子飲食原則護理指導',
+  '透析病人照護護理指導',
+  '貧血病人日常照護護理指導',
+  '透析病人蛋白質飲食護理指導',
+  '洗腎病人日常保健護理指導',
+  '預防跌倒護理指導',
+  '透析病人常用藥物注意事項護理指導',
+];
+
 @Component({
   selector: 'app-education-record-dialog',
   standalone: true,
@@ -43,7 +59,7 @@ export class EducationRecordDialogComponent implements OnInit {
   @Output() close = new EventEmitter<void>();
 
   readonly sessions = signal<EducationSession[]>([]);
-  readonly topics = signal<string[]>([]);
+  readonly topics = signal<string[]>(DEFAULT_EDUCATION_TOPICS);
   readonly isLoading = signal(false);
   readonly isSaving = signal(false);
 
@@ -73,11 +89,12 @@ export class EducationRecordDialogComponent implements OnInit {
 
   private async loadTopics(): Promise<void> {
     try {
+      // 若 site_config 有設定 education_topics 則覆蓋預設；否則用內建 12 項
       const resp: any = await localApi.get('/system/config/education_topics');
       const list = resp?.configData?.topics;
-      this.topics.set(Array.isArray(list) ? list : []);
+      this.topics.set(Array.isArray(list) && list.length ? list : DEFAULT_EDUCATION_TOPICS);
     } catch {
-      this.topics.set([]);
+      this.topics.set(DEFAULT_EDUCATION_TOPICS);
     }
   }
 

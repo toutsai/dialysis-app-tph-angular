@@ -109,6 +109,17 @@
 }
 .edu-table input:focus { border-color: #2980b9; outline: none; }
 .edu-table input:disabled { background: #f5f6f7; color: #555; }
+.topic-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #cbd5e0;
+  border-radius: 4px;
+  font-size: 14px;
+  background: #fff;
+}
+.topic-select:focus { border-color: #2980b9; outline: none; }
+.topic-select:disabled { background: #f5f6f7; color: #555; }
 
 /* 簽核格（點選蓋章＝姓名＋日期），仿工作日誌簽核 */
 .sign-cell {
