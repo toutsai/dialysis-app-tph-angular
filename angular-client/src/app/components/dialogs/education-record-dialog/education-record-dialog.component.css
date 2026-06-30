@@ -40,6 +40,10 @@
 .edu-header-actions { display: flex; align-items: center; gap: 10px; }
 .edu-progress { font-size: 14px; color: #16a34a; font-weight: 600; }
 .edu-meta { padding: 8px 20px 0; color: #555; font-size: 14px; }
+.edu-meta span { margin-right: 24px; }
+.edu-meta-field { display: inline-flex; align-items: center; gap: 4px; }
+.edu-meta-input { padding: 3px 6px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+.edu-meta-input:disabled { background: #f5f5f5; color: #555; border-color: #e0e0e0; }
 
 .edu-btn {
   padding: 8px 16px;

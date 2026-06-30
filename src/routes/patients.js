@@ -840,7 +840,7 @@ router.get('/:id/education', authenticate, (req, res) => {
   try {
     const { id } = req.params
     const db = getDatabase()
-    const patient = db.prepare('SELECT id, name, first_dialysis_date FROM patients WHERE id = ?').get(id)
+    const patient = db.prepare('SELECT id, name, medical_record_number, first_dialysis_date, patient_status, created_at FROM patients WHERE id = ?').get(id)
     if (!patient) return res.status(404).json({ error: true, message: '病人不存在' })
 
     let row = db.prepare('SELECT * FROM education_records WHERE patient_id = ?').get(id)
@@ -853,9 +853,26 @@ router.get('/:id/education', authenticate, (req, res) => {
       row = db.prepare('SELECT * FROM education_records WHERE patient_id = ?').get(id)
     }
 
+    // 入院日期：優先用衛教紀錄已儲存值；否則帶入預設 —
+    // patient_status.admissionDate（轉住院 ipd 時寫入）→ 退而求其次用病人新增日期(created_at)。
+    // 皆無則回空字串，前端顯示可手動選取的日期欄位。
+    let admissionDate = row.admission_date || ''
+    if (!admissionDate) {
+      try {
+        admissionDate = JSON.parse(patient.patient_status || '{}')?.admissionDate || ''
+      } catch {
+        admissionDate = ''
+      }
+      if (!admissionDate && patient.created_at) {
+        admissionDate = String(patient.created_at).slice(0, 10)
+      }
+    }
+
     res.json({
       patientId: id,
       patientName: patient.name,
+      medicalRecordNumber: patient.medical_record_number,
+      admissionDate,
       firstDialysisDate: patient.first_dialysis_date,
       sessions: JSON.parse(row.sessions || '[]'),
       updatedAt: row.updated_at,
@@ -878,22 +895,24 @@ router.put('/:id/education', ...isEditor, (req, res) => {
     if (!patient) return res.status(404).json({ error: true, message: '病人不存在' })
 
     const sessions = normalizeEducationSessions(req.body?.sessions)
+    // 入院日期：可編輯，空字串視為清空（存 null）
+    const admissionDate = req.body?.admissionDate ? String(req.body.admissionDate).slice(0, 10) : null
     const modifiedBy = JSON.stringify({ uid: req.user.id, name: req.user.name })
     const existing = db.prepare('SELECT id FROM education_records WHERE patient_id = ?').get(id)
     if (existing) {
       db.prepare(`
         UPDATE education_records
-        SET sessions = ?, created_by = ?, updated_at = datetime('now', 'localtime')
+        SET sessions = ?, admission_date = ?, created_by = ?, updated_at = datetime('now', 'localtime')
         WHERE patient_id = ?
-      `).run(JSON.stringify(sessions), modifiedBy, id)
+      `).run(JSON.stringify(sessions), admissionDate, modifiedBy, id)
     } else {
       db.prepare(`
-        INSERT INTO education_records (id, patient_id, sessions, created_by)
-        VALUES (?, ?, ?, ?)
-      `).run(id, id, JSON.stringify(sessions), modifiedBy)
+        INSERT INTO education_records (id, patient_id, sessions, admission_date, created_by)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(id, id, JSON.stringify(sessions), admissionDate, modifiedBy)
     }
 
-    res.json({ success: true, sessions })
+    res.json({ success: true, sessions, admissionDate })
   } catch (error) {
     console.error('儲存衛教紀錄錯誤:', error)
     res.status(500).json({ error: true, message: '儲存衛教紀錄失敗' })

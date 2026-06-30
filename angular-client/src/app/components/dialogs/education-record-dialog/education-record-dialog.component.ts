@@ -21,6 +21,8 @@ interface EducationSession {
 export class EducationRecordDialogComponent implements OnInit {
   @Input() patientId = '';
   @Input() patientName = '';
+  @Input() medicalRecordNumber = '';
+  @Input() admissionDate: string | null = null;
   @Input() firstDialysisDate: string | null = null;
   /** 是否可編輯（viewer / 鎖定時傳 false） */
   @Input() canEdit = true;
@@ -40,6 +42,8 @@ export class EducationRecordDialogComponent implements OnInit {
       const data: any = await localApi.get(`/patients/${this.patientId}/education`);
       if (data) {
         this.patientName = data.patientName || this.patientName;
+        this.medicalRecordNumber = data.medicalRecordNumber || this.medicalRecordNumber;
+        this.admissionDate = data.admissionDate ?? this.admissionDate;
         this.firstDialysisDate = data.firstDialysisDate ?? this.firstDialysisDate;
         this.sessions.set(this.normalize(data.sessions));
       } else {
@@ -84,7 +88,10 @@ export class EducationRecordDialogComponent implements OnInit {
     if (!this.canEdit || this.isSaving()) return;
     this.isSaving.set(true);
     try {
-      await localApi.put(`/patients/${this.patientId}/education`, { sessions: this.sessions() });
+      await localApi.put(`/patients/${this.patientId}/education`, {
+        sessions: this.sessions(),
+        admissionDate: this.admissionDate || '',
+      });
       this.close.emit();
     } catch (error: any) {
       console.error('儲存衛教紀錄失敗:', error);
@@ -125,7 +132,8 @@ export class EducationRecordDialogComponent implements OnInit {
       </style></head><body>
       <h2>初透病人衛教紀錄</h2>
       <div class="meta">
-        <span>姓名：${this.esc(this.patientName)}</span>
+        <span>姓名：${this.esc(this.patientName)}${this.medicalRecordNumber ? `（${this.esc(this.medicalRecordNumber)}）` : ''}</span>
+        <span>入院日期：${this.esc(this.admissionDate || '')}</span>
         <span>首透日期：${this.esc(this.firstDialysisDate || '')}</span>
       </div>
       <table>

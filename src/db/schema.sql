@@ -216,6 +216,7 @@ CREATE TABLE IF NOT EXISTS education_records (
     id TEXT PRIMARY KEY,            -- = patient_id（一對一）
     patient_id TEXT NOT NULL UNIQUE,
     sessions TEXT DEFAULT '[]',     -- JSON: [{index, topic, educator, educatedDate, signature} ×12]
+    admission_date TEXT,            -- 入院日期（可編輯，預設帶入病人入院/新增日）
     created_by TEXT DEFAULT '{}',
     created_at TEXT DEFAULT (datetime('now', 'localtime')),
     updated_at TEXT DEFAULT (datetime('now', 'localtime'))

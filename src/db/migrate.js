@@ -178,6 +178,18 @@ export function runMigrations() {
     }
 
     // ========================================
+    // education_records 表格遷移
+    // ========================================
+    const eduRecordsExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='education_records'")
+      .get()
+    if (eduRecordsExists) {
+      console.log('📋 檢查 education_records 表格...')
+      // 入院日期：可編輯,儲存於衛教紀錄(預設帶入病人入院/新增日,沒有則手動選取)
+      if (addColumnIfNotExists(db, 'education_records', 'admission_date', 'TEXT')) migrationsApplied++
+    }
+
+    // ========================================
     // daily_logs 表格遷移
     // ========================================
     const dailyLogsExists = db

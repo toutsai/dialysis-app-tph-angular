@@ -4,7 +4,7 @@
       <h3>
         <i class="fas fa-chalkboard-teacher"></i>
         初透病人衛教紀錄
-        <span class="edu-sub" *ngIf="patientName">— {{ patientName }}</span>
+        <span class="edu-sub" *ngIf="patientName">— {{ patientName }}<ng-container *ngIf="medicalRecordNumber">（{{ medicalRecordNumber }}）</ng-container></span>
       </h3>
       <div class="edu-header-actions">
         <span class="edu-progress" *ngIf="!isLoading()">已完成 {{ completedCount }}/12</span>
@@ -18,7 +18,13 @@
       </div>
     </div>
 
-    <div class="edu-meta" *ngIf="firstDialysisDate">首透日期：{{ firstDialysisDate }}</div>
+    <div class="edu-meta" *ngIf="!isLoading()">
+      <span class="edu-meta-field">
+        入院日期：
+        <input type="date" class="edu-meta-input" [(ngModel)]="admissionDate" [disabled]="!canEdit" />
+      </span>
+      <span *ngIf="firstDialysisDate">首透日期：{{ firstDialysisDate }}</span>
+    </div>
 
     <div class="edu-body">
       <div *ngIf="isLoading()" class="edu-loading">
