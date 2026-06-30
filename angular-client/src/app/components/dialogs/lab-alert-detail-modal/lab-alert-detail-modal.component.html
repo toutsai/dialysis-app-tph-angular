@@ -23,8 +23,8 @@
               <h4>{{ entry[0] }}</h4>
               <div class="options-grid">
                 @for (cause of entry[1]; track cause.text) {
-                  <label class="checkbox-label" (click)="toggleCause(cause.text)">
-                    <input type="checkbox" [checked]="isCauseSelected(cause.text)" />
+                  <label class="checkbox-label">
+                    <input type="checkbox" [checked]="isCauseSelected(cause.text)" (change)="toggleCause(cause.text)" />
                     <span class="checkbox-custom"></span>
                     {{ cause.text }}
                   </label>
@@ -46,8 +46,8 @@
               <h4>{{ entry[0] }}</h4>
               <div class="options-grid">
                 @for (suggestion of entry[1]; track suggestion.text) {
-                  <label class="checkbox-label" (click)="toggleSuggestion(suggestion.text)">
-                    <input type="checkbox" [checked]="isSuggestionSelected(suggestion.text)" />
+                  <label class="checkbox-label">
+                    <input type="checkbox" [checked]="isSuggestionSelected(suggestion.text)" (change)="toggleSuggestion(suggestion.text)" />
                     <span class="checkbox-custom"></span>
                     {{ suggestion.text }}
                   </label>
