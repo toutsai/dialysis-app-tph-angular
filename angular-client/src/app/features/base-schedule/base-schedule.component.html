@@ -97,8 +97,8 @@
     title="選擇病人排班 (總表)"
     [patients]="filteredPatientsForSelect()"
     [showFillOptions]="false"
-    (confirmEvent)="handlePatientSelect($event)"
-    (cancelEvent)="isPatientSelectDialogVisible.set(false)"
+    (confirm)="handlePatientSelect($event)"
+    (cancel)="isPatientSelectDialogVisible.set(false)"
   ></app-patient-select-dialog>
   <app-alert-dialog
     [isVisible]="isAlertDialogVisible()"
