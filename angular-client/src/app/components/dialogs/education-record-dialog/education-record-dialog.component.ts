@@ -1,15 +1,27 @@
-import { Component, EventEmitter, Input, OnInit, Output, signal } from '@angular/core';
+import { Component, EventEmitter, Input, OnInit, Output, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { localApi } from '@/services/localApiClient';
+import { getToday } from '@/utils/dateUtils';
+import { AuthService } from '@app/core/services/auth.service';
+
+/** 簽核欄位：點選蓋章 = 當前使用者姓名 + 日期 */
+interface SignOff {
+  name: string;
+  date: string; // YYYY-MM-DD
+}
 
 interface EducationSession {
   index: number;
-  topic: string;
-  educator: string;
-  educatedDate: string;
-  signature: string;
+  dialysisDate: string; // 透析日期
+  topic: string; // 主題
+  educatorSign: SignOff | null; // 衛教者/日期
+  signature: string; // 被衛教者簽名（文字）
+  returnDemoSign: SignOff | null; // 回示教日期/護理師
+  passSign: SignOff | null; // 回示教通過日/主護簽章
 }
+
+type SignField = 'educatorSign' | 'returnDemoSign' | 'passSign';
 
 @Component({
   selector: 'app-education-record-dialog',
@@ -19,6 +31,8 @@ interface EducationSession {
   styleUrl: './education-record-dialog.component.css',
 })
 export class EducationRecordDialogComponent implements OnInit {
+  private readonly authService = inject(AuthService);
+
   @Input() patientId = '';
   @Input() patientName = '';
   @Input() medicalRecordNumber = '';
@@ -67,21 +81,55 @@ export class EducationRecordDialogComponent implements OnInit {
     }
   }
 
+  private toSign(s: any): SignOff | null {
+    if (!s || typeof s !== 'object') return null;
+    const name = String(s.name || '').trim();
+    const date = s.date ? String(s.date).slice(0, 10) : '';
+    if (!name && !date) return null;
+    return { name, date };
+  }
+
   private normalize(input: any): EducationSession[] {
     return Array.from({ length: 12 }, (_, i) => {
       const s = Array.isArray(input) ? input[i] : null;
+      // 相容舊資料：educator/educatedDate → educatorSign
+      const educatorSign =
+        this.toSign(s?.educatorSign) ||
+        (s?.educator || s?.educatedDate ? this.toSign({ name: s?.educator, date: s?.educatedDate }) : null);
       return {
         index: i + 1,
+        dialysisDate: s?.dialysisDate || '',
         topic: s?.topic || '',
-        educator: s?.educator || '',
-        educatedDate: s?.educatedDate || '',
+        educatorSign,
         signature: s?.signature || '',
+        returnDemoSign: this.toSign(s?.returnDemoSign),
+        passSign: this.toSign(s?.passSign),
       };
     });
   }
 
   get completedCount(): number {
-    return this.sessions().filter((s) => !!s.educatedDate).length;
+    return this.sessions().filter((s) => !!s.educatorSign).length;
+  }
+
+  /** 點選簽核格：空 → 蓋當前使用者姓名+今日；已簽 → 取消 */
+  toggleSign(session: EducationSession, field: SignField): void {
+    if (!this.canEdit) return;
+    if (session[field]) {
+      session[field] = null;
+    } else {
+      const name = this.authService.currentUser()?.name || '';
+      session[field] = { name, date: getToday() };
+    }
+    // 觸發 signal 變更偵測
+    this.sessions.set([...this.sessions()]);
+  }
+
+  /** 顯示成「姓名（0630）」 */
+  signLabel(sign: SignOff | null): string {
+    if (!sign) return '';
+    const mmdd = sign.date ? sign.date.slice(5).replace('-', '') : '';
+    return mmdd ? `${sign.name}（${mmdd}）` : sign.name;
   }
 
   async save(): Promise<void> {
@@ -110,10 +158,12 @@ export class EducationRecordDialogComponent implements OnInit {
       .map(
         (s) => `<tr>
           <td style="text-align:center">${s.index}</td>
+          <td style="text-align:center">${this.esc(s.dialysisDate)}</td>
           <td>${this.esc(s.topic)}</td>
-          <td>${this.esc(s.educator)}</td>
-          <td>${this.esc(s.educatedDate)}</td>
+          <td style="text-align:center">${this.esc(this.signLabel(s.educatorSign))}</td>
           <td>${this.esc(s.signature)}</td>
+          <td style="text-align:center">${this.esc(this.signLabel(s.returnDemoSign))}</td>
+          <td style="text-align:center">${this.esc(this.signLabel(s.passSign))}</td>
         </tr>`,
       )
       .join('');
@@ -125,8 +175,8 @@ export class EducationRecordDialogComponent implements OnInit {
         h2 { text-align: center; margin: 0 0 8px; }
         .meta { margin: 8px 0 16px; font-size: 14px; }
         .meta span { margin-right: 24px; }
-        table { width: 100%; border-collapse: collapse; font-size: 14px; }
-        th, td { border: 1px solid #000; padding: 8px 10px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { border: 1px solid #000; padding: 6px 8px; }
         th { background: #f0f0f0; }
         td { height: 28px; }
       </style></head><body>
@@ -138,8 +188,13 @@ export class EducationRecordDialogComponent implements OnInit {
       </div>
       <table>
         <thead><tr>
-          <th style="width:48px">次數</th><th>主題</th><th style="width:120px">衛教者</th>
-          <th style="width:120px">衛教日期</th><th style="width:160px">被衛教者簽名</th>
+          <th style="width:40px">次數</th>
+          <th style="width:96px">透析日期</th>
+          <th>主題</th>
+          <th style="width:110px">衛教者/日期</th>
+          <th style="width:120px">被衛教者簽名</th>
+          <th style="width:110px">回示教日期/護理師</th>
+          <th style="width:120px">回示教通過日/主護簽章</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>

@@ -11,6 +11,7 @@ import { rebuildSingleDaySchedule } from '../services/scheduleSync.js'
 import { removeAutoMovementFromDailyLog } from '../services/dailyLogMovementSync.js'
 import { normalizeDialysisOrdersMode } from '../utils/dialysisMode.js'
 import { recordPatientHistory, createPatientSnapshot } from '../services/patientHistory.js'
+import { FREQ_MAP_TO_DAY_INDEX } from '../utils/scheduleUtils.js'
 
 const router = Router()
 
@@ -808,13 +809,24 @@ router.get('/:id/dialysis-dates', authenticate, (req, res) => {
 // ── 初透病人衛教紀錄（12 次）─────────────────────────────────────
 const EDUCATION_SESSION_COUNT = 12
 
+// 簽核欄位正規化為 { name, date } 或 null（date = YYYY-MM-DD）
+function normalizeSign(s) {
+  if (!s || typeof s !== 'object') return null
+  const name = String(s.name || '').trim()
+  const date = s.date ? String(s.date).slice(0, 10) : ''
+  if (!name && !date) return null
+  return { name, date }
+}
+
 function buildEmptyEducationSessions() {
   return Array.from({ length: EDUCATION_SESSION_COUNT }, (_, i) => ({
     index: i + 1,
-    topic: '',
-    educator: '',
-    educatedDate: '',
-    signature: '',
+    dialysisDate: '',      // 透析日期
+    topic: '',             // 主題
+    educatorSign: null,    // 衛教者/日期（點選簽核 {name,date}）
+    signature: '',         // 被衛教者簽名（文字）
+    returnDemoSign: null,  // 回示教日期/護理師
+    passSign: null,        // 回示教通過日/主護簽章
   }))
 }
 
@@ -822,14 +834,37 @@ function normalizeEducationSessions(input) {
   return buildEmptyEducationSessions().map((empty, i) => {
     const s = Array.isArray(input) ? input[i] : null
     if (!s) return empty
+    // 相容舊資料：舊欄位 educator/educatedDate → educatorSign
+    const educatorSign =
+      normalizeSign(s.educatorSign) ||
+      (s.educator || s.educatedDate ? normalizeSign({ name: s.educator, date: s.educatedDate }) : null)
     return {
       index: i + 1,
+      dialysisDate: s.dialysisDate ? String(s.dialysisDate).slice(0, 10) : '',
       topic: s.topic || '',
-      educator: s.educator || '',
-      educatedDate: s.educatedDate || '',
+      educatorSign,
       signature: s.signature || '',
+      returnDemoSign: normalizeSign(s.returnDemoSign),
+      passSign: normalizeSign(s.passSign),
     }
   })
+}
+
+// 依初透日期當第 1 次、依頻率(星期)依序往後排出 count 個透析日期
+function computeDialysisDates(firstDate, freq, count) {
+  const days = FREQ_MAP_TO_DAY_INDEX[freq] // 週一=0 … 週六=5
+  if (!firstDate || !/^\d{4}-\d{2}-\d{2}$/.test(firstDate)) return []
+  const result = [firstDate]
+  if (!days || days.length === 0) return result // 無頻率時只給第 1 次
+  const d = new Date(`${firstDate}T00:00:00Z`)
+  let guard = 0
+  while (result.length < count && guard < 400) {
+    d.setUTCDate(d.getUTCDate() + 1)
+    const monIdx = (d.getUTCDay() + 6) % 7 // 週日=0…週六=6 → 週一=0…週日=6
+    if (days.includes(monIdx)) result.push(d.toISOString().slice(0, 10))
+    guard++
+  }
+  return result
 }
 
 /**
@@ -840,7 +875,7 @@ router.get('/:id/education', authenticate, (req, res) => {
   try {
     const { id } = req.params
     const db = getDatabase()
-    const patient = db.prepare('SELECT id, name, medical_record_number, first_dialysis_date, patient_status, created_at FROM patients WHERE id = ?').get(id)
+    const patient = db.prepare('SELECT id, name, medical_record_number, first_dialysis_date, patient_status, created_at, schedule_rule FROM patients WHERE id = ?').get(id)
     if (!patient) return res.status(404).json({ error: true, message: '病人不存在' })
 
     let row = db.prepare('SELECT * FROM education_records WHERE patient_id = ?').get(id)
@@ -852,6 +887,19 @@ router.get('/:id/education', authenticate, (req, res) => {
       `).run(id, id, JSON.stringify(sessions), JSON.stringify({ uid: req.user.id, name: req.user.name }))
       row = db.prepare('SELECT * FROM education_records WHERE patient_id = ?').get(id)
     }
+
+    // 透析日期預設：依初透日期 + 頻率依序排出 12 次，僅填入「尚未儲存」的格子（不覆蓋已存值）
+    const sessions = normalizeEducationSessions(JSON.parse(row.sessions || '[]'))
+    let freq = ''
+    try {
+      freq = JSON.parse(patient.schedule_rule || '{}')?.freq || ''
+    } catch {
+      freq = ''
+    }
+    const defaultDates = computeDialysisDates(patient.first_dialysis_date, freq, EDUCATION_SESSION_COUNT)
+    sessions.forEach((s, i) => {
+      if (!s.dialysisDate && defaultDates[i]) s.dialysisDate = defaultDates[i]
+    })
 
     // 入院日期：優先用衛教紀錄已儲存值；否則帶入預設 —
     // patient_status.admissionDate（轉住院 ipd 時寫入）→ 退而求其次用病人新增日期(created_at)。
@@ -874,7 +922,7 @@ router.get('/:id/education', authenticate, (req, res) => {
       medicalRecordNumber: patient.medical_record_number,
       admissionDate,
       firstDialysisDate: patient.first_dialysis_date,
-      sessions: JSON.parse(row.sessions || '[]'),
+      sessions,
       updatedAt: row.updated_at,
     })
   } catch (error) {

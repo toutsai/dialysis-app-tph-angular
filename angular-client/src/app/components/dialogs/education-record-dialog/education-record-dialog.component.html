@@ -35,22 +35,46 @@
         <thead>
           <tr>
             <th class="col-idx">次數</th>
+            <th class="col-date">透析日期</th>
             <th>主題</th>
-            <th class="col-mid">衛教者</th>
-            <th class="col-mid">衛教日期</th>
+            <th class="col-sign-cell">衛教者/日期</th>
             <th class="col-sign">被衛教者簽名</th>
+            <th class="col-sign-cell">回示教日期/護理師</th>
+            <th class="col-sign-cell">回示教通過日/主護簽章</th>
           </tr>
         </thead>
         <tbody>
           <tr *ngFor="let s of sessions()">
             <td class="col-idx">{{ s.index }}</td>
+            <td class="col-date">
+              <input type="date" [(ngModel)]="s.dialysisDate" [disabled]="!canEdit" />
+            </td>
             <td>
               <input type="text" [(ngModel)]="s.topic" [disabled]="!canEdit"
                      list="eduTopicList" placeholder="選擇或輸入主題" />
             </td>
-            <td class="col-mid"><input type="text" [(ngModel)]="s.educator" [disabled]="!canEdit" /></td>
-            <td class="col-mid"><input type="date" [(ngModel)]="s.educatedDate" [disabled]="!canEdit" /></td>
+            <td class="col-sign-cell">
+              <button type="button" class="sign-cell" [class.signed]="s.educatorSign" [disabled]="!canEdit"
+                      (click)="toggleSign(s, 'educatorSign')"
+                      [title]="s.educatorSign ? '點選取消簽核' : '點選簽核（蓋章＝您的姓名＋今日）'">
+                {{ s.educatorSign ? signLabel(s.educatorSign) : '點選簽核' }}
+              </button>
+            </td>
             <td class="col-sign"><input type="text" [(ngModel)]="s.signature" [disabled]="!canEdit" /></td>
+            <td class="col-sign-cell">
+              <button type="button" class="sign-cell" [class.signed]="s.returnDemoSign" [disabled]="!canEdit"
+                      (click)="toggleSign(s, 'returnDemoSign')"
+                      [title]="s.returnDemoSign ? '點選取消簽核' : '點選簽核（蓋章＝您的姓名＋今日）'">
+                {{ s.returnDemoSign ? signLabel(s.returnDemoSign) : '點選簽核' }}
+              </button>
+            </td>
+            <td class="col-sign-cell">
+              <button type="button" class="sign-cell" [class.signed]="s.passSign" [disabled]="!canEdit"
+                      (click)="toggleSign(s, 'passSign')"
+                      [title]="s.passSign ? '點選取消簽核' : '點選簽核（蓋章＝您的姓名＋今日）'">
+                {{ s.passSign ? signLabel(s.passSign) : '點選簽核' }}
+              </button>
+            </td>
           </tr>
         </tbody>
       </table>

@@ -12,7 +12,7 @@
   background: #fff;
   border-radius: 12px;
   width: 100%;
-  max-width: 920px;
+  max-width: 1180px;
   max-height: 88vh;
   display: flex;
   flex-direction: column;
@@ -81,12 +81,12 @@
 .edu-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 16px;
+  font-size: 14px;
 }
 .edu-table th,
 .edu-table td {
   border: 1px solid #e9ecef;
-  padding: 8px 10px;
+  padding: 6px 8px;
   text-align: left;
 }
 .edu-table thead th {
@@ -95,17 +95,41 @@
   font-weight: 600;
   white-space: nowrap;
 }
-.edu-table .col-idx { width: 56px; text-align: center; white-space: nowrap; }
-.edu-table .col-mid { width: 150px; }
-.edu-table .col-sign { width: 180px; }
+.edu-table .col-idx { width: 48px; text-align: center; white-space: nowrap; }
+.edu-table .col-date { width: 128px; }
+.edu-table .col-sign { width: 150px; }
+.edu-table .col-sign-cell { width: 130px; text-align: center; }
 .edu-table input {
   width: 100%;
   box-sizing: border-box;
   padding: 6px 8px;
   border: 1px solid #cbd5e0;
   border-radius: 4px;
-  font-size: 15px;
+  font-size: 14px;
 }
 .edu-table input:focus { border-color: #2980b9; outline: none; }
 .edu-table input:disabled { background: #f5f6f7; color: #555; }
+
+/* 簽核格（點選蓋章＝姓名＋日期），仿工作日誌簽核 */
+.sign-cell {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 6px;
+  border: 1px dashed #cbd5e0;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  color: #adb5bd;
+  white-space: nowrap;
+}
+.sign-cell:hover:not(:disabled) { background: #eef6ff; border-color: #2980b9; }
+.sign-cell.signed {
+  color: #c0392b;
+  font-weight: 600;
+  border-style: solid;
+  border-color: #e6b8b8;
+  background: #fff7f7;
+}
+.sign-cell:disabled { cursor: default; opacity: 0.75; }
 .edu-hint { margin: 10px 2px 0; font-size: 13px; color: #868e96; }
