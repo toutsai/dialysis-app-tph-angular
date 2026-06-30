@@ -29,7 +29,7 @@ import { LabMedCorrelationViewComponent } from '../../lab-med-correlation-view/l
 export class PatientDetailModalComponent implements OnChanges, OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly firebase = inject(ApiConfigService);
-  private readonly taskStore = inject(TaskStoreService);
+  readonly taskStore = inject(TaskStoreService);
   private readonly apiManagerService = inject(ApiManagerService);
   private readonly conditionRecordsApi: ApiManager<FirestoreRecord>;
 

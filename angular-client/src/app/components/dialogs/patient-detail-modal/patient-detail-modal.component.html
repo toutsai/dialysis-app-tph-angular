@@ -42,7 +42,7 @@
             @if (hasPendingMemosForPatient) {
               <span class="memo-indicator"></span>
             }
-            備忘
+            交班留言
           </button>
           <button [class.active]="activeTab === 'labs'" (click)="activeTab = 'labs'">
             檢驗
@@ -73,7 +73,10 @@
           <!-- Memos tab -->
           <div [style.display]="activeTab === 'memos' ? '' : 'none'" class="tab-panel">
             @if (patient) {
-              <app-memo-panel [patientId]="patient.id"></app-memo-panel>
+              <app-memo-panel
+                [patientId]="patient.id"
+                [messages]="taskStore.sortedFeedMessages()"
+              ></app-memo-panel>
             }
           </div>
 
