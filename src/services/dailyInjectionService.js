@@ -61,7 +61,8 @@ export function shouldAdministerOnDate(note, targetDate) {
   // 優先序高於 QW（見結尾 return），低於明確日期。
   let hasIntervalRule = false
   let intervalRuleMatched = false
-  const intervalRegex = /\bQ(\d+)W\s*(?:W\s*)?([1-7][1-7\s.,，、&]*)?/g
+  // 容許 Q{N}W 與星期幾間有空白/逗號/頓號分隔，並相容 "Q2W, W3" / "Q2W W3" 的重複 W。
+  const intervalRegex = /\bQ(\d+)W[\s,，、]*(?:W[\s,，、]*)?([1-7][1-7\s.,，、&]*)?/g
   let ivMatch
   while ((ivMatch = intervalRegex.exec(normalized)) !== null) {
     const interval = parseInt(ivMatch[1], 10)
