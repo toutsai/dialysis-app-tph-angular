@@ -32,6 +32,8 @@ export function shouldAdministerOnDate(note, targetDate) {
   const dateObj = new Date(`${targetDate}T00:00:00Z`)
   const targetDayOfWeek = dateObj.getUTCDay() || 7
   const year = dateObj.getUTCFullYear()
+  // 當月第幾週：第 1 天起算，每 7 天一週（1-7=第1週, 8-14=第2週 …, 29-31=第5週）。
+  const weekOfMonth = Math.floor((dateObj.getUTCDate() - 1) / 7) + 1
   const normalized = normalizeFullWidth(trimmed).toUpperCase()
 
   // 分開追蹤 W 規則與日期規則。當兩者並存（如 "Q2W W4 0423 0507"），
@@ -49,6 +51,27 @@ export function shouldAdministerOnDate(note, targetDate) {
     const days = wMatch[1].match(/[1-7]/g)
     if (days?.map((day) => parseInt(day, 10)).includes(targetDayOfWeek)) {
       wRuleMatched = true
+    }
+  }
+
+  // 間隔週規則 Q{N}W[days] / Q{N}W W[days]（如 Q2W4、Q2W W4、Q2W5）。
+  // 語意：每 N 週一次，當月第 1 週起算 → 第 weekOfMonth 符合 (weekOfMonth-1)%N===0
+  // 的週才打；N=2 → 第 1/3/5 週（遇第 5 週該月多打一次）。星期幾由其後數字決定。
+  // 注意與「QW（每週）」區別：QW2=每週二；Q2W2=每兩週的週二（僅奇數週）。
+  // 優先序高於 QW（見結尾 return），低於明確日期。
+  let hasIntervalRule = false
+  let intervalRuleMatched = false
+  const intervalRegex = /\bQ(\d+)W\s*(?:W\s*)?([1-7][1-7\s.,，、&]*)?/g
+  let ivMatch
+  while ((ivMatch = intervalRegex.exec(normalized)) !== null) {
+    const interval = parseInt(ivMatch[1], 10)
+    if (!interval || interval < 1) continue
+    const dayPart = ivMatch[2]
+    if (!dayPart) continue // 只有 Q2W、無星期幾 → 交給明確日期規則
+    hasIntervalRule = true
+    const days = dayPart.match(/[1-7]/g)?.map((d) => parseInt(d, 10)) || []
+    if ((weekOfMonth - 1) % interval === 0 && days.includes(targetDayOfWeek)) {
+      intervalRuleMatched = true
     }
   }
 
@@ -99,9 +122,12 @@ export function shouldAdministerOnDate(note, targetDate) {
     if (parsed === targetDate) dateRuleMatched = true
   }
 
-  // 有明確日期 → 以日期為準（即使另含 W 也只在列出的日期那幾天才施打）
+  // 優先序：明確日期 > 間隔週(Q{N}W) > 每週(QW)。
+  // 有明確日期 → 以日期為準（即使另含 W/Q2W 也只在列出的日期那幾天才施打）。
   if (hasDateRule) return dateRuleMatched
-  // 只有 W → 用 W 規則
+  // Q{N}W 間隔週規則（如 Q2W4）— 須在 QW 之前，因 "Q2W W4" 也會被 QW 規則捕捉到 W4。
+  if (hasIntervalRule) return intervalRuleMatched
+  // 只有 QW → 用每週規則
   if (hasWRule) return wRuleMatched
   return false
 }
