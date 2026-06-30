@@ -115,7 +115,6 @@ const COLLECTION_ROUTE_MAP: Record<string, string> = {
   medications: '/medications',
   orders: '/orders',
   tasks: '/system/tasks',
-  memos: '/memos',
   nursing_schedules: '/nursing',
   audit_logs: '/system/audit-logs',
   daily_logs: '/nursing/daily-logs',

@@ -9,7 +9,6 @@ const COLLECTION_ROUTE_MAP: Record<string, string> = {
   base_schedules: '/schedules/base',
   medication_orders: '/medications/injections',
   tasks: '/system/tasks',
-  memos: '/memos',
   lab_reports: '/patients/lab-reports',
   lab_alert_analyses: '/orders/lab-alert-analyses',
   kidit_logbook: '/system/kidit-logbook',

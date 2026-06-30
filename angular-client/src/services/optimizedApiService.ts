@@ -161,28 +161,6 @@ export async function saveDuties(data: any): Promise<void> {
   }
 }
 
-// Memos
-export async function fetchAllMemos(queryConstraints: any = null): Promise<any[]> {
-  const api = ApiManager('memos');
-  return api.fetchAll(queryConstraints || []);
-}
-export async function saveMemo(memoData: any): Promise<any> {
-  const api = ApiManager('memos');
-  const result = await api.save(memoData);
-  clearCacheByPattern('memos');
-  return result;
-}
-export async function updateMemo(memoId: string, updateData: any): Promise<void> {
-  const api = ApiManager('memos');
-  await api.update(memoId, updateData);
-  clearCacheByPattern('memos');
-}
-export async function deleteMemo(memoId: string): Promise<void> {
-  const api = ApiManager('memos');
-  await api.delete(memoId);
-  clearCacheByPattern('memos');
-}
-
 // Dialysis order history
 export async function fetchDialysisOrderHistory(queryConstraints: any = null): Promise<any[]> {
   const api = ApiManager('dialysis_orders_history');
@@ -355,18 +333,13 @@ export function batchUpdatePatients(updates: Array<{ id: string; data: any }>): 
 export function batchUpdateSchedules(updates: Array<{ id: string; data: any }>): void {
   updates.forEach(({ id, data }) => addToBatch('update', 'schedules', id, data));
 }
-export function batchSaveMemos(memos: any[]): void {
-  memos.forEach((data) => addToBatch('save', 'memos', null, data));
-}
-
 export default {
   fetchAllSchedules, saveSchedule, updateSchedule,
   fetchAllPatients, savePatient, updatePatient,
-  fetchAllMemos, saveMemo, updateMemo, deleteMemo,
   fetchDialysisOrderHistory, saveDialysisOrderHistory, deleteDialysisOrderHistory,
   createDialysisOrderAndUpdatePatient,
   fetchPatientHistory, savePatientHistory,
   clearAllCache, clearCacheByCollection, getCacheStats,
-  batchUpdatePatients, batchUpdateSchedules, batchSaveMemos,
+  batchUpdatePatients, batchUpdateSchedules,
   fetchDuties, saveDuties,
 };

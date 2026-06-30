@@ -368,7 +368,7 @@ export class CollaborationComponent implements OnInit, OnDestroy {
     this.closeCreateModal();
   }
 
-  async updateTaskStatus(taskId: string, newStatus: string, collectionName = 'tasks'): Promise<void> {
+  async updateTaskStatus(taskId: string, newStatus: string): Promise<void> {
     const user = this.auth.currentUser();
     if (!user) return;
     const localUpdates = {
