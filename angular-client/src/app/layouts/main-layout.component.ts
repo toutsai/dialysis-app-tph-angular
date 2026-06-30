@@ -443,14 +443,17 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     }
     const today = getToday();
     try {
-      const allAssignments = await this.assignmentsApi.fetchAll();
-      const assignmentsSnapshot = allAssignments.filter((a: any) => a.date === today);
-      if (assignmentsSnapshot.length === 0) {
+      // nurse_assignments 沒有 list 端點，必須以 fetchById(date) 取當日分組。
+      // 裸 fetchAll() 會打到不存在的 GET /schedules/nurse-assignments 而失敗，
+      // 導致 todayMyPatientIds 恆為空、側欄留言徽章不顯示 (對齊可運作的 collaboration)。
+      const record = (await this.assignmentsApi
+        .fetchById(today)
+        .catch(() => null)) as Record<string, any> | null;
+      if (!record) {
         this.todayMyPatientIds.set([]);
         return;
       }
-      // names/teams 巢狀包在 teams JSON 欄位 (schema 只有 teams)，需解包；同時相容扁平結構。
-      const record = assignmentsSnapshot[0] as Record<string, any>;
+      // by-date 端點回傳 names/teams 於頂層；同時相容 names/teams 巢狀於 teams JSON 的格式。
       const rawTeams = record['teams'] as Record<string, any> | undefined;
       const payload =
         rawTeams && (rawTeams['names'] || rawTeams['teams']) ? rawTeams : record;
