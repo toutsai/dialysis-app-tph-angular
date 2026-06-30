@@ -36,6 +36,7 @@ import {
   type FirestoreRecord,
 } from '@services/api-manager.service';
 import { MemoDisplayDialogComponent } from '@app/components/dialogs/memo-display-dialog/memo-display-dialog.component';
+import { UpdateBannerComponent } from '@app/components/update-banner/update-banner.component';
 import { getToday } from '@/utils/dateUtils';
 import {
   canAccessPage as userCanAccessPage,
@@ -82,6 +83,7 @@ interface AssignmentRecord extends FirestoreRecord {
     RouterLink,
     RouterLinkActive,
     MemoDisplayDialogComponent,
+    UpdateBannerComponent,
   ],
   templateUrl: './main-layout.component.html',
   styleUrl: './main-layout.component.css',

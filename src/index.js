@@ -3,7 +3,7 @@ import 'dotenv/config'   // 讀取 .env 檔案到 process.env（PM2 env_file 不
 import express from 'express'
 import cors from 'cors'
 import morgan from 'morgan'
-import { existsSync } from 'fs'
+import { existsSync, statSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 
@@ -176,6 +176,20 @@ const staticPath =
     ? angularDistPath
     : legacyDistPath)
 console.log(`📂 靜態檔案路徑: ${staticPath}`)
+
+// 前端部署版本識別：即時讀 index.html mtime（每次 ng build 會變）。
+// ⚠️ 必須每次請求即時讀取，不可在啟動時快取——前端改動只 build 不 pm2 restart，
+//    若啟動時算一次，端點會回舊值偵測不到更新。免認證、不含敏感資料。
+app.get('/api/version', (req, res) => {
+  try {
+    const stat = statSync(join(staticPath, 'index.html'))
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+    res.json({ build: String(Math.floor(stat.mtimeMs)) })
+  } catch (e) {
+    res.status(503).json({ error: true, message: 'index.html 不存在' })
+  }
+})
+
 app.use(
   express.static(staticPath, {
     setHeaders: (res, filePath) => {
