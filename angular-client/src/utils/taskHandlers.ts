@@ -55,8 +55,8 @@ export async function handleTaskCreated(data: TaskFormData, currentUser: Current
     resolvedBy: null,
   }
 
-  // 根據 category 決定 API route
-  const route = data.category === 'task' ? '/system/tasks' : '/memos'
+  // 交辦與留言皆整合進 tasks 表（memos 集合已棄用），以 category 區分
+  const route = '/system/tasks'
 
   try {
     const result = await localApi.post(route, payload) as { id?: string } | null

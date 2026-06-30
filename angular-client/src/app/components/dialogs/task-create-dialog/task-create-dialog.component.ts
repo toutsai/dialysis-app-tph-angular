@@ -91,7 +91,8 @@ export class TaskCreateDialogComponent implements OnChanges, OnInit {
   otherSupplyInfo = '';
 
   get isEditMode(): boolean {
-    return !!this.initialData;
+    // 只有帶 id 的既有項目才算編輯；帶 {patientId, patientName} 的預選種子屬於「新增」
+    return !!this.initialData?.id;
   }
 
   get isClerkSupplyTask(): boolean {
@@ -166,6 +167,13 @@ export class TaskCreateDialogComponent implements OnChanges, OnInit {
         }
       } else {
         this.resetForm();
+        // 新增模式若帶有預選病人種子（如從 MyPatientsView 對特定病人新增留言），預選該病人
+        const seed = this.initialData;
+        if (seed?.patientId) {
+          this.selectedPatient =
+            this.allPatients.find(p => p.id === seed.patientId) ||
+            { id: seed.patientId, name: seed.patientName };
+        }
       }
     }
   }
