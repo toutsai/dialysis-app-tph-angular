@@ -11,7 +11,6 @@ import { rebuildSingleDaySchedule } from '../services/scheduleSync.js'
 import { removeAutoMovementFromDailyLog } from '../services/dailyLogMovementSync.js'
 import { normalizeDialysisOrdersMode } from '../utils/dialysisMode.js'
 import { recordPatientHistory, createPatientSnapshot } from '../services/patientHistory.js'
-import { FREQ_MAP_TO_DAY_INDEX } from '../utils/scheduleUtils.js'
 
 const router = Router()
 
@@ -850,21 +849,32 @@ function normalizeEducationSessions(input) {
   })
 }
 
-// 依初透日期當第 1 次、依頻率(星期)依序往後排出 count 個透析日期
-function computeDialysisDates(firstDate, freq, count) {
-  const days = FREQ_MAP_TO_DAY_INDEX[freq] // 週一=0 … 週六=5
-  if (!firstDate || !/^\d{4}-\d{2}-\d{2}$/.test(firstDate)) return []
-  const result = [firstDate]
-  if (!days || days.length === 0) return result // 無頻率時只給第 1 次
-  const d = new Date(`${firstDate}T00:00:00Z`)
-  let guard = 0
-  while (result.length < count && guard < 400) {
-    d.setUTCDate(d.getUTCDate() + 1)
-    const monIdx = (d.getUTCDay() + 6) % 7 // 週日=0…週六=6 → 週一=0…週日=6
-    if (days.includes(monIdx)) result.push(d.toISOString().slice(0, 10))
-    guard++
-  }
-  return result
+// 反查病人「實際已洗腎」的透析日期（同病歷查詢的「已透析日期」來源）。
+// 只取 firstDate ~ today（含）之間、實際排入排程的日期；尚未到的未來日不帶。
+// 初透日期一定有洗腎，故若 <= today 必納為第 1 個錨點。
+function getActualDialysisDates(db, patientId, firstDate, todayStr, limit) {
+  if (!patientId || !firstDate || !/^\d{4}-\d{2}-\d{2}$/.test(firstDate)) return []
+  if (firstDate > todayStr) return [] // 初透日都還沒到 → 全不帶
+  const rows = db
+    .prepare(
+      `
+      SELECT DISTINCT date FROM (
+        SELECT date FROM schedules, json_each(schedule) je
+        WHERE json_extract(je.value, '$.patientId') = ?
+          AND date >= ? AND date <= ?
+        UNION
+        SELECT date FROM archived_schedules, json_each(schedule) je
+        WHERE json_extract(je.value, '$.patientId') = ?
+          AND date >= ? AND date <= ?
+      )
+      ORDER BY date ASC
+    `,
+    )
+    .all(patientId, firstDate, todayStr, patientId, firstDate, todayStr)
+  const dates = rows.map((r) => r.date)
+  if (!dates.includes(firstDate)) dates.unshift(firstDate) // 確保初透日為第 1 次
+  dates.sort()
+  return dates.slice(0, limit)
 }
 
 /**
@@ -875,7 +885,7 @@ router.get('/:id/education', authenticate, (req, res) => {
   try {
     const { id } = req.params
     const db = getDatabase()
-    const patient = db.prepare('SELECT id, name, medical_record_number, first_dialysis_date, patient_status, created_at, schedule_rule FROM patients WHERE id = ?').get(id)
+    const patient = db.prepare('SELECT id, name, medical_record_number, first_dialysis_date, patient_status, created_at FROM patients WHERE id = ?').get(id)
     if (!patient) return res.status(404).json({ error: true, message: '病人不存在' })
 
     let row = db.prepare('SELECT * FROM education_records WHERE patient_id = ?').get(id)
@@ -888,15 +898,16 @@ router.get('/:id/education', authenticate, (req, res) => {
       row = db.prepare('SELECT * FROM education_records WHERE patient_id = ?').get(id)
     }
 
-    // 透析日期預設：依初透日期 + 頻率依序排出 12 次，僅填入「尚未儲存」的格子（不覆蓋已存值）
+    // 透析日期預設：只帶入「實際已洗腎」的日期（同病歷查詢已透析日期），尚未到的未來日不帶。
+    // 僅填入「尚未儲存」的格子（不覆蓋已存值）。
     const sessions = normalizeEducationSessions(JSON.parse(row.sessions || '[]'))
-    let freq = ''
-    try {
-      freq = JSON.parse(patient.schedule_rule || '{}')?.freq || ''
-    } catch {
-      freq = ''
-    }
-    const defaultDates = computeDialysisDates(patient.first_dialysis_date, freq, EDUCATION_SESSION_COUNT)
+    const defaultDates = getActualDialysisDates(
+      db,
+      id,
+      patient.first_dialysis_date,
+      getTaipeiTodayString(),
+      EDUCATION_SESSION_COUNT,
+    )
     sessions.forEach((s, i) => {
       if (!s.dialysisDate && defaultDates[i]) s.dialysisDate = defaultDates[i]
     })

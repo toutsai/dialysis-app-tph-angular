@@ -125,10 +125,10 @@ export class EducationRecordDialogComponent implements OnInit {
     this.sessions.set([...this.sessions()]);
   }
 
-  /** 顯示成「姓名（0630）」 */
+  /** 顯示成「姓名（06/30）」 */
   signLabel(sign: SignOff | null): string {
     if (!sign) return '';
-    const mmdd = sign.date ? sign.date.slice(5).replace('-', '') : '';
+    const mmdd = sign.date ? sign.date.slice(5).replace('-', '/') : '';
     return mmdd ? `${sign.name}（${mmdd}）` : sign.name;
   }
 
