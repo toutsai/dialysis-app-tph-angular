@@ -67,6 +67,8 @@ export class LabReportsComponent implements OnInit, OnDestroy {
   isLoadingAlerts = signal(false);
   alertList = signal<any[]>([]);
   alertCurrentMonth = signal(new Date());
+  alertSaveToast = signal<string>('');
+  private alertSaveToastTimer: any = null;
 
   // Alert detail modal
   isAlertDetailModalVisible = signal(false);
@@ -479,18 +481,47 @@ export class LabReportsComponent implements OnInit, OnDestroy {
     this.isAlertDetailModalVisible.set(true);
   }
 
-  handleAlertUpdate(event: { analysisText: string; suggestionText: string }): void {
+  async handleAlertUpdate(event: { analysisText: string; suggestionText: string }): Promise<void> {
     const selectedItem = this.selectedAlertItem();
     if (!selectedItem) return;
 
     const { patient, key } = selectedItem;
     const list = this.alertList();
     const targetItem = list.find((item: any) => item.patient.id === patient.id);
-    if (targetItem) {
-      targetItem.analysisTexts[key] = event.analysisText;
-      targetItem.suggestionTexts[key] = event.suggestionText;
-      this.alertList.set([...list]);
+    if (!targetItem) return;
+
+    // 1) 回填本地狀態（即時反映在表格）
+    targetItem.analysisTexts[key] = event.analysisText;
+    targetItem.suggestionTexts[key] = event.suggestionText;
+    this.alertList.set([...list]);
+
+    // 2) 立即存檔該筆分析到資料庫（確認＝存檔，免再按工具列「儲存分析」）
+    try {
+      const monthRangeKey = `${this.alertMonthRange().start}_${this.alertMonthRange().end}`;
+      const docId = `${patient.id}_${key}_${monthRangeKey}`;
+      const dataToSave: any = {
+        patientId: patient.id,
+        patientName: patient.name,
+        abnormalityKey: key,
+        monthRange: monthRangeKey,
+        analysis: event.analysisText,
+        suggestion: event.suggestionText,
+        updatedAt: new Date(),
+      };
+      await this.labAnalysesApi.save(docId, dataToSave);
+      this.showAlertSaveToast(`已儲存 ${patient.name} 的分析`);
+    } catch (error: any) {
+      console.error('儲存檢驗警示分析失敗:', error);
+      alert(`儲存失敗: ${error?.message || error}`);
     }
+  }
+
+  private showAlertSaveToast(message: string): void {
+    this.alertSaveToast.set(message);
+    if (this.alertSaveToastTimer) {
+      clearTimeout(this.alertSaveToastTimer);
+    }
+    this.alertSaveToastTimer = setTimeout(() => this.alertSaveToast.set(''), 3000);
   }
 
   async saveAlertAnalyses(): Promise<void> {

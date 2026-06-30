@@ -8,6 +8,12 @@
   background-color: #6c757d;
   border-color: #6c757d;
 }
+.alert-save-toast {
+  color: #198754;
+  font-weight: 600;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
 
 .analysis-cell-content {
   max-width: 300px;

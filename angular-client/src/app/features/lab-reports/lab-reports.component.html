@@ -181,6 +181,7 @@
         >
           儲存分析
         </button>
+        <span *ngIf="alertSaveToast()" class="alert-save-toast">✓ {{ alertSaveToast() }}</span>
       </div>
 
       <div class="alert-report-display">
