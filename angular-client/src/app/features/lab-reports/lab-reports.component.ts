@@ -273,34 +273,50 @@ export class LabReportsComponent implements OnInit, OnDestroy {
       .map((item: any) => `${parseInt(item.month.split('-')[1], 10)}月`)
       .join(' \u2192 ');
 
-    const valuesHtml = sortedValues.map((item: any) => escapeHtml(String(item.value))).join(' \u2192 ');
-
-    const firstValue = parseFloat(sortedValues[0].value);
-    const lastValue = parseFloat(sortedValues[sortedValues.length - 1].value);
-    let trendIndicator = '';
-    let trendClass = 'trend-stable';
-
-    const worseningIfIncreased = ['CaXP'];
-    const worseningIfDecreased = ['Hb', 'Albumin', 'URR'];
-
-    if (lastValue > firstValue) {
-      trendIndicator = '\u25B2';
-      trendClass = worseningIfIncreased.includes(abnormality.key) ? 'is-worsening' : 'is-improving';
-    } else if (lastValue < firstValue) {
-      trendIndicator = '\u25BC';
-      trendClass = worseningIfDecreased.includes(abnormality.key) ? 'is-worsening' : 'is-improving';
-    } else {
-      trendIndicator = '\u2015';
-    }
-
-    const indicatorHtml = `<span class="trend-indicator ${trendClass}">${trendIndicator}</span>`;
+    // \u7B2C\u4E8C\u500B\u6708\u8D77\uFF0C\u6BCF\u500B\u6708\u7684\u6578\u503C\u65C1\u52A0\u4E0A\u8DA8\u52E2\u4E09\u89D2\u5F62\uFF0C\u8207\u300C\u524D\u4E00\u500B\u6708\u300D\u6BD4\u8F03\u9032\u6B65/\u9000\u6B65\u3002
+    const valuesHtml = sortedValues
+      .map((item: any, index: number) => {
+        const valueText = escapeHtml(String(item.value));
+        if (index === 0) return valueText;
+        const indicatorHtml = this.buildTrendIndicator(
+          sortedValues[index - 1].value,
+          item.value,
+          abnormality.key,
+        );
+        return `${valueText} ${indicatorHtml}`;
+      })
+      .join(' \u2192 ');
 
     return `
       <div class="abnormality-details">
         <div class="months-row">${monthsHtml}</div>
-        <div class="values-row">${valuesHtml} ${indicatorHtml}</div>
+        <div class="values-row">${valuesHtml}</div>
       </div>
     `;
+  }
+
+  /** \u8A08\u7B97\u55AE\u6708\u76F8\u5C0D\u524D\u4E00\u500B\u6708\u7684\u8DA8\u52E2\u4E09\u89D2\u5F62 (\u25B2\u5347/\u25BC\u964D/\u2015\u6301\u5E73) \u8207\u60E1\u5316/\u6539\u5584\u984F\u8272 class\u3002 */
+  private buildTrendIndicator(prevValueRaw: any, currValueRaw: any, key: string): string {
+    const worseningIfIncreased = ['CaXP'];
+    const worseningIfDecreased = ['Hb', 'Albumin', 'URR'];
+
+    const prevValue = parseFloat(prevValueRaw);
+    const currValue = parseFloat(currValueRaw);
+
+    let trendIndicator = '\u2015';
+    let trendClass = 'trend-stable';
+
+    if (!isNaN(prevValue) && !isNaN(currValue)) {
+      if (currValue > prevValue) {
+        trendIndicator = '\u25B2';
+        trendClass = worseningIfIncreased.includes(key) ? 'is-worsening' : 'is-improving';
+      } else if (currValue < prevValue) {
+        trendIndicator = '\u25BC';
+        trendClass = worseningIfDecreased.includes(key) ? 'is-worsening' : 'is-improving';
+      }
+    }
+
+    return `<span class="trend-indicator ${trendClass}">${trendIndicator}</span>`;
   }
 
   // ---- Alert Report ----
