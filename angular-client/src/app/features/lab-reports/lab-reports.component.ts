@@ -93,7 +93,7 @@ export class LabReportsComponent implements OnInit, OnDestroy {
 
   readonly prioritizedLabItems = [
     'WBC', 'Platelet', 'Hb', 'Ferritin', 'TSAT', 'GlucoseAC', 'Triglyceride',
-    'LDL', 'Albumin', 'ALT', 'Na', 'K', 'P', 'Ca', 'CaXP', 'iPTH',
+    'LDL', 'UricAcid', 'Albumin', 'ALT', 'Na', 'K', 'P', 'Ca', 'CaXP', 'iPTH',
     'BUN', 'PostBUN', 'Creatinine', 'Kt/V', 'URR',
   ];
   readonly labItemDisplayNames: Record<string, string> = LAB_ITEM_DISPLAY_NAMES;
