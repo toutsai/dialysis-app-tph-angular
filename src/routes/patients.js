@@ -898,13 +898,23 @@ router.get('/:id/education', authenticate, (req, res) => {
       row = db.prepare('SELECT * FROM education_records WHERE patient_id = ?').get(id)
     }
 
+    // 初透日期正本存在巢狀 patient_status.isFirstDialysis.date（表單存檔寫入處），
+    // 攤平欄位 first_dialysis_date 不一定同步（可能為 null）。故以巢狀為主、攤平為備。
+    let firstDialysisDate = patient.first_dialysis_date
+    try {
+      const nestedDate = JSON.parse(patient.patient_status || '{}')?.isFirstDialysis?.date
+      if (nestedDate) firstDialysisDate = nestedDate
+    } catch {
+      /* patient_status 解析失敗時退回攤平欄位 */
+    }
+
     // 透析日期預設：只帶入「實際已洗腎」的日期（同病歷查詢已透析日期），尚未到的未來日不帶。
     // 僅填入「尚未儲存」的格子（不覆蓋已存值）。
     const sessions = normalizeEducationSessions(JSON.parse(row.sessions || '[]'))
     const defaultDates = getActualDialysisDates(
       db,
       id,
-      patient.first_dialysis_date,
+      firstDialysisDate,
       getTaipeiTodayString(),
       EDUCATION_SESSION_COUNT,
     )
@@ -932,7 +942,7 @@ router.get('/:id/education', authenticate, (req, res) => {
       patientName: patient.name,
       medicalRecordNumber: patient.medical_record_number,
       admissionDate,
-      firstDialysisDate: patient.first_dialysis_date,
+      firstDialysisDate,
       sessions,
       updatedAt: row.updated_at,
     })

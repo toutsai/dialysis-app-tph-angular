@@ -426,6 +426,18 @@ export class PatientFormModalComponent implements OnInit {
       alert('姓名和病歷號為必填項！');
       return;
     }
+    // 初透狀態開啟時必須有初透日期（衛教紀錄預帶靠此日期為錨點，避免半套狀態）
+    const firstDialysis = this.form.patientStatus?.isFirstDialysis;
+    if (firstDialysis?.active) {
+      // 補救：上方初透日期欄位已填但巢狀 date 未同步時，先補進去
+      if (!firstDialysis.date && this.form.firstDialysisDate) {
+        firstDialysis.date = this.form.firstDialysisDate;
+      }
+      if (!firstDialysis.date) {
+        alert('已開啟「初次透析」狀態，請填寫初次透析日期！');
+        return;
+      }
+    }
     this.save.emit(this.form);
   }
 }
