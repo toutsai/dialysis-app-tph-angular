@@ -114,5 +114,6 @@ export const LAB_ITEM_DISPLAY_NAMES = {
   TSAT: 'TSAT (%)',
   Triglyceride: 'TG',
   LDL: 'LDL',
+  UricAcid: 'UA',
   ALT: 'ALT',
 }
