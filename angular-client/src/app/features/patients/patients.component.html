@@ -456,48 +456,70 @@
         <span class="status-edit-title">{{ statusEditPatient().name }} · 狀態</span>
         <button class="status-edit-close" (click)="closeStatusEdit()" title="關閉"><i class="fas fa-times"></i></button>
       </div>
-      <div class="status-edit-body">
+      <div class="status-edit-body two-col">
         @if (statusEditPatient().status !== 'opd') {
-          <div class="status-date-tag" [class.active]="statusEditPatient().patientStatus.hasBloodDraw?.active" [class.focused]="statusEditFocus() === 'hasBloodDraw'" (click)="toggleStatusEdit('hasBloodDraw')">
-            <span><i class="fas fa-syringe"></i> 已抽血</span>
-            @if (statusEditPatient().patientStatus.hasBloodDraw?.active) {
-              <input type="date" [(ngModel)]="statusEditPatient().patientStatus.hasBloodDraw.date" name="qeBloodDate" (click)="$event.stopPropagation()" />
-            }
+          <div class="se-row" [class.focused]="statusEditFocus() === 'hasBloodDraw'">
+            <button type="button" class="se-chip blood" [class.active]="statusEditPatient().patientStatus.hasBloodDraw?.active" (click)="toggleStatusEdit('hasBloodDraw')">
+              <i class="fas fa-syringe"></i><span>已抽血</span>
+            </button>
+            <div class="se-detail">
+              @if (statusEditPatient().patientStatus.hasBloodDraw?.active) {
+                <input type="date" [(ngModel)]="statusEditPatient().patientStatus.hasBloodDraw.date" name="qeBloodDate" (click)="$event.stopPropagation()" />
+              } @else {
+                <span class="se-off">未設定</span>
+              }
+            </div>
           </div>
         }
-        <div class="status-date-tag" [class.active]="statusEditPatient().patientStatus.isFirstDialysis?.active" [class.focused]="statusEditFocus() === 'isFirstDialysis'" (click)="toggleStatusEdit('isFirstDialysis')">
-          <span><i class="fas fa-star"></i> 首透</span>
-          @if (statusEditPatient().patientStatus.isFirstDialysis?.active) {
-            <input type="date" [(ngModel)]="statusEditPatient().patientStatus.isFirstDialysis.date" name="qeFirstDate" (click)="$event.stopPropagation()" />
-          }
-        </div>
-        <div class="status-date-tag" [class.active]="statusEditPatient().patientStatus.isPaused?.active" [class.focused]="statusEditFocus() === 'isPaused'" (click)="toggleStatusEdit('isPaused')">
-          <span><i class="fas fa-pause-circle"></i> 暫停透析</span>
-          @if (statusEditPatient().patientStatus.isPaused?.active) {
-            <input type="date" [(ngModel)]="statusEditPatient().patientStatus.isPaused.date" name="qePausedDate" (click)="$event.stopPropagation()" />
-          }
-        </div>
-        <div class="dnm-block" [class.focused]="statusEditFocus() === 'doNotMove'">
-          <div class="status-date-tag do-not-move-tag" [class.active]="statusEditPatient().patientStatus.doNotMove?.active" (click)="toggleStatusEdit('doNotMove')">
-            <span><i class="fas fa-lock"></i> 勿動</span>
+        <div class="se-row" [class.focused]="statusEditFocus() === 'isFirstDialysis'">
+          <button type="button" class="se-chip first" [class.active]="statusEditPatient().patientStatus.isFirstDialysis?.active" (click)="toggleStatusEdit('isFirstDialysis')">
+            <i class="fas fa-star"></i><span>首透</span>
+          </button>
+          <div class="se-detail">
+            @if (statusEditPatient().patientStatus.isFirstDialysis?.active) {
+              <input type="date" [(ngModel)]="statusEditPatient().patientStatus.isFirstDialysis.date" name="qeFirstDate" (click)="$event.stopPropagation()" />
+            } @else {
+              <span class="se-off">未設定</span>
+            }
           </div>
-          @if (statusEditPatient().patientStatus.doNotMove?.active) {
-            <div class="dnm-detail" (click)="$event.stopPropagation()">
-              <div class="dnm-range-types">
-                <button type="button" [class.sel]="statusEditPatient().patientStatus.doNotMove.rangeType === 'permanent'" (click)="setDoNotMoveRange('permanent')">持續</button>
-                <button type="button" [class.sel]="statusEditPatient().patientStatus.doNotMove.rangeType === 'day'" (click)="setDoNotMoveRange('day')">單日</button>
-                <button type="button" [class.sel]="statusEditPatient().patientStatus.doNotMove.rangeType === 'range'" (click)="setDoNotMoveRange('range')">區間</button>
+        </div>
+        <div class="se-row" [class.focused]="statusEditFocus() === 'isPaused'">
+          <button type="button" class="se-chip paused" [class.active]="statusEditPatient().patientStatus.isPaused?.active" (click)="toggleStatusEdit('isPaused')">
+            <i class="fas fa-pause-circle"></i><span>暫停</span>
+          </button>
+          <div class="se-detail">
+            @if (statusEditPatient().patientStatus.isPaused?.active) {
+              <input type="date" [(ngModel)]="statusEditPatient().patientStatus.isPaused.date" name="qePausedDate" (click)="$event.stopPropagation()" />
+            } @else {
+              <span class="se-off">未設定</span>
+            }
+          </div>
+        </div>
+        <div class="se-row dnm-row" [class.focused]="statusEditFocus() === 'doNotMove'">
+          <button type="button" class="se-chip dnm" [class.active]="statusEditPatient().patientStatus.doNotMove?.active" (click)="toggleStatusEdit('doNotMove')">
+            <i class="fas fa-lock"></i><span>勿動</span>
+          </button>
+          <div class="se-detail">
+            @if (statusEditPatient().patientStatus.doNotMove?.active) {
+              <div class="dnm-detail" (click)="$event.stopPropagation()">
+                <div class="dnm-range-types">
+                  <button type="button" [class.sel]="statusEditPatient().patientStatus.doNotMove.rangeType === 'permanent'" (click)="setDoNotMoveRange('permanent')">持續</button>
+                  <button type="button" [class.sel]="statusEditPatient().patientStatus.doNotMove.rangeType === 'day'" (click)="setDoNotMoveRange('day')">單日</button>
+                  <button type="button" [class.sel]="statusEditPatient().patientStatus.doNotMove.rangeType === 'range'" (click)="setDoNotMoveRange('range')">區間</button>
+                </div>
+                @if (statusEditPatient().patientStatus.doNotMove.rangeType === 'day') {
+                  <label class="dnm-date">日期 <input type="date" [(ngModel)]="statusEditPatient().patientStatus.doNotMove.startDate" name="qeDnmDay" /></label>
+                }
+                @if (statusEditPatient().patientStatus.doNotMove.rangeType === 'range') {
+                  <label class="dnm-date">起 <input type="date" [(ngModel)]="statusEditPatient().patientStatus.doNotMove.startDate" name="qeDnmStart" /></label>
+                  <label class="dnm-date">訖 <input type="date" [(ngModel)]="statusEditPatient().patientStatus.doNotMove.endDate" name="qeDnmEnd" /></label>
+                }
+                <input class="dnm-reason" type="text" [(ngModel)]="statusEditPatient().patientStatus.doNotMove.reason" name="qeDnmReason" placeholder="勿動原因…" />
               </div>
-              @if (statusEditPatient().patientStatus.doNotMove.rangeType === 'day') {
-                <label class="dnm-date">日期 <input type="date" [(ngModel)]="statusEditPatient().patientStatus.doNotMove.startDate" name="qeDnmDay" /></label>
-              }
-              @if (statusEditPatient().patientStatus.doNotMove.rangeType === 'range') {
-                <label class="dnm-date">起 <input type="date" [(ngModel)]="statusEditPatient().patientStatus.doNotMove.startDate" name="qeDnmStart" /></label>
-                <label class="dnm-date">訖 <input type="date" [(ngModel)]="statusEditPatient().patientStatus.doNotMove.endDate" name="qeDnmEnd" /></label>
-              }
-              <input class="dnm-reason" type="text" [(ngModel)]="statusEditPatient().patientStatus.doNotMove.reason" name="qeDnmReason" placeholder="勿動原因…" />
-            </div>
-          }
+            } @else {
+              <span class="se-off">未設定</span>
+            }
+          </div>
         </div>
       </div>
       <div class="status-edit-footer">

@@ -416,7 +416,7 @@
 .status-edit-panel {
   position: fixed;
   z-index: 1201;
-  width: 274px;
+  width: 356px;
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
@@ -588,6 +588,80 @@
   border: 1px solid #cbd5e1;
   border-radius: 6px;
   outline: none;
+}
+
+/* 兩欄版：左＝狀態切換鈕，右＝日期／原因 */
+.status-edit-body.two-col {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+.se-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 4px 6px;
+  border-radius: 8px;
+}
+.se-row.focused {
+  background: rgba(59, 130, 246, 0.08);
+}
+.se-chip {
+  flex: 0 0 92px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border: 1px solid #ced4da;
+  border-radius: 20px;
+  background: #fff;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+.se-chip:hover {
+  border-color: #adb5bd;
+}
+.se-chip.active {
+  color: #fff;
+  border-color: transparent;
+}
+.se-chip.blood.active {
+  background: #3b82f6;
+}
+.se-chip.first.active {
+  background: #f97316;
+}
+.se-chip.paused.active {
+  background: #6b7280;
+}
+.se-chip.dnm.active {
+  background: #dc3545;
+}
+.se-detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+}
+.se-detail > .dnm-detail {
+  padding: 0;
+}
+.se-off {
+  color: #94a3b8;
+  font-size: 0.82rem;
+}
+.se-detail input[type='date'] {
+  font-size: 0.85rem;
+  padding: 4px 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #334155;
 }
 .action-buttons {
   display: flex;

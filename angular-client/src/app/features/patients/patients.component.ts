@@ -234,7 +234,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
     if (ps.doNotMove.startDate === undefined) ps.doNotMove.startDate = null;
     if (ps.doNotMove.endDate === undefined) ps.doNotMove.endDate = null;
     clone.patientStatus = ps;
-    const panelW = 290;
+    const panelW = 380;
     const panelH = 300;
     const x = Math.max(8, Math.min(event.clientX, window.innerWidth - panelW));
     const y = Math.max(8, Math.min(event.clientY + 8, window.innerHeight - panelH));
