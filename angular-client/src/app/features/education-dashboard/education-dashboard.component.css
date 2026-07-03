@@ -1,0 +1,238 @@
+.edu-dashboard {
+  padding: 1.25rem 1.5rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.page-header h2 {
+  margin: 0 0 4px;
+  font-size: 1.4rem;
+  color: #1e293b;
+}
+.page-header .subtitle {
+  margin: 0 0 1rem;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+/* 摘要卡片 */
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 1.25rem;
+}
+.summary-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.summary-card .num {
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.summary-card .label {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+.summary-card.total .num {
+  color: #2563eb;
+}
+.summary-card.done .num {
+  color: #16a34a;
+}
+.summary-card.doing .num {
+  color: #d97706;
+}
+.summary-card.none .num {
+  color: #94a3b8;
+}
+
+/* 工具列 */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.toolbar .search {
+  flex: 0 1 260px;
+  padding: 7px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  outline: none;
+}
+.toolbar .chk {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: #475569;
+  cursor: pointer;
+}
+.btn-refresh {
+  margin-left: auto;
+  padding: 7px 14px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #475569;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.btn-refresh:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+.btn-refresh:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.state-msg {
+  padding: 2rem;
+  text-align: center;
+  color: #64748b;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+.state-msg.error {
+  color: #dc2626;
+}
+
+/* 表格 */
+.table-wrapper {
+  overflow-x: auto;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+.edu-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.edu-table thead th {
+  text-align: left;
+  padding: 10px 14px;
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 600;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+.edu-table tbody td {
+  padding: 10px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+.edu-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.edu-table tbody tr.row-done {
+  background: #f0fdf4;
+}
+
+.col-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.col-name .p-name {
+  font-weight: 600;
+  color: #1e293b;
+}
+.col-name .p-mrn {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+.tag-off {
+  align-self: flex-start;
+  font-size: 0.72rem;
+  color: #b45309;
+  background: #fef3c7;
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+.status-badge {
+  font-size: 0.8rem;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #e0f2e9;
+  color: #15803d;
+}
+.status-badge[data-status='ipd'] {
+  background: #fde2e2;
+  color: #b91c1c;
+}
+.status-badge[data-status='er'] {
+  background: #ede0fb;
+  color: #7c3aed;
+}
+
+/* 進度條 */
+.col-prog {
+  width: 150px;
+}
+.prog {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.prog-bar {
+  flex: 1;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 5px;
+  overflow: hidden;
+}
+.prog-bar .fill {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+}
+.prog-bar .fill.educ {
+  background: #3b82f6;
+}
+.prog-bar .fill.pass {
+  background: #16a34a;
+}
+.prog-text {
+  font-variant-numeric: tabular-nums;
+  color: #475569;
+  font-size: 0.82rem;
+  min-width: 34px;
+  text-align: right;
+}
+
+.col-updated {
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.btn-open {
+  padding: 6px 12px;
+  border: 1px solid #8e44ad;
+  color: #8e44ad;
+  background: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+.btn-open:hover {
+  background: #f3e8fb;
+}
+
+@media (max-width: 720px) {
+  .summary-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

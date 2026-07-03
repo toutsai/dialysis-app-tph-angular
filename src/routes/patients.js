@@ -878,6 +878,88 @@ function getActualDialysisDates(db, patientId, firstDate, todayStr, limit) {
 }
 
 /**
+ * GET /api/patients/education-list
+ * 後台衛教進度總覽：列出「目前首透中」或「已有衛教進度」的病人 + 進度統計。
+ * 注意：必須註冊在 GET /:id 之前，否則會被 :id 路由攔截。
+ */
+router.get('/education-list', ...isEditor, (req, res) => {
+  try {
+    const db = getDatabase()
+    const rows = db.prepare(`
+      SELECT p.id, p.name, p.medical_record_number, p.status, p.ward_number,
+             p.first_dialysis_date, p.patient_status,
+             e.sessions AS edu_sessions, e.admission_date AS edu_admission, e.updated_at AS edu_updated
+      FROM patients p
+      LEFT JOIN education_records e ON e.patient_id = p.id
+      WHERE p.is_deleted = 0
+    `).all()
+
+    const total = EDUCATION_SESSION_COUNT
+    const list = []
+    for (const r of rows) {
+      let firstActive = false
+      let firstDate = r.first_dialysis_date || ''
+      try {
+        const ps = JSON.parse(r.patient_status || '{}')
+        firstActive = !!ps?.isFirstDialysis?.active
+        if (ps?.isFirstDialysis?.date) firstDate = ps.isFirstDialysis.date
+      } catch {
+        /* patient_status 解析失敗，忽略 */
+      }
+
+      let educatedCount = 0
+      let returnDemoCount = 0
+      let passedCount = 0
+      let hasRecord = false
+      if (r.edu_sessions) {
+        try {
+          const sessions = JSON.parse(r.edu_sessions) || []
+          for (const s of sessions) {
+            if (s?.educatorSign) educatedCount++
+            if (s?.returnDemoSign) returnDemoCount++
+            if (s?.passSign) passedCount++
+          }
+          hasRecord = true
+        } catch {
+          /* sessions 解析失敗，當作無進度 */
+        }
+      }
+
+      // 納入條件：目前首透中，或已有衛教進度（避免自動建立的全空白紀錄混入）
+      if (!firstActive && educatedCount === 0) continue
+
+      list.push({
+        patientId: r.id,
+        patientName: r.name,
+        medicalRecordNumber: r.medical_record_number,
+        status: r.status,
+        wardNumber: r.ward_number || '',
+        firstDialysisActive: firstActive,
+        firstDialysisDate: firstDate || '',
+        admissionDate: r.edu_admission || '',
+        hasRecord,
+        educatedCount,
+        returnDemoCount,
+        passedCount,
+        total,
+        completed: passedCount >= total,
+        lastUpdated: r.edu_updated || '',
+      })
+    }
+
+    // 排序：已衛教數少者在前（未完成優先），再依姓名
+    list.sort(
+      (a, b) => a.educatedCount - b.educatedCount || String(a.patientName).localeCompare(b.patientName),
+    )
+
+    res.json(list)
+  } catch (error) {
+    console.error('取得衛教進度清單錯誤:', error)
+    res.status(500).json({ error: true, message: '取得衛教進度清單失敗' })
+  }
+})
+
+/**
  * GET /api/patients/:id/education
  * 取得病人衛教紀錄；若尚無則即時建立 12 筆空白（首透自動產生的等效行為）
  */

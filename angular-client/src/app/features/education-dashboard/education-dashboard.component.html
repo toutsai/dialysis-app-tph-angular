@@ -1,0 +1,109 @@
+<div class="edu-dashboard">
+  <div class="page-header">
+    <h2>初透衛教進度</h2>
+    <p class="subtitle">整合目前首透中或已有衛教進度的病人，一覽衛教與回示教通過情形。</p>
+  </div>
+
+  <!-- 摘要卡片 -->
+  <div class="summary-cards">
+    <div class="summary-card total">
+      <span class="num">{{ summary().total }}</span>
+      <span class="label">衛教名單</span>
+    </div>
+    <div class="summary-card done">
+      <span class="num">{{ summary().passed }}</span>
+      <span class="label">全數通過</span>
+    </div>
+    <div class="summary-card doing">
+      <span class="num">{{ summary().inProgress }}</span>
+      <span class="label">進行中</span>
+    </div>
+    <div class="summary-card none">
+      <span class="num">{{ summary().notStarted }}</span>
+      <span class="label">尚未開始</span>
+    </div>
+  </div>
+
+  <!-- 工具列 -->
+  <div class="toolbar">
+    <input type="text" class="search" [ngModel]="search()" (ngModelChange)="search.set($event)"
+           placeholder="搜尋姓名 / 病歷號…" />
+    <label class="chk">
+      <input type="checkbox" [ngModel]="incompleteOnly()" (ngModelChange)="incompleteOnly.set($event)" />
+      只看未完成
+    </label>
+    <button class="btn-refresh" (click)="load()" [disabled]="loading()">
+      <i class="fas fa-rotate-right"></i> 重新整理
+    </button>
+  </div>
+
+  @if (loading()) {
+    <div class="state-msg">載入中…</div>
+  } @else if (errorMsg()) {
+    <div class="state-msg error">{{ errorMsg() }}</div>
+  } @else if (filteredRows().length === 0) {
+    <div class="state-msg">目前沒有符合條件的衛教名單。</div>
+  } @else {
+    <div class="table-wrapper">
+      <table class="edu-table">
+        <thead>
+          <tr>
+            <th>病人</th>
+            <th>身分</th>
+            <th>初透日</th>
+            <th class="col-prog">已衛教</th>
+            <th class="col-prog">回示教通過</th>
+            <th>最後更新</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (r of filteredRows(); track r.patientId) {
+            <tr [class.row-done]="r.passedCount >= r.total">
+              <td class="col-name">
+                <span class="p-name">{{ r.patientName }}</span>
+                <span class="p-mrn">{{ r.medicalRecordNumber }}</span>
+                @if (!r.firstDialysisActive) {
+                  <span class="tag-off" title="已取消首透標記，但仍有衛教進度">已取消首透</span>
+                }
+              </td>
+              <td>
+                <span class="status-badge" [attr.data-status]="r.status">{{ statusLabel(r.status) }}</span>
+              </td>
+              <td>{{ formatDate(r.firstDialysisDate) }}</td>
+              <td class="col-prog">
+                <div class="prog">
+                  <div class="prog-bar"><span class="fill educ" [style.width.%]="pct(r.educatedCount, r.total)"></span></div>
+                  <span class="prog-text">{{ r.educatedCount }}/{{ r.total }}</span>
+                </div>
+              </td>
+              <td class="col-prog">
+                <div class="prog">
+                  <div class="prog-bar"><span class="fill pass" [style.width.%]="pct(r.passedCount, r.total)"></span></div>
+                  <span class="prog-text">{{ r.passedCount }}/{{ r.total }}</span>
+                </div>
+              </td>
+              <td class="col-updated">{{ formatDate(r.lastUpdated) }}</td>
+              <td>
+                <button class="btn-open" (click)="openRecord(r)">
+                  <i class="fas fa-chalkboard-teacher"></i> {{ canEdit() ? '檢視／編輯' : '檢視' }}
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>
+
+@if (dialogPatient()) {
+  <app-education-record-dialog
+    [patientId]="dialogPatient()!.patientId"
+    [patientName]="dialogPatient()!.patientName"
+    [medicalRecordNumber]="dialogPatient()!.medicalRecordNumber"
+    [firstDialysisDate]="dialogPatient()!.firstDialysisDate"
+    [canEdit]="canEdit()"
+    (close)="closeRecord()"
+  ></app-education-record-dialog>
+}

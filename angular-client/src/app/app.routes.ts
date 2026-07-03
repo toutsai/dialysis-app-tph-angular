@@ -140,6 +140,18 @@ export const routes: Routes = [
         },
       },
       {
+        path: 'education-dashboard',
+        loadComponent: () =>
+          import(
+            './features/education-dashboard/education-dashboard.component'
+          ).then((m) => m.EducationDashboardComponent),
+        canActivate: [roleGuard],
+        data: {
+          title: PAGE_ACCESS.educationDashboard.title,
+          roles: PAGE_ACCESS.educationDashboard.roles,
+        },
+      },
+      {
         path: 'lab-reports',
         loadComponent: () =>
           import('./features/lab-reports/lab-reports.component').then(

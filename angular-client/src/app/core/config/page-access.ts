@@ -47,6 +47,12 @@ export const PAGE_ACCESS = {
     roles: ALL_ROLES,
     roleLabel: '所有使用者',
   },
+  educationDashboard: {
+    path: '/education-dashboard',
+    title: '初透衛教進度',
+    roles: STAFF_ROLES,
+    roleLabel: '管理員、編輯者',
+  },
   myPatients: {
     path: '/my-patients',
     title: '我的今日病人',
