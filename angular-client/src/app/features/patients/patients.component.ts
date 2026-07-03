@@ -202,6 +202,63 @@ export class PatientsComponent implements OnInit, OnDestroy {
     this.educationPatient.set(null);
   }
 
+  // --- 狀態欄快速編輯（inline 浮動面板）---
+  readonly statusEditVisible = signal(false);
+  readonly statusEditPatient = signal<any>(null);
+  readonly statusEditFocus = signal<string | null>(null);
+  readonly statusEditPos = signal<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  openStatusEdit(p: any, focusKey: string, event: MouseEvent): void {
+    event?.stopPropagation();
+    if (this.isPageLocked() || !p?.id) return;
+    const clone = JSON.parse(JSON.stringify(p));
+    const ps = clone.patientStatus || {};
+    ps.isFirstDialysis = ps.isFirstDialysis || { active: false, date: null };
+    ps.isPaused = ps.isPaused || { active: false, date: null };
+    ps.hasBloodDraw = ps.hasBloodDraw || { active: false, date: null };
+    ps.doNotMove = ps.doNotMove || { active: false, reason: '' };
+    clone.patientStatus = ps;
+    const panelW = 290;
+    const panelH = 300;
+    const x = Math.max(8, Math.min(event.clientX, window.innerWidth - panelW));
+    const y = Math.max(8, Math.min(event.clientY + 8, window.innerHeight - panelH));
+    this.statusEditPatient.set(clone);
+    this.statusEditFocus.set(focusKey);
+    this.statusEditPos.set({ x, y });
+    this.statusEditVisible.set(true);
+  }
+
+  toggleStatusEdit(key: string): void {
+    const p = this.statusEditPatient();
+    if (!p?.patientStatus?.[key]) return;
+    const status = p.patientStatus[key];
+    status.active = !status.active;
+    if (key === 'doNotMove') {
+      if (!status.active) status.reason = '';
+    } else {
+      if (key === 'isFirstDialysis' && status.active && !status.date && p.firstDialysisDate) {
+        status.date = p.firstDialysisDate;
+      }
+      if (!status.active) status.date = null;
+    }
+    this.statusEditFocus.set(key);
+    this.statusEditPatient.set({ ...p });
+  }
+
+  closeStatusEdit(): void {
+    this.statusEditVisible.set(false);
+    this.statusEditPatient.set(null);
+    this.statusEditFocus.set(null);
+  }
+
+  saveStatusEdit(): void {
+    const p = this.statusEditPatient();
+    if (!p) return;
+    this.closeStatusEdit();
+    // 走現有 handleSavePatient：保留暫停確認/移除總表排班、首透/抽血自動建任務等連鎖行為
+    void this.handleSavePatient(p);
+  }
+
   readonly displayedPatients = computed(() => {
     const allPatients = this.patientStore.allPatients();
     if (!allPatients) return [];

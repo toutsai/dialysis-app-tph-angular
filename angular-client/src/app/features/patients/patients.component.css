@@ -361,6 +361,172 @@
 .status-icon-do-not-move {
   color: #dc3545;
 }
+.status-icon-education {
+  color: #8e44ad;
+  cursor: pointer;
+}
+/* 已刪除卡片：唯讀狀態列 */
+.deleted-status-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.deleted-status-row .label {
+  color: #64748b;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+.deleted-status-row .status-icon-container {
+  font-size: 1.1rem;
+}
+/* 可編輯：四個狀態圖示常駐，未設定套灰底，點擊開快速編輯面板 */
+.status-editable .status-icon-first,
+.status-editable .status-icon-paused,
+.status-editable .status-icon-blood,
+.status-editable .status-icon-do-not-move {
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.status-editable .status-icon-first:hover,
+.status-editable .status-icon-paused:hover,
+.status-editable .status-icon-blood:hover,
+.status-editable .status-icon-do-not-move:hover,
+.status-icon-education:hover {
+  transform: scale(1.15);
+}
+.status-icon-first.status-off,
+.status-icon-paused.status-off,
+.status-icon-blood.status-off,
+.status-icon-do-not-move.status-off {
+  color: #cbd5e1;
+  opacity: 0.55;
+}
+.status-editable .status-off:hover {
+  opacity: 0.9;
+}
+
+/* 狀態快速編輯浮動面板 */
+.status-edit-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: transparent;
+}
+.status-edit-panel {
+  position: fixed;
+  z-index: 1201;
+  width: 274px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.status-edit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 8px;
+}
+.status-edit-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #1e293b;
+}
+.status-edit-close {
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+.status-edit-close:hover {
+  background: #f1f5f9;
+  color: #475569;
+}
+.status-edit-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.status-edit-body .status-date-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 20px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease-in-out;
+  font-weight: 500;
+  color: #495057;
+  background-color: #fff;
+  font-size: 0.9rem;
+}
+.status-edit-body .status-date-tag:hover {
+  border-color: #adb5bd;
+  background-color: #f8f9fa;
+}
+.status-edit-body .status-date-tag.active {
+  color: #fff;
+  border-color: var(--primary-color, #007bff);
+  background-color: var(--primary-color, #007bff);
+}
+.status-edit-body .status-date-tag.focused {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.45);
+}
+.status-edit-body .status-date-tag input[type='date'],
+.status-edit-body .status-date-tag input[type='text'] {
+  background-color: transparent;
+  border: none;
+  color: #fff;
+  padding: 0;
+  font-size: 0.9em;
+  width: 130px;
+  outline: none;
+}
+.status-edit-body .status-date-tag input[type='text']::placeholder {
+  color: rgba(255, 255, 255, 0.7);
+}
+.status-edit-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 10px;
+}
+.status-edit-footer .btn-cancel,
+.status-edit-footer .btn-save {
+  padding: 6px 16px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+.status-edit-footer .btn-cancel {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #e2e8f0;
+}
+.status-edit-footer .btn-cancel:hover {
+  background: #e2e8f0;
+}
+.status-edit-footer .btn-save {
+  background: var(--primary-color, #007bff);
+  color: #fff;
+}
+.status-edit-footer .btn-save:hover {
+  filter: brightness(0.95);
+}
 .action-buttons {
   display: flex;
   flex-wrap: nowrap;

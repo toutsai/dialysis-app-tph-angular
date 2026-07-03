@@ -119,14 +119,24 @@
               <div class="flex-cell col-freq">{{ p.freq }}</div>
               <div class="flex-cell col-mode">{{ p.mode }}</div>
               <div class="flex-cell col-status">
-                <div class="status-icon-container">
-                  <i *ngIf="p.patientStatus?.isFirstDialysis?.active" class="fas fa-star status-icon-first" [title]="'首透: ' + (p.patientStatus.isFirstDialysis.date || '無日期')"></i>
-                  <i *ngIf="p.patientStatus?.isPaused?.active" class="fas fa-pause-circle status-icon-paused" [title]="'暫停透析: ' + (p.patientStatus.isPaused.date || '無日期')"></i>
-                  <span *ngIf="p.patientStatus?.hasBloodDraw?.active" class="status-icon-blood status-blood-tag" [title]="'已抽血: ' + (p.patientStatus.hasBloodDraw.date || '無日期')">
+                <div class="status-icon-container" [class.status-editable]="!isPageLocked()">
+                  <span *ngIf="p.status !== 'opd'" class="status-icon-blood status-blood-tag" [class.status-off]="!p.patientStatus?.hasBloodDraw?.active"
+                        (click)="openStatusEdit(p, 'hasBloodDraw', $event)"
+                        [title]="p.patientStatus?.hasBloodDraw?.active ? ('已抽血: ' + (p.patientStatus.hasBloodDraw.date || '無日期')) : '已抽血（未設定，點擊編輯）'">
                     <i class="fas fa-syringe"></i>
-                    <span *ngIf="p.patientStatus.hasBloodDraw.date" class="status-blood-date">{{ formatBloodDrawMonthDay(p.patientStatus.hasBloodDraw.date) }}</span>
+                    <span *ngIf="p.patientStatus?.hasBloodDraw?.active && p.patientStatus.hasBloodDraw.date" class="status-blood-date">{{ formatBloodDrawMonthDay(p.patientStatus.hasBloodDraw.date) }}</span>
                   </span>
-                  <i *ngIf="p.patientStatus?.doNotMove?.active" class="fas fa-lock status-icon-do-not-move" [title]="'勿動：' + (p.patientStatus.doNotMove.reason || '無原因說明')"></i>
+                  <i class="fas fa-star status-icon-first" [class.status-off]="!p.patientStatus?.isFirstDialysis?.active"
+                     (click)="openStatusEdit(p, 'isFirstDialysis', $event)"
+                     [title]="p.patientStatus?.isFirstDialysis?.active ? ('首透: ' + (p.patientStatus.isFirstDialysis.date || '無日期')) : '首透（未設定，點擊編輯）'"></i>
+                  <i *ngIf="p.patientStatus?.isFirstDialysis?.active" class="fas fa-chalkboard-teacher status-icon-education"
+                     (click)="openEducationRecord(p); $event.stopPropagation()" title="初透衛教紀錄"></i>
+                  <i class="fas fa-pause-circle status-icon-paused" [class.status-off]="!p.patientStatus?.isPaused?.active"
+                     (click)="openStatusEdit(p, 'isPaused', $event)"
+                     [title]="p.patientStatus?.isPaused?.active ? ('暫停透析: ' + (p.patientStatus.isPaused.date || '無日期')) : '暫停透析（未設定，點擊編輯）'"></i>
+                  <i class="fas fa-lock status-icon-do-not-move" [class.status-off]="!p.patientStatus?.doNotMove?.active"
+                     (click)="openStatusEdit(p, 'doNotMove', $event)"
+                     [title]="p.patientStatus?.doNotMove?.active ? ('勿動：' + (p.patientStatus.doNotMove.reason || '無原因說明')) : '勿動（未設定，點擊編輯）'"></i>
                 </div>
               </div>
               <div class="flex-cell col-hospital">
@@ -144,8 +154,6 @@
                     <i class="fas fa-pencil-alt"></i>
                   </button><button class="btn-icon btn-order" (click)="openOrderModal(p)" [disabled]="isPageLocked()" title="醫囑">
                     <i class="fas fa-notes-medical"></i>
-                  </button><button *ngIf="isFirstDialysisPatient(p)" class="btn-icon btn-education" (click)="openEducationRecord(p)" title="初透衛教紀錄">
-                    <i class="fas fa-chalkboard-teacher"></i>
                   </button><button class="btn-icon btn-delete" (click)="deletePatient(p.id)" [disabled]="isDeleteLocked()" title="刪除">
                     <i class="fas fa-trash-alt"></i>
                   </button>
@@ -303,6 +311,19 @@
                 <div class="info-item"><span class="label">原分類</span><span class="value">{{ p.originalStatus === 'ipd' ? '住院' : p.originalStatus === 'er' ? '急診' : '門診' }}</span></div>
                 <div class="info-item"><span class="label">刪除原因</span><span class="value">{{ p.deleteReason || '-' }}</span></div>
               </div>
+              <div class="deleted-status-row"
+                   *ngIf="p.patientStatus?.hasBloodDraw?.active || p.patientStatus?.isFirstDialysis?.active || p.patientStatus?.isPaused?.active || p.patientStatus?.doNotMove?.active">
+                <span class="label">狀態</span>
+                <div class="status-icon-container">
+                  <span *ngIf="p.patientStatus?.hasBloodDraw?.active" class="status-icon-blood status-blood-tag" [title]="'已抽血: ' + (p.patientStatus.hasBloodDraw.date || '無日期')">
+                    <i class="fas fa-syringe"></i>
+                    <span *ngIf="p.patientStatus.hasBloodDraw.date" class="status-blood-date">{{ formatBloodDrawMonthDay(p.patientStatus.hasBloodDraw.date) }}</span>
+                  </span>
+                  <i *ngIf="p.patientStatus?.isFirstDialysis?.active" class="fas fa-star status-icon-first" [title]="'首透: ' + (p.patientStatus.isFirstDialysis.date || '無日期')"></i>
+                  <i *ngIf="p.patientStatus?.isPaused?.active" class="fas fa-pause-circle status-icon-paused" [title]="'暫停透析: ' + (p.patientStatus.isPaused.date || '無日期')"></i>
+                  <i *ngIf="p.patientStatus?.doNotMove?.active" class="fas fa-lock status-icon-do-not-move" [title]="'勿動：' + (p.patientStatus.doNotMove.reason || '無原因說明')"></i>
+                </div>
+              </div>
               <div *ngIf="p.remarks" class="remarks-section">
                 <span class="label">備註:</span> {{ p.remarks }}
               </div>
@@ -414,4 +435,47 @@
     [canEdit]="!isPageLocked()"
     (close)="closeEducationRecord()"
   ></app-education-record-dialog>
+
+  <!-- 狀態快速編輯浮動面板 -->
+  @if (statusEditVisible() && statusEditPatient()) {
+    <div class="status-edit-backdrop" (click)="closeStatusEdit()"></div>
+    <div class="status-edit-panel" [style.left.px]="statusEditPos().x" [style.top.px]="statusEditPos().y" (click)="$event.stopPropagation()">
+      <div class="status-edit-header">
+        <span class="status-edit-title">{{ statusEditPatient().name }} · 狀態</span>
+        <button class="status-edit-close" (click)="closeStatusEdit()" title="關閉"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="status-edit-body">
+        @if (statusEditPatient().status !== 'opd') {
+          <div class="status-date-tag" [class.active]="statusEditPatient().patientStatus.hasBloodDraw?.active" [class.focused]="statusEditFocus() === 'hasBloodDraw'" (click)="toggleStatusEdit('hasBloodDraw')">
+            <span><i class="fas fa-syringe"></i> 已抽血</span>
+            @if (statusEditPatient().patientStatus.hasBloodDraw?.active) {
+              <input type="date" [(ngModel)]="statusEditPatient().patientStatus.hasBloodDraw.date" name="qeBloodDate" (click)="$event.stopPropagation()" />
+            }
+          </div>
+        }
+        <div class="status-date-tag" [class.active]="statusEditPatient().patientStatus.isFirstDialysis?.active" [class.focused]="statusEditFocus() === 'isFirstDialysis'" (click)="toggleStatusEdit('isFirstDialysis')">
+          <span><i class="fas fa-star"></i> 首透</span>
+          @if (statusEditPatient().patientStatus.isFirstDialysis?.active) {
+            <input type="date" [(ngModel)]="statusEditPatient().patientStatus.isFirstDialysis.date" name="qeFirstDate" (click)="$event.stopPropagation()" />
+          }
+        </div>
+        <div class="status-date-tag" [class.active]="statusEditPatient().patientStatus.isPaused?.active" [class.focused]="statusEditFocus() === 'isPaused'" (click)="toggleStatusEdit('isPaused')">
+          <span><i class="fas fa-pause-circle"></i> 暫停透析</span>
+          @if (statusEditPatient().patientStatus.isPaused?.active) {
+            <input type="date" [(ngModel)]="statusEditPatient().patientStatus.isPaused.date" name="qePausedDate" (click)="$event.stopPropagation()" />
+          }
+        </div>
+        <div class="status-date-tag do-not-move-tag" [class.active]="statusEditPatient().patientStatus.doNotMove?.active" [class.focused]="statusEditFocus() === 'doNotMove'" (click)="toggleStatusEdit('doNotMove')">
+          <span><i class="fas fa-lock"></i> 勿動</span>
+          @if (statusEditPatient().patientStatus.doNotMove?.active) {
+            <input type="text" [(ngModel)]="statusEditPatient().patientStatus.doNotMove.reason" name="qeDoNotMoveReason" placeholder="勿動原因…" (click)="$event.stopPropagation()" />
+          }
+        </div>
+      </div>
+      <div class="status-edit-footer">
+        <button class="btn-cancel" (click)="closeStatusEdit()">取消</button>
+        <button class="btn-save" (click)="saveStatusEdit()">儲存</button>
+      </div>
+    </div>
+  }
 </div>
