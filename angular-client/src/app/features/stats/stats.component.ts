@@ -16,6 +16,7 @@ import { Subject, Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { SHIFT_CODES, earlyTeams as importedEarlyTeams, lateTeams as importedLateTeams, baseTeams } from '@/constants/scheduleConstants';
 import { generateAutoNote, getUnifiedCellStyle } from '@/utils/scheduleUtils';
+import { isDoNotMoveActiveOn, doNotMoveRangeText } from '@/utils/doNotMove';
 import {
   fetchTeamsByDate,
   saveTeams,
@@ -298,10 +299,11 @@ export class StatsComponent implements OnInit, OnDestroy {
     return this.patientStore.patientMap();
   }
 
-  /** 若病人被標記「勿動」則回傳該病人，否則 null */
+  /** 若病人於目前檢視日期被標記「勿動」則回傳該病人，否則 null */
   private getLockedPatient(patientId: string): any | null {
     const p = this.patientMap.get(patientId);
-    return p?.patientStatus?.doNotMove?.active ? p : null;
+    const viewDate = this.currentRecord?.date || this.formatDate(this.currentDate);
+    return isDoNotMoveActiveOn(p?.patientStatus?.doNotMove, viewDate) ? p : null;
   }
 
   /** 病人是否標記勿動（供模板顯示鎖定圖示） */
@@ -314,10 +316,11 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   private doNotMoveMessage(p: any): string {
+    const dnm = p?.patientStatus?.doNotMove;
     return (
-      `病人 ${p?.name || ''} 已標記為「勿動」，無法調動。\n` +
-      `原因：${p?.patientStatus?.doNotMove?.reason || '未提供'}\n` +
-      `如需移動，請先至病人清單解除勿動。`
+      `病人 ${p?.name || ''} 已標記為「勿動」（${doNotMoveRangeText(dnm)}），無法調動。\n` +
+      `原因：${dnm?.reason || '未提供'}\n` +
+      `如需移動，請先至病人清單解除或調整勿動區間。`
     );
   }
 

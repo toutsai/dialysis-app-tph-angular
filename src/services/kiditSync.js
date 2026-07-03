@@ -6,8 +6,8 @@
 import { getDatabase } from '../db/init.js'
 
 // 不納入 KiDit 申報的病人動態類型。
-// KiDit 日誌本以入院/出院/轉床等異動申報為主；「更改模式」只記在工作日誌。
-const KIDIT_EXCLUDED_MOVEMENT_TYPES = new Set(['更改模式'])
+// KiDit 日誌本以入院/出院/轉床等異動申報為主；「更改模式」「勿動」只記在工作日誌。
+const KIDIT_EXCLUDED_MOVEMENT_TYPES = new Set(['更改模式', '勿動'])
 
 /**
  * 同步每日日誌到 Kidit 日誌本

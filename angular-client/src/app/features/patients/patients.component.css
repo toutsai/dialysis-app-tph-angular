@@ -527,6 +527,68 @@
 .status-edit-footer .btn-save:hover {
   filter: brightness(0.95);
 }
+
+/* 勿動：日期區間控制 */
+.status-edit-body .dnm-block {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.status-edit-body .dnm-block.focused .do-not-move-tag {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.45);
+}
+.status-edit-body .do-not-move-tag.active {
+  color: #fff;
+  border-color: #dc3545;
+  background-color: #dc3545;
+}
+.dnm-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 2px;
+}
+.dnm-range-types {
+  display: inline-flex;
+  gap: 4px;
+}
+.dnm-range-types button {
+  padding: 3px 12px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #475569;
+  border-radius: 14px;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+.dnm-range-types button.sel {
+  background: #dc3545;
+  border-color: #dc3545;
+  color: #fff;
+}
+.dnm-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: #475569;
+}
+.dnm-date input[type='date'] {
+  font-size: 0.82rem;
+  padding: 2px 4px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+}
+.dnm-reason {
+  flex: 1 1 100%;
+  font-size: 0.85rem;
+  padding: 5px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  outline: none;
+}
 .action-buttons {
   display: flex;
   flex-wrap: nowrap;

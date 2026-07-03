@@ -22,7 +22,8 @@ import {
 } from '@services/api-manager.service';
 import { ApiService } from '@services/api.service';
 import { firstValueFrom } from 'rxjs';
-import { formatDateToYYYYMMDD, parseFirestoreTimestamp } from '@/utils/dateUtils';
+import { formatDateToYYYYMMDD, parseFirestoreTimestamp, getToday } from '@/utils/dateUtils';
+import { doNotMoveRangeText } from '@/utils/doNotMove';
 import { escapeHtml } from '@/utils/sanitize';
 import { createDialysisOrderAndUpdatePatient } from '@/services/optimizedApiService';
 
@@ -208,6 +209,17 @@ export class PatientsComponent implements OnInit, OnDestroy {
   readonly statusEditFocus = signal<string | null>(null);
   readonly statusEditPos = signal<{ x: number; y: number }>({ x: 0, y: 0 });
 
+  // 今天日期字串（YYYY-MM-DD），供勿動生效判斷；一次計算避免模板重算
+  readonly todayStr = getToday();
+
+  /** 鎖頭 tooltip：原因 + 生效區間（清單一律顯示紅鎖，不分是否當日生效） */
+  doNotMoveTitle(p: any): string {
+    const dnm = p?.patientStatus?.doNotMove;
+    if (!dnm?.active) return '';
+    const range = doNotMoveRangeText(dnm);
+    return `勿動${range ? '（' + range + '）' : ''}：${dnm.reason || '無原因說明'}`;
+  }
+
   openStatusEdit(p: any, focusKey: string, event: MouseEvent): void {
     event?.stopPropagation();
     if (this.isPageLocked() || !p?.id) return;
@@ -217,6 +229,10 @@ export class PatientsComponent implements OnInit, OnDestroy {
     ps.isPaused = ps.isPaused || { active: false, date: null };
     ps.hasBloodDraw = ps.hasBloodDraw || { active: false, date: null };
     ps.doNotMove = ps.doNotMove || { active: false, reason: '' };
+    // 勿動日期區間欄位（向後相容：舊資料無 rangeType → 視為持續）
+    if (!ps.doNotMove.rangeType) ps.doNotMove.rangeType = 'permanent';
+    if (ps.doNotMove.startDate === undefined) ps.doNotMove.startDate = null;
+    if (ps.doNotMove.endDate === undefined) ps.doNotMove.endDate = null;
     clone.patientStatus = ps;
     const panelW = 290;
     const panelH = 300;
@@ -242,6 +258,22 @@ export class PatientsComponent implements OnInit, OnDestroy {
       if (!status.active) status.date = null;
     }
     this.statusEditFocus.set(key);
+    this.statusEditPatient.set({ ...p });
+  }
+
+  /** 設定勿動的日期區間模式：持續 / 單日 / 區間 */
+  setDoNotMoveRange(type: 'day' | 'range' | 'permanent'): void {
+    const p = this.statusEditPatient();
+    const dnm = p?.patientStatus?.doNotMove;
+    if (!dnm) return;
+    dnm.rangeType = type;
+    if (type === 'permanent') {
+      // 保留已填日期即可，判斷時忽略
+    } else {
+      if (!dnm.startDate) dnm.startDate = this.todayStr;
+      if (type === 'range' && !dnm.endDate) dnm.endDate = dnm.startDate;
+    }
+    this.statusEditFocus.set('doNotMove');
     this.statusEditPatient.set({ ...p });
   }
 

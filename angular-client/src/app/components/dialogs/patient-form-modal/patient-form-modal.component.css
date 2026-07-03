@@ -31,6 +31,16 @@
 .status-date-tag:hover { border-color: #adb5bd; background-color: #f8f9fa; }
 .status-date-tag.active { color: #fff; border-color: var(--primary-color, #007bff); background-color: var(--primary-color, #007bff); }
 .status-date-tag input[type='date'] { background-color: transparent; border: none; color: #fff; padding: 0; font-size: 0.9em; width: 140px; }
+/* 勿動：日期區間控制 */
+.dnm-block { display: inline-flex; flex-direction: column; gap: 8px; }
+.dnm-block .do-not-move-tag.active { border-color: #dc3545; background-color: #dc3545; }
+.dnm-detail { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 2px; }
+.dnm-range-types { display: inline-flex; gap: 4px; }
+.dnm-range-types button { padding: 4px 14px; border: 1px solid #ced4da; background: #fff; color: #495057; border-radius: 16px; cursor: pointer; font-size: 0.85rem; }
+.dnm-range-types button.sel { background: #dc3545; border-color: #dc3545; color: #fff; }
+.dnm-date { display: inline-flex; align-items: center; gap: 4px; font-size: 0.85rem; color: #495057; }
+.dnm-date input[type='date'] { font-size: 0.85rem; padding: 3px 6px; border: 1px solid #ced4da; border-radius: 6px; color: #495057; background: #fff; width: auto; }
+.dnm-reason { font-size: 0.9rem; padding: 6px 10px; border: 1px solid #ced4da; border-radius: 6px; outline: none; min-width: 200px; }
 .form-section { padding: 1rem; border-radius: 8px; background-color: #f8f9fa; display: flex; flex-direction: column; gap: 1rem; }
 .form-section:nth-child(odd) { background-color: #ffffff; }
 .form-grid-3-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem 1.25rem; }

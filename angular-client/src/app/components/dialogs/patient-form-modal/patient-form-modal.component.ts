@@ -172,6 +172,11 @@ export class PatientFormModalComponent implements OnInit {
     this.form.patientStatus.isPaused = this.form.patientStatus.isPaused || { active: false, date: null };
     this.form.patientStatus.hasBloodDraw = this.form.patientStatus.hasBloodDraw || { active: false, date: null };
     this.form.patientStatus.doNotMove = this.form.patientStatus.doNotMove || { active: false, reason: '' };
+    // 勿動日期區間欄位（向後相容：舊資料無 rangeType → 視為持續）
+    const dnm = this.form.patientStatus.doNotMove;
+    if (!dnm.rangeType) dnm.rangeType = 'permanent';
+    if (dnm.startDate === undefined) dnm.startDate = null;
+    if (dnm.endDate === undefined) dnm.endDate = null;
   }
 
   /** 切換「勿動」鎖定；關閉時清除原因 */
@@ -180,6 +185,17 @@ export class PatientFormModalComponent implements OnInit {
     const status = this.form.patientStatus.doNotMove;
     status.active = !status.active;
     if (!status.active) status.reason = '';
+  }
+
+  /** 設定勿動的日期區間模式：持續 / 單日 / 區間 */
+  setDoNotMoveRange(type: 'day' | 'range' | 'permanent'): void {
+    this.ensurePatientStatus();
+    const dnm = this.form.patientStatus.doNotMove;
+    dnm.rangeType = type;
+    if (type !== 'permanent') {
+      if (!dnm.startDate) dnm.startDate = getToday();
+      if (type === 'range' && !dnm.endDate) dnm.endDate = dnm.startDate;
+    }
   }
 
   private syncFirstDialysisStatus(date: string | null | undefined, forceDate = false): void {

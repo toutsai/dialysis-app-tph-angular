@@ -29,6 +29,7 @@ import {
   getUnifiedCellStyle,
 } from '@/utils/scheduleUtils';
 import { formatDateToYYYYMMDD, addDays } from '@/utils/dateUtils';
+import { isDoNotMoveActiveOn, doNotMoveRangeText } from '@/utils/doNotMove';
 
 @Component({
   selector: 'app-weekly',
@@ -493,9 +494,10 @@ export class WeeklyComponent implements OnInit, OnDestroy {
   handleClearSelect(selectedValue: string): void {
     if (this.isPageLocked() || !this.clearingSlotId()) return;
     const patientIdToClear = this.weekScheduleMap()[this.clearingSlotId()!]?.patientId;
-    // 勿動病人不可從排程移除
+    // 勿動病人不可從排程移除（依該格當天判斷）
     if (patientIdToClear) {
-      const lockedClear = this.getLockedPatient(patientIdToClear);
+      const clearDayIndex = parseInt(this.clearingSlotId()!.split('-').pop()!, 10);
+      const lockedClear = this.getLockedPatient(patientIdToClear, this.dateForDayIndex(clearDayIndex));
       if (lockedClear) {
         this.showAlert('操作被鎖定', this.doNotMoveMessage(lockedClear));
         this.isClearDialogVisible.set(false);
@@ -560,17 +562,23 @@ export class WeeklyComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** 若病人被標記「勿動」則回傳該病人，否則 null */
-  private getLockedPatient(patientId: string): any | null {
+  /** 取得指定天索引 (0-6) 對應的日期字串 (YYYY-MM-DD) */
+  private dateForDayIndex(dayIndex: number): string {
+    return this.weekDates()[dayIndex]?.queryDate || '';
+  }
+
+  /** 若病人於 targetDate 當天被標記「勿動」則回傳該病人，否則 null */
+  private getLockedPatient(patientId: string, targetDate: string): any | null {
     const p = this.patientMap().get(patientId) as any;
-    return p?.patientStatus?.doNotMove?.active ? p : null;
+    return isDoNotMoveActiveOn(p?.patientStatus?.doNotMove, targetDate) ? p : null;
   }
 
   private doNotMoveMessage(p: any): string {
+    const dnm = p?.patientStatus?.doNotMove;
     return (
-      `病人 ${p?.name || ''} 已標記為「勿動」，無法調動。\n` +
-      `原因：${p?.patientStatus?.doNotMove?.reason || '未提供'}\n` +
-      `如需移動，請先至病人清單解除勿動。`
+      `病人 ${p?.name || ''} 已標記為「勿動」（${doNotMoveRangeText(dnm)}），無法調動。\n` +
+      `原因：${dnm?.reason || '未提供'}\n` +
+      `如需移動，請先至病人清單解除或調整勿動區間。`
     );
   }
 
@@ -586,11 +594,13 @@ export class WeeklyComponent implements OnInit, OnDestroy {
     const sourceSlotData = { ...dragged.data };
     const targetSlotData = { ...this.weekScheduleMap()[targetWeeklySlotId] };
     // 勿動鎖定：移動勿動病人、或互換 displace 勿動病人 → 擋下（側欄初次排入不擋）
+    // 依各自所在天判斷：被移動者看來源天、被 displace 的目標病人看目標天
     if (sourceWeeklySlotId !== 'sidebar') {
-      const lockedSelf = this.getLockedPatient(sourceSlotData.patientId);
+      const sourceDayIdx = parseInt(sourceWeeklySlotId.split('-').pop()!, 10);
+      const lockedSelf = this.getLockedPatient(sourceSlotData.patientId, this.dateForDayIndex(sourceDayIdx));
       if (lockedSelf) { this.showAlert('操作被鎖定', this.doNotMoveMessage(lockedSelf)); this.draggedItem.set(null); return; }
       if (targetSlotData?.patientId) {
-        const lockedTarget = this.getLockedPatient(targetSlotData.patientId);
+        const lockedTarget = this.getLockedPatient(targetSlotData.patientId, this.dateForDayIndex(targetDayIndex));
         if (lockedTarget) { this.showAlert('操作被鎖定', this.doNotMoveMessage(lockedTarget)); this.draggedItem.set(null); return; }
       }
     }

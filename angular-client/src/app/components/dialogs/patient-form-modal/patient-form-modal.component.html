@@ -171,10 +171,26 @@
                   }
                 </div>
               }
-              <div class="status-date-tag do-not-move-tag" [class.active]="form.patientStatus.doNotMove?.active" (click)="toggleDoNotMove()">
-                <span><i class="fas fa-lock"></i> 勿動</span>
+              <div class="dnm-block">
+                <div class="status-date-tag do-not-move-tag" [class.active]="form.patientStatus.doNotMove?.active" (click)="toggleDoNotMove()">
+                  <span><i class="fas fa-lock"></i> 勿動</span>
+                </div>
                 @if (form.patientStatus.doNotMove?.active) {
-                  <input type="text" [(ngModel)]="form.patientStatus.doNotMove.reason" name="doNotMoveReason" placeholder="勿動原因…" (click)="$event.stopPropagation()" />
+                  <div class="dnm-detail" (click)="$event.stopPropagation()">
+                    <div class="dnm-range-types">
+                      <button type="button" [class.sel]="form.patientStatus.doNotMove.rangeType === 'permanent'" (click)="setDoNotMoveRange('permanent')">持續</button>
+                      <button type="button" [class.sel]="form.patientStatus.doNotMove.rangeType === 'day'" (click)="setDoNotMoveRange('day')">單日</button>
+                      <button type="button" [class.sel]="form.patientStatus.doNotMove.rangeType === 'range'" (click)="setDoNotMoveRange('range')">區間</button>
+                    </div>
+                    @if (form.patientStatus.doNotMove.rangeType === 'day') {
+                      <label class="dnm-date">日期 <input type="date" [(ngModel)]="form.patientStatus.doNotMove.startDate" name="doNotMoveDay" /></label>
+                    }
+                    @if (form.patientStatus.doNotMove.rangeType === 'range') {
+                      <label class="dnm-date">起 <input type="date" [(ngModel)]="form.patientStatus.doNotMove.startDate" name="doNotMoveStart" /></label>
+                      <label class="dnm-date">訖 <input type="date" [(ngModel)]="form.patientStatus.doNotMove.endDate" name="doNotMoveEnd" /></label>
+                    }
+                    <input class="dnm-reason" type="text" [(ngModel)]="form.patientStatus.doNotMove.reason" name="doNotMoveReason" placeholder="勿動原因…" />
+                  </div>
                 }
               </div>
             </div>

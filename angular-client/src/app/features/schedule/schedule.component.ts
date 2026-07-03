@@ -27,6 +27,7 @@ import { NotificationService } from '@app/core/services/notification.service';
 import { DateStateService } from '@app/core/services/date-state.service';
 import { UserDirectoryService } from '@app/core/services/user-directory.service';
 import { fetchEffectiveOrders } from '@/services/effectiveOrdersService';
+import { isDoNotMoveActiveOn, doNotMoveRangeText } from '@/utils/doNotMove';
 import { InpatientSidebarComponent } from '@app/components/inpatient-sidebar/inpatient-sidebar.component';
 import { BedAssignmentDialogComponent } from '@app/components/dialogs/bed-assignment-dialog/bed-assignment-dialog.component';
 import { DailyStaffDisplayComponent } from '@app/components/daily-staff-display/daily-staff-display.component';
@@ -1493,7 +1494,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   /** 若病人被標記「勿動」則回傳該病人，否則 null */
   private getLockedPatient(patientId: string): any | null {
     const p = this.patientMap().get(patientId) as any;
-    return p?.patientStatus?.doNotMove?.active ? p : null;
+    return isDoNotMoveActiveOn(p?.patientStatus?.doNotMove, this.formatDate(this.currentDate())) ? p : null;
   }
 
   /** 病人是否標記勿動（供模板顯示鎖定圖示） */
@@ -1507,10 +1508,11 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   private doNotMoveMessage(p: any): string {
+    const dnm = p?.patientStatus?.doNotMove;
     return (
-      `病人 ${p?.name || ''} 已標記為「勿動」，無法調動。\n` +
-      `原因：${p?.patientStatus?.doNotMove?.reason || '未提供'}\n` +
-      `如需移動，請先至病人清單解除勿動。`
+      `病人 ${p?.name || ''} 已標記為「勿動」（${doNotMoveRangeText(dnm)}），無法調動。\n` +
+      `原因：${dnm?.reason || '未提供'}\n` +
+      `如需移動，請先至病人清單解除或調整勿動區間。`
     );
   }
 

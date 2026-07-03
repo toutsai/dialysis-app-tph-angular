@@ -1284,7 +1284,23 @@ async function updatePatientHandler(req, res) {
       })
     }
 
-
+    // 🔥 檢查「勿動」新增（active: false → true）：寫工作日誌病人動態，勿動原因帶入備註
+    // 僅在「首次標記勿動」時寫一筆；之後只改原因/區間不重複寫。刻意不進 KiDit（見 kiditSync）。
+    const oldDoNotMove = safeJsonParse(existing.patient_status)?.doNotMove
+    const newDoNotMove = data.patientStatus?.doNotMove
+    if (!wasDeleted && !isNowDeleted && !oldDoNotMove?.active && newDoNotMove?.active) {
+      addMovementToDailyLog(db, {
+        id: `auto_do_not_move_${id}_${Date.now()}`,
+        type: '勿動',
+        name: updated.name,
+        patientId: id,
+        medicalRecordNumber: updated.medical_record_number,
+        wardNumber: updated.ward_number || '',
+        physician: updated.physician || '',
+        reason: '',
+        remarks: newDoNotMove.reason || '標記為勿動',
+      })
+    }
 
     await logAudit('PATIENT_UPDATE', req.user.id, req.user.name, 'patients', id, {
       updatedFields: Object.keys(data),
