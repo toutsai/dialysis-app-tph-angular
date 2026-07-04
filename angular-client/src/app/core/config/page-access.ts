@@ -116,8 +116,8 @@ export const PAGE_ACCESS = {
   labReports: {
     path: '/lab-reports',
     title: '檢驗報告管理',
-    roles: DOCTOR_ROLES,
-    roleLabel: '管理員、貢獻者',
+    roles: CLINICAL_ROLES,
+    roleLabel: '管理員、編輯者、貢獻者',
   },
   orders: {
     path: '/orders',
