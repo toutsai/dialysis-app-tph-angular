@@ -107,11 +107,11 @@ export class UserManagementComponent implements OnInit {
 
   // --- Options ---
   roleOptions = [
-    { value: 'all', label: '全部' },
-    { value: 'admin', label: '管理員' },
-    { value: 'editor', label: '編輯者' },
-    { value: 'contributor', label: '貢獻者' },
-    { value: 'viewer', label: '查看者' },
+    { value: 'all', label: 'all' },
+    { value: 'admin', label: 'admin' },
+    { value: 'editor', label: 'editor' },
+    { value: 'contributor', label: 'contributor' },
+    { value: 'viewer', label: 'viewer' },
   ];
 
   sortOptions = [

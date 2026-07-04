@@ -44,8 +44,8 @@
         <button
           *ngFor="let option of roleOptions"
           class="role-toggle-btn"
-          [class.active]="selectedRole() === option.value"
-          [ngClass]="selectedRole() === option.value ? 'role-active-' + option.value : ''"
+          [class.selected]="selectedRole() === option.value"
+          [ngClass]="'role-active-' + option.value"
           (click)="selectedRole.set(selectedRole() === option.value && option.value !== 'all' ? 'all' : option.value)"
         >
           {{ option.label }}

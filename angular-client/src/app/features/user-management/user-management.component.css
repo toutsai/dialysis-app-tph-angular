@@ -63,47 +63,44 @@
   gap: 0.4rem;
   flex-wrap: wrap;
 }
+/* 篩選器：與個人卡片 role-badge 同款（英文、大寫、彩色徽章） */
 .role-toggle-btn {
-  padding: 0.4rem 0.8rem;
-  border: 2px solid #dee2e6;
+  padding: 0.35rem 0.9rem;
+  border: 2px solid transparent;
   border-radius: 20px;
-  background-color: #fff;
-  color: #495057;
-  font-size: 0.88rem;
-  font-weight: 500;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
   cursor: pointer;
   transition: all 0.2s;
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+  opacity: 0.45;
 }
 .role-toggle-btn:hover {
-  border-color: #adb5bd;
-  background-color: #f8f9fa;
+  opacity: 0.8;
 }
-.role-toggle-btn.active {
-  color: white;
-  border-color: transparent;
+.role-toggle-btn.selected {
+  opacity: 1;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.12);
 }
 .role-active-all {
   background-color: #495057;
-  border-color: #495057 !important;
 }
 .role-active-admin {
   background-color: #dc3545;
-  border-color: #dc3545 !important;
 }
 .role-active-editor {
   background-color: #007bff;
-  border-color: #007bff !important;
 }
 .role-active-contributor {
   background-color: #28a745;
-  border-color: #28a745 !important;
 }
 .role-active-viewer {
   background-color: #6c757d;
-  border-color: #6c757d !important;
 }
 .role-count {
   background-color: rgba(255, 255, 255, 0.25);
@@ -113,10 +110,6 @@
   font-weight: 600;
   min-width: 18px;
   text-align: center;
-}
-.role-toggle-btn:not(.active) .role-count {
-  background-color: #e9ecef;
-  color: #495057;
 }
 .search-filters {
   display: flex;
