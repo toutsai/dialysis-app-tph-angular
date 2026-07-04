@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnInit, Output, inject, signal } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Input, OnInit, Output, ViewChild, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { localApi } from '@/services/localApiClient';
@@ -62,6 +62,16 @@ export class EducationRecordDialogComponent implements OnInit {
   readonly topics = signal<string[]>(DEFAULT_EDUCATION_TOPICS);
   readonly isLoading = signal(false);
   readonly isSaving = signal(false);
+
+  // 被衛教者手寫簽名板（平板觸控）
+  readonly signPadVisible = signal(false);
+  @ViewChild('sigCanvas') private sigCanvasRef?: ElementRef<HTMLCanvasElement>;
+  private signTarget: EducationSession | null = null;
+  private sigCtx: CanvasRenderingContext2D | null = null;
+  private sigDrawing = false;
+  private sigLastX = 0;
+  private sigLastY = 0;
+  private sigHasInk = false;
 
   async ngOnInit(): Promise<void> {
     if (!this.patientId) return;
@@ -149,6 +159,109 @@ export class EducationRecordDialogComponent implements OnInit {
     return mmdd ? `${sign.name}（${mmdd}）` : sign.name;
   }
 
+  /** 簽名是否為手寫圖檔（data URL）；否則視為舊的文字簽名 */
+  isImageSig(v: string): boolean {
+    return typeof v === 'string' && v.startsWith('data:image');
+  }
+
+  /** 開啟手寫簽名板（平板讓病人簽名） */
+  openSignPad(session: EducationSession): void {
+    if (!this.canEdit) return;
+    this.signTarget = session;
+    this.sigHasInk = false;
+    this.signPadVisible.set(true);
+    // 等 canvas 渲染後再初始化
+    setTimeout(() => this.initSigCanvas(), 0);
+  }
+
+  private initSigCanvas(): void {
+    const canvas = this.sigCanvasRef?.nativeElement;
+    if (!canvas) return;
+    const ratio = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = Math.round(rect.width * ratio);
+    canvas.height = Math.round(rect.height * ratio);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.scale(ratio, ratio);
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#111827';
+    this.sigCtx = ctx;
+    // 若已有手寫簽名，載入既有圖以供修改（視為已有筆跡，確認時保留）
+    const existing = this.signTarget?.signature;
+    if (existing && this.isImageSig(existing)) {
+      const img = new Image();
+      img.onload = () => ctx.drawImage(img, 0, 0, rect.width, rect.height);
+      img.src = existing;
+      this.sigHasInk = true;
+    }
+  }
+
+  private sigPos(e: PointerEvent): { x: number; y: number } {
+    const canvas = this.sigCanvasRef!.nativeElement;
+    const rect = canvas.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+
+  onSigDown(e: PointerEvent): void {
+    if (!this.sigCtx) return;
+    e.preventDefault();
+    this.sigDrawing = true;
+    const { x, y } = this.sigPos(e);
+    this.sigLastX = x;
+    this.sigLastY = y;
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    // 點一下也留下墨點
+    this.sigCtx.beginPath();
+    this.sigCtx.arc(x, y, 1.2, 0, Math.PI * 2);
+    this.sigCtx.fillStyle = '#111827';
+    this.sigCtx.fill();
+    this.sigHasInk = true;
+  }
+
+  onSigMove(e: PointerEvent): void {
+    if (!this.sigDrawing || !this.sigCtx) return;
+    e.preventDefault();
+    const { x, y } = this.sigPos(e);
+    this.sigCtx.beginPath();
+    this.sigCtx.moveTo(this.sigLastX, this.sigLastY);
+    this.sigCtx.lineTo(x, y);
+    this.sigCtx.stroke();
+    this.sigLastX = x;
+    this.sigLastY = y;
+    this.sigHasInk = true;
+  }
+
+  onSigUp(): void {
+    this.sigDrawing = false;
+  }
+
+  clearSig(): void {
+    const canvas = this.sigCanvasRef?.nativeElement;
+    if (canvas && this.sigCtx) {
+      this.sigCtx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    this.sigHasInk = false;
+  }
+
+  confirmSig(): void {
+    const canvas = this.sigCanvasRef?.nativeElement;
+    if (this.signTarget) {
+      this.signTarget.signature = this.sigHasInk && canvas ? canvas.toDataURL('image/png') : '';
+      this.sessions.set([...this.sessions()]);
+    }
+    this.closeSignPad();
+  }
+
+  closeSignPad(): void {
+    this.signPadVisible.set(false);
+    this.signTarget = null;
+    this.sigCtx = null;
+    this.sigDrawing = false;
+  }
+
   async save(): Promise<void> {
     if (!this.canEdit || this.isSaving()) return;
     this.isSaving.set(true);
@@ -178,7 +291,11 @@ export class EducationRecordDialogComponent implements OnInit {
           <td style="text-align:center">${this.esc(s.dialysisDate)}</td>
           <td>${this.esc(s.topic)}</td>
           <td style="text-align:center">${this.esc(this.signLabel(s.educatorSign))}</td>
-          <td>${this.esc(s.signature)}</td>
+          <td style="text-align:center">${
+            this.isImageSig(s.signature)
+              ? `<img src="${s.signature}" style="max-height:40px;max-width:110px" alt="簽名" />`
+              : this.esc(s.signature)
+          }</td>
           <td style="text-align:center">${this.esc(this.signLabel(s.returnDemoSign))}</td>
           <td style="text-align:center">${this.esc(this.signLabel(s.passSign))}</td>
         </tr>`,

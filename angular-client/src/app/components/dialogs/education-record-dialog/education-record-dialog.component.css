@@ -144,3 +144,75 @@
 }
 .sign-cell:disabled { cursor: default; opacity: 0.75; }
 .edu-hint { margin: 10px 2px 0; font-size: 13px; color: #868e96; }
+
+/* 被衛教者簽名：點選開啟簽名板 */
+.sig-btn {
+  width: 100%;
+  min-height: 44px;
+  padding: 4px 6px;
+  border: 1px dashed #cbd5e0;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sig-btn:hover:not(:disabled) { background: #eef6ff; border-color: #2980b9; }
+.sig-btn.has-sig { border-style: solid; border-color: #cbd5e0; }
+.sig-btn:disabled { cursor: default; opacity: 0.75; }
+.sig-thumb { max-height: 40px; max-width: 100%; object-fit: contain; }
+.sig-text { font-size: 14px; color: #2c3e50; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sig-placeholder { font-size: 13px; color: #adb5bd; display: inline-flex; align-items: center; gap: 5px; }
+
+/* 簽名板彈窗 */
+.sig-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  padding: 20px;
+}
+.sig-pad {
+  background: #fff;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 640px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sig-pad-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+.sig-pad-header span { display: inline-flex; align-items: center; gap: 8px; }
+.sig-canvas-wrap {
+  border: 2px dashed #b8c2cc;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+.sig-canvas {
+  display: block;
+  width: 100%;
+  height: 260px;
+  touch-action: none;
+  cursor: crosshair;
+}
+.sig-hint { margin: 0; font-size: 13px; color: #868e96; text-align: center; }
+.sig-pad-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}

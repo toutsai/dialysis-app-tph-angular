@@ -63,7 +63,15 @@
                 {{ s.educatorSign ? signLabel(s.educatorSign) : '點選簽核' }}
               </button>
             </td>
-            <td class="col-sign"><input type="text" [(ngModel)]="s.signature" [disabled]="!canEdit" /></td>
+            <td class="col-sign">
+              <button type="button" class="sig-btn" [class.has-sig]="!!s.signature" [disabled]="!canEdit"
+                      (click)="openSignPad(s)"
+                      [title]="canEdit ? '點選開啟簽名板讓病人簽名' : ''">
+                <img *ngIf="isImageSig(s.signature)" [src]="s.signature" class="sig-thumb" alt="簽名" />
+                <span *ngIf="!isImageSig(s.signature) && s.signature" class="sig-text">{{ s.signature }}</span>
+                <span *ngIf="!s.signature" class="sig-placeholder"><i class="fas fa-pen-nib"></i> 點選簽名</span>
+              </button>
+            </td>
             <td class="col-sign-cell">
               <button type="button" class="sign-cell" [class.signed]="s.returnDemoSign" [disabled]="!canEdit"
                       (click)="toggleSign(s, 'returnDemoSign')"
@@ -81,6 +89,30 @@
           </tr>
         </tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- 被衛教者手寫簽名板（平板觸控） -->
+  <div class="sig-overlay" *ngIf="signPadVisible()" (click)="closeSignPad()">
+    <div class="sig-pad" (click)="$event.stopPropagation()">
+      <div class="sig-pad-header">
+        <span><i class="fas fa-pen-nib"></i> 被衛教者簽名<ng-container *ngIf="patientName"> — {{ patientName }}</ng-container></span>
+        <button class="edu-close" (click)="closeSignPad()" title="關閉"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="sig-canvas-wrap">
+        <canvas #sigCanvas class="sig-canvas"
+                (pointerdown)="onSigDown($event)"
+                (pointermove)="onSigMove($event)"
+                (pointerup)="onSigUp()"
+                (pointercancel)="onSigUp()"
+                (pointerleave)="onSigUp()"></canvas>
+      </div>
+      <p class="sig-hint">請用觸控筆或手指於上方白色區域簽名，完成後按「確認」。</p>
+      <div class="sig-pad-actions">
+        <button class="edu-btn edu-btn-light" (click)="clearSig()"><i class="fas fa-eraser"></i> 清除</button>
+        <button class="edu-btn edu-btn-light" (click)="closeSignPad()">取消</button>
+        <button class="edu-btn edu-btn-primary" (click)="confirmSig()"><i class="fas fa-check"></i> 確認</button>
+      </div>
     </div>
   </div>
 </div>
