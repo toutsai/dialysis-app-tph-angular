@@ -138,8 +138,6 @@ export class UserManagementComponent implements OnInit {
       );
     }
     return [...result].sort((a, b) => {
-      if (a.role === 'admin' && b.role !== 'admin') return -1;
-      if (b.role === 'admin' && a.role !== 'admin') return 1;
       let aValue: any = (a as any)[this.sortBy()];
       let bValue: any = (b as any)[this.sortBy()];
       if (this.sortBy().includes('At') && aValue && bValue) {
