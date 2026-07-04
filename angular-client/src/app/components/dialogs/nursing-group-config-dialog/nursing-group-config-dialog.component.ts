@@ -39,7 +39,8 @@ export class NursingGroupConfigDialogComponent implements OnChanges, OnInit {
   config: any = getDefaultConfig();
   sourceMonth: string | null = null;
   newRestrictionNurseId = '';
-  newRestrictionGroups: string[] = [];
+  newRestrictionGroups: string[] = [];       // 夜班待新增組別
+  newRestrictionDayGroups: string[] = [];    // 白班待新增組別
 
   // Arrays for template iteration
   maxDayShiftGroupsArray: number[] = [];
@@ -82,6 +83,12 @@ export class NursingGroupConfigDialogComponent implements OnChanges, OnInit {
   get nightShiftGroupOptions(): string[] {
     // Combined unique night shift groups from both 135 and 246
     const set = new Set<string>([...this.nightGroups135, ...this.nightGroups246]);
+    return Array.from(set).sort();
+  }
+
+  get dayShiftGroupOptions(): string[] {
+    // Combined unique day shift groups from both 135 and 246
+    const set = new Set<string>([...this.dayGroups135, ...this.dayGroups246]);
     return Array.from(set).sort();
   }
 
@@ -131,6 +138,22 @@ export class NursingGroupConfigDialogComponent implements OnChanges, OnInit {
 
   get availableNursesForNightRestriction(): DirectoryUser[] {
     return this.nurses;
+  }
+
+  /** 合併白班 + 夜班限制，依護理師彙整供清單顯示 */
+  get restrictionList(): { nurseId: string; nurseName: string; dayGroups: string[]; nightGroups: string[] }[] {
+    const day = this.config.dayShiftRestrictions || {};
+    const night = this.config.nightShiftRestrictions || {};
+    const nurseIds = new Set<string>([...Object.keys(day), ...Object.keys(night)]);
+    const list: { nurseId: string; nurseName: string; dayGroups: string[]; nightGroups: string[] }[] = [];
+    nurseIds.forEach((nurseId) => {
+      const dayGroups = [...(day[nurseId] || [])].sort();
+      const nightGroups = [...(night[nurseId] || [])].sort();
+      if (dayGroups.length === 0 && nightGroups.length === 0) return;
+      const nurse = this.nurses.find((n: DirectoryUser) => n.uid === nurseId);
+      list.push({ nurseId, nurseName: nurse?.name || nurseId, dayGroups, nightGroups });
+    });
+    return list.sort((a, b) => a.nurseName.localeCompare(b.nurseName, 'zh-TW'));
   }
 
   get validationErrors(): string[] {
@@ -200,6 +223,20 @@ export class NursingGroupConfigDialogComponent implements OnChanges, OnInit {
     this.newRestrictionGroups = [...this.newRestrictionGroups];
   }
 
+  isNewRestrictionDayGroupChecked(group: string): boolean {
+    return this.newRestrictionDayGroups.includes(group);
+  }
+
+  toggleNewRestrictionDayGroup(group: string): void {
+    const idx = this.newRestrictionDayGroups.indexOf(group);
+    if (idx === -1) {
+      this.newRestrictionDayGroups.push(group);
+    } else {
+      this.newRestrictionDayGroups.splice(idx, 1);
+    }
+    this.newRestrictionDayGroups = [...this.newRestrictionDayGroups];
+  }
+
   onDayCountChange(weekday: string): void {
     // When day shift count changes, remove any 75-group selections that are no longer valid
     const dayGroups = weekday === '135' ? this.dayGroups135 : this.dayGroups246;
@@ -209,19 +246,39 @@ export class NursingGroupConfigDialogComponent implements OnChanges, OnInit {
     }
   }
 
-  addNightRestriction(): void {
-    if (!this.newRestrictionNurseId || this.newRestrictionGroups.length === 0) return;
+  /** 新增部分工時限制：白班存 dayShiftRestrictions、夜班存 nightShiftRestrictions */
+  addRestriction(): void {
+    if (!this.newRestrictionNurseId) return;
+    if (this.newRestrictionDayGroups.length === 0 && this.newRestrictionGroups.length === 0) return;
 
-    if (!this.config.nightShiftRestrictions) {
-      this.config.nightShiftRestrictions = {};
+    if (this.newRestrictionDayGroups.length > 0) {
+      if (!this.config.dayShiftRestrictions) this.config.dayShiftRestrictions = {};
+      const existingDay = this.config.dayShiftRestrictions[this.newRestrictionNurseId] || [];
+      this.config.dayShiftRestrictions[this.newRestrictionNurseId] = Array.from(
+        new Set([...existingDay, ...this.newRestrictionDayGroups])
+      );
     }
-
-    const existing = this.config.nightShiftRestrictions[this.newRestrictionNurseId] || [];
-    const merged = new Set([...existing, ...this.newRestrictionGroups]);
-    this.config.nightShiftRestrictions[this.newRestrictionNurseId] = Array.from(merged);
+    if (this.newRestrictionGroups.length > 0) {
+      if (!this.config.nightShiftRestrictions) this.config.nightShiftRestrictions = {};
+      const existingNight = this.config.nightShiftRestrictions[this.newRestrictionNurseId] || [];
+      this.config.nightShiftRestrictions[this.newRestrictionNurseId] = Array.from(
+        new Set([...existingNight, ...this.newRestrictionGroups])
+      );
+    }
 
     this.newRestrictionNurseId = '';
     this.newRestrictionGroups = [];
+    this.newRestrictionDayGroups = [];
+  }
+
+  removeDayRestrictionGroup(nurseId: string, group: string): void {
+    if (!this.config.dayShiftRestrictions?.[nurseId]) return;
+    this.config.dayShiftRestrictions[nurseId] = this.config.dayShiftRestrictions[nurseId].filter(
+      (g: string) => g !== group
+    );
+    if (this.config.dayShiftRestrictions[nurseId].length === 0) {
+      delete this.config.dayShiftRestrictions[nurseId];
+    }
   }
 
   removeNightRestrictionGroup(nurseId: string, group: string): void {
@@ -234,7 +291,12 @@ export class NursingGroupConfigDialogComponent implements OnChanges, OnInit {
     }
   }
 
-  removeNightRestriction(nurseId: string): void {
+  /** 移除該護理師的所有限制（白班 + 夜班） */
+  removeRestriction(nurseId: string): void {
+    if (this.config.dayShiftRestrictions) {
+      delete this.config.dayShiftRestrictions[nurseId];
+      this.config.dayShiftRestrictions = { ...this.config.dayShiftRestrictions };
+    }
     if (this.config.nightShiftRestrictions) {
       delete this.config.nightShiftRestrictions[nurseId];
       this.config.nightShiftRestrictions = { ...this.config.nightShiftRestrictions };
@@ -254,6 +316,7 @@ export class NursingGroupConfigDialogComponent implements OnChanges, OnInit {
       if (!this.config.cannotBeNightLeader) this.config.cannotBeNightLeader = [];
       if (!this.config.excludedNurses) this.config.excludedNurses = [];
       if (!this.config.nightShiftRestrictions) this.config.nightShiftRestrictions = {};
+      if (!this.config.dayShiftRestrictions) this.config.dayShiftRestrictions = {};
       if (!this.config.dayShiftRules) {
         this.config.dayShiftRules = {
           '135': { shift75Groups: [] },

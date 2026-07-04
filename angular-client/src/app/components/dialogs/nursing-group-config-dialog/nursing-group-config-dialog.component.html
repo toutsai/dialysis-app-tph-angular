@@ -203,37 +203,54 @@
             }
           </section>
 
-          <!-- Section 4: Night Shift Group Restrictions -->
+          <!-- Section 4: Part-time Group Restrictions (day + night) -->
           <section class="config-section">
-            <h3 class="section-title">夜班組別限制</h3>
-            <p class="section-desc">設定特定護理師不可分配到特定夜班組別</p>
+            <h3 class="section-title">部分工時組別限制</h3>
+            <p class="section-desc">設定特定護理師不參與（不分配）指定的白班／夜班組別。分組時若可排組別全被排除，該格會留空白待人工處理。</p>
 
             @if (nurses.length === 0) {
               <div class="no-data">尚無護理師資料</div>
             } @else {
               <div class="night-restriction-container">
-                @if (nightRestrictionList.length > 0) {
+                @if (restrictionList.length > 0) {
                   <div class="restriction-list">
-                    @for (item of nightRestrictionList; track item.nurseId) {
+                    @for (item of restrictionList; track item.nurseId) {
                       <div class="restriction-item">
                         <span class="nurse-name">{{ item.nurseName }}</span>
                         <div class="restricted-groups">
-                          @for (group of item.groups; track group) {
-                            <span class="group-tag">
-                              {{ group }}組
-                              <button
-                                type="button"
-                                class="remove-group-btn"
-                                (click)="removeNightRestrictionGroup(item.nurseId, group)"
-                                title="移除"
-                              >&times;</button>
-                            </span>
+                          @if (item.dayGroups.length > 0) {
+                            <span class="shift-label day">白</span>
+                            @for (group of item.dayGroups; track group) {
+                              <span class="group-tag day">
+                                {{ group }}組
+                                <button
+                                  type="button"
+                                  class="remove-group-btn"
+                                  (click)="removeDayRestrictionGroup(item.nurseId, group)"
+                                  title="移除"
+                                >&times;</button>
+                              </span>
+                            }
+                          }
+                          @if (item.nightGroups.length > 0) {
+                            <span class="shift-label night">夜</span>
+                            @for (group of item.nightGroups; track group) {
+                              <span class="group-tag night">
+                                {{ group }}組
+                                <button
+                                  type="button"
+                                  class="remove-group-btn"
+                                  (click)="removeNightRestrictionGroup(item.nurseId, group)"
+                                  title="移除"
+                                >&times;</button>
+                              </span>
+                            }
                           }
                         </div>
                         <button
                           type="button"
                           class="remove-btn"
-                          (click)="removeNightRestriction(item.nurseId)"
+                          (click)="removeRestriction(item.nurseId)"
                           title="移除此護理師的所有限制"
                         >
                           全部移除
@@ -251,24 +268,46 @@
                       <option [value]="nurse.uid">{{ nurse.name }}</option>
                     }
                   </select>
-                  <div class="group-checkboxes">
-                    @for (group of nightShiftGroupOptions; track group) {
-                      <label class="checkbox-label small">
-                        <input
-                          type="checkbox"
-                          [checked]="isNewRestrictionGroupChecked(group)"
-                          (change)="toggleNewRestrictionGroup(group)"
-                          [disabled]="!newRestrictionNurseId"
-                        />
-                        <span class="checkbox-text">{{ group }}</span>
-                      </label>
-                    }
+
+                  <div class="restriction-group-block">
+                    <span class="restriction-group-title">白班組別</span>
+                    <div class="group-checkboxes">
+                      @for (group of dayShiftGroupOptions; track group) {
+                        <label class="checkbox-label small">
+                          <input
+                            type="checkbox"
+                            [checked]="isNewRestrictionDayGroupChecked(group)"
+                            (change)="toggleNewRestrictionDayGroup(group)"
+                            [disabled]="!newRestrictionNurseId"
+                          />
+                          <span class="checkbox-text">{{ group }}</span>
+                        </label>
+                      }
+                    </div>
                   </div>
+
+                  <div class="restriction-group-block">
+                    <span class="restriction-group-title">夜班組別</span>
+                    <div class="group-checkboxes">
+                      @for (group of nightShiftGroupOptions; track group) {
+                        <label class="checkbox-label small">
+                          <input
+                            type="checkbox"
+                            [checked]="isNewRestrictionGroupChecked(group)"
+                            (change)="toggleNewRestrictionGroup(group)"
+                            [disabled]="!newRestrictionNurseId"
+                          />
+                          <span class="checkbox-text">{{ group }}</span>
+                        </label>
+                      }
+                    </div>
+                  </div>
+
                   <button
                     type="button"
                     class="btn-add"
-                    (click)="addNightRestriction()"
-                    [disabled]="!newRestrictionNurseId || newRestrictionGroups.length === 0"
+                    (click)="addRestriction()"
+                    [disabled]="!newRestrictionNurseId || (newRestrictionDayGroups.length === 0 && newRestrictionGroups.length === 0)"
                   >
                     新增限制
                   </button>

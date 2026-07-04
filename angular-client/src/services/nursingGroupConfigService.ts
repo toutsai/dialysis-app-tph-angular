@@ -46,6 +46,7 @@ export const getDefaultConfig = (): any => ({
   },
   cannotBeNightLeader: [],
   nightShiftRestrictions: {},
+  dayShiftRestrictions: {},
   excludedNurses: [],
   lastModified: { date: null, userId: null, userName: null },
 });

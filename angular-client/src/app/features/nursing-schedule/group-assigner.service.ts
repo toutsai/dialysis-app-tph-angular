@@ -276,6 +276,9 @@ export class GroupAssignerService {
     const fixedAssignments = config.fixedAssignments || {};
     const hospitalGroups = config.hospitalGroups || { dayShift: ['H', 'I'], nightShift: ['G', 'H'] };
     const nightShiftRestrictions = config.nightShiftRestrictions || {};
+    const dayShiftRestrictions = config.dayShiftRestrictions || {};
+    // 部分工時：白班該護理師被限制的組別（勾選＝不分配）。可排組別全被排除時留空白（保底B）
+    const isDayRestricted = (nurseId: string, group: string): boolean => (dayShiftRestrictions[nurseId] || []).includes(group);
     const excludedNurses = new Set(config.excludedNurses || []);
 
     const getDayShiftGroupsForDay = (dayOfWeek: number) => {
@@ -388,17 +391,23 @@ export class GroupAssignerService {
       // 75-shift grouping
       if (nurses75.length > 0 && available75Groups.length > 0) {
         if (nurses75.length === 1) {
-          const group = available75Groups[next75GroupIndex % available75Groups.length];
-          schedule.scheduleByNurse[nurses75[0]].groups[dayIndex] = group;
-          groupCounts[nurses75[0]]['75'][group] = (groupCounts[nurses75[0]]['75'][group] || 0) + 1;
-          next75GroupIndex = (next75GroupIndex + 1) % baseAvailable75Groups.length;
+          const id = nurses75[0];
+          const allowed = available75Groups.filter((g: string) => !isDayRestricted(id, g));
+          if (allowed.length > 0) {
+            let group = available75Groups[next75GroupIndex % available75Groups.length];
+            if (!allowed.includes(group)) group = allowed[0]; // 輪替組被限制 → 改用可排組
+            schedule.scheduleByNurse[id].groups[dayIndex] = group;
+            groupCounts[id]['75'][group] = (groupCounts[id]['75'][group] || 0) + 1;
+            next75GroupIndex = (next75GroupIndex + 1) % baseAvailable75Groups.length;
+          }
+          // 無可排組別 → 留空白（保底B）
         } else {
           const assignedNurses75 = new Set<string>();
           available75Groups.forEach((group: string) => {
             let bestNurse: string | null = null;
             let minCount = Infinity;
             nurses75.forEach(id => {
-              if (!assignedNurses75.has(id)) {
+              if (!assignedNurses75.has(id) && !isDayRestricted(id, group)) {
                 const count = groupCounts[id]?.['75']?.[group] || 0;
                 if (count < minCount) { minCount = count; bestNurse = id; }
               }
@@ -411,8 +420,10 @@ export class GroupAssignerService {
           });
           nurses75.forEach(id => {
             if (!assignedNurses75.has(id)) {
-              let minCount = Infinity, minGroup = available75Groups[0];
-              available75Groups.forEach((g: string) => {
+              const allowed = available75Groups.filter((g: string) => !isDayRestricted(id, g));
+              if (allowed.length === 0) return; // 留空白（保底B）
+              let minCount = Infinity, minGroup = allowed[0];
+              allowed.forEach((g: string) => {
                 const c = groupCounts[id]?.['75']?.[g] || 0;
                 if (c < minCount) { minCount = c; minGroup = g; }
               });
@@ -447,7 +458,7 @@ export class GroupAssignerService {
             .sort((a, b) => a.score - b.score);
 
           hospitalGroupsToday.forEach((group: string) => {
-            const candidate = hospitalCandidates.find(c => !assignedNurses74.has(c.nurseId));
+            const candidate = hospitalCandidates.find(c => !assignedNurses74.has(c.nurseId) && !isDayRestricted(c.nurseId, group));
             if (candidate) {
               schedule.scheduleByNurse[candidate.nurseId].groups[dayIndex] = group;
               groupCounts[candidate.nurseId]['74'][group] = (groupCounts[candidate.nurseId]['74'][group] || 0) + 1;
@@ -466,6 +477,7 @@ export class GroupAssignerService {
           const pairs: { nurseId: string; group: string; count: number }[] = [];
           rem74Nurses.forEach(id => {
             rem74Groups.forEach((g: string) => {
+              if (isDayRestricted(id, g)) return; // 白班限制：跳過該護理師被排除的組
               pairs.push({ nurseId: id, group: g, count: groupCounts[id]?.['74']?.[g] || 0 });
             });
           });

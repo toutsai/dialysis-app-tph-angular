@@ -501,6 +501,32 @@
   background: #5a6268;
 }
 
+/* 部分工時限制：白/夜標籤與區塊 */
+.shift-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  color: #fff;
+}
+.shift-label.day { background: #0d6efd; }
+.shift-label.night { background: #6f42c1; }
+.group-tag.day { background: #0d6efd; }
+.group-tag.night { background: #6f42c1; }
+.restriction-group-block {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  width: 100%;
+}
+.restriction-group-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #495057;
+  min-width: 64px;
+}
+
 .add-restriction-form {
   display: flex;
   align-items: center;
