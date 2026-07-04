@@ -79,7 +79,7 @@ export class UserManagementComponent implements OnInit {
   isEditing = signal(false);
   userToEdit = signal<UserRecord | null>(null);
   selectedRole = signal('all');
-  sortBy = signal('name');
+  sortBy = signal('username');
   sortOrder = signal<'asc' | 'desc'>('asc');
   isSubmitting = signal(false);
   isDeletingUser = signal<string | null>(null);
@@ -145,6 +145,12 @@ export class UserManagementComponent implements OnInit {
       if (this.sortBy().includes('At') && aValue && bValue) {
         aValue = aValue.toDate ? aValue.toDate() : new Date(aValue);
         bValue = bValue.toDate ? bValue.toDate() : new Date(bValue);
+      }
+      // 帳號(員工編號)：以數字大小比較，避免長度不一時字串排序不準
+      if (this.sortBy() === 'username') {
+        const na = parseInt(aValue ?? '', 10);
+        const nb = parseInt(bValue ?? '', 10);
+        if (!isNaN(na) && !isNaN(nb)) { aValue = na; bValue = nb; }
       }
       if (typeof aValue === 'string' && typeof bValue === 'string') {
         aValue = aValue.toLowerCase();
