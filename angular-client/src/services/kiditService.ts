@@ -16,7 +16,7 @@ export const kiditService = {
   },
 
   async updateLogEvents(dateStr: string, events: any[]): Promise<void> {
-    await localApi.patch(`${ROUTE}/${dateStr}`, { events });
+    await localApi.patch(`${ROUTE}/${dateStr}/events`, { events });
   },
 
   async fetchPatientMasterRecord(patientId: string): Promise<any> {
@@ -43,7 +43,7 @@ export const kiditService = {
 
       events[eventIndex][fieldKey] = data;
 
-      await localApi.patch(`${ROUTE}/${dateStr}`, { events });
+      await localApi.patch(`${ROUTE}/${dateStr}/events`, { events });
       return true;
     } catch (e) {
       console.error('Update event KiDit data failed: ', e);
