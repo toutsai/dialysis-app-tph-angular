@@ -51,13 +51,22 @@ export class EducationDashboardComponent implements OnInit {
   readonly filteredRows = computed(() => {
     const term = this.search().trim().toLowerCase();
     const inc = this.incompleteOnly();
-    return this.rows().filter((r) => {
+    const list = this.rows().filter((r) => {
       if (inc && r.passedCount >= r.total) return false;
       if (!term) return true;
       return (
         (r.patientName || '').toLowerCase().includes(term) ||
         (r.medicalRecordNumber || '').toLowerCase().includes(term)
       );
+    });
+    // 依初透日「近→遠」（新到舊）排序，無初透日者排最後
+    return [...list].sort((a, b) => {
+      const da = a.firstDialysisDate || '';
+      const db = b.firstDialysisDate || '';
+      if (!da && !db) return 0;
+      if (!da) return 1;
+      if (!db) return -1;
+      return db.localeCompare(da);
     });
   });
 

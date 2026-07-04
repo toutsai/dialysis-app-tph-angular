@@ -51,10 +51,10 @@
             <th>病人</th>
             <th>身分</th>
             <th>初透日</th>
+            <th>檢視／編輯</th>
             <th class="col-prog">已衛教</th>
             <th class="col-prog">回示教通過</th>
             <th>最後更新</th>
-            <th>操作</th>
           </tr>
         </thead>
         <tbody>
@@ -71,6 +71,11 @@
                 <span class="status-badge" [attr.data-status]="r.status">{{ statusLabel(r.status) }}</span>
               </td>
               <td>{{ formatDate(r.firstDialysisDate) }}</td>
+              <td>
+                <button class="btn-open" (click)="openRecord(r)">
+                  <i class="fas fa-chalkboard-teacher"></i> {{ canEdit() ? '檢視／編輯' : '檢視' }}
+                </button>
+              </td>
               <td class="col-prog">
                 <div class="prog">
                   <div class="prog-bar"><span class="fill educ" [style.width.%]="pct(r.educatedCount, r.total)"></span></div>
@@ -84,11 +89,6 @@
                 </div>
               </td>
               <td class="col-updated">{{ formatDate(r.lastUpdated) }}</td>
-              <td>
-                <button class="btn-open" (click)="openRecord(r)">
-                  <i class="fas fa-chalkboard-teacher"></i> {{ canEdit() ? '檢視／編輯' : '檢視' }}
-                </button>
-              </td>
             </tr>
           }
         </tbody>
