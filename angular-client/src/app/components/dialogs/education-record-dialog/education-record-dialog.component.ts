@@ -164,6 +164,11 @@ export class EducationRecordDialogComponent implements OnInit {
     return typeof v === 'string' && v.startsWith('data:image');
   }
 
+  /** 有透析日期但主題或被衛教者簽名尚未填 → 需提醒補齊（整列警示底色） */
+  needsAttention(s: EducationSession): boolean {
+    return !!(s.dialysisDate && (!s.topic || !s.signature));
+  }
+
   /** 開啟手寫簽名板（平板讓病人簽名） */
   openSignPad(session: EducationSession): void {
     if (!this.canEdit) return;

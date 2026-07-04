@@ -44,7 +44,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let s of sessions()">
+          <tr *ngFor="let s of sessions()" [class.row-alert]="needsAttention(s)">
             <td class="col-idx">{{ s.index }}</td>
             <td class="col-date">
               <input type="date" [(ngModel)]="s.dialysisDate" [disabled]="!canEdit" />

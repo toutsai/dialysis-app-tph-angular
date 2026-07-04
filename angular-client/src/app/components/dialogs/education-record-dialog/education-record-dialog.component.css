@@ -109,6 +109,14 @@
 }
 .edu-table input:focus { border-color: #2980b9; outline: none; }
 .edu-table input:disabled { background: #f5f6f7; color: #555; }
+
+/* 有透析日期但主題或簽名未填 → 整列警示底色提醒補齊 */
+.edu-table tbody tr.row-alert td { background: #fff3cd; }
+.edu-table tbody tr.row-alert td.col-idx {
+  box-shadow: inset 4px 0 0 #f59e0b;
+  color: #b45309;
+  font-weight: 700;
+}
 .topic-select {
   width: 100%;
   box-sizing: border-box;
