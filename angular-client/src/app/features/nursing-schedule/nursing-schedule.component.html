@@ -4,6 +4,17 @@
       <h1 class="page-title">護理班表與職責</h1>
       <p class="page-description">原始Excel班表請刪除第2、3、5列後，再執行上傳功能。</p>
     </div>
+    <div class="header-actions">
+      <!-- 組別配置按鈕（移至標題列右側，跨頁籤常駐） -->
+      <button
+        *ngIf="!isGroupEditMode() && !isShiftEditMode()"
+        (click)="showGroupConfigDialog.set(true)"
+        class="btn-config"
+        title="設定護理師組別分配規則"
+      >
+        <i class="fas fa-cog"></i> 組別配置
+      </button>
+    </div>
   </header>
 
   <!-- 頁籤導覽列 -->
@@ -191,16 +202,6 @@
               </button>
               <button (click)="cancelShiftEditMode()" class="btn-secondary">取消</button>
             </ng-container>
-
-            <!-- 組別配置按鈕 -->
-            <button
-              *ngIf="!isGroupEditMode() && !isShiftEditMode()"
-              (click)="showGroupConfigDialog.set(true)"
-              class="btn-config"
-              title="設定護理師組別分配規則"
-            >
-              <i class="fas fa-cog"></i> 組別配置
-            </button>
 
             <!-- 分組編輯按鈕 -->
             <button
