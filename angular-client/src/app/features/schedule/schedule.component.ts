@@ -1224,6 +1224,9 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     }
     try {
       await optimizedUpdatePatient(patient.id, { crrtOrders: orderData });
+      // 立即以樂觀更新寫回本地 store，讓 ICU 醫囑單 CRRT 卡片（讀 top-level crrtOrders）
+      // 即時反映最新脫水速率等醫囑，不必等 forceRefresh 或重開視窗。
+      this.patientStore.updatePatientInStore(patient.id, { crrtOrders: orderData } as any);
       await this.patientStore.forceRefreshPatients();
       this.isCRRTOrderModalVisible.set(false);
       this.showAlert('儲存成功', `已更新病人 ${patient.name} 的CRRT醫囑。`);
