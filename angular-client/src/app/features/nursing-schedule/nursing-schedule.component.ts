@@ -665,13 +665,16 @@ export class NursingScheduleComponent implements OnInit {
       return;
     }
 
-    const headers = [
-      '員工編號',
-      '護理師',
-      ...currentWeek.days.map(
-        (day: any) => `${day.displayText} (${day.weekday})`
-      ),
-    ];
+    const dayCount = currentWeek.days.length;
+    const totalCols = 2 + dayCount * 2;
+
+    // 兩層表頭：日期(合併跨2欄) + 班別/組別
+    const dayHeaderRow: string[] = ['員工編號', '護理師'];
+    const subHeaderRow: string[] = ['', ''];
+    currentWeek.days.forEach((day: any) => {
+      dayHeaderRow.push(`${day.displayText} (${day.weekday})`, '');
+      subHeaderRow.push('班別', '組別');
+    });
 
     const dataRows = Object.entries(nursesToExport).map(
       ([nurseId, nurseData]: [string, any]) => {
@@ -681,7 +684,7 @@ export class NursingScheduleComponent implements OnInit {
         ];
         currentWeek.days.forEach((dayInfo: any) => {
           if (!dayInfo.isCurrentMonth) {
-            row.push('-');
+            row.push('-', '-');
             return;
           }
           const dayIndex = dayInfo.dayIndex;
@@ -689,11 +692,10 @@ export class NursingScheduleComponent implements OnInit {
           const group = nurseData.groups?.[dayIndex] || '';
           const isStandby = this.isStandby75(nurseId, dayIndex);
 
-          let cellText = shift;
-          if (group) cellText += ` ${group}組`;
-          if (isStandby) cellText += ' ⭐';
+          let shiftCell = shift;
+          if (isStandby) shiftCell += ' ⭐';
 
-          row.push(cellText.trim() || '-');
+          row.push(shiftCell.trim() || '-', group || '-');
         });
         return row;
       }
@@ -704,17 +706,22 @@ export class NursingScheduleComponent implements OnInit {
     const titleRow = [excelTitle];
     const emptyRow: string[] = [];
 
-    const dataForSheet = [titleRow, emptyRow, headers, ...dataRows];
+    const dataForSheet = [titleRow, emptyRow, dayHeaderRow, subHeaderRow, ...dataRows];
 
     try {
       const worksheet = XLSX.utils.aoa_to_sheet(dataForSheet);
 
-      const merge = {
-        s: { r: 0, c: 0 },
-        e: { r: 0, c: headers.length - 1 },
-      };
       if (!worksheet['!merges']) worksheet['!merges'] = [];
-      worksheet['!merges'].push(merge);
+      // 標題列合併
+      worksheet['!merges'].push({ s: { r: 0, c: 0 }, e: { r: 0, c: totalCols - 1 } });
+      // 員工編號 / 護理師 垂直合併(表頭兩列)
+      worksheet['!merges'].push({ s: { r: 2, c: 0 }, e: { r: 3, c: 0 } });
+      worksheet['!merges'].push({ s: { r: 2, c: 1 }, e: { r: 3, c: 1 } });
+      // 每個日期水平合併跨「班別/組別」兩欄
+      currentWeek.days.forEach((_: any, i: number) => {
+        const c = 2 + i * 2;
+        worksheet['!merges'].push({ s: { r: 2, c }, e: { r: 2, c: c + 1 } });
+      });
 
       if (worksheet['A1']) {
         worksheet['A1'].s = {
