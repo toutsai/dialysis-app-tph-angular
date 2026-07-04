@@ -1068,10 +1068,8 @@ export class StatsComponent implements OnInit, OnDestroy {
       to: { goalDate: dateStr, bedNum: toBedNum, shiftCode: toShiftCode },
     };
     this.isExceptionDialogVisible = true;
-    this.notificationService.createGlobalNotification(
-      '非當日換班/換床，已轉為調班申請，請確認後送出。',
-      'info' as any,
-    );
+    // 非當日換班/換床轉調班申請時不再發全院即時通知（調班視窗開啟已是足夠回饋，
+    // 廣播全院反成噪音）；正式送出後仍會有「成功新增調班申請」通知。
   }
 
   /** 關閉調班視窗時一併清除預填資料，避免下次手動開啟沿用舊資料 */
