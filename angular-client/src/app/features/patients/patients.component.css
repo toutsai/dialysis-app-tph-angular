@@ -399,6 +399,14 @@
 .status-icon-paused.status-off,
 .status-icon-blood.status-off,
 .status-icon-do-not-move.status-off {
+  color: #cbd5e1;
+  opacity: 0.6;
+}
+/* 住院列(淡紅底)：藍灰在紅底上顯髒，改更淺灰讓啟用圖示對比更清楚 */
+.status-ipd .status-icon-first.status-off,
+.status-ipd .status-icon-paused.status-off,
+.status-ipd .status-icon-blood.status-off,
+.status-ipd .status-icon-do-not-move.status-off {
   color: #edf0f3;
   opacity: 0.85;
 }
