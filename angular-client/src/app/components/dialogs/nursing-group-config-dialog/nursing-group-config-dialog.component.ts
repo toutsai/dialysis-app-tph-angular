@@ -96,9 +96,11 @@ export class NursingGroupConfigDialogComponent implements OnChanges, OnInit {
     return this.userDirectory.allUsers()
       .filter((user: DirectoryUser) => user.title === '護理師' || user.title === '護理師組長')
       .sort((a: DirectoryUser, b: DirectoryUser) => {
-        const nameA = a.name || '';
-        const nameB = b.name || '';
-        return nameA.localeCompare(nameB, 'zh-TW');
+        // 依員工編號(username)由小到大；非數字則以字串後備比較
+        const na = parseInt(a.username || '', 10);
+        const nb = parseInt(b.username || '', 10);
+        if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+        return (a.username || '').localeCompare(b.username || '', 'zh-TW');
       });
   }
 
