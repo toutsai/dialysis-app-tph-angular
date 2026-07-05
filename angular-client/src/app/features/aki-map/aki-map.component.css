@@ -29,6 +29,15 @@
   color: #78909c;
   font-size: 0.8rem;
 }
+.title-block { display: flex; flex-direction: column; gap: 0.15rem; }
+.title-block .source-hint {
+  font-size: 0.72rem;
+  color: #90a4ae;
+}
+.title-block .source-hint b {
+  color: #607d8b;
+  font-weight: 600;
+}
 .toolbar {
   display: flex;
   align-items: flex-end;
