@@ -34,6 +34,13 @@ interface WardGroup {
   counts: Partial<Record<AkiCategory, number>>;
 }
 
+interface WardStat {
+  ward: string;
+  total: number;
+  hit: number;
+  pct: number;
+}
+
 // 護理站顯示規則（依院方要求）：
 //   1) 第一/二/三加護病房最前  2) 5–7 樓 A–D 護理站  3) 其他(如 9A 急性精神科)  4) GC 最後
 //   隱藏：單托嬰、嬰兒病床
@@ -44,6 +51,9 @@ function wardCode(ward: string): string {
 function isHiddenWard(ward: string): boolean {
   const code = wardCode(ward);
   return code === 'DBBB' || code === 'DBBP' || ward.includes('單托嬰') || ward.includes('嬰兒病床');
+}
+function isIcuWard(ward: string): boolean {
+  return ward.includes('加護') || wardCode(ward).startsWith('DBI');
 }
 function wardSortKey(ward: string): [number, number, number] {
   const code = wardCode(ward);
@@ -159,23 +169,35 @@ export class AkiMapComponent implements OnInit {
 
   readonly watchList = computed(() => this.data()?.watchList || []);
 
-  // AKI 比例前三護理站：AKI(1-3期) 佔該站在院人數比例，取前三高（分母需 ≥5 以免小病房失真）
-  readonly topAkiWards = computed(() => {
-    const map = new Map<string, { ward: string; total: number; aki: number }>();
+  // 比例統計標題：跟隨上方篩選器（Stage 3 比例 / AKI 比例 …）
+  readonly filterRatioLabel = computed(() => {
+    const cat = this.filterCategory();
+    return cat === 'all' || cat === 'aki' ? 'AKI 比例' : `${this.label(cat as AkiCategory)} 比例`;
+  });
+
+  // 依目前篩選器計算各站命中比例，分「加護」與「一般病房」兩組各取前2（分母 ≥5 以免小病房失真）
+  readonly topWardStats = computed<{ icu: WardStat[]; ward: WardStat[] }>(() => {
+    const cat = this.filterCategory();
+    const hit = (p: AkiPatient) =>
+      cat === 'all' || cat === 'aki' ? p.stage != null && p.stage >= 1 : p.category === cat;
+    const map = new Map<string, { ward: string; total: number; hit: number }>();
     for (const p of this.visiblePatients()) {
       let e = map.get(p.ward);
       if (!e) {
-        e = { ward: p.ward, total: 0, aki: 0 };
+        e = { ward: p.ward, total: 0, hit: 0 };
         map.set(p.ward, e);
       }
       e.total++;
-      if (p.stage != null && p.stage >= 1) e.aki++;
+      if (hit(p)) e.hit++;
     }
-    return [...map.values()]
-      .filter((e) => e.aki >= 1 && e.total >= 5)
-      .map((e) => ({ ...e, pct: Math.round((e.aki / e.total) * 100) }))
-      .sort((a, b) => b.pct - a.pct || b.aki - a.aki)
-      .slice(0, 3);
+    const all = [...map.values()]
+      .filter((e) => e.hit >= 1 && e.total >= 5)
+      .map((e) => ({ ...e, pct: Math.round((e.hit / e.total) * 100) }))
+      .sort((a, b) => b.pct - a.pct || b.hit - a.hit);
+    return {
+      icu: all.filter((e) => isIcuWard(e.ward)).slice(0, 2),
+      ward: all.filter((e) => !isIcuWard(e.ward)).slice(0, 2),
+    };
   });
 
   ngOnInit(): void {

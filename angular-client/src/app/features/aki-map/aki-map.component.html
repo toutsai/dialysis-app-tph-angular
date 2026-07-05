@@ -98,18 +98,37 @@
       }
 
       <section class="aki-stats">
-        <h2>AKI 比例前三護理站</h2>
-        @if (topAkiWards().length) {
-          @for (w of topAkiWards(); track w.ward) {
-            <div class="stat-row">
-              <span class="stat-ward">{{ wardLabel(w.ward) }}</span>
-              <div class="stat-bar"><div class="stat-fill" [style.width.%]="w.pct"></div></div>
-              <span class="stat-val">{{ w.pct }}% <small>{{ w.aki }}/{{ w.total }}</small></span>
+        <h2>{{ filterRatioLabel() }} · 加護前2 ＋ 病房前2</h2>
+        <div class="stat-groups">
+          <div class="stat-group">
+            <div class="stat-group-label">加護病房</div>
+            <div class="stat-cards">
+              @for (w of topWardStats().icu; track w.ward) {
+                <div class="stat-card">
+                  <div class="sc-ward">{{ wardLabel(w.ward) }}</div>
+                  <div class="sc-pct">{{ w.pct }}%</div>
+                  <div class="sc-bar"><div class="sc-fill" [style.width.%]="w.pct"></div></div>
+                  <div class="sc-n">{{ w.hit }}/{{ w.total }}</div>
+                </div>
+              }
+              @if (!topWardStats().icu.length) { <div class="stat-empty">無資料</div> }
             </div>
-          }
-        } @else {
-          <div class="stat-empty">無 AKI 資料</div>
-        }
+          </div>
+          <div class="stat-group">
+            <div class="stat-group-label">一般病房</div>
+            <div class="stat-cards">
+              @for (w of topWardStats().ward; track w.ward) {
+                <div class="stat-card">
+                  <div class="sc-ward">{{ wardLabel(w.ward) }}</div>
+                  <div class="sc-pct">{{ w.pct }}%</div>
+                  <div class="sc-bar"><div class="sc-fill" [style.width.%]="w.pct"></div></div>
+                  <div class="sc-n">{{ w.hit }}/{{ w.total }}</div>
+                </div>
+              }
+              @if (!topWardStats().ward.length) { <div class="stat-empty">無資料</div> }
+            </div>
+          </div>
+        </div>
       </section>
     </div>
 

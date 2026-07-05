@@ -153,7 +153,7 @@
   margin-bottom: 1rem;
 }
 .watch.compact {
-  flex: 1 1 22rem;
+  flex: 1 1 16rem;
   min-width: 0;
   max-height: 9rem;
   overflow-y: auto;
@@ -163,7 +163,7 @@
 .watch.compact .watch-item { font-size: 0.75rem; padding: 0.25rem 0.5rem; }
 
 .aki-stats {
-  flex: 0 0 19rem;
+  flex: 1 1 30rem;
   border: 1px solid #eceff1;
   border-radius: 8px;
   background: #fff;
@@ -174,41 +174,61 @@
   font-size: 0.9rem;
   color: #c62828;
 }
-.stat-row {
+/* 橫向：加護組 / 一般病房組 並排，各組內卡片橫排 */
+.stat-groups {
   display: flex;
-  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+.stat-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.stat-group-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #607d8b;
+}
+.stat-cards {
+  display: flex;
   gap: 0.5rem;
-  margin-bottom: 0.5rem;
 }
-.stat-ward {
-  flex: 0 0 4.5rem;
-  font-size: 0.8rem;
+.stat-card {
+  flex: 0 0 auto;
+  min-width: 4.6rem;
+  border: 1px solid #eceff1;
+  border-radius: 6px;
+  padding: 0.35rem 0.5rem;
+  text-align: center;
+  background: #fafbfc;
+}
+.sc-ward {
+  font-size: 0.72rem;
   font-weight: 600;
+  color: #37474f;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
-.stat-bar {
-  flex: 1 1 auto;
-  height: 0.7rem;
+.sc-pct {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #c62828;
+  line-height: 1.2;
+}
+.sc-bar {
+  height: 0.35rem;
   background: #eceff1;
-  border-radius: 4px;
+  border-radius: 3px;
   overflow: hidden;
+  margin: 0.2rem 0;
 }
-.stat-fill {
+.sc-fill {
   height: 100%;
   background: linear-gradient(90deg, #ef9a9a, #d32f2f);
-  border-radius: 4px;
+  border-radius: 3px;
 }
-.stat-val {
-  flex: 0 0 auto;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: #c62828;
-  white-space: nowrap;
-}
-.stat-val small { color: #90a4ae; font-weight: 400; margin-left: 0.15rem; }
-.stat-empty { color: #90a4ae; font-size: 0.8rem; }
+.sc-n { font-size: 0.68rem; color: #90a4ae; }
+.stat-empty { color: #b0bec5; font-size: 0.78rem; align-self: center; padding: 0.5rem 0; }
 
 /* 護理站 */
 .wards {
