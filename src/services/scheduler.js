@@ -380,6 +380,13 @@ async function applyScheduledPatientUpdates() {
         switch (changeType) {
           case 'UPDATE_STATUS':
           case 'UPDATE_MODE':
+            // 內容為空則明確失敗（避免像空 change_data 一樣假成功、實際沒改）
+            if (changeType === 'UPDATE_STATUS' && !payload.status) {
+              throw new Error('UPDATE_STATUS 缺少目標 status（change_data 為空）')
+            }
+            if (changeType === 'UPDATE_MODE' && !payload.mode) {
+              throw new Error('UPDATE_MODE 缺少 mode（change_data 為空）')
+            }
             // 更新病人屬性
             // 分離 DB 欄位與 JSON 欄位 (mode, freq 在 dialysis_orders 中)
             // 先擷取變更前的病人資料，供工作日誌/歷史比對

@@ -1836,7 +1836,9 @@ router.get('/scheduled-updates', authenticate, (req, res) => {
  */
 router.post('/scheduled-updates', ...isContributor, async (req, res) => {
   try {
-    const { patientId, patientName, changeType, changeData, effectiveDate, notes } = req.body
+    const { patientId, patientName, changeType, effectiveDate, notes } = req.body
+    // 前端（Angular 預約變更對話框）以 `payload` 傳送變更內容，舊路徑用 `changeData`；兩者皆相容
+    const changeData = req.body.changeData ?? req.body.payload
 
     const id = uuidv4()
     const db = getDatabase()
@@ -1898,7 +1900,9 @@ router.post('/scheduled-updates', ...isContributor, async (req, res) => {
 router.put('/scheduled-updates/:id', ...isEditor, async (req, res) => {
   try {
     const { id } = req.params
-    const { changeData, effectiveDate, notes } = req.body
+    const { effectiveDate, notes } = req.body
+    // 前端以 `payload` 傳送變更內容，舊路徑用 `changeData`；兩者皆相容
+    const changeData = req.body.changeData ?? req.body.payload
 
     const db = getDatabase()
 
