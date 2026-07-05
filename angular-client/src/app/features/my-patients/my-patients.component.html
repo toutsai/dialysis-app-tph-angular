@@ -32,15 +32,16 @@
       <span>智慧儀表板</span>
     </div>
     <div class="dashboard-quickbar-actions">
-      <button
+      <a
         *ngFor="let link of getDashboardQuickLinks()"
         class="dashboard-quickbar-chip"
-        type="button"
-        (click)="openBedDashboard(link.patient, link.shiftCode)"
+        [href]="bedDashboardUrl(link.patient, link.shiftCode)"
+        target="_blank"
+        rel="noopener"
         [title]="'開啟 ' + link.label + ' 智慧儀表板'"
       >
         {{ link.label }}
-      </button>
+      </a>
     </div>
   </div>
 
@@ -87,13 +88,15 @@
               <span class="patient-name">{{ patient.name }}</span>
             </div>
             <div class="card-header-actions">
-              <button
+              <a
                 class="btn-icon btn-dashboard-icon"
                 title="床邊智慧儀表板"
-                (click)="openBedDashboard(patient, shiftCode)"
+                [href]="bedDashboardUrl(patient, shiftCode)"
+                target="_blank"
+                rel="noopener"
               >
                 <i class="fas fa-desktop"></i>
-              </button>
+              </a>
               <button
                 class="btn-icon btn-order-icon"
                 title="編輯醫囑"

@@ -91,6 +91,9 @@
 }
 .dashboard-quickbar-chip {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
   border: 1px solid #99d5ca;
   background: #f0fdfa;
   color: #115e59;
@@ -279,6 +282,7 @@
 }
 .btn-dashboard-icon {
   color: #0f766e;
+  text-decoration: none;
 }
 .btn-dashboard-icon:hover {
   background-color: #ccfbf1;

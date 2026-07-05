@@ -770,10 +770,13 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
     }
   }
 
-  openBedDashboard(patientFromList: MyPatientItem, shiftCode: string): void {
+  // 產生床邊儀表板網址。模板以真正的 <a target="_blank"> 開新分頁，
+  // 由使用者真實點擊原生開啟，避免 window.open 被瀏覽器彈窗封鎖。
+  bedDashboardUrl(patientFromList: MyPatientItem, shiftCode: string): string {
+    if (!patientFromList?.id) return '';
     const bedKey = patientFromList.id.replace(/-(early|noon|late)$/i, '');
     const dashboardShift = shiftCode.startsWith('noon') ? 'noon' : shiftCode;
-    const url = this.router.serializeUrl(
+    return this.router.serializeUrl(
       this.router.createUrlTree(['/bed-dashboard', bedKey], {
         queryParams: {
           date: this.selectedDate(),
@@ -781,14 +784,6 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
         },
       }),
     );
-    // 以錨點點擊開新分頁：比 window.open(...,'noopener') 更不易被瀏覽器彈窗封鎖。
-    const a = document.createElement('a');
-    a.href = url;
-    a.target = '_blank';
-    a.rel = 'noopener';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
   }
 
   closeOrderModal(): void {
