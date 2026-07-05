@@ -185,7 +185,19 @@
           }
           <span class="care-count">共 {{ currentCareItems().length }} 位</span>
         </div>
-        <button class="btn upload" [disabled]="!currentCareItems().length" (click)="exportCareExcel()">匯出 Excel</button>
+        <div class="care-actions">
+          @if (isDischargedView()) {
+            <label class="field">
+              <span>出院區間</span>
+              <select [ngModel]="dischargedDays()" (ngModelChange)="dischargedDays.set($event)">
+                @for (n of dayOptions; track n) {
+                  <option [ngValue]="n">{{ n ? '最近 ' + n + ' 天' : '全部' }}</option>
+                }
+              </select>
+            </label>
+          }
+          <button class="btn upload" [disabled]="!currentCareItems().length" (click)="exportCareExcel()">匯出 Excel</button>
+        </div>
       </div>
 
       @if (currentCareLoading()) {

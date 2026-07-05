@@ -110,10 +110,29 @@ export class AkiMapComponent implements OnInit {
   readonly dischargedItems = signal<AkiCareItem[]>([]);
   readonly dischargedLoading = signal(false);
   readonly dischargedLoaded = signal(false);
+  readonly dischargedLatestDate = signal<string | null>(null);
+  // 只看最近 N 天出院（0 = 全部）
+  readonly dischargedDays = signal<number>(30);
+  readonly dayOptions = [7, 14, 30, 0];
+
+  // 依「最後在院日距最新資料日的天數」過濾出院名單
+  readonly filteredDischargedItems = computed(() => {
+    const n = this.dischargedDays();
+    const items = this.dischargedItems();
+    const ref = this.dischargedLatestDate();
+    if (!n || !ref) return items;
+    const refT = new Date(ref).getTime();
+    return items.filter((it) => {
+      const d = it.dischargeDate || it.lastSeenDate;
+      if (!d) return true;
+      const days = (refT - new Date(d).getTime()) / 86400000;
+      return days <= n;
+    });
+  });
 
   readonly isDischargedView = computed(() => this.activeTab() === 'discharged');
   readonly currentCareItems = computed(() =>
-    this.isDischargedView() ? this.dischargedItems() : this.careItems(),
+    this.isDischargedView() ? this.filteredDischargedItems() : this.careItems(),
   );
   readonly currentCareLoading = computed(() =>
     this.isDischargedView() ? this.dischargedLoading() : this.careLoading(),
@@ -273,6 +292,7 @@ export class AkiMapComponent implements OnInit {
         }
       }
       this.dischargedItems.set(res.items);
+      this.dischargedLatestDate.set(res.latestDate);
       this.dischargedLoaded.set(true);
     } catch (e: any) {
       this.message.set({ type: 'error', text: e?.error?.message || e?.message || '載入出院關懷名單失敗' });

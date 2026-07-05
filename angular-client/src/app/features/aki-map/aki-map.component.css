@@ -432,6 +432,7 @@
   flex-wrap: wrap;
   margin-bottom: 0.75rem;
 }
+.care-actions { display: flex; align-items: flex-end; gap: 0.6rem; }
 .care-title { font-size: 0.95rem; font-weight: 600; }
 .care-date { color: #78909c; font-weight: 400; margin-left: 0.4rem; }
 .care-count { color: #1976d2; margin-left: 0.6rem; font-weight: 400; }
