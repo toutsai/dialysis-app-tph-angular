@@ -32,8 +32,11 @@ export function shouldAdministerOnDate(note, targetDate) {
   const dateObj = new Date(`${targetDate}T00:00:00Z`)
   const targetDayOfWeek = dateObj.getUTCDay() || 7
   const year = dateObj.getUTCFullYear()
-  // 當月第幾週：第 1 天起算，每 7 天一週（1-7=第1週, 8-14=第2週 …, 29-31=第5週）。
-  const weekOfMonth = Math.floor((dateObj.getUTCDate() - 1) / 7) + 1
+  // 當月第幾週：採「日曆週、週日為一週之始」，含 1 號之週為第 1 週。
+  // firstWeekday = 當月 1 號的星期（週日=0）。例：2026-07 的 7/6(週一)、7/5(週日) 皆為第 2 週。
+  // （勿改回「每 7 天一塊」的日期分塊法：那會讓 7/6 誤判成第 1 週、Q2W 多打。）
+  const firstWeekday = new Date(Date.UTC(year, dateObj.getUTCMonth(), 1)).getUTCDay()
+  const weekOfMonth = Math.ceil((dateObj.getUTCDate() + firstWeekday) / 7)
   const normalized = normalizeFullWidth(trimmed).toUpperCase()
 
   // 分開追蹤 W 規則與日期規則。當兩者並存（如 "Q2W W4 0423 0507"），
