@@ -183,9 +183,14 @@
             AKI 關懷名單（AKI 1–3 期＋疑似 ESRD）
             @if (data()?.snapshotDate) { <span class="care-date">{{ data()!.snapshotDate }}</span> }
           }
-          <span class="care-count">共 {{ currentCareItems().length }} 位</span>
+          <span class="care-count">共 {{ displayCareItems().length }} 位</span>
         </div>
         <div class="care-actions">
+          <div class="care-filter">
+            <button class="fbtn" [class.on]="careWardFilter() === 'all'" (click)="careWardFilter.set('all')">全部</button>
+            <button class="fbtn" [class.on]="careWardFilter() === 'icu'" (click)="careWardFilter.set('icu')">加護</button>
+            <button class="fbtn" [class.on]="careWardFilter() === 'ward'" (click)="careWardFilter.set('ward')">一般病房</button>
+          </div>
           @if (isDischargedView()) {
             <label class="field">
               <span>出院區間</span>
@@ -196,7 +201,7 @@
               </select>
             </label>
           }
-          <button class="btn upload" [disabled]="!currentCareItems().length" (click)="exportCareExcel()">匯出 Excel</button>
+          <button class="btn upload" [disabled]="!displayCareItems().length" (click)="exportCareExcel()">匯出 Excel</button>
         </div>
       </div>
 
@@ -207,6 +212,8 @@
           @if (isDischargedView()) { 目前無推測出院的 AKI/ESRD 病人（需先上傳新一份留院清單才會有異動）。 }
           @else { 目前無 AKI/ESRD 病人，或尚未上傳資料。 }
         </div>
+      } @else if (!displayCareItems().length) {
+        <div class="placeholder">此病房別篩選下沒有病人。</div>
       } @else {
         <div class="care-table-wrap">
           <table class="care-table">
@@ -218,7 +225,7 @@
               </tr>
             </thead>
             <tbody>
-              @for (it of currentCareItems(); track it.mrn) {
+              @for (it of displayCareItems(); track it.mrn) {
                 <tr [class.saved]="careSavedMrn() === it.mrn">
                   <td class="mono">{{ it.mrn }}</td>
                   <td class="nowrap"><button class="link" (click)="openDetail(it.mrn)">{{ it.name }}</button></td>

@@ -134,6 +134,15 @@ export class AkiMapComponent implements OnInit {
   readonly currentCareItems = computed(() =>
     this.isDischargedView() ? this.filteredDischargedItems() : this.careItems(),
   );
+
+  // 病房別篩選：全部 / 加護 / 一般病房
+  readonly careWardFilter = signal<'all' | 'icu' | 'ward'>('all');
+  readonly displayCareItems = computed(() => {
+    const f = this.careWardFilter();
+    const items = this.currentCareItems();
+    if (f === 'all') return items;
+    return items.filter((it) => (f === 'icu' ? isIcuWard(it.ward) : !isIcuWard(it.ward)));
+  });
   readonly currentCareLoading = computed(() =>
     this.isDischargedView() ? this.dischargedLoading() : this.careLoading(),
   );
@@ -356,7 +365,7 @@ export class AkiMapComponent implements OnInit {
 
   exportCareExcel(): void {
     const discharged = this.isDischargedView();
-    const rows = this.currentCareItems().map((it) => {
+    const rows = this.displayCareItems().map((it) => {
       const row: Record<string, string> = {
         病歷號: it.mrn,
         姓名: it.name,
