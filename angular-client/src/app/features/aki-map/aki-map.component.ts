@@ -1,8 +1,10 @@
 import { Component, computed, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import * as XLSX from 'xlsx';
 import {
   AkiApiService,
+  AkiCareItem,
   AkiCategory,
   AkiMapResponse,
   AkiPatient,
@@ -84,6 +86,16 @@ export class AkiMapComponent implements OnInit {
   // 詳情面板
   readonly detail = signal<AkiPatientDetail | null>(null);
   readonly detailLoading = signal(false);
+
+  // 頁籤：map（全院地圖）/ care（關懷名單）
+  readonly activeTab = signal<'map' | 'care'>('map');
+
+  // 關懷名單
+  readonly careItems = signal<AkiCareItem[]>([]);
+  readonly careLoading = signal(false);
+  readonly careLoaded = signal(false);
+  readonly careSavedMrn = signal<string | null>(null);
+  readonly dialysisOptions = ['HD', 'SLED', 'CVVHDF', '無'];
 
   private readonly colorMap = new Map(CATEGORY_DEFS.map((d) => [d.key, d]));
 
@@ -180,10 +192,96 @@ export class AkiMapComponent implements OnInit {
   onDateChange(date: string): void {
     this.selectedDate.set(date);
     this.load(date);
+    if (this.careLoaded()) this.loadCare(date);
   }
 
   setFilter(cat: AkiCategory | 'all' | 'aki'): void {
     this.filterCategory.set(cat);
+  }
+
+  // ---------- 頁籤 / 關懷名單 ----------
+
+  switchTab(tab: 'map' | 'care'): void {
+    this.activeTab.set(tab);
+    if (tab === 'care' && !this.careLoaded()) this.loadCare();
+  }
+
+  async loadCare(date?: string): Promise<void> {
+    this.careLoading.set(true);
+    try {
+      const res = await this.akiApi.getCareList(date || this.selectedDate() || undefined);
+      // 是否透析：未填則以自動偵測到的 RRT 模式預填（HD/SLED/CVVHDF）
+      for (const it of res.items) {
+        if (!it.dialysisStatus && it.autoDialysisMode && this.dialysisOptions.includes(it.autoDialysisMode)) {
+          it.dialysisStatus = it.autoDialysisMode;
+        }
+      }
+      this.careItems.set(res.items);
+      this.careLoaded.set(true);
+    } catch (e: any) {
+      this.message.set({ type: 'error', text: e?.error?.message || e?.message || '載入關懷名單失敗' });
+    } finally {
+      this.careLoading.set(false);
+    }
+  }
+
+  async saveCareRow(item: AkiCareItem, extra: Record<string, unknown> = {}): Promise<void> {
+    try {
+      const res = await this.akiApi.saveCare(item.mrn, {
+        nephrologyConsult: item.nephrologyConsult,
+        akiCause: item.akiCause,
+        dialysisStatus: item.dialysisStatus,
+        careResult: item.careResult,
+        ...extra,
+      });
+      if (res?.care) {
+        item.carePhysician = res.care.carePhysician || '';
+        item.signedAt = res.care.signedAt || null;
+      }
+      this.careSavedMrn.set(item.mrn);
+    } catch (e: any) {
+      this.message.set({ type: 'error', text: e?.error?.message || e?.message || '儲存失敗' });
+    }
+  }
+
+  sign(item: AkiCareItem): void {
+    this.saveCareRow(item, { sign: true });
+  }
+
+  unsign(item: AkiCareItem): void {
+    this.saveCareRow(item, { clearSign: true });
+  }
+
+  stageLabel(item: { stage: number | null; category: AkiCategory }): string {
+    if (item.stage != null && item.stage >= 1) return `Stage ${item.stage}`;
+    if (item.category === 'esrd') return '疑似 ESRD';
+    return '';
+  }
+
+  exportCareExcel(): void {
+    const rows = this.careItems().map((it) => ({
+      病歷號: it.mrn,
+      姓名: it.name,
+      病床號: it.bed,
+      主治醫師: it.physician,
+      科別: it.dept,
+      'AKI Stage': this.stageLabel(it),
+      腎臟科會診: it.nephrologyConsult,
+      AKI原因: it.akiCause,
+      是否透析: it.dialysisStatus,
+      關懷結果: it.careResult,
+      關懷醫師簽核: it.carePhysician,
+      簽核時間: it.signedAt || '',
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [
+      { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 10 },
+      { wch: 14 }, { wch: 20 }, { wch: 10 }, { wch: 24 }, { wch: 12 }, { wch: 20 },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'AKI關懷名單');
+    const date = this.data()?.snapshotDate || this.selectedDate() || '';
+    XLSX.writeFile(wb, `AKI關懷名單_${date}.xlsx`);
   }
 
   private fileToBase64(file: File): Promise<string> {
@@ -211,6 +309,7 @@ export class AkiMapComponent implements OnInit {
       this.message.set({ type: 'info', text: `留院清單匯入成功：${res.patients} 位病人（快照 ${res.snapshotDate}）` });
       this.selectedDate.set(res.snapshotDate);
       await this.load(res.snapshotDate);
+      if (this.careLoaded()) await this.loadCare(res.snapshotDate);
     } catch (e: any) {
       this.message.set({ type: 'error', text: e?.error?.message || e?.message || '匯入失敗' });
     } finally {
@@ -233,6 +332,7 @@ export class AkiMapComponent implements OnInit {
         text: `CKD-AKI 明細匯入成功：新增 ${res.imported} 筆（共 ${res.total} 筆，${res.range.start}~${res.range.end}）`,
       });
       await this.load();
+      if (this.careLoaded()) await this.loadCare();
     } catch (e: any) {
       this.message.set({ type: 'error', text: e?.error?.message || e?.message || '匯入失敗' });
     } finally {

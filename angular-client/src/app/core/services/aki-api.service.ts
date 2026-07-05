@@ -94,6 +94,38 @@ export interface AkiUploadBatch {
   uploadedAt: string;
 }
 
+export interface AkiCareItem {
+  mrn: string;
+  name: string;
+  ward: string;
+  bed: string;
+  dept: string;
+  physician: string;
+  category: AkiCategory;
+  stage: number | null;
+  autoDialysisMode: string | null;
+  nephrologyConsult: string;
+  akiCause: string;
+  dialysisStatus: string;
+  careResult: string;
+  carePhysician: string;
+  signedAt: string | null;
+}
+
+export interface AkiCareListResponse {
+  snapshotDate: string | null;
+  items: AkiCareItem[];
+}
+
+export interface AkiCareSavePayload {
+  nephrologyConsult?: string;
+  akiCause?: string;
+  dialysisStatus?: string;
+  careResult?: string;
+  sign?: boolean;
+  clearSign?: boolean;
+}
+
 @Injectable({ providedIn: 'root' })
 export class AkiApiService {
   private readonly api = inject(ApiService);
@@ -110,6 +142,18 @@ export class AkiApiService {
 
   getBatches(): Promise<{ batches: AkiUploadBatch[] }> {
     return firstValueFrom(this.api.get<{ batches: AkiUploadBatch[] }>('/aki/batches'));
+  }
+
+  getCareList(date?: string): Promise<AkiCareListResponse> {
+    return firstValueFrom(
+      this.api.get<AkiCareListResponse>('/aki/care-list', date ? { date } : undefined),
+    );
+  }
+
+  saveCare(mrn: string, payload: AkiCareSavePayload) {
+    return firstValueFrom(
+      this.api.put<{ success: boolean; care: any }>(`/aki/care/${mrn}`, payload),
+    );
   }
 
   uploadInpatients(fileName: string, fileContentBase64: string, snapshotDate?: string) {

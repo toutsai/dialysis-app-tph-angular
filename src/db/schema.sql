@@ -728,6 +728,22 @@ CREATE TABLE IF NOT EXISTS aki_upload_batches (
 );
 CREATE INDEX IF NOT EXISTS idx_aki_batches_kind ON aki_upload_batches(kind, uploaded_at);
 
+-- AKI 關懷名單追蹤紀錄（每位病人一筆，以病歷號為鍵，跨快照延續）
+CREATE TABLE IF NOT EXISTS aki_care_records (
+    id TEXT PRIMARY KEY,
+    mrn TEXT NOT NULL UNIQUE,          -- 病歷號
+    nephrology_consult TEXT,           -- 腎臟科會診（已會診/未會診/會診中…自由文字）
+    aki_cause TEXT,                    -- AKI 原因
+    dialysis_status TEXT,              -- 是否透析（HD/SLED/CVVHDF/無…可手動，預填本院模式）
+    care_result TEXT,                  -- 關懷結果
+    care_physician TEXT,               -- 關懷醫師簽核（姓名）
+    signed_at TEXT,                    -- 簽核時間
+    updated_by TEXT,
+    updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+    created_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_aki_care_mrn ON aki_care_records(mrn);
+
 -- ========================================
 -- 初始化預設資料
 -- ========================================

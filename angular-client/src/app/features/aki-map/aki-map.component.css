@@ -312,3 +312,113 @@
 .dx h4 { margin: 0 0 0.25rem; font-size: 0.88rem; }
 .dx ul { margin: 0; padding-left: 1.1rem; font-size: 0.8rem; color: #455a64; }
 .dx li { margin: 0.12rem 0; }
+
+/* 頁籤 */
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid #dee2e6;
+  margin-bottom: 1rem;
+}
+.tab {
+  border: none;
+  background: none;
+  padding: 0.55rem 1rem;
+  font-size: 0.95rem;
+  color: #607d8b;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+}
+.tab:hover { color: #263238; }
+.tab.active {
+  color: #1565c0;
+  font-weight: 700;
+  border-bottom-color: #1565c0;
+}
+
+/* 關懷名單 */
+.care-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.care-title { font-size: 0.95rem; font-weight: 600; }
+.care-date { color: #78909c; font-weight: 400; margin-left: 0.4rem; }
+.care-count { color: #1976d2; margin-left: 0.6rem; font-weight: 400; }
+
+.care-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #eceff1;
+  border-radius: 8px;
+  background: #fff;
+}
+.care-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  white-space: normal;
+}
+.care-table th, .care-table td {
+  border-bottom: 1px solid #eceff1;
+  padding: 0.4rem 0.55rem;
+  text-align: left;
+  vertical-align: middle;
+}
+.care-table thead th {
+  background: #f5f7f8;
+  color: #455a64;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.care-table tr.saved td { animation: flashSaved 1s ease; }
+@keyframes flashSaved { from { background: #e8f5e9; } to { background: transparent; } }
+.care-table .mono { font-variant-numeric: tabular-nums; color: #546e7a; }
+.care-table .nowrap { white-space: nowrap; }
+
+.stage-badge {
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  white-space: nowrap;
+}
+.cell-input {
+  width: 8rem;
+  border: 1px solid #cfd8dc;
+  border-radius: 5px;
+  padding: 0.3rem 0.4rem;
+  font-size: 0.8rem;
+  color: #263238;
+}
+.cell-input.wide { width: 12rem; }
+.cell-input.narrow { width: 5.5rem; }
+.cell-input:focus { outline: none; border-color: #1976d2; }
+
+.link {
+  border: none;
+  background: none;
+  color: #1565c0;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.link:hover { text-decoration: underline; }
+.link.danger { color: #c62828; font-weight: 400; font-size: 0.72rem; margin-left: 0.4rem; }
+
+.sign-cell { min-width: 6rem; }
+.sign-btn {
+  border-color: #2e7d32;
+  color: #2e7d32;
+  font-weight: 600;
+  padding: 0.3rem 0.7rem;
+}
+.signed { color: #2e7d32; font-size: 0.78rem; line-height: 1.25; }
+.signed small { color: #78909c; }
