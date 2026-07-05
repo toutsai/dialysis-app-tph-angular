@@ -131,6 +131,12 @@
           </div>
         </div>
       </section>
+
+      <section class="aki-help-card">
+        <h2>分期計算</h2>
+        <p>依 KDIGO 標準，用上傳的門診／急診／住院 Cr 資料自動判定。</p>
+        <button class="btn help-btn" (click)="showAkiHelp.set(true)">分期計算說明</button>
+      </section>
     </div>
 
     <!-- 依護理站分區 -->
@@ -367,6 +373,50 @@
             </div>
           }
         }
+      </div>
+    </div>
+  }
+
+  <!-- AKI 分期計算說明 -->
+  @if (showAkiHelp()) {
+    <div class="detail-overlay" (click)="showAkiHelp.set(false)">
+      <div class="detail-panel help-panel" (click)="$event.stopPropagation()">
+        <div class="detail-head">
+          <h2>AKI 分期是怎麼算出來的</h2>
+          <button class="btn ghost" (click)="showAkiHelp.set(false)">關閉</button>
+        </div>
+
+        <div class="help-body">
+          <h4>資料來源</h4>
+          <p>以上傳的兩份 Excel（留院病人清單 ＋ CKD-AKI 病患明細）為準，用<b>病歷號</b>串接，彙整每位病人的肌酸酐（Cr）數值——含<b>門診、急診、住院</b>三個來源、去重後依日期排序。</p>
+
+          <h4>baseline（基準值）怎麼取</h4>
+          <ul>
+            <li><b>優先採門診（OPD）最低值</b>當基準，代表入院前的真實基礎腎功能。</li>
+            <li>沒有門診值時，取「<b>時序上較早的前值最低</b>」為基準——只跟更早的數值比，尊重時間方向，<b>避免把正在恢復的病人誤判成新發 AKI</b>。</li>
+          </ul>
+
+          <h4>KDIGO 分期（僅用 Cr）</h4>
+          <ul>
+            <li><b>Stage 1</b>：Cr 升到 baseline 的 1.5–1.9 倍，或 48 小時內上升 ≥ 0.3 mg/dL</li>
+            <li><b>Stage 2</b>：Cr 升到 baseline 的 2.0–2.9 倍</li>
+            <li><b>Stage 3</b>：Cr 升到 ≥ 3.0 倍；或 Cr ≥ 4.0 mg/dL 且伴隨急性上升；或已開始透析</li>
+            <li>取整段病程中<b>最高的分期</b>為結論</li>
+          </ul>
+
+          <h4>特別歸類</h4>
+          <ul>
+            <li><b>疑似 ESRD／慢性</b>：全段最低 Cr ≥ 4.0 → 視為慢性腎衰，不計為 AKI</li>
+            <li><b>單筆無法判定</b>：只有一筆 Cr，無前值可比對</li>
+            <li><b>無 Cr 資料</b>：該病人在區間內沒有肌酸酐數值</li>
+          </ul>
+
+          <h4>限制</h4>
+          <ul>
+            <li>只用肌酸酐、<b>沒有納入尿量</b>，會低估尿量型（oliguric）AKI。</li>
+            <li>抽血日期較稀疏時，48 小時／7 天的時間窗以「窗內」近似處理。</li>
+          </ul>
+        </div>
       </div>
     </div>
   }

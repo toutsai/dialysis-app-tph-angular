@@ -100,6 +100,9 @@ export class AkiMapComponent implements OnInit {
   // 頁籤：map（全院地圖）/ care（在院關懷名單）/ discharged（出院關懷名單）
   readonly activeTab = signal<'map' | 'care' | 'discharged'>('map');
 
+  // AKI 分期計算說明視窗
+  readonly showAkiHelp = signal(false);
+
   // 關懷名單（在院）
   readonly careItems = signal<AkiCareItem[]>([]);
   readonly careLoading = signal(false);
