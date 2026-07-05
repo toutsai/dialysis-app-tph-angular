@@ -781,7 +781,14 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
         },
       }),
     );
-    window.open(url, '_blank', 'noopener');
+    // 以錨點點擊開新分頁：比 window.open(...,'noopener') 更不易被瀏覽器彈窗封鎖。
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   }
 
   closeOrderModal(): void {
