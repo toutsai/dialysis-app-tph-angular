@@ -97,14 +97,27 @@ export class AkiMapComponent implements OnInit {
   readonly detail = signal<AkiPatientDetail | null>(null);
   readonly detailLoading = signal(false);
 
-  // 頁籤：map（全院地圖）/ care（關懷名單）
-  readonly activeTab = signal<'map' | 'care'>('map');
+  // 頁籤：map（全院地圖）/ care（在院關懷名單）/ discharged（出院關懷名單）
+  readonly activeTab = signal<'map' | 'care' | 'discharged'>('map');
 
-  // 關懷名單
+  // 關懷名單（在院）
   readonly careItems = signal<AkiCareItem[]>([]);
   readonly careLoading = signal(false);
   readonly careLoaded = signal(false);
   readonly careSavedMrn = signal<string | null>(null);
+
+  // 出院關懷名單
+  readonly dischargedItems = signal<AkiCareItem[]>([]);
+  readonly dischargedLoading = signal(false);
+  readonly dischargedLoaded = signal(false);
+
+  readonly isDischargedView = computed(() => this.activeTab() === 'discharged');
+  readonly currentCareItems = computed(() =>
+    this.isDischargedView() ? this.dischargedItems() : this.careItems(),
+  );
+  readonly currentCareLoading = computed(() =>
+    this.isDischargedView() ? this.dischargedLoading() : this.careLoading(),
+  );
   readonly dialysisOptions = ['HD', 'SLED', 'CVVHDF', 'PD', 'Hospice', '無'];
   readonly nephrologyOptions = ['已會診', '會診中', '未會診'];
   readonly ckdOptions = ['無', 'G1', 'G2', 'G3a', 'G3b', 'G4', 'G5', '未知'];
@@ -244,9 +257,28 @@ export class AkiMapComponent implements OnInit {
 
   // ---------- 頁籤 / 關懷名單 ----------
 
-  switchTab(tab: 'map' | 'care'): void {
+  switchTab(tab: 'map' | 'care' | 'discharged'): void {
     this.activeTab.set(tab);
     if (tab === 'care' && !this.careLoaded()) this.loadCare();
+    if (tab === 'discharged' && !this.dischargedLoaded()) this.loadDischarged();
+  }
+
+  async loadDischarged(): Promise<void> {
+    this.dischargedLoading.set(true);
+    try {
+      const res = await this.akiApi.getDischargedCareList();
+      for (const it of res.items) {
+        if (!it.dialysisStatus && it.autoDialysisMode && this.dialysisOptions.includes(it.autoDialysisMode)) {
+          it.dialysisStatus = it.autoDialysisMode;
+        }
+      }
+      this.dischargedItems.set(res.items);
+      this.dischargedLoaded.set(true);
+    } catch (e: any) {
+      this.message.set({ type: 'error', text: e?.error?.message || e?.message || '載入出院關懷名單失敗' });
+    } finally {
+      this.dischargedLoading.set(false);
+    }
   }
 
   async loadCare(date?: string): Promise<void> {
@@ -303,30 +335,31 @@ export class AkiMapComponent implements OnInit {
   }
 
   exportCareExcel(): void {
-    const rows = this.careItems().map((it) => ({
-      病歷號: it.mrn,
-      姓名: it.name,
-      病床號: it.bed,
-      主治醫師: it.physician,
-      科別: it.dept,
-      'AKI Stage': this.stageLabel(it),
-      CKD病史: it.ckdHistory,
-      腎臟科會診: it.nephrologyConsult,
-      AKI原因: it.akiCause,
-      是否透析: it.dialysisStatus,
-      關懷結果: it.careResult,
-      關懷醫師簽核: it.carePhysician,
-      簽核時間: it.signedAt || '',
-    }));
+    const discharged = this.isDischargedView();
+    const rows = this.currentCareItems().map((it) => {
+      const row: Record<string, string> = {
+        病歷號: it.mrn,
+        姓名: it.name,
+        病床號: it.bed,
+        主治醫師: it.physician,
+        科別: it.dept,
+        'AKI Stage': this.stageLabel(it),
+      };
+      if (discharged) row['出院日'] = it.dischargeDate || it.lastSeenDate || '';
+      row['CKD病史'] = it.ckdHistory;
+      row['腎臟科會診'] = it.nephrologyConsult;
+      row['AKI原因'] = it.akiCause;
+      row['是否透析'] = it.dialysisStatus;
+      row['關懷結果'] = it.careResult;
+      row['關懷醫師簽核'] = it.carePhysician;
+      row['簽核時間'] = it.signedAt || '';
+      return row;
+    });
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [
-      { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 10 },
-      { wch: 10 }, { wch: 12 }, { wch: 20 }, { wch: 10 }, { wch: 24 }, { wch: 12 }, { wch: 20 },
-    ];
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'AKI關懷名單');
+    XLSX.utils.book_append_sheet(wb, ws, discharged ? '出院AKI關懷名單' : 'AKI關懷名單');
     const date = this.data()?.snapshotDate || this.selectedDate() || '';
-    XLSX.writeFile(wb, `AKI關懷名單_${date}.xlsx`);
+    XLSX.writeFile(wb, `${discharged ? '出院' : ''}AKI關懷名單_${date}.xlsx`);
   }
 
   private fileToBase64(file: File): Promise<string> {
@@ -355,6 +388,7 @@ export class AkiMapComponent implements OnInit {
       this.selectedDate.set(res.snapshotDate);
       await this.load(res.snapshotDate);
       if (this.careLoaded()) await this.loadCare(res.snapshotDate);
+      if (this.dischargedLoaded()) await this.loadDischarged();
     } catch (e: any) {
       this.message.set({ type: 'error', text: e?.error?.message || e?.message || '匯入失敗' });
     } finally {
@@ -378,6 +412,7 @@ export class AkiMapComponent implements OnInit {
       });
       await this.load();
       if (this.careLoaded()) await this.loadCare();
+      if (this.dischargedLoaded()) await this.loadDischarged();
     } catch (e: any) {
       this.message.set({ type: 'error', text: e?.error?.message || e?.message || '匯入失敗' });
     } finally {

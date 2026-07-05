@@ -316,6 +316,69 @@ router.get('/care-list', (req, res) => {
   }
 })
 
+// GET /api/aki/discharged-care-list —— 曾為 AKI/ESRD、但已不在最新留院名單（推測出院）的病人
+router.get('/discharged-care-list', (req, res) => {
+  try {
+    const db = getDatabase()
+    const latest = db.prepare('SELECT snapshot_date FROM aki_inpatients ORDER BY snapshot_date DESC LIMIT 1').get()?.snapshot_date
+    if (!latest) return res.json({ latestDate: null, items: [] })
+
+    // 所有「不在最新快照」的病歷號之歷史列
+    const rows = db
+      .prepare(
+        `SELECT mrn, name, ward, bed, dept, physician, admit_date AS admitDate,
+                discharge_date AS dischargeDate, snapshot_date AS snapshotDate
+         FROM aki_inpatients
+         WHERE mrn NOT IN (SELECT mrn FROM aki_inpatients WHERE snapshot_date = ?)`,
+      )
+      .all(latest)
+
+    // 每個病歷號取最後一次出現的列（最近快照）
+    const lastByMrn = new Map()
+    for (const r of rows) {
+      const prev = lastByMrn.get(r.mrn)
+      if (!prev || String(r.snapshotDate) > String(prev.snapshotDate)) lastByMrn.set(r.mrn, r)
+    }
+
+    const modeMap = buildDialysisModeMap(db)
+    const items = []
+    for (const r of lastByMrn.values()) {
+      const staging = stageForSeries(getPointsByMrn(db, r.mrn))
+      const included = (staging.stage != null && staging.stage >= 1) || staging.category === 'esrd'
+      if (!included) continue
+      const care = getCareRecord(db, r.mrn)
+      items.push({
+        mrn: r.mrn,
+        name: r.name,
+        ward: r.ward,
+        bed: r.bed,
+        dept: r.dept,
+        physician: r.physician,
+        category: staging.category,
+        stage: staging.stage,
+        autoDialysisMode: dialysisModeFor(modeMap, r.mrn),
+        dischargeDate: r.dischargeDate || null,
+        lastSeenDate: r.snapshotDate,
+        ckdHistory: care?.ckdHistory || '',
+        nephrologyConsult: care?.nephrologyConsult || '',
+        akiCause: care?.akiCause || '',
+        dialysisStatus: care?.dialysisStatus || '',
+        careResult: care?.careResult || '',
+        carePhysician: care?.carePhysician || '',
+        signedAt: care?.signedAt || null,
+      })
+    }
+    items.sort(
+      (a, b) =>
+        String(b.lastSeenDate).localeCompare(String(a.lastSeenDate)) ||
+        (CARE_RANK[a.category] ?? 9) - (CARE_RANK[b.category] ?? 9),
+    )
+    res.json({ latestDate: latest, items })
+  } catch (error) {
+    res.status(500).json({ error: true, message: error.message || '取得出院關懷名單失敗' })
+  }
+})
+
 // PUT /api/aki/care/:mrn —— 儲存關懷欄位；body.sign=true 時以登入者蓋章簽核
 router.put('/care/:mrn', (req, res) => {
   try {

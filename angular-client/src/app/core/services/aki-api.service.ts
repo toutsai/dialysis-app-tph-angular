@@ -111,10 +111,17 @@ export interface AkiCareItem {
   careResult: string;
   carePhysician: string;
   signedAt: string | null;
+  dischargeDate?: string | null;
+  lastSeenDate?: string | null;
 }
 
 export interface AkiCareListResponse {
   snapshotDate: string | null;
+  items: AkiCareItem[];
+}
+
+export interface AkiDischargedListResponse {
+  latestDate: string | null;
   items: AkiCareItem[];
 }
 
@@ -149,6 +156,12 @@ export class AkiApiService {
   getCareList(date?: string): Promise<AkiCareListResponse> {
     return firstValueFrom(
       this.api.get<AkiCareListResponse>('/aki/care-list', date ? { date } : undefined),
+    );
+  }
+
+  getDischargedCareList(): Promise<AkiDischargedListResponse> {
+    return firstValueFrom(
+      this.api.get<AkiDischargedListResponse>('/aki/discharged-care-list'),
     );
   }
 
