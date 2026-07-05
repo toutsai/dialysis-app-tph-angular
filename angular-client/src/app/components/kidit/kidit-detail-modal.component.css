@@ -4,7 +4,7 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(2px);
   display: flex;
   justify-content: center;
@@ -19,15 +19,17 @@
   height: 90vh;
   display: flex;
   flex-direction: column;
-  border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
   overflow: hidden;
+  color: #263238;
+  font-size: 0.85rem;
 }
 
 .modal-header {
-  padding: 15px 25px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e9ecef;
+  padding: 0.85rem 1.25rem;
+  background: #f5f7f8;
+  border-bottom: 1px solid #eceff1;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -35,64 +37,66 @@
 .header-title {
   display: flex;
   align-items: center;
-  gap: 10px;
-  color: #2c3e50;
+  gap: 0.5rem;
+  color: #263238;
 }
 .header-title h3 {
   margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
+  font-size: 1.15rem;
+  font-weight: 700;
 }
 .header-title .icon {
-  color: #3498db;
-  font-size: 1.2rem;
+  color: #1565c0;
+  font-size: 1.05rem;
 }
 .close-btn {
   background: transparent;
   border: none;
-  font-size: 1.2rem;
-  color: #adb5bd;
+  font-size: 1.1rem;
+  color: #90a4ae;
   cursor: pointer;
-  transition: color 0.2s;
+  transition: color 0.15s;
 }
 .close-btn:hover {
-  color: #e74c3c;
+  color: #c62828;
 }
 
 /* Tabs */
 .tabs-header {
   display: flex;
   background: #fff;
-  border-bottom: 2px solid #f1f3f5;
-  padding: 0 20px;
+  border-bottom: 1px solid #dee2e6;
+  padding: 0 1.25rem;
 }
 .tab-btn {
-  padding: 15px 20px;
+  padding: 0.7rem 1.1rem;
   border: none;
   background: transparent;
-  color: #6c757d;
+  color: #607d8b;
   font-weight: 600;
+  font-size: 0.9rem;
   cursor: pointer;
   border-bottom: 3px solid transparent;
-  transition: all 0.2s;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 .tab-btn:hover {
-  color: #3498db;
-  background: #f8f9fa;
+  color: #263238;
 }
 .tab-btn.active {
-  color: #3498db;
-  border-bottom-color: #3498db;
+  color: #1565c0;
+  border-bottom-color: #1565c0;
 }
 .patient-tag {
   background: #e3f2fd;
-  color: #1976d2;
-  padding: 2px 8px;
+  color: #1565c0;
+  padding: 0.1rem 0.5rem;
   border-radius: 12px;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 600;
 }
 
 /* Body */
@@ -106,54 +110,54 @@
 .tab-pane {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: 1.25rem;
   display: flex;
   flex-direction: column;
 }
 
 .action-bar {
-  margin-bottom: 15px;
+  margin-bottom: 0.9rem;
 }
 .hint-text {
-  color: #666;
-  font-size: 0.9rem;
+  color: #78909c;
+  font-size: 0.82rem;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.4rem;
 }
 
 /* Table */
 .table-responsive {
   flex: 1;
   overflow: auto;
-  border: 1px solid #e9ecef;
+  border: 1px solid #eceff1;
   border-radius: 8px;
 }
 .modern-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 16px;
+  font-size: 0.82rem;
 }
 .modern-table th {
-  background: #f8f9fa;
-  color: #495057;
+  background: #f5f7f8;
+  color: #455a64;
   font-weight: 600;
-  padding: 12px 15px;
+  padding: 0.5rem 0.65rem;
   text-align: left;
   position: sticky;
   top: 0;
   z-index: 1;
-  border-bottom: 1px solid #dee2e6;
+  border-bottom: 1px solid #eceff1;
   white-space: nowrap;
 }
 .modern-table td {
-  padding: 10px 15px;
-  border-bottom: 1px solid #f1f3f5;
-  color: #333;
+  padding: 0.45rem 0.65rem;
+  border-bottom: 1px solid #eceff1;
+  color: #37474f;
   white-space: nowrap;
 }
 .modern-table tr:hover {
-  background-color: #f8f9fa;
+  background-color: #fafcff;
   cursor: pointer;
 }
 .modern-table tr.is-selected {
@@ -161,33 +165,34 @@
 }
 
 .status-badge {
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  font-weight: 500;
+  padding: 0.15rem 0.45rem;
+  border-radius: 5px;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
-.badge-blue { background: #ebf8ff; color: #2c5282; }
-.badge-purple { background: #faf5ff; color: #553c9a; }
-.badge-yellow { background: #fffff0; color: #744210; }
-.badge-green { background: #f0fff4; color: #22543d; }
-.badge-red { background: #fff5f5; color: #822727; }
-.badge-gray { background: #f7fafc; color: #1a202c; }
+.badge-blue { background: #e3f2fd; color: #1565c0; }
+.badge-purple { background: #f3e5f5; color: #6a1b9a; }
+.badge-yellow { background: #fff8e1; color: #e65100; }
+.badge-green { background: #e8f5e9; color: #2e7d32; }
+.badge-red { background: #ffebee; color: #c62828; }
+.badge-gray { background: #eceff1; color: #455a64; }
 
-.font-medium { font-weight: 500; }
+.font-medium { font-weight: 600; }
 .text-center { text-align: center; }
-.text-muted { color: #718096; font-size: 0.9rem; }
-.text-green { color: #16a34a; }
+.text-muted { color: #78909c; font-size: 0.8rem; }
+.text-green { color: #2e7d32; }
 
 .form-input {
   width: 100%;
-  padding: 6px 10px;
-  border: 1px solid #cbd5e0;
-  border-radius: 4px;
-  transition: border 0.2s;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #cfd8dc;
+  border-radius: 5px;
+  font-size: 0.82rem;
+  transition: border-color 0.15s;
   box-sizing: border-box;
 }
 .form-input:focus {
-  border-color: #3498db;
+  border-color: #1976d2;
   outline: none;
 }
 
@@ -209,13 +214,13 @@
 .checkmark {
   height: 20px;
   width: 20px;
-  background-color: #eee;
+  background-color: #f5f7f8;
   border-radius: 4px;
   display: block;
-  border: 1px solid #ccc;
+  border: 1px solid #cfd8dc;
 }
-.checkbox-container:hover input ~ .checkmark { background-color: #ccc; }
-.checkbox-container input:checked ~ .checkmark { background-color: #2196f3; border-color: #2196f3; }
+.checkbox-container:hover input ~ .checkmark { background-color: #eceff1; }
+.checkbox-container input:checked ~ .checkmark { background-color: #1976d2; border-color: #1976d2; }
 .checkmark:after {
   content: '';
   position: absolute;
@@ -232,44 +237,45 @@
 
 /* Buttons */
 .btn-primary {
-  background: #3498db;
+  background: #1976d2;
   color: white;
   border: none;
-  padding: 10px 20px;
+  padding: 0.5rem 1rem;
   border-radius: 6px;
   font-weight: 600;
+  font-size: 0.85rem;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
-  transition: background 0.2s;
+  gap: 0.4rem;
+  transition: background 0.15s;
 }
-.btn-primary:hover { background: #2980b9; }
+.btn-primary:hover { background: #1565c0; }
 
 .icon-btn {
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 6px;
+  padding: 0.35rem;
   border-radius: 4px;
-  transition: all 0.2s;
-  color: #6c757d;
+  transition: color 0.15s, background 0.15s;
+  color: #78909c;
 }
-.delete-btn:hover { color: #e74c3c; background: #fee2e2; }
-.warning-btn { color: #f59e0b; }
-.warning-btn:hover { color: #d97706; background: #fef3c7; }
+.delete-btn:hover { color: #c62828; background: #ffebee; }
+.warning-btn { color: #f9a825; }
+.warning-btn:hover { color: #e65100; background: #fff8e1; }
 
 .action-cell {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 0.25rem;
   justify-content: center;
 }
 .status-indicator { display: inline-flex; }
 
 .footer-actions {
-  padding-top: 15px;
-  border-top: 1px solid #eee;
+  padding-top: 0.9rem;
+  border-top: 1px solid #eceff1;
   display: flex;
   justify-content: flex-end;
 }
@@ -280,13 +286,14 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #adb5bd;
+  color: #90a4ae;
   height: 100%;
-  min-height: 200px;
+  min-height: 12rem;
 }
 .bounce-icon {
-  font-size: 3rem;
-  margin-bottom: 15px;
+  font-size: 2.6rem;
+  margin-bottom: 0.9rem;
+  color: #b0bec5;
   animation: bounce 2s infinite;
 }
 @keyframes bounce {
@@ -297,8 +304,8 @@
 
 .empty-row {
   text-align: center;
-  color: #9ca3af;
-  padding: 48px 16px !important;
+  color: #90a4ae;
+  padding: 2.5rem 1rem !important;
 }
 
 /* Confirm dialog */
@@ -316,56 +323,63 @@
 }
 .confirm-box {
   background: white;
-  padding: 24px;
-  border-radius: 12px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
-  max-width: 400px;
+  padding: 1.5rem;
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+  max-width: 25rem;
   width: 90%;
+  color: #263238;
 }
-.confirm-box h4 { margin: 0 0 12px; color: #333; }
-.confirm-box p { margin: 0 0 20px; color: #666; }
+.confirm-box h4 { margin: 0 0 0.75rem; font-size: 1.05rem; color: #263238; }
+.confirm-box p { margin: 0 0 1.25rem; color: #607d8b; font-size: 0.85rem; }
 .confirm-actions {
   display: flex;
-  gap: 8px;
+  gap: 0.5rem;
   justify-content: flex-end;
 }
 .btn-cancel {
-  padding: 8px 16px;
-  border: 1px solid #ddd;
+  padding: 0.45rem 1rem;
+  border: 1px solid #cfd8dc;
   background: white;
+  color: #607d8b;
   border-radius: 6px;
+  font-size: 0.85rem;
   cursor: pointer;
 }
+.btn-cancel:hover { background: #f5f7f8; }
 .btn-danger {
-  padding: 8px 16px;
+  padding: 0.45rem 1rem;
   border: none;
-  background: #e74c3c;
+  background: #d32f2f;
   color: white;
   border-radius: 6px;
+  font-size: 0.85rem;
   cursor: pointer;
 }
-.btn-danger:hover { background: #c0392b; }
+.btn-danger:hover { background: #c62828; }
 
 /* Sub-tabs for vascular */
 .sub-tabs {
   display: flex;
-  gap: 8px;
-  margin-bottom: 15px;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
 }
 .sub-tabs button {
-  padding: 8px 16px;
-  border: 1px solid #ddd;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid #cfd8dc;
   background: white;
+  color: #546e7a;
   border-radius: 6px;
+  font-size: 0.82rem;
   cursor: pointer;
-  font-weight: 500;
-  transition: all 0.2s;
+  font-weight: 600;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .sub-tabs button.active {
-  background: #9b59b6;
+  background: #1565c0;
   color: white;
-  border-color: #9b59b6;
+  border-color: #1565c0;
 }
 .sub-tabs button:hover:not(.active) {
-  background: #f8f9fa;
+  background: #f5f7f8;
 }
