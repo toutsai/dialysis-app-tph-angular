@@ -95,7 +95,7 @@ export class AkiMapComponent implements OnInit {
   readonly careLoading = signal(false);
   readonly careLoaded = signal(false);
   readonly careSavedMrn = signal<string | null>(null);
-  readonly dialysisOptions = ['HD', 'SLED', 'CVVHDF', '無'];
+  readonly dialysisOptions = ['HD', 'SLED', 'CVVHDF', 'PD', 'Hospice', '無'];
   readonly nephrologyOptions = ['已會診', '會診中', '未會診'];
   readonly ckdOptions = ['無', 'G1', 'G2', 'G3a', 'G3b', 'G4', 'G5', '未知'];
 
