@@ -94,6 +94,43 @@
         </tbody>
       </table>
     </div>
+
+    <!-- 窄螢幕（直式平板/手機）卡片清單 -->
+    <div class="edu-cards">
+      @for (r of filteredRows(); track r.patientId) {
+        <div class="edu-card" [class.card-done]="r.passedCount >= r.total">
+          <div class="ec-top">
+            <div class="ec-name">
+              <span class="p-name">{{ r.patientName }}</span>
+              <span class="p-mrn">{{ r.medicalRecordNumber }}</span>
+            </div>
+            <span class="status-badge" [attr.data-status]="r.status">{{ statusLabel(r.status) }}</span>
+          </div>
+          @if (!r.firstDialysisActive) {
+            <span class="tag-off">已取消首透</span>
+          }
+          <div class="ec-meta">
+            <span>初透日：{{ formatDate(r.firstDialysisDate) }}</span>
+            <span>更新：{{ formatDate(r.lastUpdated) }}</span>
+          </div>
+          <div class="ec-prog-block">
+            <div class="ec-prog-row">
+              <span class="ec-prog-label">已衛教</span>
+              <div class="prog-bar"><span class="fill educ" [style.width.%]="pct(r.educatedCount, r.total)"></span></div>
+              <span class="prog-text">{{ r.educatedCount }}/{{ r.total }}</span>
+            </div>
+            <div class="ec-prog-row">
+              <span class="ec-prog-label">回示教通過</span>
+              <div class="prog-bar"><span class="fill pass" [style.width.%]="pct(r.passedCount, r.total)"></span></div>
+              <span class="prog-text">{{ r.passedCount }}/{{ r.total }}</span>
+            </div>
+          </div>
+          <button class="btn-open ec-open" (click)="openRecord(r)">
+            <i class="fas fa-chalkboard-teacher"></i> {{ canEdit() ? '檢視／編輯' : '檢視' }}
+          </button>
+        </div>
+      }
+    </div>
   }
 </div>
 

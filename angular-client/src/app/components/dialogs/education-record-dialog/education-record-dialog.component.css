@@ -224,3 +224,118 @@
   justify-content: flex-end;
   gap: 10px;
 }
+
+/* 窄螢幕分次卡片（直式平板）；寬螢幕隱藏 */
+.edu-scards { display: none; }
+
+@media (max-width: 900px) {
+  /* 全螢幕化 */
+  .edu-overlay { padding: 0; }
+  .edu-modal {
+    max-width: none;
+    max-height: none;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    border-radius: 0;
+  }
+  .edu-header { padding: 12px 14px; }
+  .edu-header h3 { font-size: 16px; }
+  .edu-header-actions { flex-wrap: wrap; gap: 8px; }
+  .edu-btn { padding: 10px 14px; }
+  .edu-close { width: 40px; height: 40px; }
+  .edu-body { padding: 12px 14px; }
+
+  /* 表格換分次卡片 */
+  .edu-table { display: none; }
+  .edu-scards { display: flex; flex-direction: column; gap: 12px; }
+
+  .sc {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: #fff;
+  }
+  .sc.row-alert {
+    background: #fff8e6;
+    border-color: #fcd34d;
+  }
+  .sc-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .sc-idx {
+    font-weight: 700;
+    color: #1e293b;
+    background: #eef2f7;
+    border-radius: 8px;
+    padding: 4px 10px;
+    white-space: nowrap;
+  }
+  .sc-date-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #64748b;
+  }
+  .sc-date-field input {
+    padding: 8px 10px;
+    border: 1px solid #cbd5e0;
+    border-radius: 8px;
+    font-size: 15px;
+  }
+  .sc-topic {
+    padding: 11px 12px;
+    font-size: 15px;
+    border-radius: 8px;
+  }
+  .sc-signs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .sc-tile {
+    min-height: 64px;
+    border: 1px dashed #cbd5e0;
+    border-radius: 10px;
+    background: #fff;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 8px 6px;
+    text-align: center;
+  }
+  .sc-tile:disabled { opacity: 0.7; cursor: default; }
+  .sc-tile-label { font-size: 12px; color: #64748b; }
+  .sc-tile-val { font-size: 14px; font-weight: 600; color: #94a3b8; }
+  .sc-tile-val.ph { color: #adb5bd; font-weight: 500; display: inline-flex; align-items: center; gap: 5px; }
+  .sc-tile.signed {
+    border-style: solid;
+    border-color: #86efac;
+    background: #f0fdf4;
+  }
+  .sc-tile.signed .sc-tile-val { color: #166534; }
+  .sc-tile .sig-thumb { max-height: 44px; }
+
+  /* 簽名板：直式放大 */
+  .sig-overlay { padding: 0; }
+  .sig-pad {
+    max-width: none;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    border-radius: 0;
+    justify-content: center;
+  }
+  .sig-canvas { height: 46vh; }
+  .sig-pad-actions .edu-btn { flex: 1; justify-content: center; }
+}

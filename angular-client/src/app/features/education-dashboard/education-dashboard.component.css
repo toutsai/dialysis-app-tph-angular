@@ -233,7 +233,105 @@
   background: #f3e8fb;
 }
 
-@media (max-width: 720px) {
+/* 窄螢幕卡片清單（直式平板/手機用；寬螢幕隱藏） */
+.edu-cards {
+  display: none;
+}
+.edu-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.edu-card.card-done {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+.ec-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.ec-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ec-name .p-name {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: #1e293b;
+}
+.ec-name .p-mrn {
+  font-size: 0.82rem;
+  color: #94a3b8;
+}
+.ec-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+.ec-prog-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ec-prog-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ec-prog-label {
+  flex: 0 0 5.5rem;
+  font-size: 0.85rem;
+  color: #475569;
+}
+.ec-open {
+  width: 100%;
+  justify-content: center;
+  padding: 12px;
+  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .summary-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .page-header h2 {
+    font-size: 1.5rem;
+  }
+  .toolbar .search {
+    flex: 1 1 100%;
+  }
+  /* 表格換成卡片 */
+  .table-wrapper {
+    display: none;
+  }
+  .edu-cards {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  /* 觸控目標放大 */
+  .btn-refresh {
+    padding: 10px 16px;
+  }
+  .toolbar .chk {
+    font-size: 1rem;
+    padding: 4px 0;
+  }
+}
+
+@media (max-width: 480px) {
   .summary-cards {
     grid-template-columns: repeat(2, 1fr);
   }
