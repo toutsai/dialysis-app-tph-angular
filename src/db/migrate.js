@@ -372,6 +372,17 @@ export function runMigrations() {
       migrationsApplied++
     }
 
+    // ========================================
+    // AKI 關懷名單表格遷移
+    // ========================================
+    const akiCareExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='aki_care_records'")
+      .get()
+    if (akiCareExists) {
+      console.log('📋 檢查 aki_care_records 表格...')
+      if (addColumnIfNotExists(db, 'aki_care_records', 'ckd_history', 'TEXT')) migrationsApplied++
+    }
+
     if (migrationsApplied > 0) {
       console.log(`✅ 已完成 ${migrationsApplied} 項遷移`)
     } else {

@@ -96,6 +96,8 @@ export class AkiMapComponent implements OnInit {
   readonly careLoaded = signal(false);
   readonly careSavedMrn = signal<string | null>(null);
   readonly dialysisOptions = ['HD', 'SLED', 'CVVHDF', '無'];
+  readonly nephrologyOptions = ['已會診', '會診中', '未會診'];
+  readonly ckdOptions = ['無', 'G1', 'G2', 'G3a', 'G3b', 'G4', 'G5', '未知'];
 
   private readonly colorMap = new Map(CATEGORY_DEFS.map((d) => [d.key, d]));
 
@@ -228,6 +230,7 @@ export class AkiMapComponent implements OnInit {
   async saveCareRow(item: AkiCareItem, extra: Record<string, unknown> = {}): Promise<void> {
     try {
       const res = await this.akiApi.saveCare(item.mrn, {
+        ckdHistory: item.ckdHistory,
         nephrologyConsult: item.nephrologyConsult,
         akiCause: item.akiCause,
         dialysisStatus: item.dialysisStatus,
@@ -266,6 +269,7 @@ export class AkiMapComponent implements OnInit {
       主治醫師: it.physician,
       科別: it.dept,
       'AKI Stage': this.stageLabel(it),
+      CKD病史: it.ckdHistory,
       腎臟科會診: it.nephrologyConsult,
       AKI原因: it.akiCause,
       是否透析: it.dialysisStatus,
@@ -276,7 +280,7 @@ export class AkiMapComponent implements OnInit {
     const ws = XLSX.utils.json_to_sheet(rows);
     ws['!cols'] = [
       { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 10 },
-      { wch: 14 }, { wch: 20 }, { wch: 10 }, { wch: 24 }, { wch: 12 }, { wch: 20 },
+      { wch: 10 }, { wch: 12 }, { wch: 20 }, { wch: 10 }, { wch: 24 }, { wch: 12 }, { wch: 20 },
     ];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'AKI關懷名單');

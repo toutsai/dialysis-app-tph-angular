@@ -732,9 +732,10 @@ CREATE INDEX IF NOT EXISTS idx_aki_batches_kind ON aki_upload_batches(kind, uplo
 CREATE TABLE IF NOT EXISTS aki_care_records (
     id TEXT PRIMARY KEY,
     mrn TEXT NOT NULL UNIQUE,          -- 病歷號
-    nephrology_consult TEXT,           -- 腎臟科會診（已會診/未會診/會診中…自由文字）
+    ckd_history TEXT,                  -- CKD 病史（無/G1/G2/G3a/G3b/G4/G5/未知）
+    nephrology_consult TEXT,           -- 腎臟科會診（已會診/未會診/會診中）
     aki_cause TEXT,                    -- AKI 原因
-    dialysis_status TEXT,              -- 是否透析（HD/SLED/CVVHDF/無…可手動，預填本院模式）
+    dialysis_status TEXT,              -- 是否透析（HD/SLED/CVVHDF/無，預填本院模式）
     care_result TEXT,                  -- 關懷結果
     care_physician TEXT,               -- 關懷醫師簽核（姓名）
     signed_at TEXT,                    -- 簽核時間

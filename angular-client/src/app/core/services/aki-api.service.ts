@@ -104,6 +104,7 @@ export interface AkiCareItem {
   category: AkiCategory;
   stage: number | null;
   autoDialysisMode: string | null;
+  ckdHistory: string;
   nephrologyConsult: string;
   akiCause: string;
   dialysisStatus: string;
@@ -118,6 +119,7 @@ export interface AkiCareListResponse {
 }
 
 export interface AkiCareSavePayload {
+  ckdHistory?: string;
   nephrologyConsult?: string;
   akiCause?: string;
   dialysisStatus?: string;

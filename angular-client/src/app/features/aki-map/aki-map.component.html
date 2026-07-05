@@ -159,7 +159,7 @@
             <thead>
               <tr>
                 <th>病歷號</th><th>姓名</th><th>病床號</th><th>主治醫師</th><th>科別</th><th>AKI Stage</th>
-                <th>腎臟科會診</th><th>AKI 原因</th><th>是否透析</th><th>關懷結果</th><th>關懷醫師簽核</th>
+                <th>CKD 病史</th><th>腎臟科會診</th><th>AKI 原因</th><th>是否透析</th><th>關懷結果</th><th>關懷醫師簽核</th>
               </tr>
             </thead>
             <tbody>
@@ -173,10 +173,24 @@
                   <td class="nowrap">
                     <span class="stage-badge" [style.background]="color(it.category)">{{ stageLabel(it) }}</span>
                   </td>
-                  <td><input class="cell-input" [(ngModel)]="it.nephrologyConsult" (change)="saveCareRow(it)" placeholder="會診狀態" /></td>
+                  <td>
+                    <select class="cell-input narrow" [(ngModel)]="it.ckdHistory" (change)="saveCareRow(it)">
+                      <option value="">—</option>
+                      @for (o of ckdOptions; track o) { <option [value]="o">{{ o }}</option> }
+                    </select>
+                  </td>
+                  <td>
+                    <select class="cell-input" [(ngModel)]="it.nephrologyConsult" (change)="saveCareRow(it)">
+                      <option value="">—</option>
+                      @for (o of nephrologyOptions; track o) { <option [value]="o">{{ o }}</option> }
+                    </select>
+                  </td>
                   <td><input class="cell-input wide" [(ngModel)]="it.akiCause" (change)="saveCareRow(it)" placeholder="AKI 原因" /></td>
                   <td>
-                    <input class="cell-input narrow" list="akiDialysisOpts" [(ngModel)]="it.dialysisStatus" (change)="saveCareRow(it)" placeholder="—" />
+                    <select class="cell-input narrow" [(ngModel)]="it.dialysisStatus" (change)="saveCareRow(it)">
+                      <option value="">—</option>
+                      @for (o of dialysisOptions; track o) { <option [value]="o">{{ o }}</option> }
+                    </select>
                   </td>
                   <td><input class="cell-input wide" [(ngModel)]="it.careResult" (change)="saveCareRow(it)" placeholder="關懷結果" /></td>
                   <td class="nowrap sign-cell">
@@ -192,9 +206,6 @@
             </tbody>
           </table>
         </div>
-        <datalist id="akiDialysisOpts">
-          @for (o of dialysisOptions; track o) { <option [value]="o"></option> }
-        </datalist>
       }
     </section>
   }

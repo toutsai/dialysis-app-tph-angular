@@ -250,7 +250,7 @@ function getCareRecord(db, mrn) {
   return (
     db
       .prepare(
-        `SELECT nephrology_consult AS nephrologyConsult, aki_cause AS akiCause,
+        `SELECT ckd_history AS ckdHistory, nephrology_consult AS nephrologyConsult, aki_cause AS akiCause,
                 dialysis_status AS dialysisStatus, care_result AS careResult,
                 care_physician AS carePhysician, signed_at AS signedAt,
                 updated_by AS updatedBy, updated_at AS updatedAt
@@ -296,6 +296,7 @@ router.get('/care-list', (req, res) => {
         category: staging.category,
         stage: staging.stage,
         autoDialysisMode: dialysisModeFor(modeMap, p.mrn),
+        ckdHistory: care?.ckdHistory || '',
         nephrologyConsult: care?.nephrologyConsult || '',
         akiCause: care?.akiCause || '',
         dialysisStatus: care?.dialysisStatus || '',
@@ -326,16 +327,17 @@ router.put('/care/:mrn', (req, res) => {
 
     db.prepare(
       `INSERT INTO aki_care_records
-         (id, mrn, nephrology_consult, aki_cause, dialysis_status, care_result, updated_by, updated_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
+         (id, mrn, ckd_history, nephrology_consult, aki_cause, dialysis_status, care_result, updated_by, updated_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
        ON CONFLICT(mrn) DO UPDATE SET
+         ckd_history        = excluded.ckd_history,
          nephrology_consult = excluded.nephrology_consult,
          aki_cause          = excluded.aki_cause,
          dialysis_status    = excluded.dialysis_status,
          care_result        = excluded.care_result,
          updated_by         = excluded.updated_by,
          updated_at         = excluded.updated_at`,
-    ).run(uuidv4(), mrn, b.nephrologyConsult ?? '', b.akiCause ?? '', b.dialysisStatus ?? '', b.careResult ?? '', updatedBy)
+    ).run(uuidv4(), mrn, b.ckdHistory ?? '', b.nephrologyConsult ?? '', b.akiCause ?? '', b.dialysisStatus ?? '', b.careResult ?? '', updatedBy)
 
     if (b.sign) {
       db.prepare(`UPDATE aki_care_records SET care_physician = ?, signed_at = datetime('now','localtime') WHERE mrn = ?`).run(updatedBy, mrn)
