@@ -132,13 +132,10 @@ export class AkiMapComponent implements OnInit {
     }
 
     const arr = [...groups.values()];
-    // 卡片內按分期嚴重度排序
-    const order = new Map(CATEGORY_DEFS.map((d, i) => [d.key, i]));
+    // 卡片內依床號順序排列（numeric-aware：5A02 在 5A10 之前）
     for (const g of arr) {
-      g.patients.sort(
-        (a, b) =>
-          (order.get(a.category) ?? 99) - (order.get(b.category) ?? 99) ||
-          (a.bed || '').localeCompare(b.bed || ''),
+      g.patients.sort((a, b) =>
+        (a.bed || '').localeCompare(b.bed || '', undefined, { numeric: true, sensitivity: 'base' }),
       );
     }
     // 護理站固定順序：加護 → 5–7樓A–D → 其他 → GC
