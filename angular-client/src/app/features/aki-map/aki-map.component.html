@@ -79,24 +79,39 @@
       尚無資料。請先「匯入留院清單」與「匯入 CKD-AKI 明細」兩份 Excel。
     </div>
   } @else {
-    <!-- 觀察名單：門急尚未收治的 AKI -->
-    @if (watchList().length) {
-      <section class="watch">
-        <h2>⚠️ 門急觀察名單（尚未收治，達 AKI/ESRD）· {{ watchList().length }}</h2>
-        <div class="watch-list">
-          @for (w of watchList(); track w.mrn) {
-            <button class="watch-item" [style.--c]="color(w.category)" (click)="openDetail(w.mrn)">
-              <span class="dot" [style.background]="color(w.category)"></span>
-              <span class="wname">{{ w.name }}</span>
-              @if (w.dialysisMode) { <span class="hd-tag" title="本院透析病人">{{ w.dialysisMode }}</span> }
-              <span class="wmeta">{{ label(w.category) }} · {{ w.baselineCr }}→{{ w.peakCr }}
-                @if (w.ratio) { （×{{ w.ratio }}） }
-              </span>
-            </button>
+    <!-- 觀察名單（縮小）＋ AKI 比例統計 -->
+    <div class="map-top-row">
+      @if (watchList().length) {
+        <section class="watch compact">
+          <h2>⚠️ 門急觀察名單 · {{ watchList().length }}</h2>
+          <div class="watch-list">
+            @for (w of watchList(); track w.mrn) {
+              <button class="watch-item" [style.--c]="color(w.category)" (click)="openDetail(w.mrn)">
+                <span class="dot" [style.background]="color(w.category)"></span>
+                <span class="wname">{{ w.name }}</span>
+                @if (w.dialysisMode) { <span class="hd-tag" title="本院透析病人">{{ w.dialysisMode }}</span> }
+                <span class="wmeta">{{ label(w.category) }} · {{ w.baselineCr }}→{{ w.peakCr }}</span>
+              </button>
+            }
+          </div>
+        </section>
+      }
+
+      <section class="aki-stats">
+        <h2>AKI 比例前三護理站</h2>
+        @if (topAkiWards().length) {
+          @for (w of topAkiWards(); track w.ward) {
+            <div class="stat-row">
+              <span class="stat-ward">{{ wardLabel(w.ward) }}</span>
+              <div class="stat-bar"><div class="stat-fill" [style.width.%]="w.pct"></div></div>
+              <span class="stat-val">{{ w.pct }}% <small>{{ w.aki }}/{{ w.total }}</small></span>
+            </div>
           }
-        </div>
+        } @else {
+          <div class="stat-empty">無 AKI 資料</div>
+        }
       </section>
-    }
+    </div>
 
     <!-- 依護理站分區 -->
     <section class="wards">

@@ -159,6 +159,25 @@ export class AkiMapComponent implements OnInit {
 
   readonly watchList = computed(() => this.data()?.watchList || []);
 
+  // AKI 比例前三護理站：AKI(1-3期) 佔該站在院人數比例，取前三高（分母需 ≥5 以免小病房失真）
+  readonly topAkiWards = computed(() => {
+    const map = new Map<string, { ward: string; total: number; aki: number }>();
+    for (const p of this.visiblePatients()) {
+      let e = map.get(p.ward);
+      if (!e) {
+        e = { ward: p.ward, total: 0, aki: 0 };
+        map.set(p.ward, e);
+      }
+      e.total++;
+      if (p.stage != null && p.stage >= 1) e.aki++;
+    }
+    return [...map.values()]
+      .filter((e) => e.aki >= 1 && e.total >= 5)
+      .map((e) => ({ ...e, pct: Math.round((e.aki / e.total) * 100) }))
+      .sort((a, b) => b.pct - a.pct || b.aki - a.aki)
+      .slice(0, 3);
+  });
+
   ngOnInit(): void {
     this.load();
   }
