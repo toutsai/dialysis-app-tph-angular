@@ -97,6 +97,14 @@ export class AuthService implements OnDestroy {
   readonly isEditor = computed(() => this.hasPermission('editor'));
   readonly isContributor = computed(() => this.hasPermission('contributor'));
   readonly isViewer = computed(() => this.currentUser()?.role === 'viewer');
+  // AKI Map 存取：admin、contributor（醫師）或 職稱「專科護理師」可檢視與編輯
+  readonly isSpecialist = computed(() => {
+    const u = this.currentUser();
+    return (
+      !!u &&
+      (u.role === 'admin' || u.role === 'contributor' || u.title === '專科護理師')
+    );
+  });
 
   readonly canEditSchedules = computed(() => this.hasPermission('editor'));
   readonly canEditPatients = computed(() => this.hasPermission('editor'));

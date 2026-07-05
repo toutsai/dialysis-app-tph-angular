@@ -402,12 +402,29 @@ export function requireAnyRole(...allowedRoles) {
 }
 
 /**
+ * AKI Map 存取守門：admin、contributor（醫師）或 職稱「專科護理師」者可檢視與編輯。
+ * 用於後台管理中的全院 AKI Map。
+ */
+export function requireSpecialist(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ error: true, message: '請先登入' })
+  }
+  const allowedRole = req.user.role === 'admin' || req.user.role === 'contributor'
+  const isNp = req.user.title === '專科護理師'
+  if (!allowedRole && !isNp) {
+    return res.status(403).json({ error: true, message: '權限不足' })
+  }
+  next()
+}
+
+/**
  * 便捷的權限中介軟體
  */
 export const isViewer = [authenticate]
 export const isContributor = [authenticate, requireRole('contributor')]
 export const isEditor = [authenticate, requireRole('editor')]
 export const isAdmin = [authenticate, requireRole('admin')]
+export const isSpecialist = [authenticate, requireSpecialist]
 
 // ========================================
 // 稽核日誌

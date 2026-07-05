@@ -669,6 +669,66 @@ CREATE INDEX IF NOT EXISTS idx_active_sessions_user ON active_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_active_sessions_expires ON active_sessions(expires_at);
 
 -- ========================================
+-- 全院 AKI Map（專師專用）
+-- 資料來源：HIS 匯出的「留院病人清單」+「CKD-AKI 病患明細」Excel
+-- 以病歷號(mrn, 10碼補零字串)為對接鍵，累積歷史快照
+-- ========================================
+
+-- 每日住院病人快照（AKI map 畫布）
+CREATE TABLE IF NOT EXISTS aki_inpatients (
+    id TEXT PRIMARY KEY,
+    snapshot_date TEXT NOT NULL,     -- 此快照對應的日期 (YYYY-MM-DD)
+    mrn TEXT NOT NULL,               -- 病歷號（字串，保留前導0）
+    name TEXT,
+    ward TEXT,                       -- 護理站
+    bed TEXT,                        -- 床號
+    dept TEXT,                       -- 科別
+    physician TEXT,                  -- 主治醫師
+    sex TEXT,
+    age TEXT,
+    admit_date TEXT,                 -- 入院日 (YYYY-MM-DD)
+    discharge_date TEXT,             -- 出院日 (YYYY-MM-DD，留院者為空)
+    diagnoses TEXT DEFAULT '[]',     -- JSON 陣列 [{code, name}]
+    batch_id TEXT,                   -- 來源上傳批次
+    created_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_aki_inpatients_snapshot ON aki_inpatients(snapshot_date);
+CREATE INDEX IF NOT EXISTS idx_aki_inpatients_mrn ON aki_inpatients(mrn);
+-- 同一快照日同一病人只保留一筆（重新上傳可覆蓋）
+CREATE UNIQUE INDEX IF NOT EXISTS idx_aki_inpatients_uniq ON aki_inpatients(snapshot_date, mrn);
+
+-- 肌酸酐檢驗散點（累積歷史，跨日去重）
+CREATE TABLE IF NOT EXISTS aki_lab_results (
+    id TEXT PRIMARY KEY,
+    mrn TEXT NOT NULL,               -- 病歷號
+    name TEXT,
+    source TEXT,                     -- OPD / ER / IPD（門診/急診/住院）
+    test_date TEXT NOT NULL,         -- 檢驗日 (YYYY-MM-DD)
+    creatinine REAL,                 -- Cr 值 (mg/dL)
+    order_code TEXT,                 -- 醫令碼（E09015C 等，皆為肌酸酐）
+    batch_id TEXT,
+    created_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_aki_lab_mrn_date ON aki_lab_results(mrn, test_date);
+-- 同病人同來源同日同值視為同一筆（跨日重複上傳不重覆累積）
+CREATE UNIQUE INDEX IF NOT EXISTS idx_aki_lab_uniq ON aki_lab_results(mrn, source, test_date, creatinine);
+
+-- 上傳批次紀錄
+CREATE TABLE IF NOT EXISTS aki_upload_batches (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,              -- 'inpatients' | 'labs'
+    file_name TEXT,
+    snapshot_date TEXT,              -- inpatients 用
+    range_start TEXT,                -- labs 用（檔案標題的起日）
+    range_end TEXT,                  -- labs 用（檔案標題的迄日）
+    row_count INTEGER DEFAULT 0,     -- 解析出的原始列數
+    imported_count INTEGER DEFAULT 0,-- 實際寫入/更新筆數
+    uploaded_by TEXT,
+    uploaded_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_aki_batches_kind ON aki_upload_batches(kind, uploaded_at);
+
+-- ========================================
 -- 初始化預設資料
 -- ========================================
 

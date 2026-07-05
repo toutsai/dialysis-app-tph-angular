@@ -1,0 +1,228 @@
+<div class="aki-page">
+  <!-- 頂部工具列 -->
+  <header class="aki-header">
+    <div class="title-block">
+      <h1>全院 AKI Map</h1>
+      <span class="subtitle">依 KDIGO 肌酸酐標準分期 · 專師專用</span>
+    </div>
+
+    <div class="toolbar">
+      @if (data()?.availableDates?.length) {
+        <label class="field">
+          <span>快照日</span>
+          <select [ngModel]="selectedDate()" (ngModelChange)="onDateChange($event)">
+            @for (d of data()!.availableDates; track d) {
+              <option [value]="d">{{ d }}</option>
+            }
+          </select>
+        </label>
+      }
+
+      <label class="field search">
+        <span>搜尋</span>
+        <input type="text" placeholder="姓名 / 病歷號 / 床號 / 醫師"
+               [ngModel]="search()" (ngModelChange)="search.set($event)" />
+      </label>
+
+      <button class="btn upload" [disabled]="uploadingInpatients()"
+              (click)="inpatientsInput.click()">
+        {{ uploadingInpatients() ? '匯入中…' : '匯入留院清單' }}
+      </button>
+      <input #inpatientsInput type="file" accept=".xls,.xlsx" hidden
+             (change)="onPickInpatients($event)" />
+
+      <button class="btn upload" [disabled]="uploadingLabs()"
+              (click)="labsInput.click()">
+        {{ uploadingLabs() ? '匯入中…' : '匯入 CKD-AKI 明細' }}
+      </button>
+      <input #labsInput type="file" accept=".xls,.xlsx" hidden
+             (change)="onPickLabs($event)" />
+
+      <button class="btn ghost" (click)="load()" [disabled]="loading()">重新整理</button>
+    </div>
+  </header>
+
+  @if (message(); as msg) {
+    <div class="banner" [class.error]="msg.type === 'error'">{{ msg.text }}</div>
+  }
+
+  <!-- 摘要列（可點擊篩選） -->
+  <section class="summary">
+    <button class="chip total" [class.active]="filterCategory() === 'all'"
+            (click)="setFilter('all')">
+      全部 <b>{{ totalPatients() }}</b>
+    </button>
+    <button class="chip aki" [class.active]="filterCategory() === 'aki'"
+            (click)="setFilter('aki')">
+      AKI（1–3期）
+    </button>
+    @for (s of summaryRow(); track s.key) {
+      <button class="chip" [class.active]="filterCategory() === s.key"
+              [style.--c]="s.color" (click)="setFilter(s.key)">
+        <span class="dot" [style.background]="s.color"></span>
+        {{ s.label }} <b>{{ s.count }}</b>
+      </button>
+    }
+  </section>
+
+  @if (loading() && !data()) {
+    <div class="placeholder">載入中…</div>
+  } @else if (!data()?.snapshotDate) {
+    <div class="placeholder">
+      尚無資料。請先「匯入留院清單」與「匯入 CKD-AKI 明細」兩份 Excel。
+    </div>
+  } @else {
+    <!-- 觀察名單：門急尚未收治的 AKI -->
+    @if (watchList().length) {
+      <section class="watch">
+        <h2>⚠️ 門急觀察名單（尚未收治，達 AKI/ESRD）· {{ watchList().length }}</h2>
+        <div class="watch-list">
+          @for (w of watchList(); track w.mrn) {
+            <button class="watch-item" [style.--c]="color(w.category)" (click)="openDetail(w.mrn)">
+              <span class="dot" [style.background]="color(w.category)"></span>
+              <span class="wname">{{ w.name }}</span>
+              @if (w.dialysisMode) { <span class="hd-tag" title="本院透析病人">{{ w.dialysisMode }}</span> }
+              <span class="wmeta">{{ label(w.category) }} · {{ w.baselineCr }}→{{ w.peakCr }}
+                @if (w.ratio) { （×{{ w.ratio }}） }
+              </span>
+            </button>
+          }
+        </div>
+      </section>
+    }
+
+    <!-- 依護理站分區 -->
+    <section class="wards">
+      @for (g of wardGroups(); track g.ward) {
+        <div class="ward-card">
+          <div class="ward-head">
+            <h3>{{ wardLabel(g.ward) }}</h3>
+            <div class="ward-counts">
+              @for (def of categoryDefs; track def.key) {
+                @if (g.counts[def.key]) {
+                  <span class="mini" [style.background]="def.color" [title]="def.label">
+                    {{ g.counts[def.key] }}
+                  </span>
+                }
+              }
+            </div>
+          </div>
+          <div class="bed-grid">
+            @for (p of g.patients; track p.mrn) {
+              <button class="bed" [style.--c]="color(p.category)" (click)="openDetail(p.mrn)">
+                <span class="bed-top">
+                  <span class="bed-no">{{ p.bed }}</span>
+                  @if (p.dialysisMode) { <span class="hd-tag" title="本院透析病人">{{ p.dialysisMode }}</span> }
+                </span>
+                <span class="bed-name">{{ p.name }}</span>
+                <span class="bed-cr">
+                  @if (p.latestCr != null) { Cr {{ p.latestCr }} } @else { — }
+                </span>
+                @if (p.stage) { <span class="bed-stage">S{{ p.stage }}</span> }
+              </button>
+            }
+          </div>
+        </div>
+      }
+      @if (!wardGroups().length) {
+        <div class="placeholder">此篩選條件下沒有病人。</div>
+      }
+    </section>
+  }
+
+  <!-- 病人詳情面板 -->
+  @if (detailLoading() || detail()) {
+    <div class="detail-overlay" (click)="closeDetail()">
+      <div class="detail-panel" (click)="$event.stopPropagation()">
+        @if (detailLoading()) {
+          <div class="placeholder">載入中…</div>
+        }
+        @if (detail(); as d) {
+          <div class="detail-head">
+            <div>
+              <h2>{{ d.info?.name || d.staging.latest?.value }}
+                <span class="mrn">{{ d.mrn }}</span>
+                @if (d.dialysisMode) { <span class="hd-tag" title="本院透析病人">{{ d.dialysisMode }}</span> }
+              </h2>
+              @if (d.info) {
+                <div class="detail-sub">
+                  {{ wardLabel(d.info.ward) }} · 床 {{ d.info.bed }} · {{ d.info.dept }} · {{ d.info.physician }}
+                  · {{ d.info.sex }}/{{ d.info.age }}
+                </div>
+              }
+            </div>
+            <button class="btn ghost" (click)="closeDetail()">關閉</button>
+          </div>
+
+          <!-- 分期結論 -->
+          <div class="verdict" [style.--c]="color(d.staging.category)">
+            <span class="verdict-badge" [style.background]="color(d.staging.category)">
+              {{ label(d.staging.category) }}
+            </span>
+            @if (d.staging.baseline && d.staging.peak) {
+              <span class="verdict-detail">
+                baseline {{ d.staging.baseline.value }}（{{ sourceLabel(d.staging.baseline.source) }}
+                {{ d.staging.baseline.date }}）→ peak {{ d.staging.peak.value }}（{{ sourceLabel(d.staging.peak.source) }}
+                {{ d.staging.peak.date }}）
+                @if (d.staging.ratio) { · 比值 ×{{ d.staging.ratio }} }
+                @if (d.staging.absDelta) { · Δ {{ d.staging.absDelta }} }
+                @if (d.staging.baselineMode) { · baseline 取法：{{ d.staging.baselineMode }} }
+              </span>
+            } @else if (d.staging.category === 'single') {
+              <span class="verdict-detail">僅單筆 Cr（{{ d.staging.latest?.value }}），無前值可比對。</span>
+            } @else if (d.staging.category === 'esrd') {
+              <span class="verdict-detail">全段最低 Cr ≥ 4.0（{{ d.staging.overallMin }}），視為慢性腎衰/ESRD。</span>
+            } @else if (d.staging.category === 'no-data') {
+              <span class="verdict-detail">此病人區間內無肌酸酐資料。</span>
+            }
+          </div>
+
+          <!-- Cr 趨勢圖 -->
+          @if (trendChart(); as c) {
+            <div class="trend">
+              <svg [attr.viewBox]="'0 0 ' + c.W + ' ' + c.H" class="trend-svg">
+                @if (c.dots.length > 1) {
+                  <polyline [attr.points]="c.polyline" fill="none" stroke="#90a4ae" stroke-width="2" />
+                }
+                @for (dt of c.dots; track $index) {
+                  <circle [attr.cx]="dt.cx" [attr.cy]="dt.cy" r="5" [attr.fill]="dt.color" />
+                  <text [attr.x]="dt.cx" [attr.y]="dt.cy - 10" text-anchor="middle" class="pt-val">{{ dt.value }}</text>
+                }
+              </svg>
+              <div class="trend-legend">
+                <span><i style="background:#1976d2"></i>門診</span>
+                <span><i style="background:#7b1fa2"></i>急診</span>
+                <span><i style="background:#d32f2f"></i>住院</span>
+              </div>
+            </div>
+          }
+
+          <!-- Cr 明細表 -->
+          <table class="points">
+            <thead><tr><th>日期</th><th>來源</th><th>Cr (mg/dL)</th></tr></thead>
+            <tbody>
+              @for (p of d.points; track $index) {
+                <tr>
+                  <td>{{ p.testDate }}</td>
+                  <td>{{ sourceLabel(p.source) }}</td>
+                  <td>{{ p.creatinine }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+
+          @if (d.info?.diagnoses?.length) {
+            <div class="dx">
+              <h4>診斷</h4>
+              <ul>
+                @for (dx of d.info!.diagnoses; track $index) {
+                  <li>{{ dx.code }} {{ dx.name }}</li>
+                }
+              </ul>
+            </div>
+          }
+        }
+      </div>
+    </div>
+  }
+</div>

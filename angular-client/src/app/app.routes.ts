@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
 import { roleGuard } from './core/guards/role.guard';
+import { specialistGuard } from './core/guards/specialist.guard';
 import { PAGE_ACCESS } from './core/config/page-access';
 
 export const routes: Routes = [
@@ -126,6 +127,15 @@ export const routes: Routes = [
           title: PAGE_ACCESS.reporting.title,
           roles: PAGE_ACCESS.reporting.roles,
         },
+      },
+      {
+        path: 'aki-map',
+        loadComponent: () =>
+          import('./features/aki-map/aki-map.component').then(
+            (m) => m.AkiMapComponent
+          ),
+        canActivate: [specialistGuard],
+        data: { title: '全院 AKI Map' },
       },
       {
         path: 'user-management',

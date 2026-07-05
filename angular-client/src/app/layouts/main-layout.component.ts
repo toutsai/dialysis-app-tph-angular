@@ -188,6 +188,11 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     return userCanAccessPage(pageKey, this.authService.currentUser()?.role);
   }
 
+  /** 專師專用頁面（admin 或 職稱「專科護理師」） */
+  canAccessSpecialist(): boolean {
+    return this.authService.isSpecialist();
+  }
+
   constructor() {
     this.assignmentsApi =
       this.apiManagerService.create<AssignmentRecord>('nurse_assignments');
