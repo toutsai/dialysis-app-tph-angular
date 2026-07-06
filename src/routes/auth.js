@@ -540,6 +540,8 @@ router.get('/users/directory', authenticate, (req, res) => {
           result.staffId = p.staff_id
           result.phone = p.phone
           result.clinicHours = JSON.parse(p.clinic_hours || '[]')
+          result.defaultSchedules = JSON.parse(p.default_schedules || '[]')
+          result.defaultConsultationSchedules = JSON.parse(p.default_consultation_schedules || '[]')
         }
 
         return result
