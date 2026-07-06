@@ -59,8 +59,12 @@ export class LoginComponent {
         this.password(),
       );
       if (result.success) {
-        // Navigate to main app after successful login
-        this.router.navigate(['/']);
+        // 登入成功後導回原本要去的頁面（守衛帶入的 ?returnUrl=），否則回首頁。
+        // 只接受站內路徑（以 / 開頭、非 //），避免 open redirect。
+        const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
+        const isSafeInternalPath =
+          !!returnUrl && returnUrl.startsWith('/') && !returnUrl.startsWith('//');
+        this.router.navigateByUrl(isSafeInternalPath ? returnUrl : '/');
       } else {
         this.errorMessage.set(result.error || '登入發生錯誤');
         this.isLoading.set(false);
