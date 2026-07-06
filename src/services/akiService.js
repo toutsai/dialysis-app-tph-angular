@@ -2,7 +2,8 @@
 //
 // 資料來源為 HIS 匯出的兩份 Excel：
 //   1.「留院病人清單明細表」→ 住院病人快照（map 畫布）
-//   2.「CKD-AKI 病患明細」   → 肌酸酐(Cr)散點（門診/急診/住院三源）
+//   2. 檢驗明細 → 肌酸酐(Cr)散點（門診/急診/住院三源）
+//      支援「CKD-AKI 病患明細」（寬表）與「檢驗結果(住院病人)-檢驗日期」（長表）兩種格式，自動偵測
 //
 // 兩檔以「病歷號 mrn」對接。分期採 KDIGO AKI（僅 Cr，無尿量）。
 //
@@ -64,12 +65,12 @@ function toNumber(v) {
   return isNaN(n) ? null : n
 }
 
-/** 解析標題列的「&起日YYYYMMDD&迄日YYYYMMDD」 */
+/** 解析標題列的「&起日YYYYMMDD&迄日YYYYMMDD」（新版報表為「&起日:YYYYMMDD20260615」，中間夾非數字字樣） */
 export function parseTitleRange(rows) {
   for (let i = 0; i < Math.min(rows.length, 4); i++) {
     for (const cell of rows[i] || []) {
       const s = String(cell == null ? '' : cell)
-      const m = s.match(/起日\s*(\d{8}).*?迄日\s*(\d{8})/)
+      const m = s.match(/起日\D*?(\d{8}).*?迄日\D*?(\d{8})/)
       if (m) return { rangeStart: normalizeDate(m[1]), rangeEnd: normalizeDate(m[2]) }
     }
   }
@@ -139,16 +140,29 @@ export function parseInpatients(buffer) {
   return { rangeStart, rangeEnd, rowCount, patients: [...map.values()] }
 }
 
-// ---------- CKD-AKI 明細解析 ----------
-// 欄位: 病歷號,姓名,性別,年齡,主治醫師,病床號,住院日期,
-//       門診檢驗日期,門診醫令,門診檢驗數值, 急診檢驗日期,急診醫令,急診檢驗數值, 住院檢驗日期,住院醫令,住院檢驗數值
+// ---------- 檢驗明細解析（Cr 散點，自動偵測兩種 HIS 格式） ----------
+// 格式 A「CKD-AKI 病患明細」（寬表）:
+//   病歷號,姓名,性別,年齡,主治醫師,病床號,住院日期,
+//   門診檢驗日期,門診醫令,門診檢驗數值, 急診檢驗日期,急診醫令,急診檢驗數值, 住院檢驗日期,住院醫令,住院檢驗數值
+// 格式 B「檢驗結果(住院病人)-檢驗日期」（長表，一列一筆）:
+//   病歷號,姓名,性別,年齡,入院日期,科別,主治醫師,開單日,報告日期,病床號,來源(門/急/住),醫令,序號,細項名稱,結果
+
+const LONG_SOURCE_MAP = { 門: 'OPD', 急: 'ER', 住: 'IPD' }
 
 export function parseLabs(buffer) {
   const rows = readSheetRows(buffer)
   const { rangeStart, rangeEnd } = parseTitleRange(rows)
   const headerIdx = findHeaderRow(rows, '病歷號')
-  if (headerIdx < 0) throw new Error('找不到表頭（缺「病歷號」欄），請確認是「CKD-AKI 病患明細」')
+  if (headerIdx < 0) throw new Error('找不到表頭（缺「病歷號」欄），請確認是「CKD-AKI 病患明細」或「檢驗結果(住院病人)」報表')
 
+  const header = (rows[headerIdx] || []).map((c) => String(c == null ? '' : c).trim())
+  const isLongFormat = header.includes('來源') && header.includes('結果')
+  const parsed = isLongFormat ? parseLabsLong(rows, headerIdx, header) : parseLabsWide(rows, headerIdx)
+  return { rangeStart, rangeEnd, ...parsed }
+}
+
+// 格式 A：寬表（門診/急診/住院各三欄攤開）
+function parseLabsWide(rows, headerIdx) {
   // (日期欄, 醫令欄, 數值欄, 來源代碼)
   const SRC = [
     { d: 7, o: 8, v: 9, source: 'OPD' },
@@ -174,7 +188,52 @@ export function parseLabs(buffer) {
       points.push({ mrn, name, source: s.source, testDate: date, creatinine: cr, orderCode: String(r[s.o] || '').trim() })
     }
   }
-  return { rangeStart, rangeEnd, rowCount, points }
+  return { rowCount, points }
+}
+
+// 格式 B：長表（一列一筆結果），欄位位置以表頭名稱定位
+function parseLabsLong(rows, headerIdx, header) {
+  const C = {
+    mrn: header.indexOf('病歷號'),
+    name: header.indexOf('姓名'),
+    orderDate: header.indexOf('開單日'),
+    reportDate: header.indexOf('報告日期'),
+    source: header.indexOf('來源'),
+    order: header.indexOf('醫令'),
+    item: header.indexOf('細項名稱'),
+    value: header.indexOf('結果'),
+  }
+  const seen = new Set()
+  const points = []
+  let rowCount = 0
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const r = rows[i]
+    const mrn = normalizeMrn(r?.[C.mrn])
+    if (!mrn) continue
+    rowCount++
+    // 細項防呆：報表若混入 eGFR 等其他細項，只收肌酸酐（eGFR 數值誤當 Cr 會嚴重誤判分期）
+    const item = C.item >= 0 ? String(r[C.item] || '').trim() : ''
+    if (item && !item.includes('肌酸酐')) continue
+    // 檢驗時點取開單日（≈採檢日），缺值退回報告日期
+    const date = normalizeDate(r[C.orderDate]) || normalizeDate(r[C.reportDate])
+    // 低於偵測極限的「<0.2」等非數值結果略過（沿用寬表行為，避免當 baseline 灌高比值）
+    const cr = toNumber(r[C.value])
+    if (!date || cr == null) continue
+    const rawSource = String(r[C.source] || '').trim()
+    const source = LONG_SOURCE_MAP[rawSource] || rawSource || 'IPD'
+    const key = `${mrn}|${source}|${date}|${cr}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    points.push({
+      mrn,
+      name: String(r[C.name] || '').trim(),
+      source,
+      testDate: date,
+      creatinine: cr,
+      orderCode: String(r[C.order] || '').trim(),
+    })
+  }
+  return { rowCount, points }
 }
 
 // ---------- KDIGO 分期 ----------

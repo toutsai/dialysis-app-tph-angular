@@ -5,7 +5,7 @@
       <h1>全院 AKI Map</h1>
       <span class="subtitle">依 KDIGO 肌酸酐標準分期 · 專師專用</span>
       <span class="source-hint">
-        上傳資料請用報表產生器：<b>醫學研究 &gt; W1.1 留院病人清單明細表</b>、<b>個管-CKD &gt; CKD-AKI 病患明細</b>
+        上傳資料請用報表產生器：<b>醫學研究 &gt; W1.1 留院病人清單明細表</b>、<b>檢驗結果(住院病人)-檢驗日期</b>（舊版 CKD-AKI 病患明細亦可）
       </span>
     </div>
 
@@ -36,7 +36,7 @@
 
       <button class="btn upload" [disabled]="uploadingLabs()"
               (click)="labsInput.click()">
-        {{ uploadingLabs() ? '匯入中…' : '匯入 CKD-AKI 明細' }}
+        {{ uploadingLabs() ? '匯入中…' : '匯入檢驗明細' }}
       </button>
       <input #labsInput type="file" accept=".xls,.xlsx" hidden
              (change)="onPickLabs($event)" />
@@ -80,7 +80,7 @@
     <div class="placeholder">載入中…</div>
   } @else if (!data()?.snapshotDate) {
     <div class="placeholder">
-      尚無資料。請先「匯入留院清單」與「匯入 CKD-AKI 明細」兩份 Excel。
+      尚無資料。請先「匯入留院清單」與「匯入檢驗明細」兩份 Excel。
     </div>
   } @else {
     <!-- 觀察名單（縮小）＋ AKI 比例統計 -->
@@ -391,7 +391,7 @@
 
         <div class="help-body">
           <h4>資料來源</h4>
-          <p>以上傳的兩份 Excel（留院病人清單 ＋ CKD-AKI 病患明細）為準，用<b>病歷號</b>串接，彙整每位病人的肌酸酐（Cr）數值——含<b>門診、急診、住院</b>三個來源、去重後依日期排序。</p>
+          <p>以上傳的兩份 Excel（留院病人清單 ＋ 檢驗明細）為準，用<b>病歷號</b>串接，彙整每位病人的肌酸酐（Cr）數值——含<b>門診、急診、住院</b>三個來源、去重後依日期排序。</p>
 
           <h4>baseline（基準值）怎麼取</h4>
           <ul>

@@ -440,7 +440,7 @@ export class AkiMapComponent implements OnInit {
       const res = await this.akiApi.uploadLabs(file.name, b64);
       this.message.set({
         type: 'info',
-        text: `CKD-AKI 明細匯入成功：新增 ${res.imported} 筆（共 ${res.total} 筆，${res.range.start}~${res.range.end}）`,
+        text: `檢驗明細匯入成功：新增 ${res.imported} 筆（共 ${res.total} 筆，${res.range.start}~${res.range.end}）`,
       });
       await this.load();
       if (this.careLoaded()) await this.loadCare();
