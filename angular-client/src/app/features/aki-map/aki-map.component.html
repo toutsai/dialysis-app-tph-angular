@@ -5,7 +5,7 @@
       <h1>全院 AKI Map</h1>
       <span class="subtitle">依 KDIGO 肌酸酐標準分期 · 專師專用</span>
       <span class="source-hint">
-        上傳資料請用報表產生器：<b>醫學研究 &gt; W1.1 留院病人清單明細表</b>、<b>檢驗結果(住院病人)-檢驗日期</b>（舊版 CKD-AKI 病患明細亦可）
+        上傳資料請用報表產生器：<b>醫學研究 &gt; W1.1 留院病人清單明細表</b>、<b>8.1 報告區間明細門急住--檢驗院內碼</b>（含 Cr＋eGFR；舊版檢驗結果(住院病人)／CKD-AKI 病患明細亦可）
       </span>
     </div>
 
@@ -351,15 +351,16 @@
             </div>
           }
 
-          <!-- Cr 明細表 -->
+          <!-- Cr/eGFR 明細表 -->
           <table class="points">
-            <thead><tr><th>日期</th><th>來源</th><th>Cr (mg/dL)</th></tr></thead>
+            <thead><tr><th>日期</th><th>來源</th><th>Cr (mg/dL)</th><th>eGFR</th></tr></thead>
             <tbody>
               @for (p of d.points; track $index) {
                 <tr>
                   <td>{{ p.testDate }}</td>
                   <td>{{ sourceLabel(p.source) }}</td>
-                  <td>{{ p.creatinine }}</td>
+                  <td>{{ p.creatinine ?? '—' }}</td>
+                  <td>{{ p.egfr ?? '—' }}</td>
                 </tr>
               }
             </tbody>

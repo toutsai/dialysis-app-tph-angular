@@ -100,7 +100,7 @@ router.post('/upload/inpatients', (req, res) => {
   }
 })
 
-// ---------- 上傳：CKD-AKI 明細（累積歷史，去重） ----------
+// ---------- 上傳：檢驗明細（累積歷史，去重；8.1 報表含 eGFR） ----------
 router.post('/upload/labs', (req, res) => {
   try {
     const { buffer, fileName } = decodeBuffer(req)
@@ -111,15 +111,39 @@ router.post('/upload/labs', (req, res) => {
 
     const insertLab = db.prepare(`
       INSERT OR IGNORE INTO aki_lab_results
-        (id, mrn, name, source, test_date, creatinine, order_code, batch_id, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+        (id, mrn, name, source, test_date, creatinine, egfr, order_code, batch_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+    `)
+    // 同一點已存在（唯一索引擋掉）時，把 eGFR 補寫回舊資料
+    const backfillEgfr = db.prepare(`
+      UPDATE aki_lab_results SET egfr = ?
+      WHERE mrn = ? AND source = ? AND test_date = ? AND creatinine = ? AND egfr IS NULL
+    `)
+    // eGFR-only 點（無 Cr）：唯一索引對 NULL 不去重，需自行檢查
+    const egfrOnlyExists = db.prepare(`
+      SELECT 1 FROM aki_lab_results
+      WHERE mrn = ? AND source = ? AND test_date = ? AND creatinine IS NULL AND egfr = ? LIMIT 1
     `)
 
     let imported = 0
+    let egfrBackfilled = 0
     const tx = db.transaction(() => {
       for (const p of parsed.points) {
-        const info = insertLab.run(uuidv4(), p.mrn, p.name, p.source, p.testDate, p.creatinine, p.orderCode, batchId)
-        if (info.changes > 0) imported++
+        const egfr = p.egfr ?? null
+        if (p.creatinine == null) {
+          if (egfr == null) continue
+          if (egfrOnlyExists.get(p.mrn, p.source, p.testDate, egfr)) continue
+          insertLab.run(uuidv4(), p.mrn, p.name, p.source, p.testDate, null, egfr, p.orderCode, batchId)
+          imported++
+          continue
+        }
+        const info = insertLab.run(uuidv4(), p.mrn, p.name, p.source, p.testDate, p.creatinine, egfr, p.orderCode, batchId)
+        if (info.changes > 0) {
+          imported++
+        } else if (egfr != null) {
+          const u = backfillEgfr.run(egfr, p.mrn, p.source, p.testDate, p.creatinine)
+          if (u.changes > 0) egfrBackfilled++
+        }
       }
       db.prepare(`
         INSERT INTO aki_upload_batches
@@ -129,19 +153,23 @@ router.post('/upload/labs', (req, res) => {
     })
     tx()
 
-    logAuditWithRequest(req, 'AKI_UPLOAD_LABS', 'aki_lab_results', batchId, { imported, total: parsed.points.length, fileName })
-    res.json({ success: true, imported, total: parsed.points.length, range: { start: parsed.rangeStart, end: parsed.rangeEnd } })
+    logAuditWithRequest(req, 'AKI_UPLOAD_LABS', 'aki_lab_results', batchId, { imported, egfrBackfilled, total: parsed.points.length, fileName })
+    res.json({ success: true, imported, egfrBackfilled, total: parsed.points.length, range: { start: parsed.rangeStart, end: parsed.rangeEnd } })
   } catch (error) {
-    res.status(error.status || 500).json({ error: true, message: error.message || '匯入 CKD-AKI 明細失敗' })
+    res.status(error.status || 500).json({ error: true, message: error.message || '匯入檢驗明細失敗' })
   }
 })
 
-// ---------- 取得某病歷號的 Cr 散點 ----------
+// ---------- 取得某病歷號的 Cr/eGFR 散點 ----------
 function getPointsByMrn(db, mrn) {
   return db
-    .prepare('SELECT source, test_date AS testDate, creatinine, order_code AS orderCode FROM aki_lab_results WHERE mrn = ? ORDER BY test_date')
+    .prepare('SELECT source, test_date AS testDate, creatinine, egfr, order_code AS orderCode FROM aki_lab_results WHERE mrn = ? ORDER BY test_date')
     .all(mrn)
-    .map((r) => ({ ...r, creatinine: r.creatinine == null ? null : Number(r.creatinine) }))
+    .map((r) => ({
+      ...r,
+      creatinine: r.creatinine == null ? null : Number(r.creatinine),
+      egfr: r.egfr == null ? null : Number(r.egfr),
+    }))
 }
 
 // ---------- AKI Map（住院清單 join 分期） ----------

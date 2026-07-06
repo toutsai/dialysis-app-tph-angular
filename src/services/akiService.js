@@ -2,8 +2,9 @@
 //
 // 資料來源為 HIS 匯出的兩份 Excel：
 //   1.「留院病人清單明細表」→ 住院病人快照（map 畫布）
-//   2. 檢驗明細 → 肌酸酐(Cr)散點（門診/急診/住院三源）
-//      支援「CKD-AKI 病患明細」（寬表）與「檢驗結果(住院病人)-檢驗日期」（長表）兩種格式，自動偵測
+//   2. 檢驗明細 → 肌酸酐(Cr)/腎絲球過濾率(eGFR)散點（門診/急診/住院三源）
+//      自動偵測格式：「CKD-AKI 病患明細」寬表、「檢驗結果(住院病人)-檢驗日期」長表、
+//      「8.1 報告區間明細門急住--檢驗院內碼」長表（含 eGFR，同次抽血配對）
 //
 // 兩檔以「病歷號 mrn」對接。分期採 KDIGO AKI（僅 Cr，無尿量）。
 //
@@ -140,14 +141,17 @@ export function parseInpatients(buffer) {
   return { rangeStart, rangeEnd, rowCount, patients: [...map.values()] }
 }
 
-// ---------- 檢驗明細解析（Cr 散點，自動偵測兩種 HIS 格式） ----------
+// ---------- 檢驗明細解析（Cr/eGFR 散點，自動偵測 HIS 格式） ----------
 // 格式 A「CKD-AKI 病患明細」（寬表）:
 //   病歷號,姓名,性別,年齡,主治醫師,病床號,住院日期,
 //   門診檢驗日期,門診醫令,門診檢驗數值, 急診檢驗日期,急診醫令,急診檢驗數值, 住院檢驗日期,住院醫令,住院檢驗數值
 // 格式 B「檢驗結果(住院病人)-檢驗日期」（長表，一列一筆）:
-//   病歷號,姓名,性別,年齡,入院日期,科別,主治醫師,開單日,報告日期,病床號,來源(門/急/住),醫令,序號,細項名稱,結果
+//   病歷號,姓名,...,開單日,報告日期,病床號,來源(門/急/住),醫令,序號,細項名稱,結果
+// 格式 C「8.1 報告區間明細門急住--檢驗院內碼」（長表，一列一筆，同次抽血 Cr 與 eGFR 各一列）:
+//   來源(門診/急診/住院),病歷號,開單日,姓名,身份證字號,出生日期,年齡,性別,簽收日,醫令,細項序號,細項名稱,報告日,結果,買,醫師,科別
+// 長表 B/C 共用一個解析器：欄位以表頭名稱定位，「腎絲球過濾率」列配對到同次抽血的 Cr 點。
 
-const LONG_SOURCE_MAP = { 門: 'OPD', 急: 'ER', 住: 'IPD' }
+const LONG_SOURCE_MAP = { 門: 'OPD', 急: 'ER', 住: 'IPD', 門診: 'OPD', 急診: 'ER', 住院: 'IPD' }
 
 export function parseLabs(buffer) {
   const rows = readSheetRows(buffer)
@@ -191,47 +195,77 @@ function parseLabsWide(rows, headerIdx) {
   return { rowCount, points }
 }
 
-// 格式 B：長表（一列一筆結果），欄位位置以表頭名稱定位
+// 格式 B/C：長表（一列一筆結果），欄位位置以表頭名稱定位
 function parseLabsLong(rows, headerIdx, header) {
+  const col = (...names) => {
+    for (const n of names) {
+      const i = header.indexOf(n)
+      if (i >= 0) return i
+    }
+    return -1
+  }
   const C = {
-    mrn: header.indexOf('病歷號'),
-    name: header.indexOf('姓名'),
-    orderDate: header.indexOf('開單日'),
-    reportDate: header.indexOf('報告日期'),
-    source: header.indexOf('來源'),
-    order: header.indexOf('醫令'),
-    item: header.indexOf('細項名稱'),
-    value: header.indexOf('結果'),
+    mrn: col('病歷號'),
+    name: col('姓名'),
+    reportDate: col('報告日期', '報告日'),
+    orderDate: col('開單日'),
+    source: col('來源'),
+    order: col('醫令'),
+    item: col('細項名稱'),
+    value: col('結果'),
   }
   const seen = new Set()
   const points = []
+  const byGroup = new Map() // (病歷號|來源|日期) -> 該組 Cr 點，供 eGFR 配對
+  const egfrRows = []
   let rowCount = 0
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const r = rows[i]
     const mrn = normalizeMrn(r?.[C.mrn])
     if (!mrn) continue
     rowCount++
-    // 細項防呆：報表若混入 eGFR 等其他細項，只收肌酸酐（eGFR 數值誤當 Cr 會嚴重誤判分期）
+    // 細項防呆：只收肌酸酐與腎絲球過濾率，其他細項略過（eGFR 數值誤當 Cr 會嚴重誤判分期）
     const item = C.item >= 0 ? String(r[C.item] || '').trim() : ''
-    if (item && !item.includes('肌酸酐')) continue
-    // 檢驗時點取開單日（≈採檢日），缺值退回報告日期
-    const date = normalizeDate(r[C.orderDate]) || normalizeDate(r[C.reportDate])
+    const isCr = item.includes('肌酸酐')
+    const isEgfr = item.includes('過濾率')
+    if (item && !isCr && !isEgfr) continue
+    // 檢驗時點以報告日為主，缺值退回開單日
+    const date = normalizeDate(r[C.reportDate]) || normalizeDate(r[C.orderDate])
     // 低於偵測極限的「<0.2」等非數值結果略過（沿用寬表行為，避免當 baseline 灌高比值）
-    const cr = toNumber(r[C.value])
-    if (!date || cr == null) continue
+    const val = toNumber(r[C.value])
+    if (!date || val == null) continue
     const rawSource = String(r[C.source] || '').trim()
     const source = LONG_SOURCE_MAP[rawSource] || rawSource || 'IPD'
-    const key = `${mrn}|${source}|${date}|${cr}`
+    const name = String(r[C.name] || '').trim()
+    const orderCode = String(r[C.order] || '').trim()
+    const gkey = `${mrn}|${source}|${date}`
+    if (isEgfr) {
+      egfrRows.push({ gkey, mrn, name, source, date, value: val, orderCode })
+      continue
+    }
+    const key = `${gkey}|${val}`
     if (seen.has(key)) continue
     seen.add(key)
-    points.push({
-      mrn,
-      name: String(r[C.name] || '').trim(),
-      source,
-      testDate: date,
-      creatinine: cr,
-      orderCode: String(r[C.order] || '').trim(),
-    })
+    const pt = { mrn, name, source, testDate: date, creatinine: val, egfr: null, orderCode }
+    points.push(pt)
+    if (!byGroup.has(gkey)) byGroup.set(gkey, [])
+    byGroup.get(gkey).push(pt)
+  }
+  // eGFR 依 (病歷號|來源|日期) 配對到同組 Cr 點；同日多次抽血依出現順序依序配對
+  const usedCount = new Map()
+  for (const e of egfrRows) {
+    const group = byGroup.get(e.gkey)
+    const used = usedCount.get(e.gkey) || 0
+    if (group && used < group.length) {
+      if (group[used].egfr == null) group[used].egfr = e.value
+      usedCount.set(e.gkey, used + 1)
+    } else {
+      // 無 Cr 可配（如該次 Cr 為 <0.2 被略過）→ 保留為 eGFR-only 點，仍可用於 CKD 追蹤
+      const key = `${e.gkey}|egfr|${e.value}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      points.push({ mrn: e.mrn, name: e.name, source: e.source, testDate: e.date, creatinine: null, egfr: e.value, orderCode: e.orderCode })
+    }
   }
   return { rowCount, points }
 }

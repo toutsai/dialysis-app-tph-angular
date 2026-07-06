@@ -705,6 +705,7 @@ CREATE TABLE IF NOT EXISTS aki_lab_results (
     source TEXT,                     -- OPD / ER / IPD（門診/急診/住院）
     test_date TEXT NOT NULL,         -- 檢驗日 (YYYY-MM-DD)
     creatinine REAL,                 -- Cr 值 (mg/dL)
+    egfr REAL,                       -- 腎絲球過濾率 eGFR（同次抽血配對，CKD 追蹤用；可為 NULL）
     order_code TEXT,                 -- 醫令碼（E09015C 等，皆為肌酸酐）
     batch_id TEXT,
     created_at TEXT DEFAULT (datetime('now', 'localtime'))

@@ -55,7 +55,8 @@ export interface AkiMapResponse {
 export interface AkiLabPoint {
   source: 'OPD' | 'ER' | 'IPD';
   testDate: string;
-  creatinine: number;
+  creatinine: number | null;
+  egfr: number | null;
   orderCode: string;
 }
 
@@ -182,7 +183,7 @@ export class AkiApiService {
 
   uploadLabs(fileName: string, fileContentBase64: string) {
     return firstValueFrom(
-      this.api.post<{ success: boolean; imported: number; total: number; range: { start: string; end: string } }>(
+      this.api.post<{ success: boolean; imported: number; egfrBackfilled?: number; total: number; range: { start: string; end: string } }>(
         '/aki/upload/labs',
         { fileName, fileContentBase64 },
       ),

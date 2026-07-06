@@ -383,6 +383,15 @@ export function runMigrations() {
       if (addColumnIfNotExists(db, 'aki_care_records', 'ckd_history', 'TEXT')) migrationsApplied++
     }
 
+    // AKI 檢驗散點加 eGFR 欄位（8.1 報表同次抽血 Cr+eGFR，CKD 追蹤用）
+    const akiLabExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='aki_lab_results'")
+      .get()
+    if (akiLabExists) {
+      console.log('📋 檢查 aki_lab_results 表格...')
+      if (addColumnIfNotExists(db, 'aki_lab_results', 'egfr', 'REAL')) migrationsApplied++
+    }
+
     if (migrationsApplied > 0) {
       console.log(`✅ 已完成 ${migrationsApplied} 項遷移`)
     } else {
