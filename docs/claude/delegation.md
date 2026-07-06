@@ -61,7 +61,7 @@ Subagent 的最終回覆必須遵守：
 
 **做的人不能當驗的人。** 主對話（或實作 agent）自己檢查自己的產出，會系統性地漏掉自己的盲點。
 
-- **驗收一律派 `verifier` agent**（定義在 `.claude/agents/verifier.md`，fresh context、唯讀 + 可跑指令）。給它：宣稱完成的事 + 驗收條件清單，讓它自己去讀檔/跑指令，**不要**把「我改了什麼」的敘述餵給它當證據。
+- **驗收一律派 `verifier` agent**（定義在 `.claude/agents/verifier.md`，fresh context、唯讀 + 可跑指令）。若你的 Agent 工具清單裡沒有 `verifier`（自訂 agent 在 session 啟動時載入，中途新增的檔案看不到），fallback：派 `general-purpose` 並在 prompt 開頭要求它先 Read `.claude/agents/verifier.md` 並遵守其中全部規則。給它：宣稱完成的事 + 驗收條件清單，讓它自己去讀檔/跑指令，**不要**把「我改了什麼」的敘述餵給它當證據。
 - **檔案產出**：verifier 用 read-back（實際打開檔案核對內容），不是看 diff 摘要。
 - **程式碼產出**：verifier 實跑 `node --check` + `npm run smoke:tph-angular`（或針對性指令），不是看程式碼「長得對」。
 - **高風險判斷**（動排程同步、KiDit、資料遷移、刪東西）：加第二意見——派兩個獨立 agent 各給答案，不一致就升級處理；或一個 agent 產出、另一個以「找出這裡哪裡錯」的立場審。

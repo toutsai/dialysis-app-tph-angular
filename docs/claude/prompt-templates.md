@@ -66,7 +66,7 @@
 目標：審查 {分支/diff 範圍，例如「git diff onsite-main..HEAD」}，找出會出錯的地方。
 動機：{這個 diff 要做什麼}。你的立場是對抗性的：假設裡面有 bug，去證明它。
 必查清單：
-- [ ] .claude/skills/code-review.md 的專案 checklist 逐節過一遍
+- [ ] 用 Read 打開 .claude/skills/code-review.md 的專案 checklist 逐節過一遍（它是參考檔，不是內建 Skill「code-review」，別用 Skill 工具呼叫）
 - [ ] CLAUDE.md「⚠️ 陷阱」七條是否被違反
 - [ ] 每個宣稱的行為改動，指出對應的驗證證據在哪（沒有就列為 finding）
 - [ ] 邊界：空值/JSON.parse 失敗/日期跨日跨時區/RBAC 缺漏

@@ -59,7 +59,7 @@
 1. **語法層**：`node --check`（每個改過的檔）。
 2. **建置層**：前端動過就 `npm run build:angular`。
 3. **行為層**：`npm run smoke:tph-angular`；新行為加針對性驗證（§2.3）。
-4. **審查層**：對照 `.claude/skills/code-review.md` 的專案 checklist（DB 單例、參數化 SQL、snake→camel、RBAC、ESM、Windows 路徑）。
+4. **審查層**：用 Read 打開 `.claude/skills/code-review.md`（注意：這是參考檔，與內建 Skill「code-review」同名但不是同一個東西，呼叫 Skill 不等於讀過它），對照專案 checklist（DB 單例、參數化 SQL、snake→camel、RBAC、ESM、Windows 路徑）。
 5. **驗收層**：`verifier` agent 獨立 read-back / 實跑。
 
 ✅ **正例**：五層依序過，每層留一行證據在回報裡。

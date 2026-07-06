@@ -14,7 +14,8 @@
 ```bash
 npm start                     # 啟動伺服器（port 3000）
 npm run dev                   # 開發模式 (--watch)
-npm run migrate               # 資料庫遷移（獨立腳本）
+npm run migrate               # ⚠️ 這是 Firestore→SQLite 一次性匯入工具（migrations/migrate.js），
+                              #    不是 schema 遷移！schema 遷移在 src/db/migrate.js，伺服器啟動時自動執行
 npm run init-db               # 初始化資料庫 + 預設管理員
 npm run backup                # 手動備份資料庫
 npm run build:angular         # 建置 Angular 前端 → dist/
@@ -30,7 +31,9 @@ npm run smoke:tph-angular        # 端到端 smoke test（自建 server 打 API�
 ```
 src/
   index.js                   # Express 入口：CORS、路由掛載、graceful shutdown
-  db/init.js                 # DB 全域單例 (getDatabase)；schema.sql (25+ 表)；migrate.js (獨立腳本)
+  db/init.js                 # DB 全域單例 (getDatabase)；schema.sql (25+ 表)
+  db/migrate.js              # 漸進式 ALTER TABLE schema 遷移，init.js 啟動時自動呼叫 runMigrations()
+                             #（migrations/migrate.js 是另一支：Firestore 匯入工具，勿混淆）
   middleware/                # auth.js (JWT+RBAC+稽核)、rateLimit.js、validate.js
   routes/
     auth.js                  # 登入/登出/使用者 CRUD/refresh-token
@@ -63,7 +66,7 @@ angular-client/              # Angular 19 前端原始碼（頁面清單見 docs
 
 ## 不變式（違反即是 bug）
 
-- **DB 單例**：一律 `getDatabase()`，不要 `new Database()`、不要 `db.close()`。唯一例外 `migrate.js`（獨立腳本自管連線）。
+- **DB 單例**：一律 `getDatabase()`，不要 `new Database()`、不要 `db.close()`。例外只有兩個 migrate 腳本（`src/db/migrate.js`、`migrations/migrate.js`）自管連線。
 - **better-sqlite3 是同步的**：`db.prepare().run/get/all()` 不加 await；SQL 一律參數化（`?`）；大量寫入包 `db.transaction()`。
 - **命名轉換**：DB 欄位 `snake_case`，API 回應 `camelCase`，在 route handler 手動轉。
 - **錯誤回應**：`{ error: true, message: "..." }`；ID 用 UUID v4。
@@ -75,7 +78,7 @@ angular-client/              # Angular 19 前端原始碼（頁面清單見 docs
 
 ## ⚠️ 陷阱（前人踩過，勿再踩）
 
-1. **「更改模式」不進 KiDit 是刻意決策**：`kiditSync.js` 的 `KIDIT_EXCLUDED_MOVEMENT_TYPES = Set(['更改模式'])`，同時管即時與預約兩條路徑。勿誤改回。
+1. **「更改模式」不進 KiDit 是刻意決策**：`kiditSync.js` 的 `KIDIT_EXCLUDED_MOVEMENT_TYPES = Set(['更改模式', '勿動'])`（kiditSync.js:10），同時管即時與預約兩條路徑。勿誤改回。
 2. **資料庫裡是 `SLED` 不是 `SLEDD`**：透析模式經 `utils/dialysisMode.js` 正規化（`SLEDD/SLEDF→SLED`）。任何新寫 mode 的路徑都要套 `normalizeDialysisMode`。
 3. **純改頻率/床位不寫工作日誌**：那是排程規則，不是病人動態。完整同步規則見 `docs/claude/architecture.md`「同步鏈路」節。
 4. **eventBus 是單進程記憶體實作**：PM2 改 cluster 模式會壞，需先換 Redis pub/sub。
@@ -104,7 +107,7 @@ angular-client/              # Angular 19 前端原始碼（頁面清單見 docs
 | `docs/*-handoff.md`、`CHANGES-*.md`、`HANDOFF-CHANGES.md` | 考古某功能的決策脈絡時 |
 | `.claude/skills/deploy.md`、`DEPLOYMENT.md`、`GO-LIVE-CHECKLIST.md` | 部署相關工作前 |
 | `.claude/skills/db-backup.md` | 動備份/資料庫檔案前 |
-| `.claude/skills/code-review.md` | 審查後端 diff 時（本專案專屬 checklist） |
+| `.claude/skills/code-review.md` | 審查後端 diff 時（用 Read 開的參考檔；與內建 Skill「code-review」同名但無關） |
 | `docs/claude/archive/` | 史料（遷移計畫等），平時不讀 |
 
 > AGENTS.md 只是指向本檔的路標，不要在那裡加內容。

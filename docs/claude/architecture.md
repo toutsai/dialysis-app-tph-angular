@@ -37,7 +37,7 @@ CLAUDE.md 放的是不變式與陷阱；本檔放子系統細節。**動到哪�
 - **即時操作**（`routes/patients.js`）：新增/刪除/復原/狀態轉移/更改模式 → 即時產生動態 + 歷史。**純改頻率/床位不寫工作日誌**（屬排程規則，不是病人動態）。
 - **預約變更生效**（`scheduler.js` 的 `applyScheduledPatientUpdates`，每日 01:00）：`UPDATE_STATUS` / `UPDATE_MODE` / `DELETE_PATIENT` / `RESTORE_PATIENT` 套用時比照即時操作同步工作日誌 + KiDit + 歷史（同步包在 try/catch，失敗不影響任務）。`UPDATE_FREQ` / `UPDATE_BASE_SCHEDULE_RULE` 不寫工作日誌。**歷史只在生效日套用當下寫，預約建立時不寫。**
 - **調班**：`ADD_SESSION`（臨時加洗）經 `addAutoMovementToDailyLog` 寫動態（type `臨時加洗`），取消時由 `removeAutoMovementFromDailyLog` 移除；其餘調班類型不寫病人動態。
-- **⚠️ 刻意決策 — 「更改模式」不進 KiDit**：由 `kiditSync.js` 的 `KIDIT_EXCLUDED_MOVEMENT_TYPES = Set(['更改模式'])` 過濾，同時影響即時與預約兩條路徑。原因：KiDit 是入院/出院/轉床異動申報，模式變更非申報項目；動態仍留在工作日誌。**勿誤改回。**
+- **⚠️ 刻意決策 — 「更改模式」不進 KiDit**：由 `kiditSync.js` 的 `KIDIT_EXCLUDED_MOVEMENT_TYPES = Set(['更改模式', '勿動'])`（kiditSync.js:10）過濾，同時影響即時與預約兩條路徑。原因：KiDit 是入院/出院/轉床異動申報，模式變更非申報項目；動態仍留在工作日誌。**勿誤改回。**
 
 ## 透析模式正規化
 
@@ -82,7 +82,7 @@ CLAUDE.md 放的是不變式與陷阱；本檔放子系統細節。**動到哪�
 
 ### 路由守衛與角色
 
-- 未登入 → `/login`；`requiresAdmin: true` 頁面限 admin。
+- 未登入 → `/login`；權限守衛用 `canActivate: [roleGuard]` + `data: { roles: PAGE_ACCESS.<頁>.roles }`（`core/guards/role.guard.ts` + `core/config/page-access.ts`），沒有 `requiresAdmin` 這種欄位。
 - 職稱導向：護理師/組長 → `/my-patients`；其他 → `/collaboration`。
 - Viewer 唯讀，僅能看排程/病人/日誌/協作。
 

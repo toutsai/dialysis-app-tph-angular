@@ -8,7 +8,7 @@
 
 - repo **沒有** `.github/workflows`、沒有單元測試。你 merge 的東西不會被任何機器攔下。
 - 部署是**人工**的：使用者把檔案複製到院內 Windows VM 的 `D:\dialysis-app\`（非 git repo）再 PM2 重啟。所以 (a) merge ≠ 上線，不要說「已部署」；(b) 你是最後一道防線，`judgment.md` §2 的完成定義不是儀式，是唯一的攔截點。
-- 最高風險產物是 **migration**（`migrations/migrate.js` 會直接跑在正式臨床資料上）與**排程同步邏輯**（錯了會讓病人排錯床）。動這兩處，一律走 delegation.md §6 的第二意見流程。
+- 最高風險產物是 **schema migration**（`src/db/migrate.js`——伺服器每次啟動自動跑在正式臨床資料上，寫錯一次就中）與**排程同步邏輯**（錯了會讓病人排錯床）。動這兩處，一律走 delegation.md §6 的第二意見流程。
 - 本地驗證不必碰真資料：`scripts/create-today-mock-db.cjs` 能從現有 DB 產出「今日模擬資料庫」（床邊儀表板 PIN 預設 `1234`），`scripts/reset-passwords.cjs` 可重設測試密碼，smoke test 會自建帳號（`codex_smoke_` 前綴）。優先用這條路。
 
 ### 2. 時區與日曆是這個系統的隱形殺手
