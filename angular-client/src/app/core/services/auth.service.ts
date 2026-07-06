@@ -140,7 +140,7 @@ export class AuthService implements OnDestroy {
     // 註冊 API 層 401 處理：同帳號他處登入被踢 / token 失效時帶原因導向登入頁
     setUnauthorizedHandler((reason) => this.handleSessionEnded(reason));
 
-    // 嘗試從 localStorage 恢復登入狀態
+    // 嘗試從 sessionStorage 恢復登入狀態（僅限同分頁重新整理；關瀏覽器即需重新登入）
     this.restoreSession();
   }
 
@@ -208,8 +208,8 @@ export class AuthService implements OnDestroy {
         email: user.email,
       });
 
-      // 儲存使用者資料到 localStorage（用於 session 恢復）
-      localStorage.setItem('auth_user', JSON.stringify(user));
+      // 儲存使用者資料到 sessionStorage（用於同分頁重新整理的 session 恢復；關瀏覽器即清）
+      sessionStorage.setItem('auth_user', JSON.stringify(user));
 
       console.log(`[AuthService] User signed in: ${user.name} (${user.role})`);
 
@@ -264,7 +264,18 @@ export class AuthService implements OnDestroy {
     this.dateState.clear();
 
     try {
+      // 清除 localStorage，但保留床邊儀表板的 PIN token（床邊裝置不因員工登出而需重輸 PIN）
+      const preserved: Record<string, string> = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.startsWith('bed_dashboard_token:')) {
+          preserved[key] = localStorage.getItem(key) ?? '';
+        }
+      }
       localStorage.clear();
+      for (const [key, value] of Object.entries(preserved)) {
+        localStorage.setItem(key, value);
+      }
     } catch (error) {
       console.warn('[AuthService] Failed to clear localStorage:', error);
     }
@@ -343,12 +354,17 @@ export class AuthService implements OnDestroy {
   // -----------------------------------------------------------------------
 
   /**
-   * 從 localStorage 恢復之前的 session。
+   * 從 sessionStorage 恢復之前的 session（同分頁重新整理時）。
+   * 關閉瀏覽器後 sessionStorage 會被清空，即自動登出。
    */
   private async restoreSession(): Promise<void> {
+    // 舊版將登入資訊存在 localStorage（關瀏覽器不清），改版後一律清除殘留，避免過期 token 滯留
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_user');
+
     try {
       const token = this.firebase.getToken();
-      const savedUser = localStorage.getItem('auth_user');
+      const savedUser = sessionStorage.getItem('auth_user');
 
       if (token && savedUser) {
         // 驗證 token 是否仍然有效
@@ -373,13 +389,13 @@ export class AuthService implements OnDestroy {
         } else {
           // Token 過期，清除
           this.firebase.removeToken();
-          localStorage.removeItem('auth_user');
+          sessionStorage.removeItem('auth_user');
         }
       }
     } catch (error) {
       console.warn('[AuthService] Failed to restore session:', error);
       this.firebase.removeToken();
-      localStorage.removeItem('auth_user');
+      sessionStorage.removeItem('auth_user');
     } finally {
       this.authLoading.set(false);
       this.isAuthReady.set(true);

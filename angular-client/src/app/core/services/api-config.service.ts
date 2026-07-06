@@ -21,23 +21,25 @@ export class ApiConfigService {
   }
 
   /**
-   * 取得儲存在 localStorage 的 JWT token。
+   * 取得儲存在 sessionStorage 的 JWT token。
+   * 改存 sessionStorage：關閉瀏覽器（分頁）即失效，達成自動登出。
    */
   getToken(): string | null {
-    return localStorage.getItem('auth_token');
+    return sessionStorage.getItem('auth_token');
   }
 
   /**
-   * 儲存 JWT token 到 localStorage。
+   * 儲存 JWT token 到 sessionStorage。
    */
   setToken(token: string): void {
-    localStorage.setItem('auth_token', token);
+    sessionStorage.setItem('auth_token', token);
   }
 
   /**
-   * 移除 JWT token。
+   * 移除 JWT token（含舊版殘留在 localStorage 的副本）。
    */
   removeToken(): void {
+    sessionStorage.removeItem('auth_token');
     localStorage.removeItem('auth_token');
   }
 

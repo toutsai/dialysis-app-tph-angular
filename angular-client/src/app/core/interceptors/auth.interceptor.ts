@@ -19,7 +19,7 @@ export const authInterceptor: HttpInterceptorFn = (
 
   // 只攔截 /api 相關請求
   if (req.url.includes('/api')) {
-    const token = localStorage.getItem('auth_token');
+    const token = sessionStorage.getItem('auth_token');
     if (token) {
       req = req.clone({
         setHeaders: {
@@ -33,7 +33,7 @@ export const authInterceptor: HttpInterceptorFn = (
     catchError((error) => {
       if (error.status === 401) {
         // Token 過期或無效，清除 token 並導向登入頁（帶上原因供登入頁顯示提示）
-        localStorage.removeItem('auth_token');
+        sessionStorage.removeItem('auth_token');
         const code = (error.error as { code?: string } | null)?.code;
         const reason = code === 'TOKEN_BLACKLISTED' ? 'another_device' : 'expired';
         router.navigate(['/login'], { queryParams: { reason } });

@@ -47,7 +47,7 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.route.paramMap.subscribe((params) => {
       this.bedKey.set(params.get('bedKey') || '');
-      this.needsPin.set(!this.dashboardService.hasStoredToken(this.bedKey()) && !localStorage.getItem('auth_token'));
+      this.needsPin.set(!this.dashboardService.hasStoredToken(this.bedKey()) && !this.dashboardService.hasStaffToken());
       void this.loadDashboard();
     });
 
@@ -107,7 +107,7 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
     } catch (error) {
       const message = error instanceof Error ? error.message : '讀取床邊儀表板失敗';
       this.errorMessage.set(message);
-      if (!localStorage.getItem('auth_token')) {
+      if (!this.dashboardService.hasStaffToken()) {
         this.needsPin.set(true);
       }
     } finally {
@@ -152,7 +152,7 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
 
   lockDevice(): void {
     this.dashboardService.clearStoredToken(this.bedKey());
-    this.needsPin.set(!localStorage.getItem('auth_token'));
+    this.needsPin.set(!this.dashboardService.hasStaffToken());
     this.data.set(null);
   }
 
