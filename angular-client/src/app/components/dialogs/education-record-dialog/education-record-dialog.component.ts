@@ -60,6 +60,8 @@ export class EducationRecordDialogComponent implements OnInit {
 
   readonly sessions = signal<EducationSession[]>([]);
   readonly topics = signal<string[]>(DEFAULT_EDUCATION_TOPICS);
+  // 此病人的主題輪序佇列：跳過的主題移到最後；隨紀錄儲存
+  readonly topicQueue = signal<string[]>([]);
   readonly isLoading = signal(false);
   readonly isSaving = signal(false);
 
@@ -77,8 +79,8 @@ export class EducationRecordDialogComponent implements OnInit {
     if (!this.patientId) return;
     this.isLoading.set(true);
     try {
-      // 主題下拉選項（site_config: education_topics），尚未設定時為空，欄位仍可自由輸入
-      this.loadTopics();
+      // 主題下拉選項（site_config: education_topics），尚未設定時用內建 12 項
+      await this.loadTopics();
       const data: any = await localApi.get(`/patients/${this.patientId}/education`);
       if (data) {
         this.patientName = data.patientName || this.patientName;
@@ -86,15 +88,79 @@ export class EducationRecordDialogComponent implements OnInit {
         this.admissionDate = data.admissionDate ?? this.admissionDate;
         this.firstDialysisDate = data.firstDialysisDate ?? this.firstDialysisDate;
         this.sessions.set(this.normalize(data.sessions));
+        this.initTopicQueue(data.topicQueue);
       } else {
         this.sessions.set(this.normalize([]));
+        this.initTopicQueue(null);
       }
+      this.autoAssignTopics();
     } catch (error) {
       console.error('載入衛教紀錄失敗:', error);
       this.sessions.set(this.normalize([]));
+      this.initTopicQueue(null);
     } finally {
       this.isLoading.set(false);
     }
+  }
+
+  /** 初始化此病人的主題輪序佇列：已存的優先，補上清單後來新增的主題；未存過則用主題清單順序 */
+  private initTopicQueue(saved: unknown): void {
+    const master = this.topics();
+    const base = Array.isArray(saved) && saved.length ? saved.map((t) => String(t)) : [...master];
+    for (const t of master) {
+      if (!base.includes(t)) base.push(t);
+    }
+    this.topicQueue.set(base);
+  }
+
+  /** 已被任何一列使用的主題（自動帶入、手動選、已簽核都算，避免重複衛教） */
+  private usedTopics(): Set<string> {
+    return new Set(this.sessions().map((s) => s.topic.trim()).filter(Boolean));
+  }
+
+  /**
+   * 自動帶入：有透析日期、主題空白的列，依佇列順序帶入尚未用過的主題。
+   * 已填/已簽的列不動；欄位仍可手動改選。
+   */
+  private autoAssignTopics(): void {
+    if (!this.canEdit) return;
+    const used = this.usedTopics();
+    const queue = this.topicQueue();
+    let changed = false;
+    for (const s of this.sessions()) {
+      if (!s.dialysisDate || s.topic) continue;
+      const next = queue.find((t) => !used.has(t));
+      if (!next) break;
+      s.topic = next;
+      used.add(next);
+      changed = true;
+    }
+    if (changed) this.sessions.set([...this.sessions()]);
+  }
+
+  /** 可跳過：可編輯、有帶入主題、衛教者尚未簽章 */
+  canSkip(s: EducationSession): boolean {
+    return this.canEdit && !!s.topic && !s.educatorSign;
+  }
+
+  /** 跳過（主題不合適）：該主題移到佇列最後，這一列帶入下一個未用過的主題 */
+  skipTopic(s: EducationSession): void {
+    if (!this.canSkip(s)) return;
+    const skipped = s.topic;
+    const queue = this.topicQueue().filter((t) => t !== skipped);
+    queue.push(skipped);
+    this.topicQueue.set(queue);
+    s.topic = '';
+    const used = this.usedTopics();
+    const next = queue.find((t) => !used.has(t) && t !== skipped);
+    if (next) s.topic = next;
+    this.sessions.set([...this.sessions()]);
+  }
+
+  /** 待衛教主題（依佇列順序、排除已使用），顯示於表格下方 */
+  get pendingTopics(): string[] {
+    const used = this.usedTopics();
+    return this.topicQueue().filter((t) => !used.has(t));
   }
 
   private async loadTopics(): Promise<void> {
@@ -274,6 +340,7 @@ export class EducationRecordDialogComponent implements OnInit {
       await localApi.put(`/patients/${this.patientId}/education`, {
         sessions: this.sessions(),
         admissionDate: this.admissionDate || '',
+        topicQueue: this.topicQueue(),
       });
       this.close.emit();
     } catch (error: any) {

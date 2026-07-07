@@ -1019,6 +1019,15 @@ router.get('/:id/education', authenticate, (req, res) => {
       }
     }
 
+    // 主題輪序佇列（跳過的主題排到最後）；尚未初始化時回 null，由前端以主題清單順序建立
+    let topicQueue = null
+    try {
+      const q = JSON.parse(row.topic_queue || 'null')
+      if (Array.isArray(q)) topicQueue = q
+    } catch {
+      /* 解析失敗視為未初始化 */
+    }
+
     res.json({
       patientId: id,
       patientName: patient.name,
@@ -1026,6 +1035,7 @@ router.get('/:id/education', authenticate, (req, res) => {
       admissionDate,
       firstDialysisDate,
       sessions,
+      topicQueue,
       updatedAt: row.updated_at,
     })
   } catch (error) {
@@ -1048,19 +1058,25 @@ router.put('/:id/education', ...isEditor, (req, res) => {
     const sessions = normalizeEducationSessions(req.body?.sessions)
     // 入院日期：可編輯，空字串視為清空（存 null）
     const admissionDate = req.body?.admissionDate ? String(req.body.admissionDate).slice(0, 10) : null
+    // 主題輪序佇列：只接受字串陣列；未帶（undefined）則不動既有值
+    const topicQueue = Array.isArray(req.body?.topicQueue)
+      ? JSON.stringify(req.body.topicQueue.map((t) => String(t)))
+      : undefined
     const modifiedBy = JSON.stringify({ uid: req.user.id, name: req.user.name })
     const existing = db.prepare('SELECT id FROM education_records WHERE patient_id = ?').get(id)
     if (existing) {
       db.prepare(`
         UPDATE education_records
-        SET sessions = ?, admission_date = ?, created_by = ?, updated_at = datetime('now', 'localtime')
+        SET sessions = ?, admission_date = ?, created_by = ?,
+            topic_queue = COALESCE(?, topic_queue),
+            updated_at = datetime('now', 'localtime')
         WHERE patient_id = ?
-      `).run(JSON.stringify(sessions), admissionDate, modifiedBy, id)
+      `).run(JSON.stringify(sessions), admissionDate, modifiedBy, topicQueue ?? null, id)
     } else {
       db.prepare(`
-        INSERT INTO education_records (id, patient_id, sessions, admission_date, created_by)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(id, id, JSON.stringify(sessions), admissionDate, modifiedBy)
+        INSERT INTO education_records (id, patient_id, sessions, admission_date, topic_queue, created_by)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(id, id, JSON.stringify(sessions), admissionDate, topicQueue ?? null, modifiedBy)
     }
 
     res.json({ success: true, sessions, admissionDate })

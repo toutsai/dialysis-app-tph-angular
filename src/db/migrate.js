@@ -187,6 +187,8 @@ export function runMigrations() {
       console.log('📋 檢查 education_records 表格...')
       // 入院日期：可編輯,儲存於衛教紀錄(預設帶入病人入院/新增日,沒有則手動選取)
       if (addColumnIfNotExists(db, 'education_records', 'admission_date', 'TEXT')) migrationsApplied++
+      // 衛教主題輪序佇列(跳過的主題移到最後,每病人一條)
+      if (addColumnIfNotExists(db, 'education_records', 'topic_queue', 'TEXT')) migrationsApplied++
     }
 
     // ========================================

@@ -339,3 +339,31 @@
   .sig-canvas { height: 46vh; }
   .sig-pad-actions .edu-btn { flex: 1; justify-content: center; }
 }
+
+/* ===== 主題輪序帶入 / 跳過 ===== */
+.topic-cell { display: flex; align-items: center; gap: 0.35rem; }
+.topic-cell .topic-select { flex: 1; min-width: 0; }
+.skip-btn {
+  flex: none;
+  border: 1px solid #ef9a9a;
+  background: #fff;
+  color: #c62828;
+  border-radius: 5px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.skip-btn:hover { background: #fdecea; }
+.edu-pending {
+  margin-top: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  background: #f5f7f8;
+  border-radius: 8px;
+  font-size: 0.76rem;
+  color: #546e7a;
+  line-height: 1.7;
+}
+.edu-pending-label { font-weight: 700; color: #37474f; }
+.edu-pending-item { margin-right: 0.7rem; white-space: nowrap; display: inline-block; }

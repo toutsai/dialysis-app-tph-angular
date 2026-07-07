@@ -50,11 +50,18 @@
               <input type="date" [(ngModel)]="s.dialysisDate" [disabled]="!canEdit" />
             </td>
             <td>
-              <select class="topic-select" [(ngModel)]="s.topic" [disabled]="!canEdit">
-                <option value="">（請選擇主題）</option>
-                <option *ngFor="let t of topics()" [value]="t">{{ t }}</option>
-                <option *ngIf="s.topic && !topics().includes(s.topic)" [value]="s.topic">{{ s.topic }}</option>
-              </select>
+              <div class="topic-cell">
+                <select class="topic-select" [(ngModel)]="s.topic" [disabled]="!canEdit">
+                  <option value="">（請選擇主題）</option>
+                  <option *ngFor="let t of topics()" [value]="t">{{ t }}</option>
+                  <option *ngIf="s.topic && !topics().includes(s.topic)" [value]="s.topic">{{ s.topic }}</option>
+                </select>
+                <button *ngIf="canSkip(s)" type="button" class="skip-btn"
+                        (click)="skipTopic(s)"
+                        title="主題不合適（如尚未做動靜脈瘻管）：此主題排到最後，帶入下一個">
+                  跳過
+                </button>
+              </div>
             </td>
             <td class="col-sign-cell">
               <button type="button" class="sign-cell" [class.signed]="s.educatorSign" [disabled]="!canEdit"
@@ -99,11 +106,18 @@
               <input type="date" [(ngModel)]="s.dialysisDate" [disabled]="!canEdit" />
             </label>
           </div>
-          <select class="topic-select sc-topic" [(ngModel)]="s.topic" [disabled]="!canEdit">
-            <option value="">（請選擇主題）</option>
-            <option *ngFor="let t of topics()" [value]="t">{{ t }}</option>
-            <option *ngIf="s.topic && !topics().includes(s.topic)" [value]="s.topic">{{ s.topic }}</option>
-          </select>
+          <div class="topic-cell">
+            <select class="topic-select sc-topic" [(ngModel)]="s.topic" [disabled]="!canEdit">
+              <option value="">（請選擇主題）</option>
+              <option *ngFor="let t of topics()" [value]="t">{{ t }}</option>
+              <option *ngIf="s.topic && !topics().includes(s.topic)" [value]="s.topic">{{ s.topic }}</option>
+            </select>
+            <button *ngIf="canSkip(s)" type="button" class="skip-btn"
+                    (click)="skipTopic(s)"
+                    title="主題不合適：此主題排到最後，帶入下一個">
+              跳過
+            </button>
+          </div>
           <div class="sc-signs">
             <button type="button" class="sc-tile" [class.signed]="s.educatorSign" [disabled]="!canEdit"
                     (click)="toggleSign(s, 'educatorSign')">
@@ -129,6 +143,14 @@
             </button>
           </div>
         </div>
+      </div>
+
+      <!-- 待衛教主題順序（跳過的主題會排到最後；已衛教的不再出現） -->
+      <div class="edu-pending" *ngIf="!isLoading() && pendingTopics.length">
+        <span class="edu-pending-label">待衛教順序：</span>
+        <span class="edu-pending-item" *ngFor="let t of pendingTopics; let i = index">
+          {{ i + 1 }}. {{ t }}
+        </span>
       </div>
     </div>
   </div>
