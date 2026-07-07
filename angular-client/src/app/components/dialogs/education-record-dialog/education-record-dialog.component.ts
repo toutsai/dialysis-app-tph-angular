@@ -163,6 +163,17 @@ export class EducationRecordDialogComponent implements OnInit {
     return this.topicQueue().filter((t) => !used.has(t));
   }
 
+  /** 此列下拉可選主題：排除其他列已衛教/已指派的主題（避免重複衛教），保留自己目前選的值 */
+  topicOptions(current: EducationSession): string[] {
+    const usedByOthers = new Set(
+      this.sessions()
+        .filter((s) => s !== current)
+        .map((s) => s.topic.trim())
+        .filter(Boolean),
+    );
+    return this.topics().filter((t) => t === current.topic || !usedByOthers.has(t));
+  }
+
   private async loadTopics(): Promise<void> {
     try {
       // 若 site_config 有設定 education_topics 則覆蓋預設；否則用內建 12 項

@@ -53,7 +53,7 @@
               <div class="topic-cell">
                 <select class="topic-select" [(ngModel)]="s.topic" [disabled]="!canEdit">
                   <option value="">（請選擇主題）</option>
-                  <option *ngFor="let t of topics()" [value]="t">{{ t }}</option>
+                  <option *ngFor="let t of topicOptions(s)" [value]="t">{{ t }}</option>
                   <option *ngIf="s.topic && !topics().includes(s.topic)" [value]="s.topic">{{ s.topic }}</option>
                 </select>
                 <button *ngIf="canSkip(s)" type="button" class="skip-btn"
@@ -109,7 +109,7 @@
           <div class="topic-cell">
             <select class="topic-select sc-topic" [(ngModel)]="s.topic" [disabled]="!canEdit">
               <option value="">（請選擇主題）</option>
-              <option *ngFor="let t of topics()" [value]="t">{{ t }}</option>
+              <option *ngFor="let t of topicOptions(s)" [value]="t">{{ t }}</option>
               <option *ngIf="s.topic && !topics().includes(s.topic)" [value]="s.topic">{{ s.topic }}</option>
             </select>
             <button *ngIf="canSkip(s)" type="button" class="skip-btn"
