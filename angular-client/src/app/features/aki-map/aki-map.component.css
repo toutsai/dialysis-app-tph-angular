@@ -654,3 +654,37 @@
 .batches-panel { max-width: 46rem; }
 .batches-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .batches-table .zero { color: #b0bec5; }
+
+/* ===== 詳情：住院診斷上移區塊 ===== */
+.dx-top {
+  background: #fffde7;
+  border: 1px solid #fff3c4;
+  border-radius: 8px;
+  padding: 0.5rem 0.8rem;
+  margin: 0.55rem 0 0.65rem;
+}
+.dx-top h4 { color: #8d6e00; }
+
+/* ===== 明細表：AKI 峰值 / 基準列標色 ===== */
+.points .peak-row td {
+  background: #fdecea;
+  color: #b71c1c;
+  font-weight: 700;
+}
+.points .baseline-row td {
+  background: #e8f1fb;
+  color: #0d47a1;
+  font-weight: 600;
+}
+.row-tag {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0 0.3rem;
+  border-radius: 3px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #fff;
+  vertical-align: 1px;
+}
+.row-tag.peak { background: #c62828; }
+.row-tag.base { background: #1565c0; }

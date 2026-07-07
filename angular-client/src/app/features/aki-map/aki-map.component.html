@@ -333,6 +333,18 @@
             <button class="btn ghost" (click)="closeDetail()">關閉</button>
           </div>
 
+          <!-- 住院診斷（緊接基本資訊，一眼看到就醫脈絡） -->
+          @if (d.info?.diagnoses?.length) {
+            <div class="dx dx-top">
+              <h4>住院診斷</h4>
+              <ul>
+                @for (dx of d.info!.diagnoses; track $index) {
+                  <li>{{ dx.code }} {{ dx.name }}</li>
+                }
+              </ul>
+            </div>
+          }
+
           <!-- 分期結論 -->
           <div class="verdict" [style.--c]="color(d.staging.category)">
             <span class="verdict-badge" [style.background]="color(d.staging.category)">
@@ -453,31 +465,24 @@
             </div>
           }
 
-          <!-- Cr/eGFR 明細表 -->
+          <!-- Cr/eGFR 明細表（AKI 峰值列紅底、基準列藍底） -->
           <table class="points">
             <thead><tr><th>日期</th><th>來源</th><th>Cr (mg/dL)</th><th>eGFR</th></tr></thead>
             <tbody>
               @for (p of d.points; track $index) {
-                <tr>
+                <tr [class.peak-row]="isPeakPoint(p)" [class.baseline-row]="isBaselinePoint(p)">
                   <td>{{ p.testDate }}</td>
                   <td>{{ sourceLabel(p.source) }}</td>
-                  <td>{{ p.creatinine ?? '—' }}</td>
+                  <td>
+                    {{ p.creatinine ?? '—' }}
+                    @if (isPeakPoint(p)) { <span class="row-tag peak">AKI 峰值</span> }
+                    @else if (isBaselinePoint(p)) { <span class="row-tag base">基準</span> }
+                  </td>
                   <td>{{ p.egfr ?? '—' }}</td>
                 </tr>
               }
             </tbody>
           </table>
-
-          @if (d.info?.diagnoses?.length) {
-            <div class="dx">
-              <h4>診斷</h4>
-              <ul>
-                @for (dx of d.info!.diagnoses; track $index) {
-                  <li>{{ dx.code }} {{ dx.name }}</li>
-                }
-              </ul>
-            </div>
-          }
         }
       </div>
     </div>

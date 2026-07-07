@@ -596,6 +596,21 @@ export class AkiMapComponent implements OnInit {
     return src === 'OPD' ? '門診' : src === 'ER' ? '急診' : src === 'IPD' ? '住院' : src;
   }
 
+  // 明細表列標記：達 AKI（stage≥1）時，把峰值列與基準列標色，一眼看出是哪筆
+  private matchStagingPoint(p: { source: string; testDate: string; creatinine: number | null }, ref?: { source: string; date: string; value: number }): boolean {
+    const d = this.detail();
+    if (!d || d.staging.stage == null || d.staging.stage < 1 || !ref) return false;
+    return p.testDate === ref.date && p.creatinine === ref.value && p.source === ref.source;
+  }
+
+  isPeakPoint(p: { source: string; testDate: string; creatinine: number | null }): boolean {
+    return this.matchStagingPoint(p, this.detail()?.staging.peak);
+  }
+
+  isBaselinePoint(p: { source: string; testDate: string; creatinine: number | null }): boolean {
+    return this.matchStagingPoint(p, this.detail()?.staging.baseline);
+  }
+
   // 詳情頁 Cr 趨勢折線圖的座標點
   readonly trendChart = computed(() => {
     const d = this.detail();
