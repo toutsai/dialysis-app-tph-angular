@@ -740,6 +740,38 @@ router.post('/medication-drafts', ...isDoctorRole, async (req, res) => {
 })
 
 /**
+ * PUT /api/orders/medication-drafts/:id（前端送 PATCH，由 index.js 全域轉為 PUT）
+ * 部分更新藥物草稿（合併進 draft_data JSON，如歸檔時把 status 改為 completed）
+ */
+router.put('/medication-drafts/:id', ...isDoctorRole, async (req, res) => {
+  try {
+    const { id } = req.params
+    const db = getDatabase()
+
+    const row = db.prepare(`SELECT draft_data FROM medication_drafts WHERE id = ?`).get(id)
+    if (!row) {
+      return res.status(404).json({
+        error: true,
+        message: '藥物草稿不存在',
+      })
+    }
+
+    const merged = { ...JSON.parse(row.draft_data || '{}'), ...req.body }
+    db.prepare(
+      `UPDATE medication_drafts SET draft_data = ?, updated_at = datetime('now', 'localtime') WHERE id = ?`,
+    ).run(JSON.stringify(merged), id)
+
+    res.json({ success: true, id, ...merged })
+  } catch (error) {
+    console.error('更新藥物草稿錯誤:', error)
+    res.status(500).json({
+      error: true,
+      message: '更新藥物草稿失敗',
+    })
+  }
+})
+
+/**
  * DELETE /api/orders/medication-drafts/:id
  * 刪除藥物草稿
  */
@@ -2034,25 +2066,54 @@ router.get('/injection-orders', authenticate, (req, res) => {
 // 設備設定 API (Angular 前端使用)
 // ========================================
 
+// 儲存形狀：site_config 一列一種設定，config_data 是以 id 為 key 的物件 map
+// （bed_settings 的 key = 床位編號如 "38"/"外1"；machine_bicarbonate_config 的 key = uuid）
+// API 對外一律呈現為陣列 [{ id, ...entry }]，對齊前端 ApiManager 的集合語意
+function readDeviceConfigMap(db, configId) {
+  const row = db.prepare(`SELECT config_data FROM site_config WHERE id = ?`).get(configId)
+  if (!row) return {}
+  let parsed
+  try {
+    parsed = JSON.parse(row.config_data || '{}')
+  } catch {
+    return {}
+  }
+  const map = {}
+  if (Array.isArray(parsed)) {
+    for (const item of parsed) {
+      if (item && typeof item === 'object' && item.id) {
+        const { id, ...rest } = item
+        map[id] = rest
+      }
+    }
+  } else if (parsed && typeof parsed === 'object') {
+    for (const [key, value] of Object.entries(parsed)) {
+      if (value && typeof value === 'object') map[key] = value
+    }
+  }
+  return map
+}
+
+function writeDeviceConfigMap(db, configId, map) {
+  db.prepare(`
+    INSERT INTO site_config (id, config_data, updated_at)
+    VALUES (?, ?, datetime('now', 'localtime'))
+    ON CONFLICT(id) DO UPDATE SET
+      config_data = excluded.config_data,
+      updated_at = datetime('now', 'localtime')
+  `).run(configId, JSON.stringify(map))
+}
+
+const deviceConfigList = (map) => Object.entries(map).map(([id, entry]) => ({ id, ...entry }))
+
 /**
  * GET /api/orders/bed-settings
- * 取得床位設備設定（使用 site_config table）
+ * 取得全部床位設備設定（陣列，每床一筆）
  */
 router.get('/bed-settings', authenticate, (req, res) => {
   try {
     const db = getDatabase()
-    const config = db.prepare(`SELECT * FROM site_config WHERE id = 'bed_settings'`).get()
-
-    if (!config) {
-      return res.json({ id: 'bed_settings', configData: {} })
-    }
-
-    res.json({
-      id: config.id,
-      configData: JSON.parse(config.config_data || '{}'),
-      createdAt: config.created_at,
-      updatedAt: config.updated_at,
-    })
+    res.json(deviceConfigList(readDeviceConfigMap(db, 'bed_settings')))
   } catch (error) {
     console.error('取得床位設備設定錯誤:', error)
     res.status(500).json({ error: true, message: '取得床位設備設定失敗' })
@@ -2060,21 +2121,48 @@ router.get('/bed-settings', authenticate, (req, res) => {
 })
 
 /**
+ * PUT /api/orders/bed-settings/:id
+ * 更新單一床位的設備設定（upsert；:id 為床位編號如 38、外1）
+ */
+router.put('/bed-settings/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params
+    const db = getDatabase()
+
+    const map = readDeviceConfigMap(db, 'bed_settings')
+    map[id] = { ...map[id], ...req.body }
+    delete map[id].id
+    writeDeviceConfigMap(db, 'bed_settings', map)
+
+    res.json({ id, ...map[id] })
+  } catch (error) {
+    console.error('更新床位設備設定錯誤:', error)
+    res.status(500).json({ error: true, message: '更新床位設備設定失敗' })
+  }
+})
+
+/**
  * PUT /api/orders/bed-settings
- * 更新床位設備設定
+ * 整包覆寫床位設備設定（相容既有介面；接受 map 或陣列）
  */
 router.put('/bed-settings', authenticate, async (req, res) => {
   try {
-    const configData = req.body
     const db = getDatabase()
-
-    db.prepare(`
-      INSERT INTO site_config (id, config_data, updated_at)
-      VALUES ('bed_settings', ?, datetime('now', 'localtime'))
-      ON CONFLICT(id) DO UPDATE SET
-        config_data = excluded.config_data,
-        updated_at = datetime('now', 'localtime')
-    `).run(JSON.stringify(configData))
+    const body = req.body
+    const map = {}
+    if (Array.isArray(body)) {
+      for (const item of body) {
+        if (item && typeof item === 'object' && item.id) {
+          const { id, ...rest } = item
+          map[id] = rest
+        }
+      }
+    } else if (body && typeof body === 'object') {
+      for (const [key, value] of Object.entries(body)) {
+        if (value && typeof value === 'object') map[key] = value
+      }
+    }
+    writeDeviceConfigMap(db, 'bed_settings', map)
 
     res.json({ success: true, message: '床位設備設定已更新' })
   } catch (error) {
@@ -2085,23 +2173,12 @@ router.put('/bed-settings', authenticate, async (req, res) => {
 
 /**
  * GET /api/orders/machine-bicarbonate-config
- * 取得透析機 Bicarbonate 設定
+ * 取得全部洗腎機 Bicarbonate 設定（陣列，每機型一筆）
  */
 router.get('/machine-bicarbonate-config', authenticate, (req, res) => {
   try {
     const db = getDatabase()
-    const config = db.prepare(`SELECT * FROM site_config WHERE id = 'machine_bicarbonate_config'`).get()
-
-    if (!config) {
-      return res.json({ id: 'machine_bicarbonate_config', configData: {} })
-    }
-
-    res.json({
-      id: config.id,
-      configData: JSON.parse(config.config_data || '{}'),
-      createdAt: config.created_at,
-      updatedAt: config.updated_at,
-    })
+    res.json(deviceConfigList(readDeviceConfigMap(db, 'machine_bicarbonate_config')))
   } catch (error) {
     console.error('取得 Bicarbonate 設定錯誤:', error)
     res.status(500).json({ error: true, message: '取得 Bicarbonate 設定失敗' })
@@ -2109,26 +2186,70 @@ router.get('/machine-bicarbonate-config', authenticate, (req, res) => {
 })
 
 /**
- * PUT /api/orders/machine-bicarbonate-config
- * 更新透析機 Bicarbonate 設定
+ * POST /api/orders/machine-bicarbonate-config
+ * 新增一筆洗腎機 Bicarbonate 設定
  */
-router.put('/machine-bicarbonate-config', authenticate, async (req, res) => {
+router.post('/machine-bicarbonate-config', authenticate, async (req, res) => {
   try {
-    const configData = req.body
+    const db = getDatabase()
+    const id = uuidv4()
+
+    const map = readDeviceConfigMap(db, 'machine_bicarbonate_config')
+    map[id] = { ...req.body }
+    delete map[id].id
+    writeDeviceConfigMap(db, 'machine_bicarbonate_config', map)
+
+    res.status(201).json({ id, ...map[id] })
+  } catch (error) {
+    console.error('新增 Bicarbonate 設定錯誤:', error)
+    res.status(500).json({ error: true, message: '新增 Bicarbonate 設定失敗' })
+  }
+})
+
+/**
+ * PUT /api/orders/machine-bicarbonate-config/:id（前端送 PATCH，由 index.js 全域轉為 PUT）
+ * 更新單筆洗腎機 Bicarbonate 設定
+ */
+router.put('/machine-bicarbonate-config/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params
     const db = getDatabase()
 
-    db.prepare(`
-      INSERT INTO site_config (id, config_data, updated_at)
-      VALUES ('machine_bicarbonate_config', ?, datetime('now', 'localtime'))
-      ON CONFLICT(id) DO UPDATE SET
-        config_data = excluded.config_data,
-        updated_at = datetime('now', 'localtime')
-    `).run(JSON.stringify(configData))
+    const map = readDeviceConfigMap(db, 'machine_bicarbonate_config')
+    if (!map[id]) {
+      return res.status(404).json({ error: true, message: 'Bicarbonate 設定不存在' })
+    }
+    map[id] = { ...map[id], ...req.body }
+    delete map[id].id
+    writeDeviceConfigMap(db, 'machine_bicarbonate_config', map)
 
-    res.json({ success: true, message: 'Bicarbonate 設定已更新' })
+    res.json({ id, ...map[id] })
   } catch (error) {
     console.error('更新 Bicarbonate 設定錯誤:', error)
     res.status(500).json({ error: true, message: '更新 Bicarbonate 設定失敗' })
+  }
+})
+
+/**
+ * DELETE /api/orders/machine-bicarbonate-config/:id
+ * 刪除單筆洗腎機 Bicarbonate 設定
+ */
+router.delete('/machine-bicarbonate-config/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params
+    const db = getDatabase()
+
+    const map = readDeviceConfigMap(db, 'machine_bicarbonate_config')
+    if (!map[id]) {
+      return res.status(404).json({ error: true, message: 'Bicarbonate 設定不存在' })
+    }
+    delete map[id]
+    writeDeviceConfigMap(db, 'machine_bicarbonate_config', map)
+
+    res.json({ success: true, message: 'Bicarbonate 設定已刪除' })
+  } catch (error) {
+    console.error('刪除 Bicarbonate 設定錯誤:', error)
+    res.status(500).json({ error: true, message: '刪除 Bicarbonate 設定失敗' })
   }
 })
 

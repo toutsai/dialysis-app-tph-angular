@@ -209,15 +209,6 @@ function cleanupFutureFirstDialysisAddSessions(db, patientId, masterRules, patie
   return targetDates.size
 }
 
-// Angular 前端使用 PATCH 做部分更新，TPH 後端使用 PUT
-// 此 middleware 將 PATCH 請求轉為 PUT，讓既有的 PUT handler 處理
-router.use((req, res, next) => {
-  if (req.method === 'PATCH') {
-    req.method = 'PUT'
-  }
-  next()
-})
-
 // ========================================
 // 每日排程 API
 // ========================================
@@ -732,8 +723,6 @@ async function putBaseScheduleMaster(req, res) {
 }
 router.put('/base/master', ...isEditor, putBaseScheduleMaster)
 router.put('/base/MASTER_SCHEDULE', ...isEditor, putBaseScheduleMaster)
-router.patch('/base/master', ...isEditor, putBaseScheduleMaster)
-router.patch('/base/MASTER_SCHEDULE', ...isEditor, putBaseScheduleMaster)
 
 /**
  * PATCH /api/schedules/base/master/patient/:patientId (或 /base/MASTER_SCHEDULE/patient/:patientId)
@@ -795,10 +784,10 @@ async function patchBaseSchedulePatient(req, res) {
     })
   }
 }
-router.patch('/base/master/patient/:patientId', ...isEditor, patchBaseSchedulePatient)
-router.patch('/base/MASTER_SCHEDULE/patient/:patientId', ...isEditor, patchBaseSchedulePatient)
-router.patch('/base/master//patient/:patientId', ...isEditor, patchBaseSchedulePatient)
-router.patch('/base/MASTER_SCHEDULE//patient/:patientId', ...isEditor, patchBaseSchedulePatient)
+router.put('/base/master/patient/:patientId', ...isEditor, patchBaseSchedulePatient)
+router.put('/base/MASTER_SCHEDULE/patient/:patientId', ...isEditor, patchBaseSchedulePatient)
+router.put('/base/master//patient/:patientId', ...isEditor, patchBaseSchedulePatient)
+router.put('/base/MASTER_SCHEDULE//patient/:patientId', ...isEditor, patchBaseSchedulePatient)
 
 router.post('/first-dialysis-plan', ...isEditor, async (req, res) => {
   try {
@@ -1332,7 +1321,6 @@ async function updateExceptionStatus(req, res) {
   }
 }
 
-router.patch('/exceptions/:id', ...isEditor, updateExceptionStatus)
 router.put('/exceptions/:id', ...isEditor, updateExceptionStatus)
 
 /**

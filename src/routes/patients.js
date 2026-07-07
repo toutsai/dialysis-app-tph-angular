@@ -1502,7 +1502,6 @@ async function updatePatientHandler(req, res) {
 }
 
 router.put('/:id', ...isContributor, updatePatientHandler)
-router.patch('/:id', ...isContributor, updatePatientHandler)
 
 /**
  * DELETE /api/patients/:id

@@ -68,14 +68,6 @@ function archiveDailyLogRevision(db, log, user, revisionReason = 'before_update'
   )
 }
 
-// Angular 前端使用 PATCH 做部分更新，TPH 後端使用 PUT
-router.use((req, res, next) => {
-  if (req.method === 'PATCH') {
-    req.method = 'PUT'
-  }
-  next()
-})
-
 // ========================================
 // 護理工作職責 API
 // ========================================

@@ -94,6 +94,15 @@ app.use('/api/', apiRateLimit)
 // API 回應 gzip 壓縮（重端點傳輸量大幅下降）
 app.use('/api/', gzipJson)
 
+// Angular 前端 update() 一律送 PATCH，後端統一以 PUT handler 處理：
+// 全域將 PATCH 轉為 PUT（新端點一律寫 router.put，不要另寫 router.patch）
+app.use('/api/', (req, res, next) => {
+  if (req.method === 'PATCH') {
+    req.method = 'PUT'
+  }
+  next()
+})
+
 app.use('/api/auth', authRoutes)
 app.use('/api/patients', patientsRoutes)
 app.use('/api/schedules', schedulesRoutes)

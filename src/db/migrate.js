@@ -350,6 +350,21 @@ export function runMigrations() {
     if (inventoryItemsExists) {
        console.log('📋 檢查 inventory_items 表格...')
        if (addColumnIfNotExists(db, 'inventory_items', 'units_per_box', 'INTEGER DEFAULT 1')) migrationsApplied++
+       // Angular 庫存品項表單欄位（安全庫存量/院內碼/廠牌/廠商電話）
+       if (addColumnIfNotExists(db, 'inventory_items', 'safe_inventory_level', 'INTEGER DEFAULT 0')) migrationsApplied++
+       if (addColumnIfNotExists(db, 'inventory_items', 'hospital_code', 'TEXT')) migrationsApplied++
+       if (addColumnIfNotExists(db, 'inventory_items', 'brand', 'TEXT')) migrationsApplied++
+       if (addColumnIfNotExists(db, 'inventory_items', 'vendor_phone', 'TEXT')) migrationsApplied++
+    }
+
+    const inventoryPurchasesExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='inventory_purchases'")
+      .get()
+    if (inventoryPurchasesExists) {
+      console.log('📋 檢查 inventory_purchases 表格...')
+      // Angular 進貨表單以「箱數」為單位；updated_at 供編輯紀錄使用
+      if (addColumnIfNotExists(db, 'inventory_purchases', 'box_quantity', 'INTEGER')) migrationsApplied++
+      if (addColumnIfNotExists(db, 'inventory_purchases', 'updated_at', 'TEXT')) migrationsApplied++
     }
 
     const bedDashboardDevicesExists = db

@@ -300,7 +300,6 @@ async function updateTaskHandler(req, res) {
   }
 }
 router.put('/tasks/:id', authenticate, updateTaskHandler)
-router.patch('/tasks/:id', authenticate, updateTaskHandler)
 
 /**
  * DELETE /api/system/tasks/:id
@@ -447,10 +446,10 @@ router.post('/notifications', authenticate, async (req, res) => {
 })
 
 /**
- * PATCH /api/system/notifications/:id/read
+ * PUT /api/system/notifications/:id/read（前端送 PATCH，由 index.js 全域轉為 PUT）
  * 標記通知為已讀
  */
-router.patch('/notifications/:id/read', authenticate, async (req, res) => {
+router.put('/notifications/:id/read', authenticate, async (req, res) => {
   try {
     const { id } = req.params
     const db = getDatabase()
@@ -489,8 +488,13 @@ router.get('/inventory', ...isInventoryRole, (req, res) => {
         name: i.name,
         category: i.category,
         unit: i.unit,
+        unitsPerBox: i.units_per_box,
         currentQuantity: i.current_quantity,
         minQuantity: i.min_quantity,
+        safeInventoryLevel: i.safe_inventory_level || 0,
+        hospitalCode: i.hospital_code,
+        brand: i.brand,
+        vendorPhone: i.vendor_phone,
         location: i.location,
         notes: i.notes,
         createdAt: i.created_at,
@@ -512,17 +516,17 @@ router.get('/inventory', ...isInventoryRole, (req, res) => {
  */
 router.post('/inventory', ...isInventoryRole, async (req, res) => {
   try {
-    const { name, category, unit, unitsPerBox, currentQuantity, minQuantity, location, notes } = req.body
+    const { name, category, unit, unitsPerBox, currentQuantity, minQuantity, safeInventoryLevel, hospitalCode, brand, vendorPhone, location, notes } = req.body
 
     const id = uuidv4()
     const db = getDatabase()
 
     db.prepare(
       `
-      INSERT INTO inventory_items (id, name, category, unit, units_per_box, current_quantity, min_quantity, location, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO inventory_items (id, name, category, unit, units_per_box, current_quantity, min_quantity, safe_inventory_level, hospital_code, brand, vendor_phone, location, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
-    ).run(id, name, category, unit, unitsPerBox || 1, currentQuantity || 0, minQuantity || 0, location, notes)
+    ).run(id, name, category, unit ?? null, unitsPerBox || 1, currentQuantity || 0, minQuantity || 0, safeInventoryLevel || 0, hospitalCode ?? null, brand ?? null, vendorPhone ?? null, location ?? null, notes ?? null)
 
 
     res.status(201).json({
@@ -545,19 +549,37 @@ router.post('/inventory', ...isInventoryRole, async (req, res) => {
 router.put('/inventory/:id', ...isInventoryRole, async (req, res) => {
   try {
     const { id } = req.params
-    const { name, category, unit, unitsPerBox, currentQuantity, minQuantity, location, notes } = req.body
-
     const db = getDatabase()
 
-    db.prepare(
-      `
-      UPDATE inventory_items
-      SET name = ?, category = ?, unit = ?, units_per_box = ?, current_quantity = ?, min_quantity = ?, location = ?, notes = ?,
-          updated_at = datetime('now', 'localtime')
-      WHERE id = ?
-    `,
-    ).run(name, category, unit, unitsPerBox, currentQuantity, minQuantity, location, notes, id)
+    // 只更新有送的欄位（前端表單不含庫存量等欄位，整包 SET 會把它們洗成 NULL）
+    const FIELD_COLUMN_MAP = {
+      name: 'name',
+      category: 'category',
+      unit: 'unit',
+      unitsPerBox: 'units_per_box',
+      currentQuantity: 'current_quantity',
+      minQuantity: 'min_quantity',
+      safeInventoryLevel: 'safe_inventory_level',
+      hospitalCode: 'hospital_code',
+      brand: 'brand',
+      vendorPhone: 'vendor_phone',
+      location: 'location',
+      notes: 'notes',
+    }
+    const updates = [`updated_at = datetime('now', 'localtime')`]
+    const params = []
+    for (const [field, column] of Object.entries(FIELD_COLUMN_MAP)) {
+      if (req.body[field] !== undefined) {
+        updates.push(`${column} = ?`)
+        params.push(req.body[field])
+      }
+    }
+    params.push(id)
 
+    const result = db.prepare(`UPDATE inventory_items SET ${updates.join(', ')} WHERE id = ?`).run(...params)
+    if (result.changes === 0) {
+      return res.status(404).json({ error: true, message: '庫存項目不存在' })
+    }
 
     res.json({
       success: true,
@@ -656,44 +678,50 @@ router.get('/inventory/purchases', ...isInventoryRole, (req, res) => {
 })
 
 /**
+ * 由 itemId 或（品名 + 分類）解析庫存品項 id。
+ * Angular 進貨表單送的是品名（item）而非 itemId；品名不存在時自動建立最小品項，
+ * 讓進貨紀錄與月結/耗量統計（JOIN inventory_items）保持連結。
+ */
+function resolveInventoryItemId(db, { itemId, item, category }) {
+  if (itemId) return itemId
+  if (!item) return null
+
+  const existing = category
+    ? db.prepare(`SELECT id FROM inventory_items WHERE name = ? AND category = ?`).get(item, category)
+    : db.prepare(`SELECT id FROM inventory_items WHERE name = ?`).get(item)
+  if (existing) return existing.id
+
+  const newId = uuidv4()
+  db.prepare(`INSERT INTO inventory_items (id, name, category) VALUES (?, ?, ?)`)
+    .run(newId, item, category ?? null)
+  return newId
+}
+
+/**
  * POST /api/system/inventory/purchases
- * 新增進貨紀錄
+ * 新增進貨紀錄（接受 itemId 或 item 品名 + category；quantity = 總量、boxQuantity = 箱數）
  */
 router.post('/inventory/purchases', ...isInventoryRole, async (req, res) => {
   try {
-    const { itemId, quantity, boxQuantity, unitPrice, supplier, date, notes } = req.body
+    const { itemId, item, category, quantity, boxQuantity, unitPrice, supplier, date, notes } = req.body
 
     const id = uuidv4()
     const db = getDatabase()
     const createdBy = JSON.stringify({ uid: req.user.id, name: req.user.name })
 
-    // Check if box_quantity column exists, if not, we can't save it yet unless we migrate.
-    // For now, we will try to insert it. If it fails (no column), we catch and retry without it?
-    // Or simpler: Assuming schema update is separate step.
-    // Let's use 'quantity' as primary. 'box_quantity' is optional in schema?
-    // Looking at schema.sql viewed earlier, inventory_purchases didn't have box_quantity.
-    // So I should NOT try to insert box_quantity unless I migrate DB.
-    // I will stick to schema: id, item_id, quantity, unit_price, supplier, purchase_date, notes, created_by
+    const resolvedItemId = resolveInventoryItemId(db, { itemId, item, category })
+    if (!resolvedItemId) {
+      return res.status(400).json({ error: true, message: '缺少品項（itemId 或 item 品名）' })
+    }
 
     db.prepare(
       `
       INSERT INTO inventory_purchases (
-        id, item_id, quantity, unit_price, supplier, purchase_date, notes, created_by
+        id, item_id, quantity, box_quantity, unit_price, supplier, purchase_date, notes, created_by
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
-    ).run(id, itemId, quantity, unitPrice || 0, supplier, date, notes, createdBy)
-
-    // Update inventory item current_quantity ??
-    // Usually purchase adds to stock.
-    // But this system might be just a record log?
-    // The previous implementation analysis suggests 'Monthly Inventory' calculates stock from (Previous + Purchase - Consumption).
-    // So we might NOT update actual item quantity here, purely record keeping.
-    // Wait, InventoryView has "Inventory Items" with "currentQuantity".
-    // "Manage consumables purchase, consumption records, monthly count..."
-    // If monthly count is logic-based, then current_quantity might be cache or result of count.
-    // Let's just record the purchase for now as per "Purchase Records" feature.
-
+    ).run(id, resolvedItemId, quantity ?? null, boxQuantity ?? null, unitPrice || 0, supplier ?? null, date ?? null, notes ?? null, createdBy)
 
     res.status(201).json({
       success: true,
@@ -715,19 +743,26 @@ router.post('/inventory/purchases', ...isInventoryRole, async (req, res) => {
 router.put('/inventory/purchases/:id', ...isInventoryRole, async (req, res) => {
   try {
     const { id } = req.params
-    const { itemId, quantity, unitPrice, supplier, date, notes } = req.body
+    const { itemId, item, category, quantity, boxQuantity, unitPrice, supplier, date, notes } = req.body
     const db = getDatabase()
 
-    const updates = ['updated_at = datetime("now", "localtime")']
+    const updates = [`updated_at = datetime('now', 'localtime')`]
     const params = []
 
-    if (itemId !== undefined) {
-      updates.push('item_id = ?')
-      params.push(itemId)
+    if (itemId !== undefined || item !== undefined) {
+      const resolvedItemId = resolveInventoryItemId(db, { itemId, item, category })
+      if (resolvedItemId) {
+        updates.push('item_id = ?')
+        params.push(resolvedItemId)
+      }
     }
     if (quantity !== undefined) {
       updates.push('quantity = ?')
       params.push(quantity)
+    }
+    if (boxQuantity !== undefined) {
+      updates.push('box_quantity = ?')
+      params.push(boxQuantity)
     }
     if (unitPrice !== undefined) {
       updates.push('unit_price = ?')
@@ -748,7 +783,10 @@ router.put('/inventory/purchases/:id', ...isInventoryRole, async (req, res) => {
 
     params.push(id)
 
-    db.prepare(`UPDATE inventory_purchases SET ${updates.join(', ')} WHERE id = ?`).run(...params)
+    const result = db.prepare(`UPDATE inventory_purchases SET ${updates.join(', ')} WHERE id = ?`).run(...params)
+    if (result.changes === 0) {
+      return res.status(404).json({ error: true, message: '進貨紀錄不存在' })
+    }
 
     res.json({
       success: true,
