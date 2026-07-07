@@ -272,6 +272,16 @@ function parseLabsLong(rows, headerIdx, header) {
 
 // ---------- KDIGO 分期 ----------
 
+/** 單點 KDIGO 分期（cur 對 ref 的 Cr 比較） */
+function stageOf(cur, ref) {
+  const ratio = cur / ref
+  const abs = cur - ref
+  if (ratio >= 3 || (cur >= STAGE3_ABS_CR && (ratio >= 1.5 || abs >= ABS_DELTA))) return 3
+  if (ratio >= 2) return 2
+  if (ratio >= 1.5 || abs >= ABS_DELTA) return 1
+  return 0
+}
+
 /**
  * 對單一病人的 Cr 散點做 KDIGO 分期。
  * @param {Array<{source,testDate,creatinine}>} rawPoints
@@ -319,10 +329,7 @@ export function stageForSeries(rawPoints) {
 
     const ratio = cur.value / ref.value
     const abs = cur.value - ref.value
-    let stage = 0
-    if (ratio >= 3 || (cur.value >= STAGE3_ABS_CR && (ratio >= 1.5 || abs >= ABS_DELTA))) stage = 3
-    else if (ratio >= 2) stage = 2
-    else if (ratio >= 1.5 || abs >= ABS_DELTA) stage = 1
+    const stage = stageOf(cur.value, ref.value)
 
     if (stage > best.stage || (stage === best.stage && ratio > best.ratio)) {
       best = { stage, ratio, abs, baseline: ref, current: cur }
@@ -342,4 +349,234 @@ export function stageForSeries(rawPoints) {
     overallMin,
     latest,
   }
+}
+
+// ---------- 病程分析（CKD / AKD / 本次住院 AKI / 恢復狀態） ----------
+//
+// 與使用者確認的臨床參數（2026-07-07 鎖定）：
+//   CKD 疑似：eGFR<60 首尾兩筆皆低、窗內 ≥80% 值低、首尾跨度 ≥90 天（容忍單次檢驗誤差）。
+//             僅 eGFR(G) 面向、無蛋白尿(A) 資料，故稱「疑似」，與關懷名單人工 CKD 病史欄並列不覆蓋。
+//   AKD：最近一次未緩解的 AKI 事件（達 Stage≥1 且其後未回到 baseline 範圍）起算 >7 且 ≤90 天。
+//        超過 90 天未恢復即屬 CKD 範疇，不再標 AKD。
+//   本次住院 AKI：以入院日切窗（含入院前 48h 的值，涵蓋社區型 AKI），baseline 用入院前資料
+//                （門診最低優先），無入院前資料時退回住院首值（標註）。
+//   恢復狀態：已恢復 = 最新 Cr 回到 baseline 範圍（<1.5× 且 Δ<0.3）；
+//             恢復中 = peak 已過且最新 Cr 較 peak 下降 ≥25%；其餘 = 進行中。
+
+const CKD_EGFR_THRESHOLD = 60
+const CKD_MIN_SPAN_DAYS = 90
+const CKD_LOW_RATIO = 0.8
+const AKD_MIN_DAYS = 7
+const AKD_MAX_DAYS = 90
+const RECOVERY_DROP_RATIO = 0.25
+const ADMIT_ER_LOOKBACK_DAYS = 2
+// 低值防呆：Cr 在正常低值間的比值跳動（如 0.2→0.46 比值 2.3）不算 AKI 事件。
+// 比值型觸發需 Cr 升到 ≥1.0 mg/dL，否則需符合「48h 內上升 ≥0.3」（KDIGO 原始時窗）。
+// ⚠️ 僅套用於病程分析（AKD/本次住院），不影響既有全段分期（stageForSeries 行為鎖定）。
+const LOW_CR_GUARD = 1.0
+const ABS_WINDOW_DAYS = 2 // KDIGO「≥0.3 上升」限 48h 內（日解析度 → 2 天）
+
+/**
+ * 病程分析用的單點分期：
+ *   比值條件對 ratioRef（baseline/時序前值最低）;
+ *   絕對上升 ≥0.3 條件只認 48h 內的前值（KDIGO 時窗）;
+ *   低值防呆：無 48h 內 ≥0.3 上升且 Cr<1.0 時，比值型觸發不成立。
+ */
+function guardedStageOf(cur, ratioRef, allPts = []) {
+  const absOk = allPts.some(
+    (q) =>
+      q !== cur &&
+      q.date <= cur.date &&
+      daysBetween(q.date, cur.date) <= ABS_WINDOW_DAYS &&
+      cur.value - q.value >= ABS_DELTA,
+  )
+  const ratio = cur.value / ratioRef.value
+  let st = 0
+  if (ratio >= 3 || (cur.value >= STAGE3_ABS_CR && (ratio >= 1.5 || absOk))) st = 3
+  else if (ratio >= 2) st = 2
+  else if (ratio >= 1.5 || absOk) st = 1
+  if (st >= 1 && !absOk && cur.value < LOW_CR_GUARD) st = 0
+  return st
+}
+
+function daysBetween(a, b) {
+  return Math.round((new Date(`${b}T00:00:00`) - new Date(`${a}T00:00:00`)) / 86400000)
+}
+
+function shiftDate(dateStr, days) {
+  const d = new Date(`${dateStr}T00:00:00`)
+  d.setDate(d.getDate() + days)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** eGFR → CKD G 分期 */
+export function egfrBand(v) {
+  if (v == null) return null
+  if (v < 15) return 'G5'
+  if (v < 30) return 'G4'
+  if (v < 45) return 'G3b'
+  if (v < 60) return 'G3a'
+  if (v < 90) return 'G2'
+  return 'G1'
+}
+
+/**
+ * 對單一病人的 Cr/eGFR 散點做病程分析。
+ * @param {Array<{source,testDate,creatinine,egfr}>} rawPoints
+ * @param {{admitDate?: string|null, today?: string|null}} opts admitDate=本次入院日; today=分析基準日
+ * @returns {{ckd, akd, admission}} 各項含判定依據，供前端顯示
+ */
+export function analyzeSeries(rawPoints, { admitDate = null, today = null } = {}) {
+  const pts = (rawPoints || [])
+    .filter((p) => p && p.testDate)
+    .map((p) => ({
+      source: p.source,
+      date: p.testDate,
+      value: typeof p.creatinine === 'number' ? p.creatinine : null,
+      egfr: typeof p.egfr === 'number' ? p.egfr : null,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date) || (a.value ?? 0) - (b.value ?? 0))
+  const crPts = pts.filter((p) => p.value != null)
+  const egfrPts = pts.filter((p) => p.egfr != null)
+  const refDate = today || (pts.length ? pts[pts.length - 1].date : null)
+
+  const isEsrd = crPts.length > 0 && Math.min(...crPts.map((p) => p.value)) >= ESRD_MIN_CR
+
+  // --- CKD 疑似（eGFR 面向） ---
+  const latestEgfr = egfrPts.length ? egfrPts[egfrPts.length - 1].egfr : null
+  const ckd = { suspected: false, band: null, basis: null, latestEgfr, spanDays: null, lowCount: null, egfrCount: egfrPts.length }
+  const recentMedian = () => {
+    const recent = egfrPts.slice(-3).map((p) => p.egfr).sort((a, b) => a - b)
+    return recent.length ? recent[Math.floor(recent.length / 2)] : null
+  }
+  if (isEsrd) {
+    ckd.suspected = true
+    ckd.band = egfrBand(recentMedian()) || 'G5'
+    ckd.basis = '全段 Cr≥4.0，疑似 ESRD/慢性'
+  } else if (egfrPts.length >= 2) {
+    const first = egfrPts[0]
+    const last = egfrPts[egfrPts.length - 1]
+    const span = daysBetween(first.date, last.date)
+    const lowCount = egfrPts.filter((p) => p.egfr < CKD_EGFR_THRESHOLD).length
+    ckd.spanDays = span
+    ckd.lowCount = lowCount
+    if (
+      span >= CKD_MIN_SPAN_DAYS &&
+      first.egfr < CKD_EGFR_THRESHOLD &&
+      last.egfr < CKD_EGFR_THRESHOLD &&
+      lowCount / egfrPts.length >= CKD_LOW_RATIO
+    ) {
+      ckd.suspected = true
+      ckd.band = egfrBand(recentMedian())
+      ckd.basis = `eGFR<60 持續 ${span} 天（${lowCount}/${egfrPts.length} 筆低於 60）`
+    }
+  }
+
+  // --- 最近一次「未緩解」的 AKI 事件（AKD 用） ---
+  // 逐點依時序分期；達 Stage≥1 開啟事件，回到 stage 0（回 baseline 範圍）即關閉。
+  // 走完仍開著 = 目前未緩解，其起始日即 AKD 起算點。
+  let activeOnset = null
+  if (!isEsrd && crPts.length >= 2) {
+    const opd = crPts.filter((p) => p.source === 'OPD')
+    const opdBaseline = opd.length ? opd.reduce((m, p) => (p.value < m.value ? p : m), opd[0]) : null
+    for (let i = 0; i < crPts.length; i++) {
+      const cur = crPts[i]
+      let ref = null
+      if (opdBaseline && opdBaseline.date <= cur.date && opdBaseline !== cur) ref = opdBaseline
+      const prior = crPts.slice(0, i)
+      if (prior.length) {
+        const priorMin = prior.reduce((m, p) => (p.value < m.value ? p : m), prior[0])
+        if (!ref || priorMin.value < ref.value) ref = priorMin
+      }
+      if (!ref) continue
+      const st = guardedStageOf(cur, ref, crPts)
+      if (st >= 1 && !activeOnset) {
+        activeOnset = { date: cur.date, stage: st, value: cur.value, refDate: ref.date, refValue: ref.value }
+      } else if (st === 0) {
+        activeOnset = null
+      }
+    }
+  }
+
+  // --- AKD（急性腎臟病：AKI 後 7–90 天未回 baseline） ---
+  const akd = { active: false, onsetDate: null, daysSinceOnset: null, latestCr: null, latestRatio: null }
+  if (activeOnset && refDate) {
+    const days = daysBetween(activeOnset.date, refDate)
+    const latest = crPts[crPts.length - 1]
+    akd.onsetDate = activeOnset.date
+    akd.daysSinceOnset = days
+    akd.latestCr = latest.value
+    akd.latestRatio = Number((latest.value / activeOnset.refValue).toFixed(2))
+    if (days > AKD_MIN_DAYS && days <= AKD_MAX_DAYS) akd.active = true
+  }
+
+  // --- 本次住院 AKI ＋ 恢復狀態 ---
+  let admission = null
+  if (admitDate && !isEsrd && crPts.length) {
+    const windowStart = shiftDate(admitDate, -ADMIT_ER_LOOKBACK_DAYS)
+    const eventPts = crPts.filter((p) => p.date >= windowStart)
+    const priorPts = crPts.filter((p) => p.date < windowStart)
+    let baseline = null
+    let baselineMode = null
+    if (priorPts.length) {
+      const opdPrior = priorPts.filter((p) => p.source === 'OPD')
+      if (opdPrior.length) {
+        baseline = opdPrior.reduce((m, p) => (p.value < m.value ? p : m), opdPrior[0])
+        baselineMode = '入院前門診最低'
+      } else {
+        baseline = priorPts.reduce((m, p) => (p.value < m.value ? p : m), priorPts[0])
+        baselineMode = '入院前最低'
+      }
+    } else if (eventPts.length) {
+      baseline = eventPts[0]
+      baselineMode = '無入院前資料，以住院首值為基準'
+    }
+    admission = {
+      admitDate,
+      hasAki: false,
+      stage: null,
+      baseline: baseline ? { date: baseline.date, value: baseline.value } : null,
+      baselineMode,
+      peak: null,
+      latest: null,
+      course: null, // 'ongoing' | 'recovering' | 'recovered'
+    }
+    if (baseline && eventPts.length) {
+      let best = null
+      for (let i = 0; i < eventPts.length; i++) {
+        const cur = eventPts[i]
+        if (cur === baseline) continue
+        // ref = 入院前 baseline 與窗內時序前值最低取較低者（維持時間方向）
+        let ref = baseline
+        const prior = eventPts.slice(0, i).filter((p) => p !== baseline)
+        if (prior.length) {
+          const priorMin = prior.reduce((m, p) => (p.value < m.value ? p : m), prior[0])
+          if (priorMin.value < ref.value) ref = priorMin
+        }
+        const st = guardedStageOf(cur, ref, crPts)
+        const ratio = cur.value / ref.value
+        if (!best || st > best.stage || (st === best.stage && ratio > best.ratio)) {
+          best = { stage: st, ratio, point: cur, ref }
+        }
+      }
+      const latest = eventPts[eventPts.length - 1]
+      admission.latest = { date: latest.date, value: latest.value }
+      if (best && best.stage >= 1) {
+        admission.hasAki = true
+        admission.stage = best.stage
+        admission.peak = { date: best.point.date, value: best.point.value }
+        // 事件實際比較的基準（可能是窗內時序前值最低，與入院前 baseline 不同）
+        admission.eventRef = { date: best.ref.date, value: best.ref.value }
+        if (guardedStageOf(latest, best.ref, crPts) === 0) {
+          admission.course = 'recovered'
+        } else if (latest.date > best.point.date && latest.value <= (1 - RECOVERY_DROP_RATIO) * best.point.value) {
+          admission.course = 'recovering'
+        } else {
+          admission.course = 'ongoing'
+        }
+      }
+    }
+  }
+
+  return { ckd, akd, admission, isEsrd }
 }

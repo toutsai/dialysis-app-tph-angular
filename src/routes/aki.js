@@ -5,7 +5,7 @@ import { getDatabase } from '../db/init.js'
 import { isSpecialist, logAuditWithRequest } from '../middleware/auth.js'
 import { getTaipeiTodayString } from '../utils/dateUtils.js'
 import { normalizeDialysisMode } from '../utils/dialysisMode.js'
-import { parseInpatients, parseLabs, stageForSeries, AKI_CATEGORIES } from '../services/akiService.js'
+import { parseInpatients, parseLabs, stageForSeries, analyzeSeries, AKI_CATEGORIES } from '../services/akiService.js'
 
 const router = Router()
 
@@ -161,15 +161,52 @@ router.post('/upload/labs', (req, res) => {
 })
 
 // ---------- 取得某病歷號的 Cr/eGFR 散點 ----------
+function normalizePointRow(r) {
+  return {
+    ...r,
+    creatinine: r.creatinine == null ? null : Number(r.creatinine),
+    egfr: r.egfr == null ? null : Number(r.egfr),
+  }
+}
+
 function getPointsByMrn(db, mrn) {
   return db
     .prepare('SELECT source, test_date AS testDate, creatinine, egfr, order_code AS orderCode FROM aki_lab_results WHERE mrn = ? ORDER BY test_date')
     .all(mrn)
-    .map((r) => ({
-      ...r,
-      creatinine: r.creatinine == null ? null : Number(r.creatinine),
-      egfr: r.egfr == null ? null : Number(r.egfr),
-    }))
+    .map(normalizePointRow)
+}
+
+// 一次載入全部散點依 mrn 分組（/map、關懷名單整批計算用，避免逐病人 N+1 查詢）
+function loadAllPointsGrouped(db) {
+  const rows = db
+    .prepare('SELECT mrn, name, source, test_date AS testDate, creatinine, egfr, order_code AS orderCode FROM aki_lab_results ORDER BY test_date')
+    .all()
+  const map = new Map()
+  for (const r of rows) {
+    const p = normalizePointRow(r)
+    let arr = map.get(r.mrn)
+    if (!arr) {
+      arr = []
+      map.set(r.mrn, arr)
+    }
+    arr.push(p)
+  }
+  return map
+}
+
+// 病程分析 → 清單用的扁平欄位（badge/篩選/匯出）
+function courseFieldsFor(points, admitDate, today) {
+  if (!points || !points.length) {
+    return { ckdSuspected: false, ckdBand: null, akd: false, admissionAkiStage: null, akiCourse: null }
+  }
+  const a = analyzeSeries(points, { admitDate: admitDate || null, today })
+  return {
+    ckdSuspected: a.ckd.suspected,
+    ckdBand: a.ckd.band,
+    akd: a.akd.active,
+    admissionAkiStage: a.admission?.hasAki ? a.admission.stage : null,
+    akiCourse: a.admission?.course || null,
+  }
 }
 
 // ---------- AKI Map（住院清單 join 分期） ----------
@@ -196,10 +233,12 @@ router.get('/map', (req, res) => {
     const wardSummary = {}
     const inpatientMrns = new Set()
     const modeMap = buildDialysisModeMap(db)
+    const pointsByMrn = loadAllPointsGrouped(db)
+    const today = getTaipeiTodayString()
 
     const patients = inpatients.map((p) => {
       inpatientMrns.add(p.mrn)
-      const pts = getPointsByMrn(db, p.mrn)
+      const pts = pointsByMrn.get(p.mrn) || []
       const staging = pts.length ? stageForSeries(pts) : { category: 'no-data', stage: null, pointCount: 0, points: [] }
       summary[staging.category] = (summary[staging.category] || 0) + 1
       wardSummary[p.ward] = wardSummary[p.ward] || {}
@@ -216,22 +255,28 @@ router.get('/map', (req, res) => {
         ratio: staging.ratio ?? null,
         pointCount: staging.pointCount ?? 0,
         dialysisMode: dialysisModeFor(modeMap, p.mrn),
+        ...courseFieldsFor(pts, p.admitDate, today),
       }
     })
 
-    // 觀察名單：在 Cr 資料中但不在住院快照、且達 stage>=1 或 esrd（門急尚未收治的 AKI）
-    const otherMrns = db
-      .prepare('SELECT DISTINCT mrn, name FROM aki_lab_results WHERE mrn NOT IN (SELECT mrn FROM aki_inpatients WHERE snapshot_date = ?)')
-      .all(snapshotDate)
+    // 觀察名單：在 Cr 資料中但不在住院快照、且達 stage>=1 或 esrd（門急尚未收治的 AKI）。
+    // 歷史回填後全庫涵蓋數月，僅列「近 14 天內仍有檢驗」者，避免早已出院/失聯的舊個案灌爆名單。
+    const WATCH_RECENT_DAYS = 14
+    const watchCutoff = new Date(`${today}T00:00:00`)
+    watchCutoff.setDate(watchCutoff.getDate() - WATCH_RECENT_DAYS)
+    const cutoffStr = `${watchCutoff.getFullYear()}-${String(watchCutoff.getMonth() + 1).padStart(2, '0')}-${String(watchCutoff.getDate()).padStart(2, '0')}`
     const watchList = []
-    for (const o of otherMrns) {
-      const staging = stageForSeries(getPointsByMrn(db, o.mrn))
+    for (const [mrn, pts] of pointsByMrn) {
+      if (inpatientMrns.has(mrn)) continue
+      if (!pts.length || pts[pts.length - 1].testDate < cutoffStr) continue
+      const staging = stageForSeries(pts)
       if (staging.stage >= 1 || staging.category === 'esrd') {
         watchList.push({
-          mrn: o.mrn, name: o.name, category: staging.category, stage: staging.stage,
+          mrn, name: pts.find((p) => p.name)?.name || '', category: staging.category, stage: staging.stage,
           latestCr: staging.latest?.value ?? null, latestDate: staging.latest?.date ?? null,
           baselineCr: staging.baseline?.value ?? null, peakCr: staging.peak?.value ?? null, ratio: staging.ratio ?? null,
-          dialysisMode: dialysisModeFor(modeMap, o.mrn),
+          dialysisMode: dialysisModeFor(modeMap, mrn),
+          ...courseFieldsFor(pts, null, today),
         })
       }
     }
@@ -260,10 +305,14 @@ router.get('/patient/:mrn', (req, res) => {
                 FROM aki_inpatients WHERE mrn = ? ORDER BY snapshot_date DESC LIMIT 1`)
       .get(mrn)
     const modeMap = buildDialysisModeMap(db)
+    const analysis = pts.length
+      ? analyzeSeries(pts, { admitDate: info?.admitDate || null, today: getTaipeiTodayString() })
+      : null
     res.json({
       mrn,
       info: info ? { ...info, diagnoses: safeJson(info.diagnoses) } : null,
       staging,
+      analysis,
       points: pts,
       dialysisMode: dialysisModeFor(modeMap, mrn),
     })
@@ -303,13 +352,15 @@ router.get('/care-list', (req, res) => {
     if (!snapshotDate) return res.json({ snapshotDate: null, items: [] })
 
     const inpatients = db
-      .prepare(`SELECT mrn, name, ward, bed, dept, physician FROM aki_inpatients WHERE snapshot_date = ?`)
+      .prepare(`SELECT mrn, name, ward, bed, dept, physician, admit_date AS admitDate FROM aki_inpatients WHERE snapshot_date = ?`)
       .all(snapshotDate)
     const modeMap = buildDialysisModeMap(db)
+    const pointsByMrn = loadAllPointsGrouped(db)
+    const today = getTaipeiTodayString()
 
     const items = []
     for (const p of inpatients) {
-      const pts = getPointsByMrn(db, p.mrn)
+      const pts = pointsByMrn.get(p.mrn) || []
       const staging = pts.length ? stageForSeries(pts) : { category: 'no-data', stage: null }
       const included = (staging.stage != null && staging.stage >= 1) || staging.category === 'esrd'
       if (!included) continue
@@ -323,6 +374,7 @@ router.get('/care-list', (req, res) => {
         physician: p.physician,
         category: staging.category,
         stage: staging.stage,
+        ...courseFieldsFor(pts, p.admitDate, today),
         autoDialysisMode: dialysisModeFor(modeMap, p.mrn),
         ckdHistory: care?.ckdHistory || '',
         nephrologyConsult: care?.nephrologyConsult || '',
@@ -369,9 +421,12 @@ router.get('/discharged-care-list', (req, res) => {
     }
 
     const modeMap = buildDialysisModeMap(db)
+    const pointsByMrn = loadAllPointsGrouped(db)
+    const today = getTaipeiTodayString()
     const items = []
     for (const r of lastByMrn.values()) {
-      const staging = stageForSeries(getPointsByMrn(db, r.mrn))
+      const pts = pointsByMrn.get(r.mrn) || []
+      const staging = pts.length ? stageForSeries(pts) : { category: 'no-data', stage: null }
       const included = (staging.stage != null && staging.stage >= 1) || staging.category === 'esrd'
       if (!included) continue
       const care = getCareRecord(db, r.mrn)
@@ -384,6 +439,7 @@ router.get('/discharged-care-list', (req, res) => {
         physician: r.physician,
         category: staging.category,
         stage: staging.stage,
+        ...courseFieldsFor(pts, r.admitDate, today),
         autoDialysisMode: dialysisModeFor(modeMap, r.mrn),
         dischargeDate: r.dischargeDate || null,
         lastSeenDate: r.snapshotDate,

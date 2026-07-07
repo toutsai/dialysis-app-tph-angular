@@ -6,10 +6,43 @@ import {
   AkiApiService,
   AkiCareItem,
   AkiCategory,
+  AkiCourseFields,
   AkiMapResponse,
   AkiPatient,
   AkiPatientDetail,
+  AkiUploadBatch,
 } from '@app/core/services/aki-api.service';
+
+// 病程篩選（與分期篩選 AND 疊加）
+type CourseFilter = 'all' | 'ckd' | 'akd' | 'admission-aki' | 'recovering' | 'recovered';
+
+const COURSE_DEFS: { key: Exclude<CourseFilter, 'all'>; label: string; color: string }[] = [
+  { key: 'ckd', label: '疑似 CKD', color: '#6d4c41' },
+  { key: 'akd', label: 'AKD', color: '#e65100' },
+  { key: 'admission-aki', label: '本次住院 AKI', color: '#c62828' },
+  { key: 'recovering', label: '恢復中', color: '#00897b' },
+  { key: 'recovered', label: '已恢復', color: '#43a047' },
+];
+
+function matchCourse(p: AkiCourseFields, f: CourseFilter): boolean {
+  switch (f) {
+    case 'ckd': return p.ckdSuspected;
+    case 'akd': return p.akd;
+    case 'admission-aki': return p.admissionAkiStage != null;
+    case 'recovering': return p.akiCourse === 'recovering';
+    case 'recovered': return p.akiCourse === 'recovered';
+    default: return true;
+  }
+}
+
+// 上傳結果彈窗內容
+interface UploadResult {
+  ok: boolean;
+  title: string;
+  fileName: string;
+  lines: string[];
+  hint?: string;
+}
 
 interface CategoryDef {
   key: AkiCategory;
@@ -88,10 +121,18 @@ export class AkiMapComponent implements OnInit {
 
   readonly selectedDate = signal<string>('');
   readonly filterCategory = signal<AkiCategory | 'all' | 'aki'>('all');
+  readonly filterCourse = signal<CourseFilter>('all');
   readonly search = signal<string>('');
+  readonly courseDefs = COURSE_DEFS;
 
   readonly uploadingInpatients = signal(false);
   readonly uploadingLabs = signal(false);
+
+  // 上傳結果彈窗 + 上傳紀錄
+  readonly uploadResult = signal<UploadResult | null>(null);
+  readonly showBatches = signal(false);
+  readonly batches = signal<AkiUploadBatch[]>([]);
+  readonly batchesLoading = signal(false);
 
   // 詳情面板
   readonly detail = signal<AkiPatientDetail | null>(null);
@@ -174,18 +215,28 @@ export class AkiMapComponent implements OnInit {
 
   readonly totalPatients = computed(() => this.visiblePatients().length);
 
+  // 病程摘要列（可點擊疊加篩選）
+  readonly courseSummary = computed(() =>
+    COURSE_DEFS.map((def) => ({
+      ...def,
+      count: this.visiblePatients().filter((p) => matchCourse(p, def.key)).length,
+    })),
+  );
+
   // 篩選後依護理站分組
   readonly wardGroups = computed<WardGroup[]>(() => {
     const cat = this.filterCategory();
     const q = this.search().trim().toLowerCase();
     const groups = new Map<string, WardGroup>();
 
+    const course = this.filterCourse();
     for (const p of this.visiblePatients()) {
       if (cat === 'aki') {
         if (!(p.stage != null && p.stage >= 1)) continue;
       } else if (cat !== 'all' && p.category !== cat) {
         continue;
       }
+      if (!matchCourse(p, course)) continue;
       if (q) {
         const hay = `${p.name} ${p.mrn} ${p.bed} ${p.physician} ${p.dept}`.toLowerCase();
         if (!hay.includes(q)) continue;
@@ -286,6 +337,27 @@ export class AkiMapComponent implements OnInit {
     this.filterCategory.set(cat);
   }
 
+  setCourseFilter(f: CourseFilter): void {
+    this.filterCourse.set(this.filterCourse() === f ? 'all' : f);
+  }
+
+  // 病程徽章（卡片 / 關懷名單共用）
+  courseBadges(p: AkiCourseFields): { label: string; color: string; title: string }[] {
+    const badges: { label: string; color: string; title: string }[] = [];
+    if (p.ckdSuspected) badges.push({ label: p.ckdBand ? `CKD ${p.ckdBand}` : 'CKD', color: '#6d4c41', title: '疑似 CKD（eGFR<60 持續 ≥90 天）' });
+    if (p.akd) badges.push({ label: 'AKD', color: '#e65100', title: 'AKI 後 7–90 天腎功能未回基準（急性腎臟病）' });
+    if (p.admissionAkiStage != null) {
+      if (p.akiCourse === 'recovering') badges.push({ label: `本次AKI S${p.admissionAkiStage}·恢復中`, color: '#00897b', title: '本次住院 AKI，peak 已過、Cr 下降 ≥25%' });
+      else if (p.akiCourse === 'recovered') badges.push({ label: `本次AKI S${p.admissionAkiStage}·已恢復`, color: '#43a047', title: '本次住院曾 AKI，最新 Cr 已回基準範圍' });
+      else badges.push({ label: `本次AKI S${p.admissionAkiStage}`, color: '#c62828', title: '本次住院 AKI 進行中' });
+    }
+    return badges;
+  }
+
+  courseLabel(course: string | null): string {
+    return course === 'ongoing' ? '進行中' : course === 'recovering' ? '恢復中' : course === 'recovered' ? '已恢復' : '';
+  }
+
   // ---------- 頁籤 / 關懷名單 ----------
 
   switchTab(tab: 'map' | 'care' | 'discharged'): void {
@@ -378,6 +450,9 @@ export class AkiMapComponent implements OnInit {
         'AKI Stage': this.stageLabel(it),
       };
       if (discharged) row['出院日'] = it.dischargeDate || it.lastSeenDate || '';
+      row['疑似CKD'] = it.ckdSuspected ? (it.ckdBand || 'Y') : '';
+      row['AKD'] = it.akd ? 'Y' : '';
+      row['本次住院AKI'] = it.admissionAkiStage != null ? `S${it.admissionAkiStage}${this.courseLabel(it.akiCourse) ? '·' + this.courseLabel(it.akiCourse) : ''}` : '';
       row['CKD病史'] = it.ckdHistory;
       row['腎臟科會診'] = it.nephrologyConsult;
       row['AKI原因'] = it.akiCause;
@@ -416,13 +491,29 @@ export class AkiMapComponent implements OnInit {
     try {
       const b64 = await this.fileToBase64(file);
       const res = await this.akiApi.uploadInpatients(file.name, b64);
-      this.message.set({ type: 'info', text: `留院清單匯入成功：${res.patients} 位病人（快照 ${res.snapshotDate}）` });
+      this.uploadResult.set({
+        ok: true,
+        title: '留院清單匯入成功',
+        fileName: file.name,
+        lines: [
+          `匯入 ${res.patients} 位在院病人`,
+          `快照日期：${res.snapshotDate}`,
+          `檔內資料列：${res.rowCount} 列（同病人多診斷已合併）`,
+        ],
+        hint: '同快照日重複上傳會以新檔覆蓋。',
+      });
       this.selectedDate.set(res.snapshotDate);
       await this.load(res.snapshotDate);
       if (this.careLoaded()) await this.loadCare(res.snapshotDate);
       if (this.dischargedLoaded()) await this.loadDischarged();
     } catch (e: any) {
-      this.message.set({ type: 'error', text: e?.error?.message || e?.message || '匯入失敗' });
+      this.uploadResult.set({
+        ok: false,
+        title: '留院清單匯入失敗',
+        fileName: file.name,
+        lines: [e?.error?.message || e?.message || '未知錯誤'],
+        hint: '請確認檔案為「W1.1 留院病人清單明細表」原始匯出檔。',
+      });
     } finally {
       this.uploadingInpatients.set(false);
       input.value = '';
@@ -438,18 +529,49 @@ export class AkiMapComponent implements OnInit {
     try {
       const b64 = await this.fileToBase64(file);
       const res = await this.akiApi.uploadLabs(file.name, b64);
-      this.message.set({
-        type: 'info',
-        text: `檢驗明細匯入成功：新增 ${res.imported} 筆${res.egfrBackfilled ? `、補 eGFR ${res.egfrBackfilled} 筆` : ''}（共 ${res.total} 筆，${res.range.start}~${res.range.end}）`,
+      const dup = res.total - res.imported - (res.egfrBackfilled || 0);
+      this.uploadResult.set({
+        ok: true,
+        title: '檢驗明細匯入成功',
+        fileName: file.name,
+        lines: [
+          `新增 ${res.imported} 筆檢驗散點`,
+          ...(res.egfrBackfilled ? [`為既有資料補上 eGFR ${res.egfrBackfilled} 筆`] : []),
+          ...(dup > 0 ? [`${dup} 筆已在資料庫中（自動去重，不會重複累積）`] : []),
+          `檔案區間：${res.range.start} ~ ${res.range.end}（共解析 ${res.total} 筆）`,
+        ],
+        hint: res.imported === 0 && !res.egfrBackfilled
+          ? '新增 0 筆代表這個檔案的資料先前都已匯入過，屬正常去重，不是失敗。'
+          : undefined,
       });
       await this.load();
       if (this.careLoaded()) await this.loadCare();
       if (this.dischargedLoaded()) await this.loadDischarged();
     } catch (e: any) {
-      this.message.set({ type: 'error', text: e?.error?.message || e?.message || '匯入失敗' });
+      this.uploadResult.set({
+        ok: false,
+        title: '檢驗明細匯入失敗',
+        fileName: file.name,
+        lines: [e?.error?.message || e?.message || '未知錯誤'],
+        hint: '請確認檔案為「8.1 報告區間明細門急住」或舊版檢驗明細的原始匯出檔。',
+      });
     } finally {
       this.uploadingLabs.set(false);
       input.value = '';
+    }
+  }
+
+  // 上傳紀錄
+  async openBatches(): Promise<void> {
+    this.showBatches.set(true);
+    this.batchesLoading.set(true);
+    try {
+      const res = await this.akiApi.getBatches();
+      this.batches.set(res.batches);
+    } catch (e: any) {
+      this.message.set({ type: 'error', text: e?.error?.message || e?.message || '載入上傳紀錄失敗' });
+    } finally {
+      this.batchesLoading.set(false);
     }
   }
 
@@ -493,5 +615,26 @@ export class AkiMapComponent implements OnInit {
     }));
     const polyline = dots.map((dt) => `${dt.cx.toFixed(1)},${dt.cy.toFixed(1)}`).join(' ');
     return { W, H, dots, polyline, minV, maxV };
+  });
+
+  // 詳情頁 eGFR 趨勢折線圖（CKD 追蹤用；60 參考線）
+  readonly egfrTrendChart = computed(() => {
+    const d = this.detail();
+    const pts = (d?.points || []).filter((p) => p.egfr != null);
+    if (pts.length === 0) return null;
+    const W = 520, H = 140, padX = 44, padY = 18;
+    const values = pts.map((p) => p.egfr as number);
+    const minV = Math.min(...values, 55); // 讓 60 參考線常在圖內
+    const maxV = Math.max(...values, 65);
+    const span = maxV - minV || 1;
+    const n = pts.length;
+    const x = (i: number) => (n === 1 ? W / 2 : padX + (i * (W - padX - 12)) / (n - 1));
+    const y = (v: number) => H - padY - ((v - minV) / span) * (H - padY * 2);
+    const dots = pts.map((p, i) => ({
+      cx: x(i), cy: y(p.egfr as number), value: p.egfr as number, date: p.testDate, source: p.source,
+      color: (p.egfr as number) < 60 ? '#e65100' : '#43a047',
+    }));
+    const polyline = dots.map((dt) => `${dt.cx.toFixed(1)},${dt.cy.toFixed(1)}`).join(' ');
+    return { W, H, dots, polyline, refY: y(60) };
   });
 }

@@ -569,3 +569,88 @@
 }
 .signed { color: #2e7d32; font-size: 0.78rem; line-height: 1.25; }
 .signed small { color: #78909c; }
+
+/* ===== 病程徽章 / 篩選 ===== */
+.course-row { margin-top: -0.35rem; }
+.course-label {
+  font-size: 0.74rem;
+  color: #78909c;
+  font-weight: 600;
+  align-self: center;
+  margin-right: 0.1rem;
+}
+.course-badge {
+  display: inline-block;
+  color: #fff;
+  border-radius: 3px;
+  padding: 0.05rem 0.3rem;
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.bed-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-top: 2px;
+}
+.course-cell { max-width: 11rem; }
+.course-cell .course-badge { margin: 0 2px 2px 0; }
+
+/* ===== 病人詳情：病程判讀 ===== */
+.course-panel {
+  background: #fafafa;
+  border: 1px solid #eceff1;
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  margin: 0.7rem 0;
+}
+.course-panel h4 { margin: 0 0 0.4rem; font-size: 0.82rem; color: #455a64; }
+.course-list { list-style: none; margin: 0; padding: 0; }
+.course-list li {
+  font-size: 0.78rem;
+  color: #37474f;
+  line-height: 1.5;
+  padding: 0.2rem 0;
+}
+.course-list .course-badge { margin-right: 0.4rem; font-size: 0.7rem; }
+.course-state { color: #c62828; margin-left: 0.3rem; }
+.course-state.ok { color: #2e7d32; }
+
+/* ===== eGFR 趨勢 ===== */
+.egfr-trend { margin-top: 0.4rem; }
+.trend-title { margin-left: auto; color: #90a4ae; font-weight: 600; }
+.ref-label { fill: #e65100; }
+
+/* ===== 上傳結果彈窗 ===== */
+.upload-result {
+  max-width: 26rem;
+  text-align: center;
+  padding: 1.4rem 1.6rem;
+}
+.ur-icon { font-size: 2.2rem; }
+.ur-icon.fail { filter: saturate(1.2); }
+.ur-title { margin: 0.4rem 0 0.2rem; font-size: 1.05rem; color: #263238; }
+.ur-file {
+  font-size: 0.74rem;
+  color: #78909c;
+  word-break: break-all;
+  margin-bottom: 0.6rem;
+}
+.ur-lines {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0.6rem 0.8rem;
+  background: #f5f7f8;
+  border-radius: 8px;
+  text-align: left;
+}
+.ur-lines li { font-size: 0.82rem; color: #37474f; line-height: 1.7; }
+.ur-hint { font-size: 0.74rem; color: #8d6e63; margin: 0.3rem 0 0.6rem; }
+.ur-actions { display: flex; justify-content: center; gap: 0.6rem; margin-top: 0.4rem; }
+
+/* ===== 上傳紀錄 ===== */
+.batches-panel { max-width: 46rem; }
+.batches-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.batches-table .zero { color: #b0bec5; }

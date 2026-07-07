@@ -6,7 +6,18 @@ import { ApiService } from './api.service';
 export type AkiCategory =
   | 'stage-3' | 'stage-2' | 'stage-1' | 'esrd' | 'stage-0' | 'single' | 'no-data';
 
-export interface AkiPatient {
+export type AkiCourse = 'ongoing' | 'recovering' | 'recovered';
+
+// 病程分析的扁平欄位（badge / 篩選 / 匯出共用）
+export interface AkiCourseFields {
+  ckdSuspected: boolean;
+  ckdBand: string | null;
+  akd: boolean;
+  admissionAkiStage: number | null;
+  akiCourse: AkiCourse | null;
+}
+
+export interface AkiPatient extends AkiCourseFields {
   mrn: string;
   name: string;
   ward: string;
@@ -29,7 +40,7 @@ export interface AkiPatient {
   dialysisMode: string | null;
 }
 
-export interface AkiWatchItem {
+export interface AkiWatchItem extends AkiCourseFields {
   mrn: string;
   name: string;
   category: AkiCategory;
@@ -40,6 +51,38 @@ export interface AkiWatchItem {
   peakCr: number | null;
   ratio: number | null;
   dialysisMode: string | null;
+}
+
+// 病人詳情的完整病程分析（含判定依據）
+export interface AkiAnalysis {
+  isEsrd: boolean;
+  ckd: {
+    suspected: boolean;
+    band: string | null;
+    basis: string | null;
+    latestEgfr: number | null;
+    spanDays: number | null;
+    lowCount: number | null;
+    egfrCount: number;
+  };
+  akd: {
+    active: boolean;
+    onsetDate: string | null;
+    daysSinceOnset: number | null;
+    latestCr: number | null;
+    latestRatio: number | null;
+  };
+  admission: {
+    admitDate: string;
+    hasAki: boolean;
+    stage: number | null;
+    baseline: { date: string; value: number } | null;
+    baselineMode: string | null;
+    eventRef?: { date: string; value: number };
+    peak: { date: string; value: number } | null;
+    latest: { date: string; value: number } | null;
+    course: AkiCourse | null;
+  } | null;
 }
 
 export interface AkiMapResponse {
@@ -76,8 +119,9 @@ export interface AkiStaging {
 
 export interface AkiPatientDetail {
   mrn: string;
-  info: (Omit<AkiPatient, 'category' | 'stage' | 'latestCr' | 'latestDate' | 'baselineCr' | 'peakCr' | 'ratio' | 'pointCount' | 'dialysisMode'> & { snapshotDate: string }) | null;
+  info: (Omit<AkiPatient, 'category' | 'stage' | 'latestCr' | 'latestDate' | 'baselineCr' | 'peakCr' | 'ratio' | 'pointCount' | 'dialysisMode' | keyof AkiCourseFields> & { snapshotDate: string }) | null;
   staging: AkiStaging;
+  analysis: AkiAnalysis | null;
   points: AkiLabPoint[];
   dialysisMode: string | null;
 }
@@ -95,7 +139,7 @@ export interface AkiUploadBatch {
   uploadedAt: string;
 }
 
-export interface AkiCareItem {
+export interface AkiCareItem extends AkiCourseFields {
   mrn: string;
   name: string;
   ward: string;
