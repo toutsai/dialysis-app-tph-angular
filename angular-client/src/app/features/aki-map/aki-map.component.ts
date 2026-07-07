@@ -351,7 +351,7 @@ export class AkiMapComponent implements OnInit {
   // 病程徽章（卡片 / 關懷名單共用）
   courseBadges(p: AkiCourseFields): { label: string; color: string; title: string }[] {
     const badges: { label: string; color: string; title: string }[] = [];
-    if (p.todayAkiStage != null) badges.push({ label: `當日AKI S${p.todayAkiStage}`, color: '#ad1457', title: '最新資料日當天有檢驗值達 AKI 門檻' });
+    if (p.todayAkiStage != null) badges.push({ label: `當日AKI S${p.todayAkiStage}`, color: '#ad1457', title: '最新資料日當天新發生或急性惡化的 AKI' });
     if (p.ckdSuspected) badges.push({ label: p.ckdBand ? `CKD ${p.ckdBand}` : 'CKD', color: '#6d4c41', title: '疑似 CKD（eGFR<60 持續 ≥90 天）' });
     if (p.akd) badges.push({ label: 'AKD', color: '#e65100', title: 'AKI 後 7–90 天腎功能未回基準（急性腎臟病）' });
     if (p.admissionAkiStage != null) {

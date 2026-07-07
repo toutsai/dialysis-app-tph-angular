@@ -496,10 +496,22 @@ export function analyzeSeries(rawPoints, { admitDate = null, today = null, dataD
       } else if (st === 0) {
         activeOnset = null
       }
-      if (dataDate && cur.date === dataDate && st >= 1 && st > (daily.stage || 0)) {
-        daily.active = true
-        daily.stage = st
-        daily.cr = cur.value
+      // 當日 AKI 只算「新發生或急性惡化」：事件起始日=當天，或當天相對 48h 內前值又升 ≥0.3。
+      // 前幾天 AKI、當天 Cr 已在下降但尚未回 baseline 者（恢復中）不算當日。
+      if (dataDate && cur.date === dataDate && st >= 1) {
+        const onsetToday = activeOnset && activeOnset.date === dataDate
+        const acuteRiseToday = crPts.some(
+          (q) =>
+            q !== cur &&
+            q.date <= cur.date &&
+            daysBetween(q.date, cur.date) <= ABS_WINDOW_DAYS &&
+            cur.value - q.value >= ABS_DELTA,
+        )
+        if ((onsetToday || acuteRiseToday) && st > (daily.stage || 0)) {
+          daily.active = true
+          daily.stage = st
+          daily.cr = cur.value
+        }
       }
     }
   }
