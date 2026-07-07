@@ -85,6 +85,7 @@ angular-client/              # Angular 19 前端原始碼（頁面清單見 docs
 5. **`backup.js` 被 scheduler.js 和 system.js import**：修改時保持既有 export 不變。
 6. **PATCH 已全域轉 PUT**（index.js，掛在所有 /api 路由前）：後端一律寫 `router.put`，不要寫 `router.patch`（永遠收不到 PATCH）。
 7. **`data/dialysis.db` 已 gitignore**；`dist/` 是建置產出，改前端要改 `angular-client/` 原始碼再 build。
+8. **DB 時間戳一律存本地時間字串**（`datetime('now','localtime')` 或 `toLocaleString('sv-SE')`），讀取端 `new Date(str)` 以本地時區解析。**勿用 `toISOString()` 存**——帳號鎖定曾因存 UTC 字串被解讀成 8 小時前而形同虛設（2026-07-08 修復）。
 
 ## 工作方式（每個 session 適用）
 
