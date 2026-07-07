@@ -78,8 +78,36 @@
   color: #475569;
   cursor: pointer;
 }
-.btn-refresh {
+.btn-uneducated {
   margin-left: auto;
+  padding: 7px 14px;
+  border: 1px solid #fca5a5;
+  background: #fff;
+  color: #dc2626;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-uneducated:hover:not(:disabled) {
+  background: #fef2f2;
+}
+.btn-uneducated:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.uneducated-count {
+  background: #dc2626;
+  color: #fff;
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.btn-refresh {
   padding: 7px 14px;
   border: 1px solid #cbd5e1;
   background: #fff;
@@ -219,6 +247,180 @@
   white-space: nowrap;
 }
 
+/* 未衛教欄 */
+.col-uneducated {
+  white-space: nowrap;
+  text-align: center;
+}
+.badge-uneducated {
+  border: 1px solid #fca5a5;
+  background: #fef2f2;
+  color: #dc2626;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 4px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.badge-uneducated:hover {
+  background: #fee2e2;
+}
+.badge-ok {
+  color: #16a34a;
+  font-size: 0.85rem;
+}
+
+/* 未衛教整合彈窗 */
+.ue-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+.ue-panel {
+  background: #fff;
+  border-radius: 12px;
+  width: min(720px, 100%);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.3);
+}
+.ue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 18px 8px;
+}
+.ue-header h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  color: #1e293b;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ue-header h3 i {
+  color: #dc2626;
+}
+.ue-scope {
+  font-size: 0.85rem;
+  color: #64748b;
+  font-weight: 400;
+}
+.ue-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ue-print {
+  padding: 6px 12px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #475569;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.ue-print:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+.ue-print:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.ue-close {
+  border: none;
+  background: none;
+  color: #94a3b8;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.ue-close:hover {
+  color: #475569;
+}
+.ue-note {
+  margin: 0;
+  padding: 0 18px 10px;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+.ue-empty {
+  padding: 2.5rem;
+  text-align: center;
+  color: #16a34a;
+  font-size: 1rem;
+}
+.ue-body {
+  overflow-y: auto;
+  padding: 0 18px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ue-patient {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.ue-patient-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+.ue-pname {
+  font-weight: 700;
+  color: #1e293b;
+}
+.ue-pmrn {
+  font-size: 0.82rem;
+  color: #94a3b8;
+}
+.ue-pstat {
+  font-size: 0.85rem;
+  color: #475569;
+}
+.ue-pstat b {
+  color: #dc2626;
+}
+.ue-open {
+  margin-left: auto;
+  font-size: 0.8rem;
+  padding: 4px 10px;
+}
+.ue-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+.ue-table th,
+.ue-table td {
+  text-align: left;
+  padding: 8px 14px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.ue-table thead th {
+  color: #64748b;
+  font-weight: 600;
+  background: #fff;
+}
+.ue-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.ue-no-nurse {
+  color: #94a3b8;
+}
+
 .btn-open {
   padding: 6px 12px;
   border: 1px solid #8e44ad;
@@ -322,7 +524,8 @@
     gap: 12px;
   }
   /* 觸控目標放大 */
-  .btn-refresh {
+  .btn-refresh,
+  .btn-uneducated {
     padding: 10px 16px;
   }
   .toolbar .chk {

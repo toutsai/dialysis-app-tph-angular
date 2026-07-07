@@ -32,6 +32,13 @@
       <input type="checkbox" [ngModel]="incompleteOnly()" (ngModelChange)="incompleteOnly.set($event)" />
       只看未完成
     </label>
+    <button class="btn-uneducated" (click)="openUneducated()" [disabled]="loading()"
+            title="彙整所有病人的未衛教日期與當天照顧護理師（應衛教日已排除外圍床排程）">
+      <i class="fas fa-user-clock"></i> 未衛教整合
+      @if (uneducatedTotal() > 0) {
+        <span class="uneducated-count">{{ uneducatedTotal() }}</span>
+      }
+    </button>
     <button class="btn-refresh" (click)="load()" [disabled]="loading()">
       <i class="fas fa-rotate-right"></i> 重新整理
     </button>
@@ -53,6 +60,7 @@
             <th>初透日</th>
             <th>檢視／編輯</th>
             <th class="col-prog">已衛教</th>
+            <th class="col-uneducated">未衛教</th>
             <th class="col-prog">回示教通過</th>
             <th>最後更新</th>
           </tr>
@@ -81,6 +89,16 @@
                   <div class="prog-bar"><span class="fill educ" [style.width.%]="pct(r.educatedCount, r.total)"></span></div>
                   <span class="prog-text">{{ r.educatedCount }}/{{ r.total }}</span>
                 </div>
+              </td>
+              <td class="col-uneducated">
+                @if (r.uneducatedCount > 0) {
+                  <button class="badge-uneducated" (click)="openUneducated(r)"
+                          [title]="'應衛教 ' + r.expectedCount + ' 天（排除外圍床），點擊查看未衛教日期與護理師'">
+                    {{ r.uneducatedCount }} 天
+                  </button>
+                } @else {
+                  <span class="badge-ok" [title]="'應衛教 ' + r.expectedCount + ' 天（排除外圍床）'">無</span>
+                }
               </td>
               <td class="col-prog">
                 <div class="prog">
@@ -124,6 +142,14 @@
               <div class="prog-bar"><span class="fill pass" [style.width.%]="pct(r.passedCount, r.total)"></span></div>
               <span class="prog-text">{{ r.passedCount }}/{{ r.total }}</span>
             </div>
+            <div class="ec-prog-row">
+              <span class="ec-prog-label">未衛教</span>
+              @if (r.uneducatedCount > 0) {
+                <button class="badge-uneducated" (click)="openUneducated(r)">{{ r.uneducatedCount }} 天</button>
+              } @else {
+                <span class="badge-ok">無</span>
+              }
+            </div>
           </div>
           <button class="btn-open ec-open" (click)="openRecord(r)">
             <i class="fas fa-chalkboard-teacher"></i> {{ canEdit() ? '檢視／編輯' : '檢視' }}
@@ -143,4 +169,68 @@
     [canEdit]="canEdit()"
     (close)="closeRecord()"
   ></app-education-record-dialog>
+}
+
+<!-- 未衛教整合彈窗 -->
+@if (showUneducated()) {
+  <div class="ue-overlay" (click)="closeUneducated()">
+    <div class="ue-panel" (click)="$event.stopPropagation()">
+      <div class="ue-header">
+        <h3>
+          <i class="fas fa-user-clock"></i>
+          未衛教整合
+          @if (uneducatedFilterId()) {
+            <span class="ue-scope">（單一病人）</span>
+          }
+        </h3>
+        <div class="ue-actions">
+          <button class="ue-print" (click)="printUneducated()" [disabled]="uneducatedPatients().length === 0">
+            <i class="fas fa-print"></i> 列印
+          </button>
+          <button class="ue-close" (click)="closeUneducated()" aria-label="關閉">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+      <p class="ue-note">
+        應衛教日 = 自初透日起實際排入排程的透析日（已排除外圍床），有洗就應衛教（含當日）。
+      </p>
+
+      @if (uneducatedPatients().length === 0) {
+        <div class="ue-empty">目前沒有未衛教的日期 🎉</div>
+      } @else {
+        <div class="ue-body">
+          @for (p of uneducatedPatients(); track p.patientId) {
+            <div class="ue-patient">
+              <div class="ue-patient-head">
+                <span class="ue-pname">{{ p.patientName }}</span>
+                <span class="ue-pmrn">{{ p.medicalRecordNumber }}</span>
+                <span class="status-badge" [attr.data-status]="p.status">{{ statusLabel(p.status) }}</span>
+                <span class="ue-pstat">
+                  未衛教 <b>{{ p.uneducatedCount }}</b> 天／應衛教 {{ p.expectedCount }} 天
+                </span>
+                <button class="btn-open ue-open" (click)="openRecord(p)">
+                  <i class="fas fa-chalkboard-teacher"></i> 衛教紀錄
+                </button>
+              </div>
+              <table class="ue-table">
+                <thead>
+                  <tr><th>日期</th><th>班別</th><th>當天照顧護理師</th></tr>
+                </thead>
+                <tbody>
+                  @for (d of p.uneducatedDates; track d.date) {
+                    <tr>
+                      <td>{{ d.date }}</td>
+                      <td>{{ shiftLabel(d.shift) }}</td>
+                      <td [class.ue-no-nurse]="nurseLabel(d) === '—'">{{ nurseLabel(d) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  </div>
 }

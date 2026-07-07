@@ -5,6 +5,13 @@ import { localApi } from '@/services/localApiClient';
 import { AuthService } from '@app/core/services/auth.service';
 import { EducationRecordDialogComponent } from '@app/components/dialogs/education-record-dialog/education-record-dialog.component';
 
+interface UneducatedDate {
+  date: string;
+  shift: string; // early / noon / late / ''（凍結日期無班別）
+  team: string;
+  nurse: string;
+}
+
 interface EducationListItem {
   patientId: string;
   patientName: string;
@@ -21,7 +28,16 @@ interface EducationListItem {
   total: number;
   completed: boolean;
   lastUpdated: string;
+  expectedCount: number;
+  uneducatedCount: number;
+  uneducatedDates: UneducatedDate[];
 }
+
+const SHIFT_LABELS: Record<string, string> = {
+  early: '早班',
+  noon: '午班',
+  late: '晚班',
+};
 
 /**
  * 後台「初透衛教進度」總覽。
@@ -46,7 +62,27 @@ export class EducationDashboardComponent implements OnInit {
 
   readonly dialogPatient = signal<EducationListItem | null>(null);
 
+  // 未衛教整合彈窗：null = 全部病人；有值 = 只看該病人
+  readonly showUneducated = signal(false);
+  readonly uneducatedFilterId = signal<string | null>(null);
+
   readonly canEdit = computed(() => !this.authService.isViewer());
+
+  /** 未衛教整合清單：有未衛教日的病人，未衛教天數多者在前 */
+  readonly uneducatedPatients = computed(() => {
+    const filterId = this.uneducatedFilterId();
+    return this.rows()
+      .filter((r) => r.uneducatedCount > 0 && (!filterId || r.patientId === filterId))
+      .sort(
+        (a, b) =>
+          b.uneducatedCount - a.uneducatedCount ||
+          String(a.patientName).localeCompare(b.patientName),
+      );
+  });
+
+  readonly uneducatedTotal = computed(() =>
+    this.rows().reduce((sum, r) => sum + (r.uneducatedCount || 0), 0),
+  );
 
   readonly filteredRows = computed(() => {
     const term = this.search().trim().toLowerCase();
@@ -117,5 +153,72 @@ export class EducationDashboardComponent implements OnInit {
   async closeRecord(): Promise<void> {
     this.dialogPatient.set(null);
     await this.load();
+  }
+
+  shiftLabel(shift: string): string {
+    return SHIFT_LABELS[shift] || '—';
+  }
+
+  nurseLabel(d: UneducatedDate): string {
+    if (!d.nurse && !d.team) return '—';
+    return d.team && d.nurse ? `${d.team} ${d.nurse}` : d.nurse || d.team;
+  }
+
+  /** 開啟未衛教整合彈窗；帶 row 時只看該病人 */
+  openUneducated(row?: EducationListItem): void {
+    this.uneducatedFilterId.set(row ? row.patientId : null);
+    this.showUneducated.set(true);
+  }
+
+  closeUneducated(): void {
+    this.showUneducated.set(false);
+    this.uneducatedFilterId.set(null);
+  }
+
+  /** 列印未衛教整合清單（同衛教紀錄視窗的 window.open 列印模式） */
+  printUneducated(): void {
+    const patients = this.uneducatedPatients();
+    const today = new Date().toLocaleDateString('zh-TW');
+    const esc = (s: string) =>
+      String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const blocks = patients
+      .map((p) => {
+        const rows = p.uneducatedDates
+          .map(
+            (d) => `<tr>
+              <td>${esc(d.date)}</td>
+              <td>${esc(this.shiftLabel(d.shift))}</td>
+              <td>${esc(this.nurseLabel(d))}</td>
+            </tr>`,
+          )
+          .join('');
+        return `<h3>${esc(p.patientName)}（${esc(p.medicalRecordNumber)}）
+            — 未衛教 ${p.uneducatedCount} 天／應衛教 ${p.expectedCount} 天，初透日 ${esc(p.firstDialysisDate || '—')}</h3>
+          <table>
+            <thead><tr><th>日期</th><th>班別</th><th>當天照顧護理師</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>`;
+      })
+      .join('');
+    const html = `<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8">
+      <title>未衛教整合清單</title>
+      <style>
+        body { font-family: "Microsoft JhengHei", sans-serif; padding: 24px; color: #1e293b; }
+        h2 { margin: 0 0 4px; } .meta { color: #64748b; font-size: 13px; margin-bottom: 16px; }
+        h3 { font-size: 15px; margin: 18px 0 6px; }
+        table { border-collapse: collapse; width: 100%; font-size: 13px; }
+        th, td { border: 1px solid #94a3b8; padding: 6px 10px; text-align: left; }
+        th { background: #f1f5f9; }
+      </style></head><body>
+      <h2>初透衛教 — 未衛教整合清單</h2>
+      <div class="meta">列印日期：${today}｜共 ${patients.length} 位病人（應衛教日已排除外圍床排程）</div>
+      ${blocks || '<p>目前沒有未衛教的日期。</p>'}
+      </body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    w.print();
   }
 }

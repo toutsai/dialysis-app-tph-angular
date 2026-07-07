@@ -849,21 +849,22 @@ function normalizeEducationSessions(input) {
   })
 }
 
-// 反查病人「實際已洗腎」的透析日期（同病歷查詢的「已透析日期」來源）。
-// 只取 firstDate ~ today（含）之間、實際排入排程的日期；尚未到的未來日不帶。
-// 初透日期一定有洗腎，故若 <= today 必納為第 1 個錨點。
-function getActualDialysisDates(db, patientId, firstDate, todayStr, limit) {
+// 反查病人「應衛教」的透析日期：firstDate ~ today（含）之間實際排入排程的日期，
+// 排除外圍床（slot key 前綴 peripheral，如 ICU 床邊透析 — 病人不在洗腎室，無法衛教）。
+// 回傳 [{ date, shift }]（shift = early/noon/late，供反查當日照顧護理師）。
+// 初透日錨點：該日排程完全查不到才補（資料缺漏仍視為有洗）；若該日只排在外圍則不補。
+function getEducationDialysisDates(db, patientId, firstDate, todayStr) {
   if (!patientId || !firstDate || !/^\d{4}-\d{2}-\d{2}$/.test(firstDate)) return []
   if (firstDate > todayStr) return [] // 初透日都還沒到 → 全不帶
   const rows = db
     .prepare(
       `
-      SELECT DISTINCT date FROM (
-        SELECT date FROM schedules, json_each(schedule) je
+      SELECT DISTINCT date, slotKey FROM (
+        SELECT date, je.key AS slotKey FROM schedules, json_each(schedule) je
         WHERE json_extract(je.value, '$.patientId') = ?
           AND date >= ? AND date <= ?
         UNION
-        SELECT date FROM archived_schedules, json_each(schedule) je
+        SELECT date, je.key AS slotKey FROM archived_schedules, json_each(schedule) je
         WHERE json_extract(je.value, '$.patientId') = ?
           AND date >= ? AND date <= ?
       )
@@ -871,10 +872,19 @@ function getActualDialysisDates(db, patientId, firstDate, todayStr, limit) {
     `,
     )
     .all(patientId, firstDate, todayStr, patientId, firstDate, todayStr)
-  const dates = rows.map((r) => r.date)
-  if (!dates.includes(firstDate)) dates.unshift(firstDate) // 確保初透日為第 1 次
-  dates.sort()
-  return dates.slice(0, limit)
+
+  const byDate = new Map() // date -> shift
+  let firstDateInSchedule = false
+  for (const r of rows) {
+    if (r.date === firstDate) firstDateInSchedule = true
+    if (String(r.slotKey || '').startsWith('peripheral')) continue
+    if (!byDate.has(r.date)) byDate.set(r.date, String(r.slotKey).split('-').pop() || '')
+  }
+  if (!firstDateInSchedule) byDate.set(firstDate, '')
+
+  return [...byDate.entries()]
+    .map(([date, shift]) => ({ date, shift }))
+    .sort((a, b) => a.date.localeCompare(b.date))
 }
 
 /**
@@ -885,6 +895,7 @@ function getActualDialysisDates(db, patientId, firstDate, todayStr, limit) {
 router.get('/education-list', ...isEditor, (req, res) => {
   try {
     const db = getDatabase()
+    const todayStr = getTaipeiTodayString()
     const rows = db.prepare(`
       SELECT p.id, p.name, p.medical_record_number, p.status, p.ward_number,
              p.first_dialysis_date, p.patient_status,
@@ -911,9 +922,10 @@ router.get('/education-list', ...isEditor, (req, res) => {
       let returnDemoCount = 0
       let passedCount = 0
       let hasRecord = false
+      let sessions = []
       if (r.edu_sessions) {
         try {
-          const sessions = JSON.parse(r.edu_sessions) || []
+          sessions = JSON.parse(r.edu_sessions) || []
           for (const s of sessions) {
             if (s?.educatorSign) educatedCount++
             if (s?.returnDemoSign) returnDemoCount++
@@ -921,12 +933,47 @@ router.get('/education-list', ...isEditor, (req, res) => {
           }
           hasRecord = true
         } catch {
+          sessions = []
           /* sessions 解析失敗，當作無進度 */
         }
       }
 
       // 納入條件：目前首透中，或已有衛教進度（避免自動建立的全空白紀錄混入）
       if (!firstActive && educatedCount === 0) continue
+
+      // 應衛教日：自初透日起的非外圍透析日（有洗就應衛教，含當日），最多 12 次。
+      // 已取消首透者凍結在已存的透析日期，不再往後累計。
+      let expectedInfos = []
+      if (firstDate) {
+        if (firstActive) {
+          expectedInfos = getEducationDialysisDates(db, r.id, firstDate, todayStr).slice(0, total)
+        } else {
+          expectedInfos = sessions
+            .filter((s) => s?.dialysisDate)
+            .map((s) => ({ date: String(s.dialysisDate).slice(0, 10), shift: '' }))
+            .filter((d) => d.date <= todayStr)
+        }
+      }
+
+      // 未衛教日 = 應衛教日中沒有衛教者簽核的日期；12 次皆已衛教即視為完成、不再列
+      const uneducatedDates = []
+      if (educatedCount < total) {
+        const educatedOn = new Set(
+          sessions
+            .filter((s) => s?.educatorSign && s?.dialysisDate)
+            .map((s) => String(s.dialysisDate).slice(0, 10)),
+        )
+        // 有簽核但沒填透析日期的格數：視為涵蓋最早的未對上日期，避免誤報未衛教
+        let unmatchedSigned = sessions.filter((s) => s?.educatorSign && !s?.dialysisDate).length
+        for (const info of expectedInfos) {
+          if (educatedOn.has(info.date)) continue
+          if (unmatchedSigned > 0) {
+            unmatchedSigned--
+            continue
+          }
+          uneducatedDates.push({ date: info.date, shift: info.shift, team: '', nurse: '' })
+        }
+      }
 
       list.push({
         patientId: r.id,
@@ -944,7 +991,48 @@ router.get('/education-list', ...isEditor, (req, res) => {
         total,
         completed: passedCount >= total,
         lastUpdated: r.edu_updated || '',
+        expectedCount: expectedInfos.length,
+        uneducatedCount: uneducatedDates.length,
+        uneducatedDates,
       })
+    }
+
+    // 反查未衛教日的當天照顧護理師：
+    // nurse_assignments.teams JSON = { teams: {`${patientId}-${shift}`: {nurseTeam..}}, names: {隊名: 姓名} }
+    const allDates = [...new Set(list.flatMap((it) => it.uneducatedDates.map((d) => d.date)))]
+    if (allDates.length > 0) {
+      const placeholders = allDates.map(() => '?').join(',')
+      const assignRows = db
+        .prepare(`SELECT date, teams FROM nurse_assignments WHERE date IN (${placeholders})`)
+        .all(...allDates)
+      const assignByDate = new Map()
+      for (const a of assignRows) {
+        try {
+          const raw = JSON.parse(a.teams || '{}')
+          // 兼容舊扁平格式（同 GET /schedules/nurse-assignments/:date）
+          assignByDate.set(a.date, { teams: raw.teams || raw, names: raw.names || {} })
+        } catch {
+          /* teams 解析失敗，該日查無護理師 */
+        }
+      }
+      for (const it of list) {
+        for (const d of it.uneducatedDates) {
+          const payload = assignByDate.get(d.date)
+          if (!payload) continue
+          // 凍結日期（已取消首透）沒有班別資訊 → 三班都試
+          const shifts = d.shift ? [d.shift] : ['early', 'noon', 'late']
+          for (const sh of shifts) {
+            const t = payload.teams?.[`${it.patientId}-${sh}`]
+            const team = t?.nurseTeam || t?.nurseTeamIn || t?.nurseTeamOut || ''
+            if (team) {
+              d.team = team
+              d.nurse = payload.names?.[team] || ''
+              if (!d.shift) d.shift = sh
+              break
+            }
+          }
+        }
+      }
     }
 
     // 排序：已衛教數少者在前（未完成優先），再依姓名
@@ -990,16 +1078,12 @@ router.get('/:id/education', authenticate, (req, res) => {
       /* patient_status 解析失敗時退回攤平欄位 */
     }
 
-    // 透析日期預設：只帶入「實際已洗腎」的日期（同病歷查詢已透析日期），尚未到的未來日不帶。
-    // 僅填入「尚未儲存」的格子（不覆蓋已存值）。
+    // 透析日期預設：只帶入「實際已洗腎」的日期（排除外圍床 — 外圍不列入應衛教），
+    // 尚未到的未來日不帶。僅填入「尚未儲存」的格子（不覆蓋已存值）。
     const sessions = normalizeEducationSessions(JSON.parse(row.sessions || '[]'))
-    const defaultDates = getActualDialysisDates(
-      db,
-      id,
-      firstDialysisDate,
-      getTaipeiTodayString(),
-      EDUCATION_SESSION_COUNT,
-    )
+    const defaultDates = getEducationDialysisDates(db, id, firstDialysisDate, getTaipeiTodayString())
+      .map((d) => d.date)
+      .slice(0, EDUCATION_SESSION_COUNT)
     sessions.forEach((s, i) => {
       if (!s.dialysisDate && defaultDates[i]) s.dialysisDate = defaultDates[i]
     })
