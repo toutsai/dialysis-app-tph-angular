@@ -143,6 +143,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   readonly patientNameForDialog = signal('');
   readonly memosForDialog = signal<MemoItem[]>([]);
   private memoPollTimer: ReturnType<typeof setInterval> | null = null;
+  private patientRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
   /** Set of patient IDs that have pending memos. */
   readonly patientWithMemoIds = computed<Set<string>>(
@@ -208,6 +209,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
           this.startConflictListener();
           this.fetchTodayAssignedPatients();
           this.taskStoreService.startRealtimeUpdates(user.uid);
+          this.startPatientRefreshTimer();
         } else {
           this.activeMemos.set([]);
           this.stopSharedDataListeners();
@@ -217,6 +219,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
           this.patientStoreService.reset();
           this.todayMyPatientIds.set([]);
           this.taskStoreService.stopRealtimeUpdates();
+          this.stopPatientRefreshTimer();
         }
       });
     });
@@ -358,6 +361,28 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     if (this.memoPollTimer) {
       clearInterval(this.memoPollTimer);
       this.memoPollTimer = null;
+    }
+  }
+
+  private readonly PATIENT_REFRESH_INTERVAL = 5 * 60_000; // 5 minutes
+
+  /**
+   * 每 5 分鐘背景重抓病人主檔。
+   * 病人 store 是一次性載入（hasFetched 守門），久開不重整的分頁會一直沿用舊資料；
+   * 背景強制重抓讓其他使用者的異動最多 5 分鐘內反映到畫面，毋須整頁重整。
+   */
+  private startPatientRefreshTimer(): void {
+    if (this.patientRefreshTimer) return;
+    this.patientRefreshTimer = setInterval(() => {
+      // 錯誤已在 store 內記錄；背景輪詢失敗不打擾使用者，等下一輪再試
+      this.patientStoreService.forceRefreshPatients().catch(() => {});
+    }, this.PATIENT_REFRESH_INTERVAL);
+  }
+
+  private stopPatientRefreshTimer(): void {
+    if (this.patientRefreshTimer) {
+      clearInterval(this.patientRefreshTimer);
+      this.patientRefreshTimer = null;
     }
   }
 
@@ -513,5 +538,6 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     this.stopSharedDataListeners();
     this.stopConflictListener();
     this.taskStoreService.stopRealtimeUpdates();
+    this.stopPatientRefreshTimer();
   }
 }

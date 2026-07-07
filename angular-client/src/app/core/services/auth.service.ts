@@ -10,7 +10,12 @@ import {
 import { Router } from '@angular/router';
 import { ApiConfigService } from './api-config.service';
 import { DateStateService } from './date-state.service';
+import { PatientStoreService } from './patient-store.service';
+import { MedicationStoreService } from './medication-store.service';
+import { UserDirectoryService } from './user-directory.service';
+import { ArchiveStoreService } from './archive-store.service';
 import { setUnauthorizedHandler, type UnauthorizedReason } from '@/services/localApiClient';
+import { clearAllCache } from '@/services/optimizedApiService';
 
 // ---------------------------------------------------------------------------
 // Types (保持與 cloud 版完全相同)
@@ -76,6 +81,10 @@ export class AuthService implements OnDestroy {
   private readonly firebase = inject(ApiConfigService);
   private readonly router = inject(Router);
   private readonly dateState = inject(DateStateService);
+  private readonly patientStore = inject(PatientStoreService);
+  private readonly medicationStore = inject(MedicationStoreService);
+  private readonly userDirectory = inject(UserDirectoryService);
+  private readonly archiveStore = inject(ArchiveStoreService);
 
   // -----------------------------------------------------------------------
   // State signals (保持與 cloud 版相同)
@@ -247,6 +256,7 @@ export class AuthService implements OnDestroy {
       }).catch(() => {});
     } finally {
       await this.clearBrowserStorage();
+      this.clearInMemoryCaches();
       this.currentUser.set(null);
       this.claims.set(null);
       if (this.refreshTimer) {
@@ -256,6 +266,23 @@ export class AuthService implements OnDestroy {
       this.stopSessionTimeoutCheck();
       this.router.navigate(['/login'], reason ? { queryParams: { reason } } : {});
       this.sessionEnding = false;
+    }
+  }
+
+  /**
+   * 清除各 service 的 JS 記憶體快取。
+   * 登出只清瀏覽器儲存不夠：optimizedApiService / 各 store 的單例快取仍留在記憶體，
+   * 同分頁登出再登入會沿用舊資料（過去要按 F5 整頁重載才會更新）。
+   */
+  private clearInMemoryCaches(): void {
+    try {
+      clearAllCache(); // optimizedApiService 模組層級 30 秒快取
+      this.patientStore.reset();
+      this.medicationStore.clearCache();
+      this.userDirectory.clearCache();
+      this.archiveStore.clearCache();
+    } catch (error) {
+      console.warn('[AuthService] Failed to clear in-memory caches:', error);
     }
   }
 
