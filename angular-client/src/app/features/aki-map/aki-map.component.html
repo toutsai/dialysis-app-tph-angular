@@ -233,6 +233,10 @@
                 }
               </select>
             </label>
+            <label class="field checkbox-field">
+              <input type="checkbox" [ngModel]="showClosed()" (ngModelChange)="showClosed.set($event)" />
+              <span>顯示已結案</span>
+            </label>
           }
           <button class="btn upload" [disabled]="!displayCareItems().length" (click)="exportCareExcel()">匯出 Excel</button>
         </div>
@@ -256,8 +260,18 @@
                 <th>病歷號</th><th>姓名</th><th>病床號</th><th>主治醫師</th><th>科別</th>
                 @if (isCkdView()) { <th>CKD 分期</th><th>最新 eGFR</th> } @else { <th>AKI Stage</th> }
                 <th>病程</th>
-                @if (isDischargedView()) { <th>出院日</th> }
-                <th>CKD 病史</th><th>腎臟科會診</th><th>{{ isCkdView() ? '原因/備註' : 'AKI 原因' }}</th><th>是否透析</th><th>關懷結果</th><th>關懷醫師簽核</th>
+                @if (isDischargedView()) {
+                  <th>出院日</th><th>回診安排</th><th>回診日期</th><th>追蹤抽血</th><th>電訪</th><th>結案</th>
+                } @else {
+                  <th>CKD 病史</th><th>腎臟科會診</th>
+                  @if (isCkdView()) {
+                    <th>Pre-ESRD 收案</th><th>衛教</th><th>透析準備</th>
+                  } @else {
+                    <th>AKI 原因</th><th>腎毒性藥物</th><th>尿量</th>
+                  }
+                  <th>是否透析</th>
+                }
+                <th>關懷結果</th><th>關懷醫師簽核</th>
               </tr>
             </thead>
             <tbody>
@@ -285,26 +299,85 @@
                   </td>
                   @if (isDischargedView()) {
                     <td class="nowrap">{{ it.dischargeDate || it.lastSeenDate }}</td>
+                    <td>
+                      <select class="cell-input narrow" [(ngModel)]="it.followupAppt" (change)="saveCareRow(it)">
+                        <option value="">—</option>
+                        @for (o of followupApptOptions; track o) { <option [value]="o">{{ o }}</option> }
+                      </select>
+                    </td>
+                    <td><input type="date" class="cell-input date" [(ngModel)]="it.followupApptDate" (change)="saveCareRow(it)" /></td>
+                    <td>
+                      <select class="cell-input narrow" [(ngModel)]="it.followupLab" (change)="saveCareRow(it)">
+                        <option value="">—</option>
+                        @for (o of followupLabOptions; track o) { <option [value]="o">{{ o }}</option> }
+                      </select>
+                    </td>
+                    <td>
+                      <select class="cell-input narrow" [(ngModel)]="it.contactStatus" (change)="saveCareRow(it)">
+                        <option value="">—</option>
+                        @for (o of contactOptions; track o) { <option [value]="o">{{ o }}</option> }
+                      </select>
+                    </td>
+                    <td>
+                      <select class="cell-input" [(ngModel)]="it.closureStatus" (change)="saveCareRow(it)">
+                        <option value="">—</option>
+                        @for (o of closureOptions; track o) { <option [value]="o">{{ o }}</option> }
+                      </select>
+                    </td>
+                  } @else {
+                    <td>
+                      <select class="cell-input narrow" [(ngModel)]="it.ckdHistory" (change)="saveCareRow(it)">
+                        <option value="">—</option>
+                        @for (o of ckdOptions; track o) { <option [value]="o">{{ o }}</option> }
+                      </select>
+                    </td>
+                    <td>
+                      <select class="cell-input" [(ngModel)]="it.nephrologyConsult" (change)="saveCareRow(it)">
+                        <option value="">—</option>
+                        @for (o of nephrologyOptions; track o) { <option [value]="o">{{ o }}</option> }
+                      </select>
+                    </td>
+                    @if (isCkdView()) {
+                      <td>
+                        <select class="cell-input" [(ngModel)]="it.preesrdEnrolled" (change)="saveCareRow(it)">
+                          <option value="">—</option>
+                          @for (o of preesrdOptions; track o) { <option [value]="o">{{ o }}</option> }
+                        </select>
+                      </td>
+                      <td>
+                        <select class="cell-input" [(ngModel)]="it.ckdEducation" (change)="saveCareRow(it)">
+                          <option value="">—</option>
+                          @for (o of educationOptions; track o) { <option [value]="o">{{ o }}</option> }
+                        </select>
+                      </td>
+                      <td>
+                        <select class="cell-input" [(ngModel)]="it.vascularPrep" (change)="saveCareRow(it)">
+                          <option value="">—</option>
+                          @for (o of vascularOptions; track o) { <option [value]="o">{{ o }}</option> }
+                        </select>
+                      </td>
+                    } @else {
+                      <td><input class="cell-input wide" [(ngModel)]="it.akiCause" (change)="saveCareRow(it)" placeholder="AKI 原因" /></td>
+                      <td>
+                        <select class="cell-input" [(ngModel)]="it.nephrotoxinReview" (change)="saveCareRow(it)">
+                          <option value="">—</option>
+                          @for (o of nephrotoxinOptions; track o) { <option [value]="o">{{ o }}</option> }
+                        </select>
+                      </td>
+                      <td>
+                        <select class="cell-input narrow" [(ngModel)]="it.urineOutput" (change)="saveCareRow(it)">
+                          <option value="">—</option>
+                          @for (o of urineOptions; track o) { <option [value]="o">{{ o }}</option> }
+                        </select>
+                      </td>
+                    }
+                    <td>
+                      <select class="cell-input narrow" [(ngModel)]="it.dialysisStatus" (change)="saveCareRow(it)">
+                        <option value="">—</option>
+                        @for (o of dialysisOptions; track o) { <option [value]="o">{{ o }}</option> }
+                      </select>
+                    </td>
                   }
-                  <td>
-                    <select class="cell-input narrow" [(ngModel)]="it.ckdHistory" (change)="saveCareRow(it)">
-                      <option value="">—</option>
-                      @for (o of ckdOptions; track o) { <option [value]="o">{{ o }}</option> }
-                    </select>
-                  </td>
-                  <td>
-                    <select class="cell-input" [(ngModel)]="it.nephrologyConsult" (change)="saveCareRow(it)">
-                      <option value="">—</option>
-                      @for (o of nephrologyOptions; track o) { <option [value]="o">{{ o }}</option> }
-                    </select>
-                  </td>
-                  <td><input class="cell-input wide" [(ngModel)]="it.akiCause" (change)="saveCareRow(it)" placeholder="AKI 原因" /></td>
-                  <td>
-                    <select class="cell-input narrow" [(ngModel)]="it.dialysisStatus" (change)="saveCareRow(it)">
-                      <option value="">—</option>
-                      @for (o of dialysisOptions; track o) { <option [value]="o">{{ o }}</option> }
-                    </select>
-                  </td>
                   <td><input class="cell-input wide" [(ngModel)]="it.careResult" (change)="saveCareRow(it)" placeholder="關懷結果" /></td>
                   <td class="nowrap sign-cell">
                     @if (it.signedAt) {
@@ -554,7 +627,8 @@
             <li><b>CKD 關懷名單</b>：有 eGFR 慢性證據者；疑似 ESRD 若「為本院透析確定病人且 CKD 病史欄已填」也列入。</li>
             <li><b>AKI 關懷名單</b>：AKI 1–3 期；<b>疑似 ESRD 但無法確認慢性者，先以 AKI 論</b>（在關懷欄填上 CKD 病史後會自動轉入 CKD 名單）。</li>
             <li>同一病人可同時在兩份名單（AKI on CKD）；關懷欄位共用一份紀錄，填一次兩邊同步。</li>
-            <li><b>出院待追蹤名單</b>：曾 AKI／疑似 ESRD、已不在最新留院名單者。</li>
+            <li><b>出院待追蹤名單</b>：曾 AKI／疑似 ESRD、已不在最新留院名單者。追蹤欄位＝回診安排／追蹤抽血／電訪／結案；<b>標記結案（恢復／轉腎臟科／死亡）後預設隱藏</b>，可用「顯示已結案」開關查看。</li>
+            <li>各名單欄位分面向（AKI＝原因/腎毒性藥物/尿量；CKD＝Pre-ESRD收案/衛教/透析準備；出院＝追蹤閉環），但同一病人共用一份關懷紀錄，共用欄位（會診/透析/關懷結果/簽核）任一頁籤填寫即同步。</li>
           </ul>
 
           <h4>防呆與特別歸類</h4>

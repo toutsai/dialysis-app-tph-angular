@@ -729,3 +729,7 @@
 }
 
 .care-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.checkbox-field { flex-direction: row; align-items: center; gap: 0.3rem; }
+.checkbox-field input { margin: 0; }
+.cell-input.date { min-width: 7.5rem; }

@@ -219,17 +219,42 @@ function getLatestDataDate(db) {
   return db.prepare('SELECT MAX(test_date) AS d FROM aki_lab_results').get()?.d || null
 }
 
+// 關懷紀錄欄位（snake_case → camelCase）；三名單共用一份紀錄，各頁籤顯示自己的子集
+const CARE_COLUMNS = `ckd_history AS ckdHistory, nephrology_consult AS nephrologyConsult, aki_cause AS akiCause,
+       dialysis_status AS dialysisStatus, care_result AS careResult,
+       nephrotoxin_review AS nephrotoxinReview, urine_output AS urineOutput,
+       preesrd_enrolled AS preesrdEnrolled, ckd_education AS ckdEducation, vascular_prep AS vascularPrep,
+       followup_appt AS followupAppt, followup_appt_date AS followupApptDate, followup_lab AS followupLab,
+       contact_status AS contactStatus, closure_status AS closureStatus,
+       care_physician AS carePhysician, signed_at AS signedAt`
+
 // 一次載入全部關懷紀錄（名單歸類要用到人工 CKD 病史，逐筆查會 N+1）
 function loadCareRecords(db) {
-  const rows = db
-    .prepare(
-      `SELECT mrn, ckd_history AS ckdHistory, nephrology_consult AS nephrologyConsult, aki_cause AS akiCause,
-              dialysis_status AS dialysisStatus, care_result AS careResult,
-              care_physician AS carePhysician, signed_at AS signedAt`
-      + ' FROM aki_care_records',
-    )
-    .all()
+  const rows = db.prepare(`SELECT mrn, ${CARE_COLUMNS} FROM aki_care_records`).all()
   return new Map(rows.map((r) => [r.mrn, r]))
+}
+
+// 關懷紀錄攤平到名單項目（無紀錄時給空字串）
+function careFields(care) {
+  return {
+    ckdHistory: care?.ckdHistory || '',
+    nephrologyConsult: care?.nephrologyConsult || '',
+    akiCause: care?.akiCause || '',
+    dialysisStatus: care?.dialysisStatus || '',
+    careResult: care?.careResult || '',
+    nephrotoxinReview: care?.nephrotoxinReview || '',
+    urineOutput: care?.urineOutput || '',
+    preesrdEnrolled: care?.preesrdEnrolled || '',
+    ckdEducation: care?.ckdEducation || '',
+    vascularPrep: care?.vascularPrep || '',
+    followupAppt: care?.followupAppt || '',
+    followupApptDate: care?.followupApptDate || '',
+    followupLab: care?.followupLab || '',
+    contactStatus: care?.contactStatus || '',
+    closureStatus: care?.closureStatus || '',
+    carePhysician: care?.carePhysician || '',
+    signedAt: care?.signedAt || null,
+  }
 }
 
 // 名單歸類（使用者決策 2026-07-07）：
@@ -362,13 +387,7 @@ router.get('/patient/:mrn', (req, res) => {
 function getCareRecord(db, mrn) {
   return (
     db
-      .prepare(
-        `SELECT ckd_history AS ckdHistory, nephrology_consult AS nephrologyConsult, aki_cause AS akiCause,
-                dialysis_status AS dialysisStatus, care_result AS careResult,
-                care_physician AS carePhysician, signed_at AS signedAt,
-                updated_by AS updatedBy, updated_at AS updatedAt
-         FROM aki_care_records WHERE mrn = ?`,
-      )
+      .prepare(`SELECT ${CARE_COLUMNS}, updated_by AS updatedBy, updated_at AS updatedAt FROM aki_care_records WHERE mrn = ?`)
       .get(mrn) || null
   )
 }
@@ -414,13 +433,7 @@ function toCareItem(c) {
     latestEgfr: c.analysis?.ckd?.latestEgfr ?? null,
     ckdBasis: c.analysis?.ckd?.basis || (c.analysis?.isEsrd ? '全段 Cr≥4.0 疑似 ESRD' : null),
     autoDialysisMode: c.dialysisMode,
-    ckdHistory: c.care?.ckdHistory || '',
-    nephrologyConsult: c.care?.nephrologyConsult || '',
-    akiCause: c.care?.akiCause || '',
-    dialysisStatus: c.care?.dialysisStatus || '',
-    careResult: c.care?.careResult || '',
-    carePhysician: c.care?.carePhysician || '',
-    signedAt: c.care?.signedAt || null,
+    ...careFields(c.care),
   }
 }
 
@@ -523,13 +536,7 @@ router.get('/discharged-care-list', (req, res) => {
         autoDialysisMode: dialysisModeFor(modeMap, r.mrn),
         dischargeDate: r.dischargeDate || null,
         lastSeenDate: r.snapshotDate,
-        ckdHistory: care?.ckdHistory || '',
-        nephrologyConsult: care?.nephrologyConsult || '',
-        akiCause: care?.akiCause || '',
-        dialysisStatus: care?.dialysisStatus || '',
-        careResult: care?.careResult || '',
-        carePhysician: care?.carePhysician || '',
-        signedAt: care?.signedAt || null,
+        ...careFields(care),
       })
     }
     items.sort(
@@ -543,7 +550,27 @@ router.get('/discharged-care-list', (req, res) => {
   }
 })
 
-// PUT /api/aki/care/:mrn —— 儲存關懷欄位；body.sign=true 時以登入者蓋章簽核
+// camelCase → DB 欄位對照（PUT 部分更新用）
+const CARE_FIELD_MAP = {
+  ckdHistory: 'ckd_history',
+  nephrologyConsult: 'nephrology_consult',
+  akiCause: 'aki_cause',
+  dialysisStatus: 'dialysis_status',
+  careResult: 'care_result',
+  nephrotoxinReview: 'nephrotoxin_review',
+  urineOutput: 'urine_output',
+  preesrdEnrolled: 'preesrd_enrolled',
+  ckdEducation: 'ckd_education',
+  vascularPrep: 'vascular_prep',
+  followupAppt: 'followup_appt',
+  followupApptDate: 'followup_appt_date',
+  followupLab: 'followup_lab',
+  contactStatus: 'contact_status',
+  closureStatus: 'closure_status',
+}
+
+// PUT /api/aki/care/:mrn —— 儲存關懷欄位；body.sign=true 時以登入者蓋章簽核。
+// 只更新 body 有帶的欄位（undefined = 不動），避免不同頁籤存檔互相洗掉對方的欄位。
 router.put('/care/:mrn', (req, res) => {
   try {
     const db = getDatabase()
@@ -552,19 +579,18 @@ router.put('/care/:mrn', (req, res) => {
     const b = req.body || {}
     const updatedBy = req.user?.name || req.user?.username || ''
 
-    db.prepare(
-      `INSERT INTO aki_care_records
-         (id, mrn, ckd_history, nephrology_consult, aki_cause, dialysis_status, care_result, updated_by, updated_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
-       ON CONFLICT(mrn) DO UPDATE SET
-         ckd_history        = excluded.ckd_history,
-         nephrology_consult = excluded.nephrology_consult,
-         aki_cause          = excluded.aki_cause,
-         dialysis_status    = excluded.dialysis_status,
-         care_result        = excluded.care_result,
-         updated_by         = excluded.updated_by,
-         updated_at         = excluded.updated_at`,
-    ).run(uuidv4(), mrn, b.ckdHistory ?? '', b.nephrologyConsult ?? '', b.akiCause ?? '', b.dialysisStatus ?? '', b.careResult ?? '', updatedBy)
+    db.prepare('INSERT OR IGNORE INTO aki_care_records (id, mrn) VALUES (?, ?)').run(uuidv4(), mrn)
+    const sets = []
+    const vals = []
+    for (const [key, col] of Object.entries(CARE_FIELD_MAP)) {
+      if (b[key] !== undefined) {
+        sets.push(`${col} = ?`)
+        vals.push(b[key] ?? '')
+      }
+    }
+    sets.push('updated_by = ?', "updated_at = datetime('now','localtime')")
+    vals.push(updatedBy)
+    db.prepare(`UPDATE aki_care_records SET ${sets.join(', ')} WHERE mrn = ?`).run(...vals, mrn)
 
     if (b.sign) {
       db.prepare(`UPDATE aki_care_records SET care_physician = ?, signed_at = datetime('now','localtime') WHERE mrn = ?`).run(updatedBy, mrn)

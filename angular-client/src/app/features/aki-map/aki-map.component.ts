@@ -160,10 +160,13 @@ export class AkiMapComponent implements OnInit {
   readonly dischargedDays = signal<number>(30);
   readonly dayOptions = [7, 14, 30, 0];
 
-  // 依「最後在院日距最新資料日的天數」過濾出院名單
+  // 依「最後在院日距最新資料日的天數」過濾出院名單；已結案/死亡預設隱藏
   readonly filteredDischargedItems = computed(() => {
     const n = this.dischargedDays();
-    const items = this.dischargedItems();
+    let items = this.dischargedItems();
+    if (!this.showClosed()) {
+      items = items.filter((it) => !it.closureStatus || it.closureStatus === '持續追蹤');
+    }
     const ref = this.dischargedLatestDate();
     if (!n || !ref) return items;
     const refT = new Date(ref).getTime();
@@ -199,6 +202,20 @@ export class AkiMapComponent implements OnInit {
   readonly dialysisOptions = ['HD', 'SLED', 'CVVHDF', 'PD', 'Hospice', '無'];
   readonly nephrologyOptions = ['已會診', '會診中', '未會診'];
   readonly ckdOptions = ['無', 'G1', 'G2', 'G3a', 'G3b', 'G4', 'G5', '未知'];
+  // AKI 名單專屬
+  readonly nephrotoxinOptions = ['已檢視無', '已停用調整', '檢視中', '未檢視'];
+  readonly urineOptions = ['正常', '寡尿', '無尿', '未評估'];
+  // CKD 名單專屬
+  readonly preesrdOptions = ['已收案', '擬收案', '未收案', '不適用'];
+  readonly educationOptions = ['已完成', '待安排', '不適用'];
+  readonly vascularOptions = ['已建立', '評估中', '未評估', '不適用'];
+  // 出院待追蹤名單專屬
+  readonly followupApptOptions = ['已約門診', '未約', '不需'];
+  readonly followupLabOptions = ['已排', '未排', '不需'];
+  readonly contactOptions = ['已電訪', '待電訪', '失聯'];
+  readonly closureOptions = ['持續追蹤', '已結案·恢復', '已結案·轉腎臟科', '死亡'];
+  // 出院名單預設隱藏已結案/死亡
+  readonly showClosed = signal(false);
 
   private readonly colorMap = new Map(CATEGORY_DEFS.map((d) => [d.key, d]));
 
@@ -439,6 +456,16 @@ export class AkiMapComponent implements OnInit {
         akiCause: item.akiCause,
         dialysisStatus: item.dialysisStatus,
         careResult: item.careResult,
+        nephrotoxinReview: item.nephrotoxinReview,
+        urineOutput: item.urineOutput,
+        preesrdEnrolled: item.preesrdEnrolled,
+        ckdEducation: item.ckdEducation,
+        vascularPrep: item.vascularPrep,
+        followupAppt: item.followupAppt,
+        followupApptDate: item.followupApptDate,
+        followupLab: item.followupLab,
+        contactStatus: item.contactStatus,
+        closureStatus: item.closureStatus,
         ...extra,
       });
       if (res?.care) {
@@ -488,10 +515,26 @@ export class AkiMapComponent implements OnInit {
       row['AKD'] = it.akd ? 'Y' : '';
       row['本次住院AKI'] = it.admissionAkiStage != null ? `S${it.admissionAkiStage}${this.courseLabel(it.akiCourse) ? '·' + this.courseLabel(it.akiCourse) : ''}` : '';
       row['當日AKI'] = it.todayAkiStage != null ? `S${it.todayAkiStage}` : '';
-      row['CKD病史'] = it.ckdHistory;
-      row['腎臟科會診'] = it.nephrologyConsult;
-      row[ckdView ? '原因/備註' : 'AKI原因'] = it.akiCause;
-      row['是否透析'] = it.dialysisStatus;
+      if (discharged) {
+        row['回診安排'] = it.followupAppt;
+        row['回診日期'] = it.followupApptDate;
+        row['追蹤抽血'] = it.followupLab;
+        row['電訪狀態'] = it.contactStatus;
+        row['結案狀態'] = it.closureStatus;
+      } else {
+        row['CKD病史'] = it.ckdHistory;
+        row['腎臟科會診'] = it.nephrologyConsult;
+        if (ckdView) {
+          row['Pre-ESRD收案'] = it.preesrdEnrolled;
+          row['腎臟保健衛教'] = it.ckdEducation;
+          row['透析準備(血管通路)'] = it.vascularPrep;
+        } else {
+          row['AKI原因'] = it.akiCause;
+          row['腎毒性藥物檢視'] = it.nephrotoxinReview;
+          row['尿量狀態'] = it.urineOutput;
+        }
+        row['是否透析'] = it.dialysisStatus;
+      }
       row['關懷結果'] = it.careResult;
       row['關懷醫師簽核'] = it.carePhysician;
       row['簽核時間'] = it.signedAt || '';

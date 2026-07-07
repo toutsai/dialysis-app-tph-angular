@@ -159,6 +159,19 @@ export interface AkiCareItem extends AkiCourseFields {
   akiCause: string;
   dialysisStatus: string;
   careResult: string;
+  // AKI 名單專屬
+  nephrotoxinReview: string;
+  urineOutput: string;
+  // CKD 名單專屬
+  preesrdEnrolled: string;
+  ckdEducation: string;
+  vascularPrep: string;
+  // 出院待追蹤名單專屬
+  followupAppt: string;
+  followupApptDate: string;
+  followupLab: string;
+  contactStatus: string;
+  closureStatus: string;
   carePhysician: string;
   signedAt: string | null;
   dischargeDate?: string | null;
@@ -181,6 +194,16 @@ export interface AkiCareSavePayload {
   akiCause?: string;
   dialysisStatus?: string;
   careResult?: string;
+  nephrotoxinReview?: string;
+  urineOutput?: string;
+  preesrdEnrolled?: string;
+  ckdEducation?: string;
+  vascularPrep?: string;
+  followupAppt?: string;
+  followupApptDate?: string;
+  followupLab?: string;
+  contactStatus?: string;
+  closureStatus?: string;
   sign?: boolean;
   clearSign?: boolean;
 }

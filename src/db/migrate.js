@@ -381,6 +381,14 @@ export function runMigrations() {
     if (akiCareExists) {
       console.log('📋 檢查 aki_care_records 表格...')
       if (addColumnIfNotExists(db, 'aki_care_records', 'ckd_history', 'TEXT')) migrationsApplied++
+      // 三關懷名單分面向欄位（2026-07-07）
+      for (const col of [
+        'nephrotoxin_review', 'urine_output', // AKI 名單
+        'preesrd_enrolled', 'ckd_education', 'vascular_prep', // CKD 名單
+        'followup_appt', 'followup_appt_date', 'followup_lab', 'contact_status', 'closure_status', // 出院名單
+      ]) {
+        if (addColumnIfNotExists(db, 'aki_care_records', col, 'TEXT')) migrationsApplied++
+      }
     }
 
     // AKI 檢驗散點加 eGFR 欄位（8.1 報表同次抽血 Cr+eGFR，CKD 追蹤用）

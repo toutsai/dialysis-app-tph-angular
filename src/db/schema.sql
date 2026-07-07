@@ -737,7 +737,20 @@ CREATE TABLE IF NOT EXISTS aki_care_records (
     nephrology_consult TEXT,           -- 腎臟科會診（已會診/未會診/會診中）
     aki_cause TEXT,                    -- AKI 原因
     dialysis_status TEXT,              -- 是否透析（HD/SLED/CVVHDF/無，預填本院模式）
-    care_result TEXT,                  -- 關懷結果
+    care_result TEXT,                  -- 關懷結果（三名單共用照護歷程）
+    -- AKI 名單專屬
+    nephrotoxin_review TEXT,           -- 腎毒性藥物檢視（已檢視無/已停用調整/檢視中/未檢視）
+    urine_output TEXT,                 -- 尿量狀態（正常/寡尿/無尿/未評估）
+    -- CKD 名單專屬
+    preesrd_enrolled TEXT,             -- Pre-ESRD 照護收案（已收案/擬收案/未收案/不適用）
+    ckd_education TEXT,                -- 腎臟保健衛教（已完成/待安排/不適用）
+    vascular_prep TEXT,                -- 透析準備-血管通路（已建立/評估中/未評估/不適用）
+    -- 出院待追蹤名單專屬
+    followup_appt TEXT,                -- 回診安排（已約門診/未約/不需）
+    followup_appt_date TEXT,           -- 回診日期
+    followup_lab TEXT,                 -- 追蹤抽血（已排/未排/不需）
+    contact_status TEXT,               -- 電訪狀態（已電訪/待電訪/失聯）
+    closure_status TEXT,               -- 結案狀態（持續追蹤/已結案·恢復/已結案·轉腎臟科/死亡）
     care_physician TEXT,               -- 關懷醫師簽核（姓名）
     signed_at TEXT,                    -- 簽核時間
     updated_by TEXT,
