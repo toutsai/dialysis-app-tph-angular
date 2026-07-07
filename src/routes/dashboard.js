@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken'
 import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../db/init.js'
 import { isAdmin, isTokenBlacklisted, logAudit, verifyToken } from '../middleware/auth.js'
+import { loginRateLimit } from '../middleware/rateLimit.js'
 import { getDashboardData, normalizeBedKey, formatBedLabel } from '../services/dashboardDataService.js'
 import {
   buildDashboardPinList,
@@ -120,7 +121,23 @@ function isValidDashboardPin(device, bedKey, pin) {
   return !!device?.pin_hash && bcrypt.compareSync(String(pin || ''), device.pin_hash)
 }
 
-router.post('/bed-login', async (req, res) => {
+// PIN 暴力破解防護（比照 auth.js 帳號鎖定；PIN 僅 4-6 碼，必須雙層防護：IP 限速 + 裝置鎖定）
+const BED_LOGIN_LOCKOUT = {
+  MAX_ATTEMPTS: 5,
+  LOCKOUT_MINUTES: 30,
+}
+
+// 一律存本地時間字串（'YYYY-MM-DD HH:MM:SS'），與讀取端 new Date() 的本地解析一致
+function localDateTimeString(msFromNow = 0) {
+  return new Date(Date.now() + msFromNow).toLocaleString('sv-SE')
+}
+
+function isDeviceLocked(device) {
+  if (!device?.locked_until) return false
+  return new Date(device.locked_until) > new Date()
+}
+
+router.post('/bed-login', loginRateLimit, async (req, res) => {
   try {
     const bedKey = normalizeBedKey(req.body?.bedKey)
     const pin = String(req.body?.pin || '')
@@ -138,18 +155,60 @@ router.post('/bed-login', async (req, res) => {
       return res.status(401).json({ error: true, message: '床位裝置未啟用' })
     }
 
+    if (isDeviceLocked(device)) {
+      const remainingMinutes = Math.max(1, Math.ceil((new Date(device.locked_until) - new Date()) / 60000))
+      return res.status(423).json({
+        error: true,
+        message: `PIN 錯誤次數過多，此床位已被鎖定，請於 ${remainingMinutes} 分鐘後再試`,
+        locked: true,
+        remainingMinutes,
+      })
+    }
+
     if (!device && isDefaultDashboardBedKey(bedKey) && isDerivedDashboardPinValid(bedKey, pin)) {
       device = createDerivedDevice(db, bedKey)
     }
 
     if (!device || !isValidDashboardPin(device, bedKey, pin)) {
+      if (device) {
+        const newFailedCount = (device.failed_login_count || 0) + 1
+        if (newFailedCount >= BED_LOGIN_LOCKOUT.MAX_ATTEMPTS) {
+          const lockUntilStr = localDateTimeString(BED_LOGIN_LOCKOUT.LOCKOUT_MINUTES * 60000)
+          db.prepare(
+            `UPDATE bed_dashboard_devices
+             SET failed_login_count = ?, locked_until = ?, updated_at = datetime('now', 'localtime')
+             WHERE id = ?`,
+          ).run(newFailedCount, lockUntilStr, device.id)
+          logAudit(
+            'BED_DASHBOARD_LOCKED',
+            device.id,
+            device.display_name,
+            'bed_dashboard_devices',
+            device.id,
+            { reason: 'PIN 錯誤次數過多', failedCount: newFailedCount, lockedUntil: lockUntilStr },
+            false,
+          )
+          return res.status(423).json({
+            error: true,
+            message: `PIN 錯誤次數過多，此床位已被鎖定 ${BED_LOGIN_LOCKOUT.LOCKOUT_MINUTES} 分鐘`,
+            locked: true,
+            remainingMinutes: BED_LOGIN_LOCKOUT.LOCKOUT_MINUTES,
+          })
+        }
+        db.prepare(
+          `UPDATE bed_dashboard_devices
+           SET failed_login_count = ?, updated_at = datetime('now', 'localtime')
+           WHERE id = ?`,
+        ).run(newFailedCount, device.id)
+      }
       return res.status(401).json({ error: true, message: '床位或 PIN 不正確' })
     }
 
     db.prepare(
       `
       UPDATE bed_dashboard_devices
-      SET last_login_at = datetime('now', 'localtime'), updated_at = datetime('now', 'localtime')
+      SET last_login_at = datetime('now', 'localtime'), updated_at = datetime('now', 'localtime'),
+          failed_login_count = 0, locked_until = NULL
       WHERE id = ?
     `,
     ).run(device.id)

@@ -156,9 +156,11 @@ router.post('/login', loginRateLimit, validate({
 
       // 判斷是否要鎖定帳號
       if (newFailedCount >= LOGIN_LOCKOUT_CONFIG.MAX_ATTEMPTS) {
-        const lockUntil = new Date()
-        lockUntil.setMinutes(lockUntil.getMinutes() + LOGIN_LOCKOUT_CONFIG.LOCKOUT_MINUTES)
-        const lockUntilStr = lockUntil.toISOString().slice(0, 19).replace('T', ' ')
+        // 必須存「本地時間」字串：讀取端 isAccountLocked 用 new Date(locked_until) 以本地時區解析。
+        // 舊寫法 toISOString()（UTC）在台北時區會被解讀成 8 小時前 → 鎖定形同虛設。
+        const lockUntilStr = new Date(
+          Date.now() + LOGIN_LOCKOUT_CONFIG.LOCKOUT_MINUTES * 60000,
+        ).toLocaleString('sv-SE')
 
         db.prepare(
           `

@@ -370,6 +370,11 @@ export function runMigrations() {
     const bedDashboardDevicesExists = db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='bed_dashboard_devices'")
       .get()
+    if (bedDashboardDevicesExists) {
+      // PIN 暴力破解防護：失敗次數 + 鎖定時間（比照 users 表）
+      if (addColumnIfNotExists(db, 'bed_dashboard_devices', 'failed_login_count', 'INTEGER DEFAULT 0')) migrationsApplied++
+      if (addColumnIfNotExists(db, 'bed_dashboard_devices', 'locked_until', 'TEXT DEFAULT NULL')) migrationsApplied++
+    }
     if (!bedDashboardDevicesExists) {
       console.log('?? 撱箇? bed_dashboard_devices 銵冽...')
       db.exec(`
@@ -380,6 +385,8 @@ export function runMigrations() {
           pin_hash TEXT NOT NULL,
           is_active INTEGER DEFAULT 1,
           last_login_at TEXT,
+          failed_login_count INTEGER DEFAULT 0,
+          locked_until TEXT DEFAULT NULL,
           created_at TEXT DEFAULT (datetime('now', 'localtime')),
           updated_at TEXT DEFAULT (datetime('now', 'localtime'))
         )

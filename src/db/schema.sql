@@ -571,6 +571,8 @@ CREATE TABLE IF NOT EXISTS bed_dashboard_devices (
     pin_hash TEXT NOT NULL,
     is_active INTEGER DEFAULT 1,
     last_login_at TEXT,
+    failed_login_count INTEGER DEFAULT 0,
+    locked_until TEXT DEFAULT NULL,
     created_at TEXT DEFAULT (datetime('now', 'localtime')),
     updated_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
