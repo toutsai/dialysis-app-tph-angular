@@ -135,7 +135,7 @@ export const routes: Routes = [
             (m) => m.AkiMapComponent
           ),
         canActivate: [specialistGuard],
-        data: { title: '全院 AKI Map' },
+        data: { title: '腎臟病地圖' },
       },
       {
         path: 'user-management',

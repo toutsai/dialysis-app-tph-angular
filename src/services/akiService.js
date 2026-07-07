@@ -423,10 +423,11 @@ export function egfrBand(v) {
 /**
  * 對單一病人的 Cr/eGFR 散點做病程分析。
  * @param {Array<{source,testDate,creatinine,egfr}>} rawPoints
- * @param {{admitDate?: string|null, today?: string|null}} opts admitDate=本次入院日; today=分析基準日
- * @returns {{ckd, akd, admission}} 各項含判定依據，供前端顯示
+ * @param {{admitDate?: string|null, today?: string|null, dataDate?: string|null}} opts
+ *   admitDate=本次入院日; today=分析基準日; dataDate=全庫最新資料日（「當日AKI」判定用）
+ * @returns {{ckd, akd, admission, daily, isEsrd}} 各項含判定依據，供前端顯示
  */
-export function analyzeSeries(rawPoints, { admitDate = null, today = null } = {}) {
+export function analyzeSeries(rawPoints, { admitDate = null, today = null, dataDate = null } = {}) {
   const pts = (rawPoints || [])
     .filter((p) => p && p.testDate)
     .map((p) => ({
@@ -443,17 +444,15 @@ export function analyzeSeries(rawPoints, { admitDate = null, today = null } = {}
   const isEsrd = crPts.length > 0 && Math.min(...crPts.map((p) => p.value)) >= ESRD_MIN_CR
 
   // --- CKD 疑似（eGFR 面向） ---
+  // ⚠️ 2026-07-07 起「疑似 CKD」只認 eGFR 慢性證據（低值持續 ≥90 天），不再因 Cr≥4(ESRD) 直接視為 CKD。
+  //    疑似 ESRD 但無慢性證據者屬「不確定」→ 名單歸類以 AKI 論（使用者決策）。
   const latestEgfr = egfrPts.length ? egfrPts[egfrPts.length - 1].egfr : null
   const ckd = { suspected: false, band: null, basis: null, latestEgfr, spanDays: null, lowCount: null, egfrCount: egfrPts.length }
   const recentMedian = () => {
     const recent = egfrPts.slice(-3).map((p) => p.egfr).sort((a, b) => a - b)
     return recent.length ? recent[Math.floor(recent.length / 2)] : null
   }
-  if (isEsrd) {
-    ckd.suspected = true
-    ckd.band = egfrBand(recentMedian()) || 'G5'
-    ckd.basis = '全段 Cr≥4.0，疑似 ESRD/慢性'
-  } else if (egfrPts.length >= 2) {
+  if (egfrPts.length >= 2) {
     const first = egfrPts[0]
     const last = egfrPts[egfrPts.length - 1]
     const span = daysBetween(first.date, last.date)
@@ -468,7 +467,7 @@ export function analyzeSeries(rawPoints, { admitDate = null, today = null } = {}
     ) {
       ckd.suspected = true
       ckd.band = egfrBand(recentMedian())
-      ckd.basis = `eGFR<60 持續 ${span} 天（${lowCount}/${egfrPts.length} 筆低於 60）`
+      ckd.basis = `eGFR<60 持續 ${span} 天（${lowCount}/${egfrPts.length} 筆低於 60）${isEsrd ? '，且全段 Cr≥4.0' : ''}`
     }
   }
 
@@ -476,6 +475,8 @@ export function analyzeSeries(rawPoints, { admitDate = null, today = null } = {}
   // 逐點依時序分期；達 Stage≥1 開啟事件，回到 stage 0（回 baseline 範圍）即關閉。
   // 走完仍開著 = 目前未緩解，其起始日即 AKD 起算點。
   let activeOnset = null
+  // 當日 AKI：全庫「最新資料日」(dataDate) 當天有點達 AKI 門檻（早上上傳後的當日警示用）
+  const daily = { active: false, date: dataDate, stage: null, cr: null }
   if (!isEsrd && crPts.length >= 2) {
     const opd = crPts.filter((p) => p.source === 'OPD')
     const opdBaseline = opd.length ? opd.reduce((m, p) => (p.value < m.value ? p : m), opd[0]) : null
@@ -494,6 +495,11 @@ export function analyzeSeries(rawPoints, { admitDate = null, today = null } = {}
         activeOnset = { date: cur.date, stage: st, value: cur.value, refDate: ref.date, refValue: ref.value }
       } else if (st === 0) {
         activeOnset = null
+      }
+      if (dataDate && cur.date === dataDate && st >= 1 && st > (daily.stage || 0)) {
+        daily.active = true
+        daily.stage = st
+        daily.cr = cur.value
       }
     }
   }
@@ -578,5 +584,5 @@ export function analyzeSeries(rawPoints, { admitDate = null, today = null } = {}
     }
   }
 
-  return { ckd, akd, admission, isEsrd }
+  return { ckd, akd, admission, daily, isEsrd }
 }

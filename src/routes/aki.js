@@ -195,18 +195,53 @@ function loadAllPointsGrouped(db) {
 }
 
 // 病程分析 → 清單用的扁平欄位（badge/篩選/匯出）
-function courseFieldsFor(points, admitDate, today) {
-  if (!points || !points.length) {
-    return { ckdSuspected: false, ckdBand: null, akd: false, admissionAkiStage: null, akiCourse: null }
+function flattenCourse(a) {
+  if (!a) {
+    return { ckdSuspected: false, ckdBand: null, akd: false, admissionAkiStage: null, akiCourse: null, todayAkiStage: null }
   }
-  const a = analyzeSeries(points, { admitDate: admitDate || null, today })
   return {
     ckdSuspected: a.ckd.suspected,
     ckdBand: a.ckd.band,
     akd: a.akd.active,
     admissionAkiStage: a.admission?.hasAki ? a.admission.stage : null,
     akiCourse: a.admission?.course || null,
+    todayAkiStage: a.daily?.active ? a.daily.stage : null,
   }
+}
+
+function courseFieldsFor(points, admitDate, today, dataDate) {
+  if (!points || !points.length) return flattenCourse(null)
+  return flattenCourse(analyzeSeries(points, { admitDate: admitDate || null, today, dataDate }))
+}
+
+// 全庫最新資料日（「當日 AKI」的判定基準日；上傳多為早上補前一日+當日報告）
+function getLatestDataDate(db) {
+  return db.prepare('SELECT MAX(test_date) AS d FROM aki_lab_results').get()?.d || null
+}
+
+// 一次載入全部關懷紀錄（名單歸類要用到人工 CKD 病史，逐筆查會 N+1）
+function loadCareRecords(db) {
+  const rows = db
+    .prepare(
+      `SELECT mrn, ckd_history AS ckdHistory, nephrology_consult AS nephrologyConsult, aki_cause AS akiCause,
+              dialysis_status AS dialysisStatus, care_result AS careResult,
+              care_physician AS carePhysician, signed_at AS signedAt`
+      + ' FROM aki_care_records',
+    )
+    .all()
+  return new Map(rows.map((r) => [r.mrn, r]))
+}
+
+// 名單歸類（使用者決策 2026-07-07）：
+// - CKD 名單：有 eGFR 慢性證據（ckd.suspected）；或疑似 ESRD 且為本院透析確定病人、且人工 CKD 病史已填（非「無」）
+// - AKI 名單：全段 stage>=1；或疑似 ESRD 但未歸入 CKD（不確定以 AKI 論）
+function classifyForLists(analysis, staging, dialysisMode, careRecord) {
+  if (!analysis) return { inCkd: false, inAki: false }
+  const manualCkd = String(careRecord?.ckdHistory || '').trim() !== '' && careRecord?.ckdHistory !== '無'
+  const esrdToCkd = analysis.isEsrd && (analysis.ckd.suspected || (dialysisMode && manualCkd))
+  const inCkd = analysis.ckd.suspected || esrdToCkd
+  const inAki = (staging.stage != null && staging.stage >= 1) || (analysis.isEsrd && !esrdToCkd)
+  return { inCkd, inAki }
 }
 
 // ---------- AKI Map（住院清單 join 分期） ----------
@@ -235,6 +270,7 @@ router.get('/map', (req, res) => {
     const modeMap = buildDialysisModeMap(db)
     const pointsByMrn = loadAllPointsGrouped(db)
     const today = getTaipeiTodayString()
+    const dataDate = getLatestDataDate(db)
 
     const patients = inpatients.map((p) => {
       inpatientMrns.add(p.mrn)
@@ -255,7 +291,7 @@ router.get('/map', (req, res) => {
         ratio: staging.ratio ?? null,
         pointCount: staging.pointCount ?? 0,
         dialysisMode: dialysisModeFor(modeMap, p.mrn),
-        ...courseFieldsFor(pts, p.admitDate, today),
+        ...courseFieldsFor(pts, p.admitDate, today, dataDate),
       }
     })
 
@@ -276,7 +312,7 @@ router.get('/map', (req, res) => {
           latestCr: staging.latest?.value ?? null, latestDate: staging.latest?.date ?? null,
           baselineCr: staging.baseline?.value ?? null, peakCr: staging.peak?.value ?? null, ratio: staging.ratio ?? null,
           dialysisMode: dialysisModeFor(modeMap, mrn),
-          ...courseFieldsFor(pts, null, today),
+          ...courseFieldsFor(pts, null, today, dataDate),
         })
       }
     }
@@ -286,7 +322,7 @@ router.get('/map', (req, res) => {
       .prepare('SELECT DISTINCT snapshot_date AS d FROM aki_inpatients ORDER BY snapshot_date DESC LIMIT 60')
       .all().map((r) => r.d)
 
-    res.json({ snapshotDate, patients, summary, wardSummary, watchList, availableDates, categoryMeta: AKI_CATEGORIES })
+    res.json({ snapshotDate, latestDataDate: dataDate, patients, summary, wardSummary, watchList, availableDates, categoryMeta: AKI_CATEGORIES })
   } catch (error) {
     res.status(500).json({ error: true, message: error.message || '取得 AKI Map 失敗' })
   }
@@ -306,7 +342,7 @@ router.get('/patient/:mrn', (req, res) => {
       .get(mrn)
     const modeMap = buildDialysisModeMap(db)
     const analysis = pts.length
-      ? analyzeSeries(pts, { admitDate: info?.admitDate || null, today: getTaipeiTodayString() })
+      ? analyzeSeries(pts, { admitDate: info?.admitDate || null, today: getTaipeiTodayString(), dataDate: getLatestDataDate(db) })
       : null
     res.json({
       mrn,
@@ -321,7 +357,7 @@ router.get('/patient/:mrn', (req, res) => {
   }
 })
 
-// ---------- AKI 關懷名單 ----------
+// ---------- AKI / CKD 關懷名單 ----------
 
 function getCareRecord(db, mrn) {
   return (
@@ -339,55 +375,98 @@ function getCareRecord(db, mrn) {
 
 // 關懷名單排序：Stage 3→2→1→ESRD，其次床號
 const CARE_RANK = { 'stage-3': 0, 'stage-2': 1, 'stage-1': 2, esrd: 3 }
+// CKD 名單排序：G5 → G3a
+const CKD_RANK = { G5: 0, G4: 1, G3b: 2, G3a: 3 }
 
-// GET /api/aki/care-list?date= —— 當前快照的 AKI(1-3)+疑似ESRD 病人 + 關懷欄位
+// 在院關懷名單共用計算：回傳每位在院病人的 staging/analysis/歸類/關懷紀錄
+function buildCareCandidates(db, snapshotDate) {
+  const inpatients = db
+    .prepare(`SELECT mrn, name, ward, bed, dept, physician, admit_date AS admitDate FROM aki_inpatients WHERE snapshot_date = ?`)
+    .all(snapshotDate)
+  const modeMap = buildDialysisModeMap(db)
+  const pointsByMrn = loadAllPointsGrouped(db)
+  const careMap = loadCareRecords(db)
+  const today = getTaipeiTodayString()
+  const dataDate = getLatestDataDate(db)
+
+  return inpatients.map((p) => {
+    const pts = pointsByMrn.get(p.mrn) || []
+    const staging = pts.length ? stageForSeries(pts) : { category: 'no-data', stage: null }
+    const analysis = pts.length ? analyzeSeries(pts, { admitDate: p.admitDate || null, today, dataDate }) : null
+    const dialysisMode = dialysisModeFor(modeMap, p.mrn)
+    const care = careMap.get(p.mrn) || null
+    const { inCkd, inAki } = classifyForLists(analysis, staging, dialysisMode, care)
+    return { p, pts, staging, analysis, dialysisMode, care, inCkd, inAki }
+  })
+}
+
+function toCareItem(c) {
+  return {
+    mrn: c.p.mrn,
+    name: c.p.name,
+    ward: c.p.ward,
+    bed: c.p.bed,
+    dept: c.p.dept,
+    physician: c.p.physician,
+    category: c.staging.category,
+    stage: c.staging.stage,
+    ...flattenCourse(c.analysis),
+    latestEgfr: c.analysis?.ckd?.latestEgfr ?? null,
+    ckdBasis: c.analysis?.ckd?.basis || (c.analysis?.isEsrd ? '全段 Cr≥4.0 疑似 ESRD' : null),
+    autoDialysisMode: c.dialysisMode,
+    ckdHistory: c.care?.ckdHistory || '',
+    nephrologyConsult: c.care?.nephrologyConsult || '',
+    akiCause: c.care?.akiCause || '',
+    dialysisStatus: c.care?.dialysisStatus || '',
+    careResult: c.care?.careResult || '',
+    carePhysician: c.care?.carePhysician || '',
+    signedAt: c.care?.signedAt || null,
+  }
+}
+
+function resolveSnapshotDate(db, req) {
+  let snapshotDate = (req.query.date && String(req.query.date).trim()) || null
+  if (!snapshotDate) {
+    const row = db.prepare('SELECT snapshot_date FROM aki_inpatients ORDER BY snapshot_date DESC LIMIT 1').get()
+    snapshotDate = row?.snapshot_date || null
+  }
+  return snapshotDate
+}
+
+// GET /api/aki/care-list?date= —— AKI 關懷名單：全段 stage>=1，或疑似 ESRD 且未歸入 CKD（不確定以 AKI 論）
 router.get('/care-list', (req, res) => {
   try {
     const db = getDatabase()
-    let snapshotDate = (req.query.date && String(req.query.date).trim()) || null
-    if (!snapshotDate) {
-      const row = db.prepare('SELECT snapshot_date FROM aki_inpatients ORDER BY snapshot_date DESC LIMIT 1').get()
-      snapshotDate = row?.snapshot_date || null
-    }
+    const snapshotDate = resolveSnapshotDate(db, req)
     if (!snapshotDate) return res.json({ snapshotDate: null, items: [] })
 
-    const inpatients = db
-      .prepare(`SELECT mrn, name, ward, bed, dept, physician, admit_date AS admitDate FROM aki_inpatients WHERE snapshot_date = ?`)
-      .all(snapshotDate)
-    const modeMap = buildDialysisModeMap(db)
-    const pointsByMrn = loadAllPointsGrouped(db)
-    const today = getTaipeiTodayString()
-
-    const items = []
-    for (const p of inpatients) {
-      const pts = pointsByMrn.get(p.mrn) || []
-      const staging = pts.length ? stageForSeries(pts) : { category: 'no-data', stage: null }
-      const included = (staging.stage != null && staging.stage >= 1) || staging.category === 'esrd'
-      if (!included) continue
-      const care = getCareRecord(db, p.mrn)
-      items.push({
-        mrn: p.mrn,
-        name: p.name,
-        ward: p.ward,
-        bed: p.bed,
-        dept: p.dept,
-        physician: p.physician,
-        category: staging.category,
-        stage: staging.stage,
-        ...courseFieldsFor(pts, p.admitDate, today),
-        autoDialysisMode: dialysisModeFor(modeMap, p.mrn),
-        ckdHistory: care?.ckdHistory || '',
-        nephrologyConsult: care?.nephrologyConsult || '',
-        akiCause: care?.akiCause || '',
-        dialysisStatus: care?.dialysisStatus || '',
-        careResult: care?.careResult || '',
-        carePhysician: care?.carePhysician || '',
-        signedAt: care?.signedAt || null,
-      })
-    }
+    const items = buildCareCandidates(db, snapshotDate)
+      .filter((c) => c.inAki)
+      .map(toCareItem)
     items.sort(
       (a, b) =>
         (CARE_RANK[a.category] ?? 9) - (CARE_RANK[b.category] ?? 9) ||
+        String(a.bed || '').localeCompare(String(b.bed || ''), undefined, { numeric: true }),
+    )
+    res.json({ snapshotDate, items })
+  } catch (error) {
+    res.status(500).json({ error: true, message: error.message || '取得關懷名單失敗' })
+  }
+})
+
+// GET /api/aki/ckd-care-list?date= —— CKD 關懷名單：eGFR 慢性證據，或疑似 ESRD 之透析確定病人＋人工 CKD 病史
+router.get('/ckd-care-list', (req, res) => {
+  try {
+    const db = getDatabase()
+    const snapshotDate = resolveSnapshotDate(db, req)
+    if (!snapshotDate) return res.json({ snapshotDate: null, items: [] })
+
+    const items = buildCareCandidates(db, snapshotDate)
+      .filter((c) => c.inCkd)
+      .map(toCareItem)
+    items.sort(
+      (a, b) =>
+        (CKD_RANK[a.ckdBand] ?? 9) - (CKD_RANK[b.ckdBand] ?? 9) ||
         String(a.bed || '').localeCompare(String(b.bed || ''), undefined, { numeric: true }),
     )
     res.json({ snapshotDate, items })
@@ -423,6 +502,7 @@ router.get('/discharged-care-list', (req, res) => {
     const modeMap = buildDialysisModeMap(db)
     const pointsByMrn = loadAllPointsGrouped(db)
     const today = getTaipeiTodayString()
+    const dataDate = getLatestDataDate(db)
     const items = []
     for (const r of lastByMrn.values()) {
       const pts = pointsByMrn.get(r.mrn) || []
@@ -439,7 +519,7 @@ router.get('/discharged-care-list', (req, res) => {
         physician: r.physician,
         category: staging.category,
         stage: staging.stage,
-        ...courseFieldsFor(pts, r.admitDate, today),
+        ...courseFieldsFor(pts, r.admitDate, today, dataDate),
         autoDialysisMode: dialysisModeFor(modeMap, r.mrn),
         dischargeDate: r.dischargeDate || null,
         lastSeenDate: r.snapshotDate,

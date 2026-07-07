@@ -727,3 +727,5 @@
   .detail-grid { grid-template-columns: 1fr; }
   .points-wrap { max-height: 44vh; }
 }
+
+.care-table .num { text-align: right; font-variant-numeric: tabular-nums; }

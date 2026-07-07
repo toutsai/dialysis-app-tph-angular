@@ -13,24 +13,20 @@ import {
   AkiUploadBatch,
 } from '@app/core/services/aki-api.service';
 
-// 病程篩選（與分期篩選 AND 疊加）
-type CourseFilter = 'all' | 'ckd' | 'akd' | 'admission-aki' | 'recovering' | 'recovered';
+// 主篩選（與分期色碼篩選 AND 疊加）
+type CourseFilter = 'all' | 'ckd' | 'admission-aki' | 'today-aki';
 
 const COURSE_DEFS: { key: Exclude<CourseFilter, 'all'>; label: string; color: string }[] = [
-  { key: 'ckd', label: '疑似 CKD', color: '#6d4c41' },
-  { key: 'akd', label: 'AKD', color: '#e65100' },
-  { key: 'admission-aki', label: '本次住院 AKI', color: '#c62828' },
-  { key: 'recovering', label: '恢復中', color: '#00897b' },
-  { key: 'recovered', label: '已恢復', color: '#43a047' },
+  { key: 'ckd', label: '全院 CKD', color: '#6d4c41' },
+  { key: 'admission-aki', label: '住院 AKI', color: '#c62828' },
+  { key: 'today-aki', label: '當日 AKI', color: '#ad1457' },
 ];
 
 function matchCourse(p: AkiCourseFields, f: CourseFilter): boolean {
   switch (f) {
     case 'ckd': return p.ckdSuspected;
-    case 'akd': return p.akd;
     case 'admission-aki': return p.admissionAkiStage != null;
-    case 'recovering': return p.akiCourse === 'recovering';
-    case 'recovered': return p.akiCourse === 'recovered';
+    case 'today-aki': return p.todayAkiStage != null;
     default: return true;
   }
 }
@@ -138,8 +134,13 @@ export class AkiMapComponent implements OnInit {
   readonly detail = signal<AkiPatientDetail | null>(null);
   readonly detailLoading = signal(false);
 
-  // 頁籤：map（全院地圖）/ care（在院關懷名單）/ discharged（出院關懷名單）
-  readonly activeTab = signal<'map' | 'care' | 'discharged'>('map');
+  // 頁籤：map（腎臟病地圖）/ ckd（CKD 關懷名單）/ care（AKI 關懷名單）/ discharged（出院待追蹤名單）
+  readonly activeTab = signal<'map' | 'ckd' | 'care' | 'discharged'>('map');
+
+  // CKD 關懷名單
+  readonly ckdItems = signal<AkiCareItem[]>([]);
+  readonly ckdLoading = signal(false);
+  readonly ckdLoaded = signal(false);
 
   // AKI 分期計算說明視窗
   readonly showAkiHelp = signal(false);
@@ -175,8 +176,11 @@ export class AkiMapComponent implements OnInit {
   });
 
   readonly isDischargedView = computed(() => this.activeTab() === 'discharged');
+  readonly isCkdView = computed(() => this.activeTab() === 'ckd');
   readonly currentCareItems = computed(() =>
-    this.isDischargedView() ? this.filteredDischargedItems() : this.careItems(),
+    this.isDischargedView() ? this.filteredDischargedItems()
+      : this.isCkdView() ? this.ckdItems()
+      : this.careItems(),
   );
 
   // 病房別篩選：全部 / 加護 / 一般病房
@@ -188,7 +192,9 @@ export class AkiMapComponent implements OnInit {
     return items.filter((it) => (f === 'icu' ? isIcuWard(it.ward) : !isIcuWard(it.ward)));
   });
   readonly currentCareLoading = computed(() =>
-    this.isDischargedView() ? this.dischargedLoading() : this.careLoading(),
+    this.isDischargedView() ? this.dischargedLoading()
+      : this.isCkdView() ? this.ckdLoading()
+      : this.careLoading(),
   );
   readonly dialysisOptions = ['HD', 'SLED', 'CVVHDF', 'PD', 'Hospice', '無'];
   readonly nephrologyOptions = ['已會診', '會診中', '未會診'];
@@ -331,6 +337,7 @@ export class AkiMapComponent implements OnInit {
     this.selectedDate.set(date);
     this.load(date);
     if (this.careLoaded()) this.loadCare(date);
+    if (this.ckdLoaded()) this.loadCkd(date);
   }
 
   setFilter(cat: AkiCategory | 'all' | 'aki'): void {
@@ -344,6 +351,7 @@ export class AkiMapComponent implements OnInit {
   // 病程徽章（卡片 / 關懷名單共用）
   courseBadges(p: AkiCourseFields): { label: string; color: string; title: string }[] {
     const badges: { label: string; color: string; title: string }[] = [];
+    if (p.todayAkiStage != null) badges.push({ label: `當日AKI S${p.todayAkiStage}`, color: '#ad1457', title: '最新資料日當天有檢驗值達 AKI 門檻' });
     if (p.ckdSuspected) badges.push({ label: p.ckdBand ? `CKD ${p.ckdBand}` : 'CKD', color: '#6d4c41', title: '疑似 CKD（eGFR<60 持續 ≥90 天）' });
     if (p.akd) badges.push({ label: 'AKD', color: '#e65100', title: 'AKI 後 7–90 天腎功能未回基準（急性腎臟病）' });
     if (p.admissionAkiStage != null) {
@@ -360,10 +368,29 @@ export class AkiMapComponent implements OnInit {
 
   // ---------- 頁籤 / 關懷名單 ----------
 
-  switchTab(tab: 'map' | 'care' | 'discharged'): void {
+  switchTab(tab: 'map' | 'ckd' | 'care' | 'discharged'): void {
     this.activeTab.set(tab);
+    if (tab === 'ckd' && !this.ckdLoaded()) this.loadCkd();
     if (tab === 'care' && !this.careLoaded()) this.loadCare();
     if (tab === 'discharged' && !this.dischargedLoaded()) this.loadDischarged();
+  }
+
+  async loadCkd(date?: string): Promise<void> {
+    this.ckdLoading.set(true);
+    try {
+      const res = await this.akiApi.getCkdCareList(date || this.selectedDate() || undefined);
+      for (const it of res.items) {
+        if (!it.dialysisStatus && it.autoDialysisMode && this.dialysisOptions.includes(it.autoDialysisMode)) {
+          it.dialysisStatus = it.autoDialysisMode;
+        }
+      }
+      this.ckdItems.set(res.items);
+      this.ckdLoaded.set(true);
+    } catch (e: any) {
+      this.message.set({ type: 'error', text: e?.error?.message || e?.message || '載入 CKD 關懷名單失敗' });
+    } finally {
+      this.ckdLoading.set(false);
+    }
   }
 
   async loadDischarged(): Promise<void> {
@@ -440,6 +467,7 @@ export class AkiMapComponent implements OnInit {
 
   exportCareExcel(): void {
     const discharged = this.isDischargedView();
+    const ckdView = this.isCkdView();
     const rows = this.displayCareItems().map((it) => {
       const row: Record<string, string> = {
         病歷號: it.mrn,
@@ -447,15 +475,22 @@ export class AkiMapComponent implements OnInit {
         病床號: it.bed,
         主治醫師: it.physician,
         科別: it.dept,
-        'AKI Stage': this.stageLabel(it),
       };
+      if (ckdView) {
+        row['CKD分期(自動)'] = it.ckdBand || (it.ckdSuspected ? 'Y' : '');
+        row['最新eGFR'] = it.latestEgfr != null ? String(it.latestEgfr) : '';
+        row['判定依據'] = it.ckdBasis || '';
+      } else {
+        row['AKI Stage'] = this.stageLabel(it);
+      }
       if (discharged) row['出院日'] = it.dischargeDate || it.lastSeenDate || '';
       row['疑似CKD'] = it.ckdSuspected ? (it.ckdBand || 'Y') : '';
       row['AKD'] = it.akd ? 'Y' : '';
       row['本次住院AKI'] = it.admissionAkiStage != null ? `S${it.admissionAkiStage}${this.courseLabel(it.akiCourse) ? '·' + this.courseLabel(it.akiCourse) : ''}` : '';
+      row['當日AKI'] = it.todayAkiStage != null ? `S${it.todayAkiStage}` : '';
       row['CKD病史'] = it.ckdHistory;
       row['腎臟科會診'] = it.nephrologyConsult;
-      row['AKI原因'] = it.akiCause;
+      row[ckdView ? '原因/備註' : 'AKI原因'] = it.akiCause;
       row['是否透析'] = it.dialysisStatus;
       row['關懷結果'] = it.careResult;
       row['關懷醫師簽核'] = it.carePhysician;
@@ -464,9 +499,10 @@ export class AkiMapComponent implements OnInit {
     });
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, discharged ? '出院AKI關懷名單' : 'AKI關懷名單');
+    const sheetName = discharged ? '出院待追蹤名單' : ckdView ? 'CKD關懷名單' : 'AKI關懷名單';
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
     const date = this.data()?.snapshotDate || this.selectedDate() || '';
-    XLSX.writeFile(wb, `${discharged ? '出院' : ''}AKI關懷名單_${date}.xlsx`);
+    XLSX.writeFile(wb, `${sheetName}_${date}.xlsx`);
   }
 
   private fileToBase64(file: File): Promise<string> {
@@ -505,6 +541,7 @@ export class AkiMapComponent implements OnInit {
       this.selectedDate.set(res.snapshotDate);
       await this.load(res.snapshotDate);
       if (this.careLoaded()) await this.loadCare(res.snapshotDate);
+      if (this.ckdLoaded()) await this.loadCkd(res.snapshotDate);
       if (this.dischargedLoaded()) await this.loadDischarged();
     } catch (e: any) {
       this.uploadResult.set({
@@ -546,6 +583,7 @@ export class AkiMapComponent implements OnInit {
       });
       await this.load();
       if (this.careLoaded()) await this.loadCare();
+      if (this.ckdLoaded()) await this.loadCkd();
       if (this.dischargedLoaded()) await this.loadDischarged();
     } catch (e: any) {
       this.uploadResult.set({

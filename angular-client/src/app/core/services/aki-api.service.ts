@@ -15,6 +15,7 @@ export interface AkiCourseFields {
   akd: boolean;
   admissionAkiStage: number | null;
   akiCourse: AkiCourse | null;
+  todayAkiStage: number | null;
 }
 
 export interface AkiPatient extends AkiCourseFields {
@@ -83,10 +84,12 @@ export interface AkiAnalysis {
     latest: { date: string; value: number } | null;
     course: AkiCourse | null;
   } | null;
+  daily?: { active: boolean; date: string | null; stage: number | null; cr: number | null };
 }
 
 export interface AkiMapResponse {
   snapshotDate: string | null;
+  latestDataDate?: string | null;
   patients: AkiPatient[];
   summary: Partial<Record<AkiCategory, number>>;
   wardSummary: Record<string, Partial<Record<AkiCategory, number>>>;
@@ -148,6 +151,8 @@ export interface AkiCareItem extends AkiCourseFields {
   physician: string;
   category: AkiCategory;
   stage: number | null;
+  latestEgfr?: number | null;
+  ckdBasis?: string | null;
   autoDialysisMode: string | null;
   ckdHistory: string;
   nephrologyConsult: string;
@@ -192,6 +197,11 @@ export class AkiApiService {
 
   getPatient(mrn: string): Promise<AkiPatientDetail> {
     return firstValueFrom(this.api.get<AkiPatientDetail>(`/aki/patient/${mrn}`));
+  }
+
+  getCkdCareList(date?: string): Promise<AkiCareListResponse> {
+    const q = date ? `?date=${encodeURIComponent(date)}` : '';
+    return firstValueFrom(this.api.get<AkiCareListResponse>(`/aki/ckd-care-list${q}`));
   }
 
   getBatches(): Promise<{ batches: AkiUploadBatch[] }> {

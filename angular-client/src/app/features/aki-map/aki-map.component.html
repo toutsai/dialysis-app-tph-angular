@@ -2,8 +2,8 @@
   <!-- 頂部工具列 -->
   <header class="aki-header">
     <div class="title-block">
-      <h1>全院 AKI Map</h1>
-      <span class="subtitle">依 KDIGO 肌酸酐標準分期 · 專師專用</span>
+      <h1>腎臟病地圖</h1>
+      <span class="subtitle">KDIGO AKI 分期 ＋ eGFR CKD 追蹤 · 專師專用</span>
       <span class="source-hint">
         上傳資料請用報表產生器：<b>醫學研究 &gt; W1.1 留院病人清單明細表</b>、<b>8.1 報告區間明細門急住--檢驗院內碼</b>（含 Cr＋eGFR；舊版檢驗結果(住院病人)／CKD-AKI 病患明細亦可）
       </span>
@@ -52,9 +52,10 @@
 
   <!-- 頁籤 -->
   <nav class="tabs">
-    <button class="tab" [class.active]="activeTab() === 'map'" (click)="switchTab('map')">全院 AKI Map</button>
+    <button class="tab" [class.active]="activeTab() === 'map'" (click)="switchTab('map')">腎臟病地圖</button>
+    <button class="tab" [class.active]="activeTab() === 'ckd'" (click)="switchTab('ckd')">CKD 關懷名單</button>
     <button class="tab" [class.active]="activeTab() === 'care'" (click)="switchTab('care')">AKI 關懷名單</button>
-    <button class="tab" [class.active]="activeTab() === 'discharged'" (click)="switchTab('discharged')">出院 AKI 關懷名單</button>
+    <button class="tab" [class.active]="activeTab() === 'discharged'" (click)="switchTab('discharged')">出院待追蹤名單</button>
   </nav>
 
   @if (activeTab() === 'map') {
@@ -77,9 +78,9 @@
     }
   </section>
 
-  <!-- 病程摘要列（與上方分期篩選 AND 疊加，再點一次取消） -->
+  <!-- 主篩選列（與上方分期色碼篩選 AND 疊加，再點一次取消） -->
   <section class="summary course-row">
-    <span class="course-label">病程</span>
+    <span class="course-label">篩選</span>
     @for (c of courseSummary(); track c.key) {
       <button class="chip" [class.active]="filterCourse() === c.key"
               [style.--c]="c.color" (click)="setCourseFilter(c.key)">
@@ -202,14 +203,17 @@
   }
   }
 
-  @if (activeTab() === 'care' || activeTab() === 'discharged') {
+  @if (activeTab() === 'ckd' || activeTab() === 'care' || activeTab() === 'discharged') {
     <section class="care">
       <div class="care-toolbar">
         <div class="care-title">
           @if (isDischargedView()) {
-            出院 AKI 關懷名單（已不在最新留院名單，推測出院）
+            出院待追蹤名單（曾 AKI／疑似 ESRD，已不在最新留院名單）
+          } @else if (isCkdView()) {
+            CKD 關懷名單（eGFR 慢性證據；疑似 ESRD 經確認為慢性者亦列入）
+            @if (data()?.snapshotDate) { <span class="care-date">{{ data()!.snapshotDate }}</span> }
           } @else {
-            AKI 關懷名單（AKI 1–3 期＋疑似 ESRD）
+            AKI 關懷名單（AKI 1–3 期；疑似 ESRD 未確認慢性者以 AKI 論）
             @if (data()?.snapshotDate) { <span class="care-date">{{ data()!.snapshotDate }}</span> }
           }
           <span class="care-count">共 {{ displayCareItems().length }} 位</span>
@@ -239,6 +243,7 @@
       } @else if (!currentCareItems().length) {
         <div class="placeholder">
           @if (isDischargedView()) { 目前無推測出院的 AKI/ESRD 病人（需先上傳新一份留院清單才會有異動）。 }
+          @else if (isCkdView()) { 目前無符合 CKD 慢性證據的在院病人，或尚未上傳資料。 }
           @else { 目前無 AKI/ESRD 病人，或尚未上傳資料。 }
         </div>
       } @else if (!displayCareItems().length) {
@@ -248,9 +253,11 @@
           <table class="care-table">
             <thead>
               <tr>
-                <th>病歷號</th><th>姓名</th><th>病床號</th><th>主治醫師</th><th>科別</th><th>AKI Stage</th><th>病程</th>
+                <th>病歷號</th><th>姓名</th><th>病床號</th><th>主治醫師</th><th>科別</th>
+                @if (isCkdView()) { <th>CKD 分期</th><th>最新 eGFR</th> } @else { <th>AKI Stage</th> }
+                <th>病程</th>
                 @if (isDischargedView()) { <th>出院日</th> }
-                <th>CKD 病史</th><th>腎臟科會診</th><th>AKI 原因</th><th>是否透析</th><th>關懷結果</th><th>關懷醫師簽核</th>
+                <th>CKD 病史</th><th>腎臟科會診</th><th>{{ isCkdView() ? '原因/備註' : 'AKI 原因' }}</th><th>是否透析</th><th>關懷結果</th><th>關懷醫師簽核</th>
               </tr>
             </thead>
             <tbody>
@@ -261,9 +268,16 @@
                   <td class="nowrap">{{ it.bed }}</td>
                   <td class="nowrap">{{ it.physician }}</td>
                   <td class="nowrap">{{ it.dept }}</td>
-                  <td class="nowrap">
-                    <span class="stage-badge" [style.background]="color(it.category)">{{ stageLabel(it) }}</span>
-                  </td>
+                  @if (isCkdView()) {
+                    <td class="nowrap">
+                      <span class="stage-badge" style="background:#6d4c41" [title]="it.ckdBasis || ''">{{ it.ckdBand || '疑似' }}</span>
+                    </td>
+                    <td class="nowrap num">{{ it.latestEgfr ?? '—' }}</td>
+                  } @else {
+                    <td class="nowrap">
+                      <span class="stage-badge" [style.background]="color(it.category)">{{ stageLabel(it) }}</span>
+                    </td>
+                  }
                   <td class="nowrap course-cell">
                     @for (b of courseBadges(it); track b.label) {
                       <span class="course-badge" [style.background]="b.color" [title]="b.title">{{ b.label }}</span>
@@ -526,12 +540,21 @@
             <li>地圖色碼取全段病程中<b>最高的分期</b>；「病程」列則回答下面四個更細的問題。</li>
           </ul>
 
-          <h4>病程判讀（四項，2026-07 起）</h4>
+          <h4>病程判讀與篩選（2026-07 起）</h4>
           <ul>
-            <li><b>疑似 CKD</b>：eGFR&lt;60 <b>持續 ≥90 天</b>（首尾兩筆皆低、期間 ≥80% 的值低）。G 分期依近期 eGFR：G3a 45–59／G3b 30–44／G4 15–29／G5 &lt;15。只有 eGFR（G）面向、無蛋白尿資料，故稱「疑似」，與關懷名單的人工 CKD 病史欄位並列參考。</li>
+            <li><b>全院 CKD（疑似）</b>：eGFR&lt;60 <b>持續 ≥90 天</b>（首尾兩筆皆低、期間 ≥80% 的值低）。G 分期依近期 eGFR：G3a 45–59／G3b 30–44／G4 15–29／G5 &lt;15。只有 eGFR（G）面向、無蛋白尿資料，故稱「疑似」，與關懷名單的人工 CKD 病史欄位並列參考。</li>
+            <li><b>住院 AKI</b>：以<b>入院日</b>切窗（含入院前 48 小時的急診值，涵蓋社區型 AKI），窗內達 KDIGO 門檻即標記，並附分期。</li>
+            <li><b>當日 AKI</b>：<b>最新資料日</b>當天有檢驗值達 AKI 門檻——早上上傳報告後的當日新警示。</li>
             <li><b>AKD（急性腎臟病）</b>：最近一次未緩解的 AKI 事件起算 <b>7–90 天</b>、Cr 仍未回到基準範圍。超過 90 天未恢復即進入 CKD 範疇。</li>
-            <li><b>本次住院 AKI</b>：以<b>入院日</b>切窗（含入院前 48 小時的急診值，涵蓋社區型 AKI），窗內達 KDIGO 門檻即標記，並附分期。</li>
             <li><b>恢復狀態</b>：<b>已恢復</b>＝最新 Cr 回到基準範圍（&lt;1.5 倍且 Δ&lt;0.3）；<b>恢復中</b>＝peak 已過、最新 Cr 較 peak 下降 ≥25%；其餘＝<b>進行中</b>。</li>
+          </ul>
+
+          <h4>關懷名單怎麼分</h4>
+          <ul>
+            <li><b>CKD 關懷名單</b>：有 eGFR 慢性證據者；疑似 ESRD 若「為本院透析確定病人且 CKD 病史欄已填」也列入。</li>
+            <li><b>AKI 關懷名單</b>：AKI 1–3 期；<b>疑似 ESRD 但無法確認慢性者，先以 AKI 論</b>（在關懷欄填上 CKD 病史後會自動轉入 CKD 名單）。</li>
+            <li>同一病人可同時在兩份名單（AKI on CKD）；關懷欄位共用一份紀錄，填一次兩邊同步。</li>
+            <li><b>出院待追蹤名單</b>：曾 AKI／疑似 ESRD、已不在最新留院名單者。</li>
           </ul>
 
           <h4>防呆與特別歸類</h4>
