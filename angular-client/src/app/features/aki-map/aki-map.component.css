@@ -688,3 +688,42 @@
 }
 .row-tag.peak { background: #c62828; }
 .row-tag.base { background: #1565c0; }
+
+/* ===== 病人詳情：寬幅雙欄版型 ===== */
+.patient-detail-panel {
+  max-width: 66rem;
+  width: 94vw;
+}
+.detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 0 1.2rem;
+  align-items: start;
+}
+.detail-grid .detail-col { min-width: 0; }
+.points-wrap {
+  max-height: 60vh;
+  overflow-y: auto;
+  border: 1px solid #eceff1;
+  border-radius: 8px;
+}
+.points-wrap .points { margin-bottom: 0; }
+.points-wrap .points thead th {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 1;
+  box-shadow: 0 1px 0 #eceff1;
+}
+.points-count {
+  font-size: 0.72rem;
+  color: #90a4ae;
+  margin-top: 0.3rem;
+  text-align: right;
+}
+/* 窄螢幕（平板直式以下）退回單欄 */
+@media (max-width: 900px) {
+  .patient-detail-panel { max-width: 39rem; }
+  .detail-grid { grid-template-columns: 1fr; }
+  .points-wrap { max-height: 44vh; }
+}

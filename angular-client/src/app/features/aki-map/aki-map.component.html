@@ -309,10 +309,10 @@
     </section>
   }
 
-  <!-- 病人詳情面板 -->
+  <!-- 病人詳情面板（寬幅雙欄：左=判讀資訊+趨勢，右=累積數據） -->
   @if (detailLoading() || detail()) {
     <div class="detail-overlay" (click)="closeDetail()">
-      <div class="detail-panel" (click)="$event.stopPropagation()">
+      <div class="detail-panel patient-detail-panel" (click)="$event.stopPropagation()">
         @if (detailLoading()) {
           <div class="placeholder">載入中…</div>
         }
@@ -332,6 +332,9 @@
             </div>
             <button class="btn ghost" (click)="closeDetail()">關閉</button>
           </div>
+
+          <div class="detail-grid">
+          <div class="detail-col">
 
           <!-- 住院診斷（緊接基本資訊，一眼看到就醫脈絡） -->
           @if (d.info?.diagnoses?.length) {
@@ -465,24 +468,32 @@
             </div>
           }
 
-          <!-- Cr/eGFR 明細表（AKI 峰值列紅底、基準列藍底） -->
-          <table class="points">
-            <thead><tr><th>日期</th><th>來源</th><th>Cr (mg/dL)</th><th>eGFR</th></tr></thead>
-            <tbody>
-              @for (p of d.points; track $index) {
-                <tr [class.peak-row]="isPeakPoint(p)" [class.baseline-row]="isBaselinePoint(p)">
-                  <td>{{ p.testDate }}</td>
-                  <td>{{ sourceLabel(p.source) }}</td>
-                  <td>
-                    {{ p.creatinine ?? '—' }}
-                    @if (isPeakPoint(p)) { <span class="row-tag peak">AKI 峰值</span> }
-                    @else if (isBaselinePoint(p)) { <span class="row-tag base">基準</span> }
-                  </td>
-                  <td>{{ p.egfr ?? '—' }}</td>
-                </tr>
-              }
-            </tbody>
-          </table>
+          </div><!-- /detail-col 左欄 -->
+
+          <div class="detail-col">
+          <!-- Cr/eGFR 明細表（AKI 峰值列紅底、基準列藍底；獨立捲動、表頭固定） -->
+          <div class="points-wrap">
+            <table class="points">
+              <thead><tr><th>日期</th><th>來源</th><th>Cr (mg/dL)</th><th>eGFR</th></tr></thead>
+              <tbody>
+                @for (p of d.points; track $index) {
+                  <tr [class.peak-row]="isPeakPoint(p)" [class.baseline-row]="isBaselinePoint(p)">
+                    <td>{{ p.testDate }}</td>
+                    <td>{{ sourceLabel(p.source) }}</td>
+                    <td>
+                      {{ p.creatinine ?? '—' }}
+                      @if (isPeakPoint(p)) { <span class="row-tag peak">AKI 峰值</span> }
+                      @else if (isBaselinePoint(p)) { <span class="row-tag base">基準</span> }
+                    </td>
+                    <td>{{ p.egfr ?? '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <div class="points-count">累積數據 {{ d.points.length }} 筆（門急住三來源、去重後）</div>
+          </div><!-- /detail-col 右欄 -->
+          </div><!-- /detail-grid -->
         }
       </div>
     </div>
