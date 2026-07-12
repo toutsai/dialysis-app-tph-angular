@@ -2,11 +2,33 @@
   <header class="page-header">
     <div class="header-top">
       <h1 class="page-title">使用者帳號管理</h1>
-      <div *ngIf="!isLoading() && userStats().total > 0" class="user-stats">
-        <span class="stats-total">總計: {{ userStats().total }}</span>
-        <span *ngIf="userStats().filtered !== userStats().total" class="stats-filtered">
-          顯示: {{ userStats().filtered }}
-        </span>
+      <div class="header-top-right">
+        <div *ngIf="!isLoading() && userStats().total > 0" class="user-stats">
+          <span class="stats-total">總計: {{ userStats().total }}</span>
+          <span *ngIf="userStats().filtered !== userStats().total" class="stats-filtered">
+            顯示: {{ userStats().filtered }}
+          </span>
+        </div>
+        <div class="header-actions">
+          <button
+            *ngIf="isAdmin"
+            class="btn btn-secondary"
+            (click)="toggleDashboardPins()"
+            [disabled]="isLoadingDashboardPins()"
+          >
+            <span *ngIf="!isPinPanelVisible()">查詢床位 PIN</span>
+            <span *ngIf="isPinPanelVisible()">隱藏床位 PIN</span>
+          </button>
+          <button
+            *ngIf="isAdmin"
+            class="btn btn-primary"
+            (click)="handleAddUser()"
+            [disabled]="isSubmitting()"
+          >
+            <span *ngIf="isSubmitting()">處理中...</span>
+            <span *ngIf="!isSubmitting()">+ 新增使用者</span>
+          </button>
+        </div>
       </div>
     </div>
     <div class="header-controls">
@@ -50,26 +72,6 @@
         >
           {{ option.label }}
           <span class="role-count" *ngIf="roleCounts()[option.value] !== undefined">{{ roleCounts()[option.value] }}</span>
-        </button>
-      </div>
-      <div class="header-actions">
-        <button
-          *ngIf="isAdmin"
-          class="btn btn-secondary"
-          (click)="toggleDashboardPins()"
-          [disabled]="isLoadingDashboardPins()"
-        >
-          <span *ngIf="!isPinPanelVisible()">查詢床位 PIN</span>
-          <span *ngIf="isPinPanelVisible()">隱藏床位 PIN</span>
-        </button>
-        <button
-          *ngIf="isAdmin"
-          class="btn btn-primary"
-          (click)="handleAddUser()"
-          [disabled]="isSubmitting()"
-        >
-          <span *ngIf="isSubmitting()">處理中...</span>
-          <span *ngIf="!isSubmitting()">+ 新增使用者</span>
         </button>
       </div>
     </div>
