@@ -27,6 +27,7 @@ interface NurseCard {
   nurseId: string;
   nurseName: string;
   patients: Patient[];
+  excluded: boolean;
 }
 
 @Component({
@@ -52,6 +53,10 @@ export class NursePatientCareDialogComponent implements OnChanges {
   searchTerm = signal('');
   selectedPatientId = signal<string | null>(null);
   isDirty = signal(false);
+  /** 排除不列入照護分配的護理師 id */
+  excludedIds = signal<Set<string>>(new Set());
+  /** 排除名單設定模式：點護理師卡片=切換排除 */
+  isExclusionMode = signal(false);
   updatedInfo = signal<{ updatedAt: string | null; updatedByName: string }>({
     updatedAt: null,
     updatedByName: '',
@@ -117,17 +122,27 @@ export class NursePatientCareDialogComponent implements OnChanges {
       .filter((p) => p.id && this.isRegularOpd(p) && !assigned.has(p.id)).length;
   });
 
-  /** 每位護理師的卡片（照護病人只顯示目前為門診者） */
+  /** 每位護理師的卡片（照護病人只顯示目前為常規門診者） */
   readonly nurseCards = computed<NurseCard[]>(() => {
     const map = this.assignmentMap();
     const patientMap = this.patientStore.patientMap();
+    const excluded = this.excludedIds();
     return this.nurses().map((n) => {
       const patients = (map[n.id] || [])
         .map((id) => patientMap.get(id))
         .filter((p): p is Patient => !!p && this.isRegularOpd(p));
-      return { nurseId: n.id, nurseName: n.name || '', patients };
+      return { nurseId: n.id, nurseName: n.name || '', patients, excluded: excluded.has(n.id) };
     });
   });
+
+  /** 畫面上顯示的卡片：一般模式隱藏已排除者，排除設定模式顯示全部 */
+  readonly displayedCards = computed<NurseCard[]>(() =>
+    this.isExclusionMode() ? this.nurseCards() : this.nurseCards().filter((c) => !c.excluded),
+  );
+
+  readonly excludedCount = computed(
+    () => this.nurseCards().filter((c) => c.excluded).length,
+  );
 
   readonly selectedPatient = computed<Patient | null>(() => {
     const id = this.selectedPatientId();
@@ -147,6 +162,7 @@ export class NursePatientCareDialogComponent implements OnChanges {
     this.selectedPatientId.set(null);
     this.searchTerm.set('');
     this.isDirty.set(false);
+    this.isExclusionMode.set(false);
     this.loadError.set('');
     this.isLoading.set(true);
     try {
@@ -156,11 +172,14 @@ export class NursePatientCareDialogComponent implements OnChanges {
         this.careApi.fetch(),
       ]);
 
-      // 只保留目前仍在職護理師的分配；已離職者的病人自動回到未分配
+      const excluded = new Set(doc?.excludedNurseIds || []);
+      this.excludedIds.set(excluded);
+
+      // 只保留目前仍在職且未被排除護理師的分配；其餘病人自動回到未分配
       const nurseIds = new Set(this.nurses().map((n) => n.id));
       const map: Record<string, string[]> = {};
       for (const entry of doc?.assignments || []) {
-        if (entry?.nurseId && nurseIds.has(entry.nurseId)) {
+        if (entry?.nurseId && nurseIds.has(entry.nurseId) && !excluded.has(entry.nurseId)) {
           map[entry.nurseId] = Array.isArray(entry.patientIds) ? [...entry.patientIds] : [];
         }
       }
@@ -178,6 +197,49 @@ export class NursePatientCareDialogComponent implements OnChanges {
   }
 
   // --- Interactions ---
+  toggleExclusionMode(): void {
+    if (!this.isAdmin) return;
+    this.selectedPatientId.set(null);
+    this.isExclusionMode.set(!this.isExclusionMode());
+  }
+
+  onNurseCardClick(card: NurseCard): void {
+    if (this.isExclusionMode()) {
+      this.toggleNurseExcluded(card);
+    } else {
+      this.moveSelectedTo(card.nurseId);
+    }
+  }
+
+  private toggleNurseExcluded(card: NurseCard): void {
+    if (!this.isAdmin) return;
+    const excluding = !card.excluded;
+    if (excluding && card.patients.length > 0) {
+      const ok = confirm(
+        `${card.nurseName} 已分配 ${card.patients.length} 位病人，排除後將移回未分配。確定排除？`,
+      );
+      if (!ok) return;
+    }
+    this.excludedIds.update((current) => {
+      const next = new Set(current);
+      if (excluding) {
+        next.add(card.nurseId);
+      } else {
+        next.delete(card.nurseId);
+      }
+      return next;
+    });
+    if (excluding) {
+      // 排除者的分配清空，病人回到未分配
+      this.assignmentMap.update((current) => {
+        const next = { ...current };
+        delete next[card.nurseId];
+        return next;
+      });
+    }
+    this.isDirty.set(true);
+  }
+
   togglePatient(patient: Patient): void {
     if (!this.isAdmin || !patient.id) return;
     this.selectedPatientId.set(this.selectedPatientId() === patient.id ? null : patient.id);
@@ -215,7 +277,7 @@ export class NursePatientCareDialogComponent implements OnChanges {
           nurseName: nameById.get(nurseId) || '',
           patientIds,
         }));
-      await this.careApi.save(assignments);
+      await this.careApi.save(assignments, Array.from(this.excludedIds()));
       this.isDirty.set(false);
       this.updatedInfo.set({
         updatedAt: new Date().toLocaleString('sv-SE'),

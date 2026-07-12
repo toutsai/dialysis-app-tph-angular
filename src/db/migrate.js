@@ -436,12 +436,17 @@ export function runMigrations() {
         CREATE TABLE IF NOT EXISTS nurse_patient_care (
           id TEXT PRIMARY KEY DEFAULT 'main',
           assignments TEXT DEFAULT '[]',
+          excluded_nurse_ids TEXT DEFAULT '[]',
           updated_by TEXT DEFAULT '{}',
           created_at TEXT DEFAULT (datetime('now', 'localtime')),
           updated_at TEXT DEFAULT (datetime('now', 'localtime'))
         )
       `)
       migrationsApplied++
+    } else {
+      // 排除護理師名單欄位（2026-07-13）
+      if (addColumnIfNotExists(db, 'nurse_patient_care', 'excluded_nurse_ids', "TEXT DEFAULT '[]'"))
+        migrationsApplied++
     }
 
     if (migrationsApplied > 0) {

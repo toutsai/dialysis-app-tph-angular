@@ -11,12 +11,17 @@
       <button class="npc-close-btn" (click)="close()" title="關閉">&times;</button>
     </header>
 
-    <div class="npc-hint" *ngIf="isAdmin">
-      <ng-container *ngIf="selectedPatient() as selected">
-        已選取 <strong>{{ selected.name }}</strong>，點護理師卡片即可指派，或點「未分配」區移回。
+    <div class="npc-hint" [class.exclusion]="isExclusionMode()" *ngIf="isAdmin">
+      <ng-container *ngIf="isExclusionMode()">
+        排除名單設定中：點護理師卡片切換「排除/納入」，被排除者不列入照護分配；完成後按「完成排除設定」，最後記得「儲存」。
       </ng-container>
-      <ng-container *ngIf="!selectedPatient()">
-        點選病人後，再點護理師卡片完成指派；調整完按「儲存」。
+      <ng-container *ngIf="!isExclusionMode()">
+        <ng-container *ngIf="selectedPatient() as selected">
+          已選取 <strong>{{ selected.name }}</strong>，點護理師卡片即可指派，或點「未分配」區移回。
+        </ng-container>
+        <ng-container *ngIf="!selectedPatient()">
+          點選病人後，再點護理師卡片完成指派；調整完按「儲存」。
+        </ng-container>
       </ng-container>
     </div>
 
@@ -60,18 +65,32 @@
       <!-- 全部護理師 -->
       <section class="npc-nurses">
         <div class="npc-section-header">
-          <h3>護理師 <span class="npc-count">{{ nurseCards().length }}</span></h3>
+          <h3>護理師 <span class="npc-count">{{ displayedCards().length }}</span></h3>
+          <button
+            *ngIf="isAdmin"
+            class="npc-exclude-toggle"
+            [class.active]="isExclusionMode()"
+            (click)="toggleExclusionMode()"
+          >
+            {{ isExclusionMode() ? '完成排除設定' : '設定排除名單' }}
+          </button>
+          <span class="npc-excluded-info" *ngIf="!isExclusionMode() && excludedCount() > 0">
+            已排除 {{ excludedCount() }} 人
+          </span>
         </div>
-        <div class="npc-nurse-grid">
+        <div class="npc-nurse-grid" [class.exclusion-mode]="isExclusionMode()">
           <div
-            *ngFor="let card of nurseCards()"
+            *ngFor="let card of displayedCards()"
             class="npc-nurse-card"
-            [class.droppable]="selectedPatientId()"
-            (click)="moveSelectedTo(card.nurseId)"
+            [class.droppable]="!isExclusionMode() && selectedPatientId()"
+            [class.excluded]="card.excluded"
+            [class.selectable]="isExclusionMode()"
+            (click)="onNurseCardClick(card)"
           >
             <div class="npc-nurse-name">
               {{ card.nurseName }}
               <span class="npc-count">{{ card.patients.length }}</span>
+              <span class="npc-excluded-badge" *ngIf="card.excluded">已排除</span>
             </div>
             <div class="npc-nurse-patients">
               <button

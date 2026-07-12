@@ -17,6 +17,7 @@ export interface NurseCareAssignment {
 
 export interface NursePatientCareDoc {
   assignments: NurseCareAssignment[];
+  excludedNurseIds?: string[];
   updatedAt?: string | null;
   updatedBy?: { uid?: string; name?: string } | null;
 }
@@ -36,8 +37,8 @@ export class NursePatientCareApiService {
   }
 
   /** 儲存照護分配 (Observable) */
-  save$(assignments: NurseCareAssignment[]): Observable<unknown> {
-    return this.api.put(this.route, { assignments });
+  save$(assignments: NurseCareAssignment[], excludedNurseIds: string[] = []): Observable<unknown> {
+    return this.api.put(this.route, { assignments, excludedNurseIds });
   }
 
   /** 取得照護分配 */
@@ -51,9 +52,12 @@ export class NursePatientCareApiService {
   }
 
   /** 儲存照護分配 */
-  async save(assignments: NurseCareAssignment[]): Promise<unknown> {
+  async save(
+    assignments: NurseCareAssignment[],
+    excludedNurseIds: string[] = [],
+  ): Promise<unknown> {
     try {
-      return await firstValueFrom(this.save$(assignments));
+      return await firstValueFrom(this.save$(assignments, excludedNurseIds));
     } catch (error) {
       console.error('儲存照護分配失敗:', error);
       throw error;

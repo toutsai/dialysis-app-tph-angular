@@ -873,11 +873,12 @@ router.get('/patient-care', authenticate, (req, res) => {
     const row = db.prepare(`SELECT * FROM nurse_patient_care WHERE id = 'main'`).get()
 
     if (!row) {
-      return res.json({ assignments: [], updatedAt: null, updatedBy: null })
+      return res.json({ assignments: [], excludedNurseIds: [], updatedAt: null, updatedBy: null })
     }
 
     res.json({
       assignments: JSON.parse(row.assignments || '[]'),
+      excludedNurseIds: JSON.parse(row.excluded_nurse_ids || '[]'),
       updatedBy: JSON.parse(row.updated_by || '{}'),
       updatedAt: row.updated_at,
     })
@@ -896,7 +897,7 @@ router.get('/patient-care', authenticate, (req, res) => {
  */
 router.put('/patient-care', ...isAdmin, (req, res) => {
   try {
-    const { assignments } = req.body || {}
+    const { assignments, excludedNurseIds = [] } = req.body || {}
 
     if (!Array.isArray(assignments)) {
       return res.status(400).json({ error: true, message: 'assignments 必須是陣列' })
@@ -909,6 +910,14 @@ router.put('/patient-care', ...isAdmin, (req, res) => {
         .status(400)
         .json({ error: true, message: 'assignments 格式錯誤（需含 nurseId 與 patientIds 陣列）' })
     }
+    if (
+      !Array.isArray(excludedNurseIds) ||
+      excludedNurseIds.some((id) => typeof id !== 'string')
+    ) {
+      return res
+        .status(400)
+        .json({ error: true, message: 'excludedNurseIds 必須是字串陣列' })
+    }
 
     const db = getDatabase()
     const updatedBy = JSON.stringify({
@@ -918,14 +927,15 @@ router.put('/patient-care', ...isAdmin, (req, res) => {
 
     db.prepare(
       `
-      INSERT INTO nurse_patient_care (id, assignments, updated_by, updated_at)
-      VALUES ('main', ?, ?, datetime('now', 'localtime'))
+      INSERT INTO nurse_patient_care (id, assignments, excluded_nurse_ids, updated_by, updated_at)
+      VALUES ('main', ?, ?, ?, datetime('now', 'localtime'))
       ON CONFLICT(id) DO UPDATE SET
         assignments = excluded.assignments,
+        excluded_nurse_ids = excluded.excluded_nurse_ids,
         updated_by = excluded.updated_by,
         updated_at = datetime('now', 'localtime')
     `,
-    ).run(JSON.stringify(assignments), updatedBy)
+    ).run(JSON.stringify(assignments), JSON.stringify(excludedNurseIds), updatedBy)
 
     res.json({ success: true, message: '照護分配已儲存' })
   } catch (error) {
