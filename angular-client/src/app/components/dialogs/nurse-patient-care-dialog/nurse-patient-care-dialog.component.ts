@@ -63,6 +63,15 @@ export class NursePatientCareDialogComponent implements OnChanges {
     return this.authService.isAdmin();
   }
 
+  /** 照護清單顯示對象：常規門診病人（未刪除；分類未設定視為常規，同病人表單預設） */
+  private isRegularOpd(p: Patient): boolean {
+    return (
+      p.status === 'opd' &&
+      !p['isDeleted'] &&
+      (p['patientCategory'] == null || p['patientCategory'] === 'opd_regular')
+    );
+  }
+
   // --- Computed ---
   readonly nurses = computed(() => {
     const list = this.userDirectory
@@ -88,7 +97,9 @@ export class NursePatientCareDialogComponent implements OnChanges {
   readonly unassignedPatients = computed(() => {
     const assigned = this.assignedIdSet();
     const search = this.searchTerm().trim().toLowerCase();
-    let result = this.patientStore.opdPatients().filter((p) => p.id && !assigned.has(p.id));
+    let result = this.patientStore
+      .allPatients()
+      .filter((p) => p.id && this.isRegularOpd(p) && !assigned.has(p.id));
     if (search) {
       result = result.filter(
         (p) =>
@@ -101,7 +112,9 @@ export class NursePatientCareDialogComponent implements OnChanges {
 
   readonly unassignedTotal = computed(() => {
     const assigned = this.assignedIdSet();
-    return this.patientStore.opdPatients().filter((p) => p.id && !assigned.has(p.id)).length;
+    return this.patientStore
+      .allPatients()
+      .filter((p) => p.id && this.isRegularOpd(p) && !assigned.has(p.id)).length;
   });
 
   /** 每位護理師的卡片（照護病人只顯示目前為門診者） */
@@ -111,7 +124,7 @@ export class NursePatientCareDialogComponent implements OnChanges {
     return this.nurses().map((n) => {
       const patients = (map[n.id] || [])
         .map((id) => patientMap.get(id))
-        .filter((p): p is Patient => !!p && p.status === 'opd');
+        .filter((p): p is Patient => !!p && this.isRegularOpd(p));
       return { nurseId: n.id, nurseName: n.name || '', patients };
     });
   });
