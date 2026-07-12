@@ -252,6 +252,15 @@ CREATE TABLE IF NOT EXISTS nurse_assignment_revisions (
 
 CREATE INDEX IF NOT EXISTS idx_nar_date_time ON nurse_assignment_revisions(date, created_at);
 
+-- 護理師固定照護病人分配（單一 JSON 文件；與每日護理分組 nurse_assignments 無關）
+CREATE TABLE IF NOT EXISTS nurse_patient_care (
+    id TEXT PRIMARY KEY DEFAULT 'main',
+    assignments TEXT DEFAULT '[]',  -- JSON: [{nurseId, nurseName, patientIds: [...]}]
+    updated_by TEXT DEFAULT '{}',   -- {uid, name}
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
 -- 護理工作職責
 CREATE TABLE IF NOT EXISTS nursing_duties (
     id TEXT PRIMARY KEY DEFAULT 'main',

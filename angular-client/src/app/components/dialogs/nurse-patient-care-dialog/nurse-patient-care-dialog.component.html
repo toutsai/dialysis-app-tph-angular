@@ -1,0 +1,101 @@
+<div *ngIf="isVisible" class="npc-overlay" (click)="onOverlayClick($event)">
+  <div class="npc-modal">
+    <header class="npc-header">
+      <div class="npc-header-left">
+        <h2>護理師分配病人照護清單</h2>
+        <span class="npc-updated" *ngIf="updatedInfo().updatedAt">
+          最後儲存：{{ updatedInfo().updatedAt }}
+          <ng-container *ngIf="updatedInfo().updatedByName">（{{ updatedInfo().updatedByName }}）</ng-container>
+        </span>
+      </div>
+      <button class="npc-close-btn" (click)="close()" title="關閉">&times;</button>
+    </header>
+
+    <div class="npc-hint" *ngIf="isAdmin">
+      <ng-container *ngIf="selectedPatient() as selected">
+        已選取 <strong>{{ selected.name }}</strong>，點護理師卡片即可指派，或點「未分配」區移回。
+      </ng-container>
+      <ng-container *ngIf="!selectedPatient()">
+        點選病人後，再點護理師卡片完成指派；調整完按「儲存」。
+      </ng-container>
+    </div>
+
+    <div *ngIf="isLoading()" class="npc-loading">載入中...</div>
+    <div *ngIf="!isLoading() && loadError()" class="npc-error">{{ loadError() }}</div>
+
+    <div *ngIf="!isLoading() && !loadError()" class="npc-body">
+      <!-- 未分配門診病人 -->
+      <section
+        class="npc-unassigned"
+        [class.droppable]="selectedPatientId()"
+        (click)="moveSelectedTo(null)"
+      >
+        <div class="npc-section-header" (click)="$event.stopPropagation()">
+          <h3>未分配門診病人 <span class="npc-count">{{ unassignedTotal() }}</span></h3>
+          <input
+            type="text"
+            class="npc-search"
+            [ngModel]="searchTerm()"
+            (ngModelChange)="searchTerm.set($event)"
+            placeholder="搜尋姓名/病歷號..."
+            (click)="$event.stopPropagation()"
+          />
+        </div>
+        <div class="npc-chip-list">
+          <button
+            *ngFor="let p of unassignedPatients()"
+            class="npc-chip"
+            [class.selected]="selectedPatientId() === p.id"
+            [title]="'病歷號: ' + (p.medicalRecordNumber || '-')"
+            (click)="togglePatient(p); $event.stopPropagation()"
+          >
+            {{ p.name }}
+          </button>
+          <span *ngIf="unassignedPatients().length === 0" class="npc-empty-text">
+            {{ unassignedTotal() === 0 ? '所有門診病人皆已分配' : '沒有符合搜尋的病人' }}
+          </span>
+        </div>
+      </section>
+
+      <!-- 全部護理師 -->
+      <section class="npc-nurses">
+        <div class="npc-section-header">
+          <h3>護理師 <span class="npc-count">{{ nurseCards().length }}</span></h3>
+        </div>
+        <div class="npc-nurse-grid">
+          <div
+            *ngFor="let card of nurseCards()"
+            class="npc-nurse-card"
+            [class.droppable]="selectedPatientId()"
+            (click)="moveSelectedTo(card.nurseId)"
+          >
+            <div class="npc-nurse-name">
+              {{ card.nurseName }}
+              <span class="npc-count">{{ card.patients.length }}</span>
+            </div>
+            <div class="npc-nurse-patients">
+              <button
+                *ngFor="let p of card.patients"
+                class="npc-chip small"
+                [class.selected]="selectedPatientId() === p.id"
+                [title]="'病歷號: ' + (p.medicalRecordNumber || '-')"
+                (click)="togglePatient(p); $event.stopPropagation()"
+              >
+                {{ p.name }}
+              </button>
+              <span *ngIf="card.patients.length === 0" class="npc-empty-text small">尚未分配</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <footer class="npc-footer">
+      <span class="npc-dirty-hint" *ngIf="isDirty()">有未儲存的變更</span>
+      <button *ngIf="isAdmin" class="btn btn-primary" (click)="save()" [disabled]="isSaving() || isLoading()">
+        {{ isSaving() ? '儲存中...' : '儲存' }}
+      </button>
+      <button class="btn btn-secondary" (click)="close()">關閉</button>
+    </footer>
+  </div>
+</div>

@@ -9,6 +9,7 @@ import { NotificationService } from '@app/core/services/notification.service';
 import { AlertDialogComponent } from '@app/components/dialogs/alert-dialog/alert-dialog.component';
 import { ConfirmDialogComponent } from '@app/components/dialogs/confirm-dialog/confirm-dialog.component';
 import { UserFormModalComponent } from '@app/components/dialogs/user-form-modal/user-form-modal.component';
+import { NursePatientCareDialogComponent } from '@app/components/dialogs/nurse-patient-care-dialog/nurse-patient-care-dialog.component';
 import { formatDateToChinese, parseFirestoreTimestamp } from '@/utils/dateUtils';
 
 interface UserRecord extends FirestoreRecord {
@@ -59,6 +60,7 @@ interface ConfirmInfo {
     AlertDialogComponent,
     ConfirmDialogComponent,
     UserFormModalComponent,
+    NursePatientCareDialogComponent,
   ],
   templateUrl: './user-management.component.html',
   styleUrl: './user-management.component.css',
@@ -84,6 +86,7 @@ export class UserManagementComponent implements OnInit {
   isSubmitting = signal(false);
   isDeletingUser = signal<string | null>(null);
   isPinPanelVisible = signal(false);
+  isCareListVisible = signal(false);
   isLoadingDashboardPins = signal(false);
   dashboardPins = signal<DashboardPinRecord[]>([]);
   pinSearchTerm = signal('');
@@ -297,6 +300,11 @@ export class UserManagementComponent implements OnInit {
     } catch {
       this.showAlert('床位 PIN', `${pin.displayName} PIN：${pin.pin}`);
     }
+  }
+
+  openCareList(): void {
+    if (!this.isAdmin) return;
+    this.isCareListVisible.set(true);
   }
 
   handleAddUser(): void {

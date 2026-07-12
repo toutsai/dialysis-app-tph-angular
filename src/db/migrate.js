@@ -424,6 +424,26 @@ export function runMigrations() {
       if (addColumnIfNotExists(db, 'aki_lab_results', 'egfr', 'REAL')) migrationsApplied++
     }
 
+    // ========================================
+    // 護理師固定照護病人分配（單一 JSON 文件）
+    // ========================================
+    const nursePatientCareExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='nurse_patient_care'")
+      .get()
+    if (!nursePatientCareExists) {
+      console.log('📋 建立 nurse_patient_care 表格...')
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS nurse_patient_care (
+          id TEXT PRIMARY KEY DEFAULT 'main',
+          assignments TEXT DEFAULT '[]',
+          updated_by TEXT DEFAULT '{}',
+          created_at TEXT DEFAULT (datetime('now', 'localtime')),
+          updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+      `)
+      migrationsApplied++
+    }
+
     if (migrationsApplied > 0) {
       console.log(`✅ 已完成 ${migrationsApplied} 項遷移`)
     } else {

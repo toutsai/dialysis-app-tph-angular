@@ -21,6 +21,13 @@
           </button>
           <button
             *ngIf="isAdmin"
+            class="btn btn-secondary"
+            (click)="openCareList()"
+          >
+            護理師分配病人照護清單
+          </button>
+          <button
+            *ngIf="isAdmin"
             class="btn btn-primary"
             (click)="handleAddUser()"
             [disabled]="isSubmitting()"
@@ -216,6 +223,11 @@
       新增第一個使用者
     </button>
   </div>
+
+  <app-nurse-patient-care-dialog
+    [isVisible]="isCareListVisible()"
+    (closed)="isCareListVisible.set(false)"
+  ></app-nurse-patient-care-dialog>
 
   <app-user-form-modal
     [isVisible]="isModalVisible()"

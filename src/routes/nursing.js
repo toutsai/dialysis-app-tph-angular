@@ -860,6 +860,84 @@ router.put('/group-config/:id', ...isAdmin, async (req, res) => {
 })
 
 // ========================================
+// 護理師固定照護病人分配 API
+// ========================================
+
+/**
+ * GET /api/nursing/patient-care
+ * 取得護理師照護病人分配（單一 JSON 文件）
+ */
+router.get('/patient-care', authenticate, (req, res) => {
+  try {
+    const db = getDatabase()
+    const row = db.prepare(`SELECT * FROM nurse_patient_care WHERE id = 'main'`).get()
+
+    if (!row) {
+      return res.json({ assignments: [], updatedAt: null, updatedBy: null })
+    }
+
+    res.json({
+      assignments: JSON.parse(row.assignments || '[]'),
+      updatedBy: JSON.parse(row.updated_by || '{}'),
+      updatedAt: row.updated_at,
+    })
+  } catch (error) {
+    console.error('取得照護分配錯誤:', error)
+    res.status(500).json({
+      error: true,
+      message: '取得照護分配失敗',
+    })
+  }
+})
+
+/**
+ * PUT /api/nursing/patient-care
+ * 儲存護理師照護病人分配（整份覆蓋）
+ */
+router.put('/patient-care', ...isAdmin, (req, res) => {
+  try {
+    const { assignments } = req.body || {}
+
+    if (!Array.isArray(assignments)) {
+      return res.status(400).json({ error: true, message: 'assignments 必須是陣列' })
+    }
+    const invalid = assignments.some(
+      (a) => !a || typeof a.nurseId !== 'string' || !Array.isArray(a.patientIds),
+    )
+    if (invalid) {
+      return res
+        .status(400)
+        .json({ error: true, message: 'assignments 格式錯誤（需含 nurseId 與 patientIds 陣列）' })
+    }
+
+    const db = getDatabase()
+    const updatedBy = JSON.stringify({
+      uid: req.user?.id || '',
+      name: req.user?.name || '',
+    })
+
+    db.prepare(
+      `
+      INSERT INTO nurse_patient_care (id, assignments, updated_by, updated_at)
+      VALUES ('main', ?, ?, datetime('now', 'localtime'))
+      ON CONFLICT(id) DO UPDATE SET
+        assignments = excluded.assignments,
+        updated_by = excluded.updated_by,
+        updated_at = datetime('now', 'localtime')
+    `,
+    ).run(JSON.stringify(assignments), updatedBy)
+
+    res.json({ success: true, message: '照護分配已儲存' })
+  } catch (error) {
+    console.error('儲存照護分配錯誤:', error)
+    res.status(500).json({
+      error: true,
+      message: '儲存照護分配失敗',
+    })
+  }
+})
+
+// ========================================
 // 交班日誌 API
 // ========================================
 

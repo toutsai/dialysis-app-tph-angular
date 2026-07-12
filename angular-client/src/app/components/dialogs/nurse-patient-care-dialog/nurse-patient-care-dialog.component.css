@@ -1,0 +1,259 @@
+/* 護理師分配病人照護清單 dialog */
+.npc-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+.npc-modal {
+  background: #fff;
+  border-radius: 10px;
+  width: min(1280px, 96vw);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+}
+
+.npc-header {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem 1.25rem 0.75rem;
+  border-bottom: 1px solid #e9ecef;
+}
+.npc-header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.npc-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #333;
+}
+.npc-updated {
+  font-size: 0.8rem;
+  color: #888;
+}
+.npc-close-btn {
+  border: none;
+  background: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: #888;
+  cursor: pointer;
+  padding: 0 0.25rem;
+}
+.npc-close-btn:hover {
+  color: #333;
+}
+
+.npc-hint {
+  flex-shrink: 0;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.85rem;
+  color: #0056b3;
+  background: #f0f7ff;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.npc-loading,
+.npc-error {
+  padding: 2rem;
+  text-align: center;
+  color: #666;
+}
+.npc-error {
+  color: #c0392b;
+}
+
+/* 捲動區：min-height:0 避免 flex 壓扁內容 */
+.npc-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.75rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.npc-body > section {
+  flex-shrink: 0;
+}
+
+.npc-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.npc-section-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: #444;
+}
+.npc-count {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 0 0.35em;
+  border-radius: 10px;
+  background: #e9ecef;
+  color: #555;
+  font-size: 0.8rem;
+  text-align: center;
+  font-weight: 600;
+}
+.npc-search {
+  padding: 0.3rem 0.6rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  width: 220px;
+}
+
+.npc-unassigned {
+  border: 1px dashed #adb5bd;
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  background: #fafbfc;
+}
+.npc-unassigned.droppable {
+  border-color: #007bff;
+  background: #f0f7ff;
+  cursor: pointer;
+}
+
+.npc-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.npc-chip {
+  border: 1px solid #ced4da;
+  background: #fff;
+  border-radius: 14px;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.85rem;
+  color: #333;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.npc-chip:hover {
+  border-color: #007bff;
+  background: #f0f7ff;
+}
+.npc-chip.selected {
+  background: #007bff;
+  border-color: #0056b3;
+  color: #fff;
+  font-weight: 600;
+}
+.npc-chip.small {
+  font-size: 0.8rem;
+  padding: 0.15rem 0.55rem;
+}
+.npc-empty-text {
+  font-size: 0.85rem;
+  color: #999;
+}
+.npc-empty-text.small {
+  font-size: 0.78rem;
+}
+
+.npc-nurse-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.6rem;
+}
+.npc-nurse-card {
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0.5rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-height: 72px;
+}
+.npc-nurse-card.droppable {
+  border-color: #007bff;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px rgba(0, 123, 255, 0.25);
+}
+.npc-nurse-card.droppable:hover {
+  background: #f0f7ff;
+}
+.npc-nurse-name {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.92rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.npc-nurse-patients {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.npc-footer {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid #e9ecef;
+}
+.npc-dirty-hint {
+  font-size: 0.85rem;
+  color: #c47f00;
+  margin-right: auto;
+}
+
+.npc-footer .btn {
+  padding: 0.45rem 1.1rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.npc-footer .btn-primary {
+  background: #007bff;
+  color: #fff;
+}
+.npc-footer .btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.npc-footer .btn-secondary {
+  background: #fff;
+  border-color: #ced4da;
+  color: #333;
+}
+
+@media (max-width: 768px) {
+  .npc-modal {
+    width: 100vw;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+  .npc-nurse-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+  .npc-search {
+    width: 100%;
+  }
+  .npc-section-header {
+    flex-wrap: wrap;
+  }
+}
