@@ -923,7 +923,8 @@ router.get('/education-list', ...isEditor, (req, res) => {
     const rows = db.prepare(`
       SELECT p.id, p.name, p.medical_record_number, p.status, p.ward_number,
              p.first_dialysis_date, p.patient_status,
-             e.sessions AS edu_sessions, e.admission_date AS edu_admission, e.updated_at AS edu_updated
+             e.sessions AS edu_sessions, e.admission_date AS edu_admission, e.updated_at AS edu_updated,
+             e.paper_education AS edu_paper, e.paper_completed AS edu_paper_done
       FROM patients p
       LEFT JOIN education_records e ON e.patient_id = p.id
       WHERE p.is_deleted = 0
@@ -963,8 +964,12 @@ router.get('/education-list', ...isEditor, (req, res) => {
         }
       }
 
-      // 納入條件：目前首透中，或已有衛教進度（避免自動建立的全空白紀錄混入）
-      if (!firstActive && educatedCount === 0) continue
+      // 紙本衛教（病人層級）：已紙本衛教者跳過電子未衛教判定；紙本已完成視為全數通過
+      const paperEducation = !!r.edu_paper
+      const paperCompleted = paperEducation && !!r.edu_paper_done
+
+      // 納入條件：目前首透中、已有衛教進度、或已標記紙本衛教（避免自動建立的全空白紀錄混入）
+      if (!firstActive && educatedCount === 0 && !paperEducation) continue
 
       // 應衛教日：自初透日起的非外圍透析日（有洗就應衛教，含當日），最多 12 次。
       // 已取消首透者凍結在已存的透析日期，不再往後累計。
@@ -980,9 +985,10 @@ router.get('/education-list', ...isEditor, (req, res) => {
         }
       }
 
-      // 未衛教日 = 應衛教日中沒有衛教者簽核的日期；12 次皆已衛教即視為完成、不再列
+      // 未衛教日 = 應衛教日中沒有衛教者簽核的日期；12 次皆已衛教即視為完成、不再列。
+      // 已紙本衛教者衛教在紙本進行，電子未衛教日無意義 → 不計（改列紙本頁籤）。
       const uneducatedDates = []
-      if (educatedCount < total) {
+      if (educatedCount < total && !paperEducation) {
         const educatedOn = new Set(
           sessions
             .filter((s) => s?.educatorSign && s?.dialysisDate)
@@ -1015,7 +1021,9 @@ router.get('/education-list', ...isEditor, (req, res) => {
         returnDemoCount,
         passedCount,
         total,
-        completed: passedCount >= total,
+        paperEducation,
+        paperCompleted,
+        completed: passedCount >= total || paperCompleted,
         lastUpdated: r.edu_updated || '',
         expectedCount: expectedInfos.length,
         uneducatedCount: uneducatedDates.length,
@@ -1145,6 +1153,8 @@ router.get('/:id/education', authenticate, (req, res) => {
       admissionDate,
       firstDialysisDate,
       primaryNurse: getPrimaryNurseMap(db).get(id) || null,
+      paperEducation: !!row.paper_education,
+      paperCompleted: !!(row.paper_education && row.paper_completed),
       sessions,
       topicQueue,
       updatedAt: row.updated_at,
@@ -1173,6 +1183,13 @@ router.put('/:id/education', ...isEditor, (req, res) => {
     const topicQueue = Array.isArray(req.body?.topicQueue)
       ? JSON.stringify(req.body.topicQueue.map((t) => String(t)))
       : undefined
+    // 紙本衛教旗標：未帶則不動既有值（COALESCE）；「紙本已完成」必須先「已紙本衛教」
+    let paperEducation
+    let paperCompleted
+    if (req.body?.paperEducation !== undefined || req.body?.paperCompleted !== undefined) {
+      paperEducation = req.body?.paperEducation ? 1 : 0
+      paperCompleted = paperEducation && req.body?.paperCompleted ? 1 : 0
+    }
     const modifiedBy = JSON.stringify({ uid: req.user.id, name: req.user.name })
     const existing = db.prepare('SELECT id FROM education_records WHERE patient_id = ?').get(id)
     if (existing) {
@@ -1180,14 +1197,19 @@ router.put('/:id/education', ...isEditor, (req, res) => {
         UPDATE education_records
         SET sessions = ?, admission_date = ?, created_by = ?,
             topic_queue = COALESCE(?, topic_queue),
+            paper_education = COALESCE(?, paper_education),
+            paper_completed = COALESCE(?, paper_completed),
             updated_at = datetime('now', 'localtime')
         WHERE patient_id = ?
-      `).run(JSON.stringify(sessions), admissionDate, modifiedBy, topicQueue ?? null, id)
+      `).run(
+        JSON.stringify(sessions), admissionDate, modifiedBy,
+        topicQueue ?? null, paperEducation ?? null, paperCompleted ?? null, id,
+      )
     } else {
       db.prepare(`
-        INSERT INTO education_records (id, patient_id, sessions, admission_date, topic_queue, created_by)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(id, id, JSON.stringify(sessions), admissionDate, topicQueue ?? null, modifiedBy)
+        INSERT INTO education_records (id, patient_id, sessions, admission_date, topic_queue, paper_education, paper_completed, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, id, JSON.stringify(sessions), admissionDate, topicQueue ?? null, paperEducation ?? 0, paperCompleted ?? 0, modifiedBy)
     }
 
     res.json({ success: true, sessions, admissionDate })

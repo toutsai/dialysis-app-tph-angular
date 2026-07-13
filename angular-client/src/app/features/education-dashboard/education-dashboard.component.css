@@ -106,6 +106,9 @@
   font-size: 0.78rem;
   font-weight: 700;
 }
+.uneducated-count.paper {
+  background: #b45309;
+}
 
 .btn-refresh {
   padding: 7px 14px;
@@ -280,6 +283,27 @@
   color: #16a34a;
   font-size: 0.85rem;
 }
+/* 紙本衛教標記：進行中可點（開紙本頁籤）、完成為靜態 */
+.badge-paper {
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+  color: #b45309;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 4px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.badge-paper:hover {
+  background: #fef3c7;
+}
+.badge-paper-done {
+  color: #16a34a;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
 
 /* 未衛教整合彈窗 */
 .ue-overlay {
@@ -367,6 +391,43 @@
   padding: 0 18px 10px;
   font-size: 0.82rem;
   color: #64748b;
+}
+/* 未衛教整合頁籤（電子/紙本） */
+.ue-tabs {
+  flex-shrink: 0;
+  display: flex;
+  gap: 6px;
+  padding: 0 18px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 10px;
+}
+.ue-tab {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ue-tab.active {
+  background: #fff;
+  color: #1d6fa5;
+  border-color: #1d6fa5;
+  border-bottom-color: #fff;
+  margin-bottom: -1px;
+}
+.ue-tab-count {
+  background: #dc2626;
+  color: #fff;
+  border-radius: 10px;
+  padding: 0 7px;
+  font-size: 0.75rem;
+  font-weight: 700;
 }
 .ue-empty {
   padding: 2.5rem;

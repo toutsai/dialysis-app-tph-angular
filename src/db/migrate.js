@@ -189,6 +189,9 @@ export function runMigrations() {
       if (addColumnIfNotExists(db, 'education_records', 'admission_date', 'TEXT')) migrationsApplied++
       // 衛教主題輪序佇列(跳過的主題移到最後,每病人一條)
       if (addColumnIfNotExists(db, 'education_records', 'topic_queue', 'TEXT')) migrationsApplied++
+      // 紙本衛教(病人層級)：paper_education=以紙本進行衛教、paper_completed=紙本衛教已完成
+      if (addColumnIfNotExists(db, 'education_records', 'paper_education', 'INTEGER DEFAULT 0')) migrationsApplied++
+      if (addColumnIfNotExists(db, 'education_records', 'paper_completed', 'INTEGER DEFAULT 0')) migrationsApplied++
     }
 
     // ========================================

@@ -29,6 +29,18 @@
         <i class="fas fa-user-nurse"></i>
         主護：{{ primaryNurse()?.nurseName || '未分配' }}
       </span>
+      <label class="edu-paper-chk"
+             title="此病人的衛教以紙本進行：不列入電子未衛教判定，改列「未衛教整合」的紙本頁籤">
+        <input type="checkbox" [ngModel]="paperEducation()" (ngModelChange)="onPaperEducationChange($event)"
+               [disabled]="!canEdit" />
+        已紙本衛教
+      </label>
+      <label class="edu-paper-chk" [class.edu-paper-dim]="!paperEducation()"
+             title="紙本衛教全部完成（視為全數通過）；需先勾選「已紙本衛教」">
+        <input type="checkbox" [ngModel]="paperCompleted()" (ngModelChange)="paperCompleted.set($event)"
+               [disabled]="!canEdit || !paperEducation()" />
+        紙本衛教已完成
+      </label>
     </div>
 
     <div class="edu-body">

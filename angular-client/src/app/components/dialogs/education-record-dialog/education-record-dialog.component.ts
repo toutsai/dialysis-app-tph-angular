@@ -67,6 +67,9 @@ export class EducationRecordDialogComponent implements OnInit {
   readonly sessions = signal<EducationSession[]>([]);
   /** 主護（照護清單反查；null = 尚未分配） */
   readonly primaryNurse = signal<PrimaryNurse | null>(null);
+  /** 紙本衛教（病人層級）：已紙本衛教者不列入電子未衛教判定；紙本完成視為全數通過 */
+  readonly paperEducation = signal(false);
+  readonly paperCompleted = signal(false);
   readonly topics = signal<string[]>(DEFAULT_EDUCATION_TOPICS);
   // 此病人的主題輪序佇列：跳過的主題移到最後；隨紀錄儲存
   readonly topicQueue = signal<string[]>([]);
@@ -96,6 +99,8 @@ export class EducationRecordDialogComponent implements OnInit {
         this.admissionDate = data.admissionDate ?? this.admissionDate;
         this.firstDialysisDate = data.firstDialysisDate ?? this.firstDialysisDate;
         this.primaryNurse.set(data.primaryNurse?.nurseName ? data.primaryNurse : null);
+        this.paperEducation.set(!!data.paperEducation);
+        this.paperCompleted.set(!!data.paperCompleted);
         this.sessions.set(this.normalize(data.sessions));
         this.initTopicQueue(data.topicQueue);
       } else {
@@ -238,6 +243,12 @@ export class EducationRecordDialogComponent implements OnInit {
     this.sessions.set([...this.sessions()]);
   }
 
+  /** 勾/取消「已紙本衛教」；取消時連動清掉「紙本衛教已完成」 */
+  onPaperEducationChange(checked: boolean): void {
+    this.paperEducation.set(checked);
+    if (!checked) this.paperCompleted.set(false);
+  }
+
   /** 主護簽章欄提示：標明這位病人的主護（來源：照護清單） */
   passSignTitle(s: EducationSession): string {
     if (s.passSign) return '點選取消簽核';
@@ -369,6 +380,8 @@ export class EducationRecordDialogComponent implements OnInit {
         sessions: this.sessions(),
         admissionDate: this.admissionDate || '',
         topicQueue: this.topicQueue(),
+        paperEducation: this.paperEducation(),
+        paperCompleted: this.paperCompleted(),
       });
       this.close.emit();
     } catch (error: any) {
@@ -420,6 +433,7 @@ export class EducationRecordDialogComponent implements OnInit {
         <span>入院日期：${this.esc(this.admissionDate || '')}</span>
         <span>首透日期：${this.esc(this.firstDialysisDate || '')}</span>
         <span>主護：${this.esc(this.primaryNurse()?.nurseName || '未分配')}</span>
+        ${this.paperEducation() ? `<span>紙本衛教：${this.paperCompleted() ? '已完成' : '進行中'}</span>` : ''}
       </div>
       <table>
         <thead><tr>

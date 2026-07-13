@@ -38,6 +38,9 @@
       @if (uneducatedTotal() > 0) {
         <span class="uneducated-count">{{ uneducatedTotal() }}</span>
       }
+      @if (paperPendingTotal() > 0) {
+        <span class="uneducated-count paper" title="紙本紀錄未完成病人數">紙本 {{ paperPendingTotal() }}</span>
+      }
     </button>
     <button class="btn-refresh" (click)="load()" [disabled]="loading()">
       <i class="fas fa-rotate-right"></i> 重新整理
@@ -68,7 +71,7 @@
         </thead>
         <tbody>
           @for (r of filteredRows(); track r.patientId) {
-            <tr [class.row-done]="r.passedCount >= r.total">
+            <tr [class.row-done]="r.completed">
               <td class="col-name">
                 <span class="p-name">{{ r.patientName }}</span>
                 <span class="p-mrn">{{ r.medicalRecordNumber }}</span>
@@ -93,7 +96,16 @@
                 </div>
               </td>
               <td class="col-uneducated">
-                @if (r.uneducatedCount > 0) {
+                @if (r.paperEducation) {
+                  @if (r.paperCompleted) {
+                    <span class="badge-paper-done" title="紙本衛教已完成（視為全數通過）">紙本完成</span>
+                  } @else {
+                    <button class="badge-paper" (click)="openUneducated(r)"
+                            title="衛教以紙本進行中（不列入電子未衛教判定），點擊查看紙本未完成清單">
+                      紙本進行中
+                    </button>
+                  }
+                } @else if (r.uneducatedCount > 0) {
                   <button class="badge-uneducated" (click)="openUneducated(r)"
                           [title]="'應衛教 ' + r.expectedCount + ' 天（排除外圍床），點擊查看未衛教日期與護理師'">
                     {{ r.uneducatedCount }} 天
@@ -118,7 +130,7 @@
     <!-- 窄螢幕（直式平板/手機）卡片清單 -->
     <div class="edu-cards">
       @for (r of filteredRows(); track r.patientId) {
-        <div class="edu-card" [class.card-done]="r.passedCount >= r.total">
+        <div class="edu-card" [class.card-done]="r.completed">
           <div class="ec-top">
             <div class="ec-name">
               <span class="p-name">{{ r.patientName }}</span>
@@ -147,7 +159,13 @@
             </div>
             <div class="ec-prog-row">
               <span class="ec-prog-label">未衛教</span>
-              @if (r.uneducatedCount > 0) {
+              @if (r.paperEducation) {
+                @if (r.paperCompleted) {
+                  <span class="badge-paper-done">紙本完成</span>
+                } @else {
+                  <button class="badge-paper" (click)="openUneducated(r)">紙本進行中</button>
+                }
+              } @else if (r.uneducatedCount > 0) {
                 <button class="badge-uneducated" (click)="openUneducated(r)">{{ r.uneducatedCount }} 天</button>
               } @else {
                 <span class="badge-ok">無</span>
@@ -187,7 +205,8 @@
           }
         </h3>
         <div class="ue-actions">
-          <button class="ue-print" (click)="printUneducated()" [disabled]="uneducatedPatients().length === 0">
+          <button class="ue-print" (click)="printUneducated()"
+                  [disabled]="(ueTab() === 'paper' ? paperPendingPatients().length : uneducatedPatients().length) === 0">
             <i class="fas fa-print"></i> 列印
           </button>
           <button class="ue-close" (click)="closeUneducated()" aria-label="關閉">
@@ -195,6 +214,57 @@
           </button>
         </div>
       </div>
+      <div class="ue-tabs">
+        <button class="ue-tab" [class.active]="ueTab() === 'electronic'" (click)="ueTab.set('electronic')">
+          電子初透衛教紀錄未完成
+          @if (uneducatedPatients().length > 0) {
+            <span class="ue-tab-count">{{ uneducatedPatients().length }}</span>
+          }
+        </button>
+        <button class="ue-tab" [class.active]="ueTab() === 'paper'" (click)="ueTab.set('paper')">
+          紙本初透衛教紀錄未完成
+          @if (paperPendingPatients().length > 0) {
+            <span class="ue-tab-count">{{ paperPendingPatients().length }}</span>
+          }
+        </button>
+      </div>
+
+      @if (ueTab() === 'paper') {
+        <p class="ue-note">
+          已勾選「已紙本衛教」但尚未勾「紙本衛教已完成」的病人；紙本做完後請到衛教紀錄視窗勾選完成。
+        </p>
+
+        @if (paperPendingPatients().length === 0) {
+          <div class="ue-empty">目前沒有紙本未完成的病人 🎉</div>
+        } @else {
+          <div class="ue-body">
+            <table class="ue-table">
+              <thead>
+                <tr><th>病人</th><th>身分</th><th>初透日</th><th>主護</th><th></th></tr>
+              </thead>
+              <tbody>
+                @for (p of paperPendingPatients(); track p.patientId) {
+                  <tr>
+                    <td>
+                      <span class="ue-pname">{{ p.patientName }}</span>
+                      <span class="ue-pmrn">{{ p.medicalRecordNumber }}</span>
+                    </td>
+                    <td><span class="status-badge" [attr.data-status]="p.status">{{ statusLabel(p.status) }}</span></td>
+                    <td>{{ formatDate(p.firstDialysisDate) }}</td>
+                    <td>{{ primaryNurseLabel(p) }}</td>
+                    <td>
+                      <button class="btn-open ue-open" (click)="openRecord(p)">
+                        <i class="fas fa-chalkboard-teacher"></i> 衛教紀錄
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      } @else {
+
       <p class="ue-note">
         應衛教日 = 自初透日起實際排入排程的透析日（已排除外圍床），有洗就應衛教（含當日）。
       </p>
@@ -236,6 +306,8 @@
             </div>
           }
         </div>
+      }
+
       }
     </div>
   </div>
