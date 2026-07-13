@@ -1183,15 +1183,19 @@ router.put('/:id/education', ...isEditor, (req, res) => {
     const topicQueue = Array.isArray(req.body?.topicQueue)
       ? JSON.stringify(req.body.topicQueue.map((t) => String(t)))
       : undefined
-    // 紙本衛教旗標：未帶則不動既有值（COALESCE）；「紙本已完成」必須先「已紙本衛教」
+    // 紙本衛教旗標：兩欄各自「未帶則不動既有值」（COALESCE）
     let paperEducation
     let paperCompleted
-    if (req.body?.paperEducation !== undefined || req.body?.paperCompleted !== undefined) {
-      paperEducation = req.body?.paperEducation ? 1 : 0
-      paperCompleted = paperEducation && req.body?.paperCompleted ? 1 : 0
-    }
+    if (req.body?.paperEducation !== undefined) paperEducation = req.body.paperEducation ? 1 : 0
+    if (req.body?.paperCompleted !== undefined) paperCompleted = req.body.paperCompleted ? 1 : 0
+    if (paperEducation === 0) paperCompleted = 0 // 取消「已紙本衛教」連動清除「已完成」
     const modifiedBy = JSON.stringify({ uid: req.user.id, name: req.user.name })
-    const existing = db.prepare('SELECT id FROM education_records WHERE patient_id = ?').get(id)
+    const existing = db.prepare('SELECT id, paper_education FROM education_records WHERE patient_id = ?').get(id)
+    // 「紙本已完成」必須「已紙本衛教」：只送 completed 時以既有 paper_education 判斷
+    if (paperCompleted === 1) {
+      const effectivePaper = paperEducation ?? (existing?.paper_education ? 1 : 0)
+      if (!effectivePaper) paperCompleted = 0
+    }
     if (existing) {
       db.prepare(`
         UPDATE education_records
