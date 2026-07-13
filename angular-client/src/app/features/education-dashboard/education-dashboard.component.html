@@ -58,6 +58,7 @@
             <th>病人</th>
             <th>身分</th>
             <th>初透日</th>
+            <th title="來源：使用者管理的護理師分配病人照護清單">主護</th>
             <th>檢視／編輯</th>
             <th class="col-prog">已衛教</th>
             <th class="col-uneducated">未衛教</th>
@@ -79,6 +80,7 @@
                 <span class="status-badge" [attr.data-status]="r.status">{{ statusLabel(r.status) }}</span>
               </td>
               <td>{{ formatDate(r.firstDialysisDate) }}</td>
+              <td class="col-nurse" [class.no-nurse]="!r.primaryNurse">{{ primaryNurseLabel(r) }}</td>
               <td>
                 <button class="btn-open" (click)="openRecord(r)">
                   <i class="fas fa-chalkboard-teacher"></i> {{ canEdit() ? '檢視／編輯' : '檢視' }}
@@ -129,6 +131,7 @@
           }
           <div class="ec-meta">
             <span>初透日：{{ formatDate(r.firstDialysisDate) }}</span>
+            <span>主護：{{ primaryNurseLabel(r) }}</span>
             <span>更新：{{ formatDate(r.lastUpdated) }}</span>
           </div>
           <div class="ec-prog-block">
@@ -208,6 +211,9 @@
                 <span class="status-badge" [attr.data-status]="p.status">{{ statusLabel(p.status) }}</span>
                 <span class="ue-pstat">
                   未衛教 <b>{{ p.uneducatedCount }}</b> 天／應衛教 {{ p.expectedCount }} 天
+                </span>
+                <span class="ue-pstat" title="來源：使用者管理的護理師分配病人照護清單">
+                  主護：{{ primaryNurseLabel(p) }}
                 </span>
                 <button class="btn-open ue-open" (click)="openRecord(p)">
                   <i class="fas fa-chalkboard-teacher"></i> 衛教紀錄

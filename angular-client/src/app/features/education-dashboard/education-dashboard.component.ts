@@ -21,6 +21,8 @@ interface EducationListItem {
   firstDialysisActive: boolean;
   firstDialysisDate: string;
   admissionDate: string;
+  /** 主護（來源：使用者管理的護理師分配病人照護清單；null = 尚未分配） */
+  primaryNurse: { nurseId: string; nurseName: string } | null;
   hasRecord: boolean;
   educatedCount: number;
   returnDemoCount: number;
@@ -164,6 +166,11 @@ export class EducationDashboardComponent implements OnInit {
     return d.team && d.nurse ? `${d.team} ${d.nurse}` : d.nurse || d.team;
   }
 
+  /** 主護姓名（照護清單反查；未分配顯示 —） */
+  primaryNurseLabel(r: EducationListItem): string {
+    return r.primaryNurse?.nurseName || '—';
+  }
+
   /** 開啟未衛教整合彈窗；帶 row 時只看該病人 */
   openUneducated(row?: EducationListItem): void {
     this.uneducatedFilterId.set(row ? row.patientId : null);
@@ -193,7 +200,7 @@ export class EducationDashboardComponent implements OnInit {
           )
           .join('');
         return `<h3>${esc(p.patientName)}（${esc(p.medicalRecordNumber)}）
-            — 未衛教 ${p.uneducatedCount} 天／應衛教 ${p.expectedCount} 天，初透日 ${esc(p.firstDialysisDate || '—')}</h3>
+            — 未衛教 ${p.uneducatedCount} 天／應衛教 ${p.expectedCount} 天，初透日 ${esc(p.firstDialysisDate || '—')}，主護 ${esc(this.primaryNurseLabel(p))}</h3>
           <table>
             <thead><tr><th>日期</th><th>班別</th><th>當天照顧護理師</th></tr></thead>
             <tbody>${rows}</tbody>

@@ -887,6 +887,30 @@ function getEducationDialysisDates(db, patientId, firstDate, todayStr) {
     .sort((a, b) => a.date.localeCompare(b.date))
 }
 
+// 主護反查：讀「護理師分配病人照護清單」（nurse_patient_care，單一 JSON 文件 id='main'），
+// 建 patientId → { nurseId, nurseName } 反查表。排除名單（excluded_nurse_ids）內的護理師不列入，
+// 與照護清單前端顯示規則一致。衛教紀錄「回示教通過日/主護簽章」欄的主護即由此對應。
+function getPrimaryNurseMap(db) {
+  const map = new Map()
+  try {
+    const row = db
+      .prepare("SELECT assignments, excluded_nurse_ids FROM nurse_patient_care WHERE id = 'main'")
+      .get()
+    if (!row) return map
+    const excluded = new Set(JSON.parse(row.excluded_nurse_ids || '[]'))
+    const assignments = JSON.parse(row.assignments || '[]')
+    for (const a of Array.isArray(assignments) ? assignments : []) {
+      if (!a?.nurseId || excluded.has(a.nurseId)) continue
+      for (const pid of Array.isArray(a.patientIds) ? a.patientIds : []) {
+        if (!map.has(pid)) map.set(pid, { nurseId: a.nurseId, nurseName: a.nurseName || '' })
+      }
+    }
+  } catch (error) {
+    console.error('解析護理師照護清單失敗:', error)
+  }
+  return map
+}
+
 /**
  * GET /api/patients/education-list
  * 後台衛教進度總覽：列出「目前首透中」或「已有衛教進度」的病人 + 進度統計。
@@ -906,6 +930,7 @@ router.get('/education-list', ...isEditor, (req, res) => {
     `).all()
 
     const total = EDUCATION_SESSION_COUNT
+    const primaryNurseMap = getPrimaryNurseMap(db)
     const list = []
     for (const r of rows) {
       let firstActive = false
@@ -984,6 +1009,7 @@ router.get('/education-list', ...isEditor, (req, res) => {
         firstDialysisActive: firstActive,
         firstDialysisDate: firstDate || '',
         admissionDate: r.edu_admission || '',
+        primaryNurse: primaryNurseMap.get(r.id) || null,
         hasRecord,
         educatedCount,
         returnDemoCount,
@@ -1118,6 +1144,7 @@ router.get('/:id/education', authenticate, (req, res) => {
       medicalRecordNumber: patient.medical_record_number,
       admissionDate,
       firstDialysisDate,
+      primaryNurse: getPrimaryNurseMap(db).get(id) || null,
       sessions,
       topicQueue,
       updatedAt: row.updated_at,

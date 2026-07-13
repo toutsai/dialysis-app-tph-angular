@@ -24,6 +24,11 @@
         <input type="date" class="edu-meta-input" [(ngModel)]="admissionDate" [disabled]="!canEdit" />
       </span>
       <span *ngIf="firstDialysisDate">首透日期：{{ firstDialysisDate }}</span>
+      <span class="edu-nurse" [class.edu-nurse-none]="!primaryNurse()"
+            title="來源：使用者管理的護理師分配病人照護清單">
+        <i class="fas fa-user-nurse"></i>
+        主護：{{ primaryNurse()?.nurseName || '未分配' }}
+      </span>
     </div>
 
     <div class="edu-body">
@@ -40,7 +45,10 @@
             <th class="col-sign-cell">衛教者/日期</th>
             <th class="col-sign">被衛教者簽名</th>
             <th class="col-sign-cell">回示教日期/護理師</th>
-            <th class="col-sign-cell">回示教通過日/主護簽章</th>
+            <th class="col-sign-cell" [title]="primaryNurse() ? '主護：' + primaryNurse()!.nurseName : '尚未在照護清單分配主護'">
+              回示教通過日/主護簽章
+              <span class="th-nurse" *ngIf="primaryNurse()">（{{ primaryNurse()!.nurseName }}）</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -89,7 +97,7 @@
             <td class="col-sign-cell">
               <button type="button" class="sign-cell" [class.signed]="s.passSign" [disabled]="!canEdit"
                       (click)="toggleSign(s, 'passSign')"
-                      [title]="s.passSign ? '點選取消簽核' : '點選簽核（蓋章＝您的姓名＋今日）'">
+                      [title]="passSignTitle(s)">
                 {{ s.passSign ? signLabel(s.passSign) : '點選簽核' }}
               </button>
             </td>
@@ -137,8 +145,8 @@
               <span class="sc-tile-val">{{ s.returnDemoSign ? signLabel(s.returnDemoSign) : '點選簽核' }}</span>
             </button>
             <button type="button" class="sc-tile" [class.signed]="s.passSign" [disabled]="!canEdit"
-                    (click)="toggleSign(s, 'passSign')">
-              <span class="sc-tile-label">回示教通過/主護簽章</span>
+                    (click)="toggleSign(s, 'passSign')" [title]="passSignTitle(s)">
+              <span class="sc-tile-label">回示教通過/主護簽章<ng-container *ngIf="primaryNurse()">（{{ primaryNurse()!.nurseName }}）</ng-container></span>
               <span class="sc-tile-val">{{ s.passSign ? signLabel(s.passSign) : '點選簽核' }}</span>
             </button>
           </div>

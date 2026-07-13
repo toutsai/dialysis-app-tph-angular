@@ -44,6 +44,11 @@
 .edu-meta-field { display: inline-flex; align-items: center; gap: 4px; }
 .edu-meta-input { padding: 3px 6px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
 .edu-meta-input:disabled { background: #f5f5f5; color: #555; border-color: #e0e0e0; }
+/* 主護（來源：護理師分配病人照護清單）；未分配以橘色提醒 */
+.edu-nurse { color: #1d6fa5; font-weight: 600; }
+.edu-nurse i { margin-right: 4px; }
+.edu-nurse-none { color: #b45309; }
+.th-nurse { color: #1d6fa5; white-space: nowrap; }
 
 .edu-btn {
   padding: 8px 16px;

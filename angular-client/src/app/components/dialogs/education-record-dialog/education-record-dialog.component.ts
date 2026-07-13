@@ -23,6 +23,12 @@ interface EducationSession {
 
 type SignField = 'educatorSign' | 'returnDemoSign' | 'passSign';
 
+/** 主護（來源：使用者管理的護理師分配病人照護清單） */
+interface PrimaryNurse {
+  nurseId: string;
+  nurseName: string;
+}
+
 /** 初透衛教主題預設 12 項（可由 site_config education_topics 覆蓋） */
 const DEFAULT_EDUCATION_TOPICS = [
   '環境介紹/股靜脈導管置入術護理指導',
@@ -59,6 +65,8 @@ export class EducationRecordDialogComponent implements OnInit {
   @Output() close = new EventEmitter<void>();
 
   readonly sessions = signal<EducationSession[]>([]);
+  /** 主護（照護清單反查；null = 尚未分配） */
+  readonly primaryNurse = signal<PrimaryNurse | null>(null);
   readonly topics = signal<string[]>(DEFAULT_EDUCATION_TOPICS);
   // 此病人的主題輪序佇列：跳過的主題移到最後；隨紀錄儲存
   readonly topicQueue = signal<string[]>([]);
@@ -87,6 +95,7 @@ export class EducationRecordDialogComponent implements OnInit {
         this.medicalRecordNumber = data.medicalRecordNumber || this.medicalRecordNumber;
         this.admissionDate = data.admissionDate ?? this.admissionDate;
         this.firstDialysisDate = data.firstDialysisDate ?? this.firstDialysisDate;
+        this.primaryNurse.set(data.primaryNurse?.nurseName ? data.primaryNurse : null);
         this.sessions.set(this.normalize(data.sessions));
         this.initTopicQueue(data.topicQueue);
       } else {
@@ -227,6 +236,14 @@ export class EducationRecordDialogComponent implements OnInit {
     }
     // 觸發 signal 變更偵測
     this.sessions.set([...this.sessions()]);
+  }
+
+  /** 主護簽章欄提示：標明這位病人的主護（來源：照護清單） */
+  passSignTitle(s: EducationSession): string {
+    if (s.passSign) return '點選取消簽核';
+    const nurse = this.primaryNurse()?.nurseName;
+    const base = '點選簽核（蓋章＝您的姓名＋今日）';
+    return nurse ? `主護：${nurse}。${base}` : `尚未在照護清單分配主護。${base}`;
   }
 
   /** 顯示成「姓名（06/30）」 */
@@ -402,6 +419,7 @@ export class EducationRecordDialogComponent implements OnInit {
         <span>姓名：${this.esc(this.patientName)}${this.medicalRecordNumber ? `（${this.esc(this.medicalRecordNumber)}）` : ''}</span>
         <span>入院日期：${this.esc(this.admissionDate || '')}</span>
         <span>首透日期：${this.esc(this.firstDialysisDate || '')}</span>
+        <span>主護：${this.esc(this.primaryNurse()?.nurseName || '未分配')}</span>
       </div>
       <table>
         <thead><tr>

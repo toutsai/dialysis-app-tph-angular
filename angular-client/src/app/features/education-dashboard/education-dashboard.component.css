@@ -247,6 +247,17 @@
   white-space: nowrap;
 }
 
+/* 主護欄（照護清單反查；未分配灰色） */
+.col-nurse {
+  white-space: nowrap;
+  color: #1d6fa5;
+  font-weight: 600;
+}
+.col-nurse.no-nurse {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
 /* 未衛教欄 */
 .col-uneducated {
   white-space: nowrap;
