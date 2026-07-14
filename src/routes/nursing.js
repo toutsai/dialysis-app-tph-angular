@@ -311,9 +311,8 @@ function syncNurseNamesToAssignments(db, yearMonth, scheduleByNurse) {
   const [year, month] = yearMonth.split('-').map(Number)
   const daysInMonth = new Date(year, month, 0).getDate()
 
-  // 取得今天日期（只同步今天及以後）
-  const today = new Date()
-  const todayStr = today.toISOString().split('T')[0]
+  // 取得今天日期（只同步今天及以後；台北時區，勿用 toISOString 以免凌晨差一天）
+  const todayStr = getTaipeiTodayString()
 
   let updatedCount = 0
   let createdCount = 0
@@ -1102,7 +1101,7 @@ router.put('/handover-logs/latest', ...isEditor, async (req, res) => {
         updated_at = datetime('now', 'localtime')
     `,
     ).run(
-      sourceDate || new Date().toISOString().split('T')[0],
+      sourceDate || getTaipeiTodayString(),
       content || '',
       JSON.stringify(updatedBy || {}),
     )

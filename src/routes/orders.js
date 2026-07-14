@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid'
 import XLSX from 'xlsx'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isContributor, isEditor, logAudit, requireAnyRole } from '../middleware/auth.js'
-import { getTaipeiMonthString } from '../utils/dateUtils.js'
+import { getTaipeiMonthString, getTaipeiTodayString } from '../utils/dateUtils.js'
 import { normalizeDialysisOrdersMode } from '../utils/dialysisMode.js'
 
 const router = Router()
@@ -546,7 +546,7 @@ router.post('/medications', ...isDoctorRole, async (req, res) => {
       patientId,
       patientName,
       JSON.stringify(medications || []),
-      orderDate || new Date().toISOString().split('T')[0],
+      orderDate || getTaipeiTodayString(),
       JSON.stringify({ uid: req.user.id, name: req.user.name }),
     )
 
@@ -1128,7 +1128,7 @@ router.post('/condition-records', ...isContributor, async (req, res) => {
     ).run(
       id,
       patientId,
-      recordDate || new Date().toISOString().split('T')[0],
+      recordDate || getTaipeiTodayString(),
       content,
       JSON.stringify({ uid: req.user.id, name: req.user.name }),
     )

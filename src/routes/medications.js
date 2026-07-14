@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isEditor, logAudit } from '../middleware/auth.js'
 import { getDailyInjections } from '../services/dailyInjectionService.js'
+import { getTaipeiTodayString } from '../utils/dateUtils.js'
 
 const router = Router()
 
@@ -226,7 +227,7 @@ router.post('/', ...isEditor, async (req, res) => {
       data.patientId,
       data.patientName || '',
       JSON.stringify(data.medications || []),
-      data.orderDate || new Date().toISOString().split('T')[0],
+      data.orderDate || getTaipeiTodayString(),
       JSON.stringify({ uid: req.user.id, name: req.user.name })
     )
 

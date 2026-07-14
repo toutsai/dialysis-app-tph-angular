@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@services/api-manager.service';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
+import { getToday, formatDateToYYYYMMDD } from '@/utils/dateUtils';
 // Standalone 版：已移除 Firebase
 
 @Component({
@@ -39,7 +40,7 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
 
   private createFormState(): any {
     return {
-      effectiveDate: new Date().toISOString().split('T')[0],
+      effectiveDate: getToday(),
       aks: [''],
       dialysateCa: '',
       dryWeight: '',
@@ -82,7 +83,7 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
       const dialysisTime = this.parseDialysisTime(orders);
 
       Object.assign(this.localOrderData, {
-        effectiveDate: orders.effectiveDate || new Date().toISOString().split('T')[0],
+        effectiveDate: orders.effectiveDate || getToday(),
         vascAccess: orders.vascAccess || '',
         arterialNeedle: orders.arterialNeedle || '',
         venousNeedle: orders.venousNeedle || '',
@@ -115,7 +116,7 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
   }
 
   get todayStr(): string {
-    return new Date().toISOString().split('T')[0];
+    return getToday();
   }
 
   private firstPresent(...values: any[]): any {
@@ -354,7 +355,7 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
     if (!isoString) return 'N/A';
     const date = this.getDate(isoString);
     if (!date) return 'N/A';
-    return date.toISOString().split('T')[0];
+    return formatDateToYYYYMMDD(date);
   }
 
   private getDate(dateValue: any): Date | null {
