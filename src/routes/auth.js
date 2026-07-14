@@ -11,6 +11,7 @@ import {
   registerSession,
   removeSession,
   blacklistToken,
+  revokeUserSessions,
   getClientIp,
 } from '../middleware/auth.js'
 import { loginRateLimit } from '../middleware/rateLimit.js'
@@ -802,6 +803,16 @@ router.put('/users/:id', ...isAdmin, async (req, res) => {
       db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params)
     }
 
+    // 安全相關變更（停用、改角色、改密碼）立即作廢既有 token，
+    // 否則舊 JWT 在 24 小時內仍以舊權限有效
+    const securityChanged =
+      (is_active !== undefined && !is_active) ||
+      (role !== undefined && role !== existing.role) ||
+      Boolean(password)
+    if (securityChanged) {
+      revokeUserSessions(id, 'admin_revoke')
+    }
+
     // 同步醫師資料到 physicians 表
     const finalTitle = title !== undefined ? title : existing.title
     const finalName = name !== undefined ? name : existing.name
@@ -939,6 +950,9 @@ router.post('/users/:id/reset-password', ...isAdmin, async (req, res) => {
     `,
     ).run(passwordHash, id)
 
+    // 重設密碼後立即作廢既有 token，強制以新密碼重新登入
+    revokeUserSessions(id, 'admin_revoke')
+
     await logAudit('PASSWORD_RESET_BY_ADMIN', req.user.id, req.user.name, 'users', id, {
       targetUser: existing.name,
     })
@@ -982,6 +996,9 @@ router.delete('/users/:id', ...isAdmin, async (req, res) => {
         message: '使用者不存在',
       })
     }
+
+    // 刪除帳號後立即作廢既有 token
+    revokeUserSessions(id, 'admin_revoke')
 
     await logAudit('USER_DELETE', req.user.id, req.user.name, 'users', id, {})
 

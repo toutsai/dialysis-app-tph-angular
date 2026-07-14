@@ -1364,7 +1364,7 @@ router.get('/site-config/:id', authenticate, (req, res) => {
  * PUT /api/system/site-config/:id
  * 更新站點配置
  */
-router.put('/site-config/:id', authenticate, async (req, res) => {
+router.put('/site-config/:id', ...isContributor, async (req, res) => {
   try {
     const { id } = req.params
     const configData = req.body
@@ -1434,7 +1434,7 @@ router.get('/auto-assign-config/current', authenticate, (req, res) => {
  * PUT /api/system/auto-assign-config/current
  * 更新自動分配設定
  */
-router.put('/auto-assign-config/current', authenticate, async (req, res) => {
+router.put('/auto-assign-config/current', ...isContributor, async (req, res) => {
   try {
     const configData = req.body
     const db = getDatabase()
@@ -1497,7 +1497,7 @@ router.get('/config/:key', authenticate, (req, res) => {
  * PUT /api/system/config/:key
  * 別名 → site-config/:key
  */
-router.put('/config/:key', authenticate, async (req, res) => {
+router.put('/config/:key', ...isContributor, async (req, res) => {
   try {
     const { key } = req.params
     const configData = req.body

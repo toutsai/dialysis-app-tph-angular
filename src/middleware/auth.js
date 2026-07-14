@@ -88,8 +88,9 @@ export async function blacklistToken(token, userId, reason = 'logout') {
       return false
     }
 
-    // Token 過期時間
-    const expiresAt = new Date(decoded.exp * 1000).toISOString()
+    // Token 過期時間（本地時間字串，與清理 SQL 的 datetime('now','localtime') 同基準；
+    // 勿用 toISOString()——UTC 字串會讓深夜作廢的 token 提早最多 8 小時被清出黑名單）
+    const expiresAt = new Date(decoded.exp * 1000).toLocaleString('sv-SE')
 
     db.prepare(
       `
@@ -176,7 +177,8 @@ export async function registerSession(userId, token, req) {
       return null
     }
 
-    const expiresAt = new Date(decoded.exp * 1000).toISOString()
+    // 本地時間字串，與清理 SQL 的 localtime 基準一致（同上方 blacklistToken 的說明）
+    const expiresAt = new Date(decoded.exp * 1000).toLocaleString('sv-SE')
     const ipAddress = getClientIp(req)
     const userAgent = req.headers['user-agent'] || 'unknown'
 
@@ -224,6 +226,42 @@ export async function registerSession(userId, token, req) {
   } catch (error) {
     console.error('註冊 session 失敗:', error)
     return null
+  }
+}
+
+/**
+ * 作廢使用者現行 Session 的 token 並移除 Session
+ * （停用帳號/刪除帳號/改角色/重設密碼時呼叫，讓既有 JWT 立即失效）
+ * @param {string} userId - 使用者 ID
+ * @param {string} reason - 黑名單原因（預設 'admin_revoke'）
+ * @returns {boolean} 是否有作廢任何 session
+ */
+export function revokeUserSessions(userId, reason = 'admin_revoke') {
+  try {
+    const db = getDatabase()
+
+    const session = db
+      .prepare(`SELECT * FROM active_sessions WHERE user_id = ?`)
+      .get(userId)
+
+    if (!session) {
+      return false
+    }
+
+    db.prepare(
+      `
+      INSERT OR REPLACE INTO token_blacklist (token_hash, user_id, reason, expires_at, created_at)
+      VALUES (?, ?, ?, ?, datetime('now', 'localtime'))
+    `,
+    ).run(session.token_hash, userId, reason, session.expires_at)
+
+    db.prepare(`DELETE FROM active_sessions WHERE user_id = ?`).run(userId)
+
+    console.log(`🔒 已作廢使用者 ${userId} 的現行 token（${reason}）`)
+    return true
+  } catch (error) {
+    console.error('作廢使用者 session 失敗:', error)
+    return false
   }
 }
 
