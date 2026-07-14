@@ -713,6 +713,16 @@
   (assignBed)="handleAssignBed($event)"
 ></app-bed-assignment-dialog>
 
+<!-- Patient Select Dialog（點擊空床位加入病人） -->
+<app-patient-select-dialog
+  [isVisible]="isPatientSelectDialogVisible()"
+  title="選擇病人排班"
+  [patients]="allPatients()"
+  [showFillOptions]="false"
+  (confirm)="handlePatientSelect($event)"
+  (cancel)="cancelPatientSelect()"
+></app-patient-select-dialog>
+
 @if (isWardDialogVisible()) {
   <app-ward-number-dialog
     title="設定住院床號"

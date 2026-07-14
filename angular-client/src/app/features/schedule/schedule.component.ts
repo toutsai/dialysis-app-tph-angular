@@ -45,6 +45,7 @@ import { PatientMessagesIconComponent } from '@app/components/patient-messages-i
 import { MemoDisplayDialogComponent } from '@app/components/dialogs/memo-display-dialog/memo-display-dialog.component';
 import { ConditionRecordDisplayDialogComponent } from '@app/components/dialogs/condition-record-display-dialog/condition-record-display-dialog.component';
 import { AutoAssignConfigDialogComponent } from '@app/components/dialogs/auto-assign-config-dialog/auto-assign-config-dialog.component';
+import { PatientSelectDialogComponent } from '@app/components/dialogs/patient-select-dialog/patient-select-dialog.component';
 import { AutoAssignConfigService, type AutoAssignConfig } from '@app/core/services/auto-assign-config.service';
 
 import {
@@ -222,7 +223,7 @@ const PERIPHERAL_BED_RANGE = Array.from({ length: PERIPHERAL_BED_COUNT }, (_, i)
 @Component({
   selector: 'app-schedule',
   standalone: true,
-  imports: [CommonModule, FormsModule, InpatientSidebarComponent, BedAssignmentDialogComponent, DailyStaffDisplayComponent, StatsToolbarComponent, WardNumberDialogComponent, InpatientRoundsDialogComponent, IcuOrdersDialogComponent, DialysisOrderModalComponent, CrrtOrderModalComponent, DailyRecordsSummaryDialogComponent, DailyInjectionListDialogComponent, DailyDraftListDialogComponent, PatientDetailModalComponent, PatientMessagesIconComponent, MemoDisplayDialogComponent, ConditionRecordDisplayDialogComponent, AutoAssignConfigDialogComponent],
+  imports: [CommonModule, FormsModule, InpatientSidebarComponent, BedAssignmentDialogComponent, DailyStaffDisplayComponent, StatsToolbarComponent, WardNumberDialogComponent, InpatientRoundsDialogComponent, IcuOrdersDialogComponent, DialysisOrderModalComponent, CrrtOrderModalComponent, DailyRecordsSummaryDialogComponent, DailyInjectionListDialogComponent, DailyDraftListDialogComponent, PatientDetailModalComponent, PatientMessagesIconComponent, MemoDisplayDialogComponent, ConditionRecordDisplayDialogComponent, AutoAssignConfigDialogComponent, PatientSelectDialogComponent],
   templateUrl: './schedule.component.html',
   styleUrl: './schedule.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -1608,6 +1609,11 @@ export class ScheduleComponent implements OnInit, OnDestroy {
 
   onDragLeave(event: DragEvent): void {
     (event.target as HTMLElement).closest('.patient-name, .peripheral-patient-name')?.classList.remove('drag-over');
+  }
+
+  cancelPatientSelect(): void {
+    this.isPatientSelectDialogVisible.set(false);
+    this.currentSlotId.set(null);
   }
 
   handlePatientSelect(data: { patientId: string }): void {
