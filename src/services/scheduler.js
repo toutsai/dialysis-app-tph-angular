@@ -6,7 +6,7 @@
 import cron from 'node-cron'
 import { getDatabase } from '../db/init.js'
 import { createBackup } from '../utils/backup.js'
-import { initializeFutureSchedules } from './scheduleSync.js'
+import { initializeFutureSchedules, syncMasterScheduleToFuture } from './scheduleSync.js'
 import { cleanupExpiredBlacklist, cleanupExpiredSessions } from '../middleware/auth.js'
 import { getTaipeiTodayString, getTaipeiYesterdayString, formatDateToYYYYMMDD } from '../utils/dateUtils.js'
 import { FREQ_MAP_TO_DAY_INDEX } from '../utils/scheduleUtils.js'
@@ -489,6 +489,8 @@ async function applyScheduledPatientUpdates() {
             }
 
             const schedule = JSON.parse(masterDoc.schedule || '{}')
+            // 變更前規則快照（獨立 parse 取得深拷貝，供未來排程同步 diff 用）
+            const beforeMasterRules = JSON.parse(masterDoc.schedule || '{}')
 
             // 檢查床位衝突
             for (const otherPatientId in schedule) {
@@ -554,6 +556,18 @@ async function applyScheduledPatientUpdates() {
               WHERE id = 'MASTER_SCHEDULE'
             `,
             ).run(JSON.stringify(schedule))
+
+            // 同步變更到未來 60 天既有排程（與總表 PUT 路徑 schedules.js 一致，
+            // 否則既有排程列仍顯示舊床位/班別）
+            try {
+              await syncMasterScheduleToFuture(beforeMasterRules, schedule, {
+                uid: 'system-scheduler',
+                name: '預約變更自動套用',
+              })
+              console.log(`    - 已同步總表變更到未來 60 天排程`)
+            } catch (syncErr) {
+              console.error(`    - ⚠️ 未來排程同步失敗 (非致命): ${syncErr.message}`)
+            }
 
             console.log(`    - 成功更新 patient/${patientId} 和總表規則`)
             break

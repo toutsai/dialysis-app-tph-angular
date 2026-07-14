@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '@app/core/services/auth.service';
 import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@services/api-manager.service';
+import { getToday } from '@/utils/dateUtils';
 // Standalone 版：已移除 Firebase
 
 @Component({
@@ -80,10 +81,11 @@ export class ConditionRecordPanelComponent implements OnChanges {
         content,
         authorName: currentUser.name,
         authorId: currentUser.uid,
-        recordDate: this.targetDate || new Date().toISOString().split('T')[0],
+        recordDate: this.targetDate || getToday(),
         createdAt: new Date().toISOString(),
       } as any);
       this.newContent = '';
+      this.newRecordContent = '';
       await this.fetchRecords();
       this.recordsChanged.emit();
     } catch (err) {
@@ -109,9 +111,28 @@ export class ConditionRecordPanelComponent implements OnChanges {
     return this.records();
   }
 
+  async updateRecord(): Promise<void> {
+    const content = this.newRecordContent.trim();
+    if (!content || !this.editingRecordId) return;
+
+    this.isSaving.set(true);
+    try {
+      await this.conditionRecordsApi.update(this.editingRecordId, { content } as any);
+      this.editingRecordId = null;
+      this.newRecordContent = '';
+      await this.fetchRecords();
+      this.recordsChanged.emit();
+    } catch (err) {
+      console.error('更新病情紀錄失敗:', err);
+      alert('更新失敗，請稍後再試');
+    } finally {
+      this.isSaving.set(false);
+    }
+  }
+
   handleSave(): void {
     if (this.editingRecordId) {
-      // TODO: implement update
+      this.updateRecord();
     } else {
       this.newContent = this.newRecordContent;
       this.addRecord();

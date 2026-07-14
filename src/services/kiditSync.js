@@ -126,9 +126,9 @@ export async function syncEventsToKiditLogbook(dateStr, dailyLogData) {
     existingEvents.forEach(existing => {
       if (eventsMap.has(existing.id)) {
         const current = eventsMap.get(existing.id)
-        // 保留使用者的手動勾選狀態
-        current.isRegistered = existing.isRegistered || false
-        current.transferOutHospital = existing.transferOutHospital || ''
+        // 以既有事件為底（保留使用者已填的申報表單欄位與勾選狀態），
+        // 再以 daily_log 重新產生的受管欄位（type/timestamp/病人資訊/details）覆蓋
+        eventsMap.set(existing.id, { ...existing, ...current })
       }
     })
 

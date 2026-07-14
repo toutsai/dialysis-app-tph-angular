@@ -166,25 +166,25 @@ async function handleMove(db, exceptionId, data) {
   const sourceKey = getScheduleKey(from.bedNum, from.shiftCode)
   const targetKey = getScheduleKey(to.bedNum, to.shiftCode)
 
-  // 取得來源排程
+  // 取得來源與目標排程（同日調床時共用同一物件，避免互相覆寫）
   const sourceScheduleRow = db.prepare(`SELECT * FROM schedules WHERE date = ?`).get(from.sourceDate)
   const sourceSchedule = sourceScheduleRow ? JSON.parse(sourceScheduleRow.schedule || '{}') : {}
 
-  // 移除來源位置
-  if (sourceSchedule[sourceKey]?.patientId === patientId) {
+  const sameDay = from.sourceDate === to.goalDate
+  const targetScheduleRow = sameDay
+    ? sourceScheduleRow
+    : db.prepare(`SELECT * FROM schedules WHERE date = ?`).get(to.goalDate)
+  const targetSchedule = sameDay
+    ? sourceSchedule
+    : (targetScheduleRow ? JSON.parse(targetScheduleRow.schedule || '{}') : {})
+
+  // 先在記憶體中移除來源（衝突檢查通過前不寫庫，避免病人「哪裡都不在」）
+  const sourceRemoved = sourceSchedule[sourceKey]?.patientId === patientId
+  if (sourceRemoved) {
     delete sourceSchedule[sourceKey]
     console.log(`  └─ 移除 ${patientName} 從 ${from.sourceDate} ${sourceKey}`)
-
-    db.prepare(`
-      UPDATE schedules SET schedule = ?, updated_at = datetime('now', 'localtime')
-      WHERE date = ?
-    `).run(JSON.stringify(sourceSchedule), from.sourceDate)
   }
   processedDates.push(from.sourceDate)
-
-  // 取得目標排程
-  const targetScheduleRow = db.prepare(`SELECT * FROM schedules WHERE date = ?`).get(to.goalDate)
-  let targetSchedule = targetScheduleRow ? JSON.parse(targetScheduleRow.schedule || '{}') : {}
 
   // 建立新的排班資料
   const newSlotData = {
@@ -201,7 +201,7 @@ async function handleMove(db, exceptionId, data) {
     newSlotData.modeOverride = to.mode
   }
 
-  // 檢查衝突
+  // 檢查衝突（在任何寫庫動作之前，throw 時來源仍完好）
   if (targetSchedule[targetKey]) {
     const occupant = targetSchedule[targetKey]
     if (occupant.exceptionId) {
@@ -217,18 +217,26 @@ async function handleMove(db, exceptionId, data) {
 
   targetSchedule[targetKey] = newSlotData
 
-  // 更新或建立目標排程
-  if (targetScheduleRow) {
-    db.prepare(`
-      UPDATE schedules SET schedule = ?, updated_at = datetime('now', 'localtime')
-      WHERE date = ?
-    `).run(JSON.stringify(targetSchedule), to.goalDate)
-  } else {
-    db.prepare(`
-      INSERT INTO schedules (id, date, schedule)
-      VALUES (?, ?, ?)
-    `).run(to.goalDate, to.goalDate, JSON.stringify(targetSchedule))
-  }
+  // 來源與目標在同一個交易中寫入，任一失敗即整體回滾
+  db.transaction(() => {
+    if (sourceRemoved && !sameDay) {
+      db.prepare(`
+        UPDATE schedules SET schedule = ?, updated_at = datetime('now', 'localtime')
+        WHERE date = ?
+      `).run(JSON.stringify(sourceSchedule), from.sourceDate)
+    }
+    if (targetScheduleRow) {
+      db.prepare(`
+        UPDATE schedules SET schedule = ?, updated_at = datetime('now', 'localtime')
+        WHERE date = ?
+      `).run(JSON.stringify(targetSchedule), to.goalDate)
+    } else {
+      db.prepare(`
+        INSERT INTO schedules (id, date, schedule)
+        VALUES (?, ?, ?)
+      `).run(to.goalDate, to.goalDate, JSON.stringify(targetSchedule))
+    }
+  })()
 
   if (from.sourceDate !== to.goalDate) {
     processedDates.push(to.goalDate)
@@ -265,13 +273,13 @@ async function handleSuspend(db, exceptionId, data) {
       const schedule = JSON.parse(scheduleRow.schedule || '{}')
       let updateNeeded = false
 
+      // 同一天可能有多個 slot（加洗/重複資料），全部移除，與重算路徑行為一致
       for (const key in schedule) {
         if (schedule[key].patientId === patientId) {
           delete schedule[key]
           updateNeeded = true
           removedCount++
           console.log(`    └─ 移除 ${dateStr} 的 ${key}`)
-          break
         }
       }
 
