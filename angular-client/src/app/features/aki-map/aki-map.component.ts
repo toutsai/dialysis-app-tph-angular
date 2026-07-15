@@ -346,6 +346,13 @@ export class AkiMapComponent implements OnInit {
     return this.colorMap.get(cat)?.color || '#b0bec5';
   }
 
+  /** 床卡外框樣式：AKI/ESRD 彩色加粗、無 AKI 與單筆黑框、無 Cr 資料虛線灰框 */
+  frameClass(cat: AkiCategory): string {
+    if (cat === 'no-data') return 'frame-nodata';
+    if (cat === 'stage-0' || cat === 'single') return 'frame-neutral';
+    return 'frame-aki';
+  }
+
   label(cat: AkiCategory): string {
     return this.colorMap.get(cat)?.label || cat;
   }

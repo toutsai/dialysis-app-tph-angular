@@ -174,7 +174,7 @@
           </div>
           <div class="bed-grid">
             @for (p of g.patients; track p.mrn) {
-              <button class="bed" [style.--c]="color(p.category)" (click)="openDetail(p.mrn)">
+              <button [class]="'bed ' + frameClass(p.category)" [style.--c]="color(p.category)" (click)="openDetail(p.mrn)">
                 <span class="bed-top">
                   <span class="bed-no">{{ p.bed }}</span>
                   @if (p.dialysisMode) { <span class="hd-tag" title="本院透析病人">{{ p.dialysisMode }}</span> }
