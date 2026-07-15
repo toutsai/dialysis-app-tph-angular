@@ -66,6 +66,7 @@
             <th class="col-prog">已衛教</th>
             <th class="col-uneducated">未衛教</th>
             <th class="col-prog">回示教通過</th>
+            <th class="col-review" title="12 次全數通過（或紙本完成）後由主護做最終查驗">總查驗</th>
             <th>最後更新</th>
           </tr>
         </thead>
@@ -120,6 +121,19 @@
                   <span class="prog-text">{{ r.passedCount }}/{{ r.total }}</span>
                 </div>
               </td>
+              <td class="col-review">
+                @if (r.finalReview) {
+                  <span class="badge-review-done" [title]="'主護總查驗：' + r.finalReview!.name + ' ' + (r.finalReview!.date || '')">
+                    <i class="fas fa-stamp"></i> {{ r.finalReview!.name }}
+                  </span>
+                } @else if (r.completed) {
+                  <button class="badge-review-pending" (click)="openRecord(r)" title="全數通過，待主護總查驗；點擊開啟紀錄簽章">
+                    待總查驗
+                  </button>
+                } @else {
+                  <span class="badge-review-na">—</span>
+                }
+              </td>
               <td class="col-updated">{{ formatDate(r.lastUpdated) }}</td>
             </tr>
           }
@@ -169,6 +183,16 @@
                 <button class="badge-uneducated" (click)="openUneducated(r)">{{ r.uneducatedCount }} 天</button>
               } @else {
                 <span class="badge-ok">無</span>
+              }
+            </div>
+            <div class="ec-prog-row">
+              <span class="ec-prog-label">總查驗</span>
+              @if (r.finalReview) {
+                <span class="badge-review-done"><i class="fas fa-stamp"></i> {{ r.finalReview!.name }}</span>
+              } @else if (r.completed) {
+                <button class="badge-review-pending" (click)="openRecord(r)">待總查驗</button>
+              } @else {
+                <span class="badge-review-na">—</span>
               }
             </div>
           </div>

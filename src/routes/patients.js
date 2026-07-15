@@ -924,7 +924,7 @@ router.get('/education-list', ...isEditor, (req, res) => {
       SELECT p.id, p.name, p.medical_record_number, p.status, p.ward_number,
              p.first_dialysis_date, p.patient_status,
              e.sessions AS edu_sessions, e.admission_date AS edu_admission, e.updated_at AS edu_updated,
-             e.paper_education AS edu_paper, e.paper_completed AS edu_paper_done
+             e.paper_education AS edu_paper, e.paper_completed AS edu_paper_done, e.final_review AS edu_final_review
       FROM patients p
       LEFT JOIN education_records e ON e.patient_id = p.id
       WHERE p.is_deleted = 0
@@ -989,13 +989,18 @@ router.get('/education-list', ...isEditor, (req, res) => {
       // 已紙本衛教者衛教在紙本進行，電子未衛教日無意義 → 不計（改列紙本頁籤）。
       const uneducatedDates = []
       if (educatedCount < total && !paperEducation) {
+        const expectedDateSet = new Set(expectedInfos.map((i) => i.date))
         const educatedOn = new Set(
           sessions
             .filter((s) => s?.educatorSign && s?.dialysisDate)
             .map((s) => String(s.dialysisDate).slice(0, 10)),
         )
-        // 有簽核但沒填透析日期的格數：視為涵蓋最早的未對上日期，避免誤報未衛教
-        let unmatchedSigned = sessions.filter((s) => s?.educatorSign && !s?.dialysisDate).length
+        // 有簽核但「沒填透析日期」或「日期不在應衛教窗內」的格數：視為涵蓋最早的未對上日期，
+        // 避免誤報未衛教。後者發生在恢復/轉出後回來續用未完成次數、且首透日期被改成回歸日時
+        // （舊已衛教紀錄的日期落在新窗之外，仍應消耗應衛教格）。
+        let unmatchedSigned = sessions.filter(
+          (s) => s?.educatorSign && (!s?.dialysisDate || !expectedDateSet.has(String(s.dialysisDate).slice(0, 10))),
+        ).length
         for (const info of expectedInfos) {
           if (educatedOn.has(info.date)) continue
           if (unmatchedSigned > 0) {
@@ -1024,6 +1029,13 @@ router.get('/education-list', ...isEditor, (req, res) => {
         paperEducation,
         paperCompleted,
         completed: passedCount >= total || paperCompleted,
+        finalReview: (() => {
+          try {
+            return JSON.parse(r.edu_final_review || 'null')
+          } catch {
+            return null
+          }
+        })(),
         lastUpdated: r.edu_updated || '',
         expectedCount: expectedInfos.length,
         uneducatedCount: uneducatedDates.length,
@@ -1114,12 +1126,18 @@ router.get('/:id/education', authenticate, (req, res) => {
 
     // 透析日期預設：只帶入「實際已洗腎」的日期（排除外圍床 — 外圍不列入應衛教），
     // 尚未到的未來日不帶。僅填入「尚未儲存」的格子（不覆蓋已存值）。
+    // 空格依序帶入「尚未被任何格使用」的透析日 —— 恢復/轉出後回來續用未完成次數時，
+    // 已存格保留舊日期，空格自然接續回歸後的新透析日（勿改回以格序=日序的對位法，會跳日）。
     const sessions = normalizeEducationSessions(JSON.parse(row.sessions || '[]'))
-    const defaultDates = getEducationDialysisDates(db, id, firstDialysisDate, getTaipeiTodayString())
+    const usedDates = new Set(sessions.map((s) => s.dialysisDate).filter(Boolean))
+    const availableDates = getEducationDialysisDates(db, id, firstDialysisDate, getTaipeiTodayString())
       .map((d) => d.date)
-      .slice(0, EDUCATION_SESSION_COUNT)
-    sessions.forEach((s, i) => {
-      if (!s.dialysisDate && defaultDates[i]) s.dialysisDate = defaultDates[i]
+      .filter((d) => !usedDates.has(d))
+    let nextDateIdx = 0
+    sessions.forEach((s) => {
+      if (!s.dialysisDate && nextDateIdx < availableDates.length) {
+        s.dialysisDate = availableDates[nextDateIdx++]
+      }
     })
 
     // 入院日期：優先用衛教紀錄已儲存值；否則帶入預設 —
@@ -1146,6 +1164,14 @@ router.get('/:id/education', authenticate, (req, res) => {
       /* 解析失敗視為未初始化 */
     }
 
+    // 主護總查驗簽章（12 次全數通過或紙本完成後由主護簽）
+    let finalReview = null
+    try {
+      finalReview = JSON.parse(row.final_review || 'null')
+    } catch {
+      /* 解析失敗視為未查驗 */
+    }
+
     res.json({
       patientId: id,
       patientName: patient.name,
@@ -1155,6 +1181,7 @@ router.get('/:id/education', authenticate, (req, res) => {
       primaryNurse: getPrimaryNurseMap(db).get(id) || null,
       paperEducation: !!row.paper_education,
       paperCompleted: !!(row.paper_education && row.paper_completed),
+      finalReview,
       sessions,
       topicQueue,
       updatedAt: row.updated_at,
@@ -1190,11 +1217,29 @@ router.put('/:id/education', ...isEditor, (req, res) => {
     if (req.body?.paperCompleted !== undefined) paperCompleted = req.body.paperCompleted ? 1 : 0
     if (paperEducation === 0) paperCompleted = 0 // 取消「已紙本衛教」連動清除「已完成」
     const modifiedBy = JSON.stringify({ uid: req.user.id, name: req.user.name })
-    const existing = db.prepare('SELECT id, paper_education FROM education_records WHERE patient_id = ?').get(id)
+    const existing = db.prepare('SELECT id, paper_education, paper_completed FROM education_records WHERE patient_id = ?').get(id)
     // 「紙本已完成」必須「已紙本衛教」：只送 completed 時以既有 paper_education 判斷
     if (paperCompleted === 1) {
       const effectivePaper = paperEducation ?? (existing?.paper_education ? 1 : 0)
       if (!effectivePaper) paperCompleted = 0
+    }
+
+    // 主護總查驗：未帶（undefined）不動既有值；null=取消查驗；物件=簽章。
+    // 簽章需資格：12 次回示教全數通過，或紙本衛教已完成（以本次送來的狀態計算）。
+    const finalReviewProvided = req.body?.finalReview !== undefined
+    let finalReviewJson = null
+    if (finalReviewProvided && req.body.finalReview) {
+      const sign = normalizeSign(req.body.finalReview)
+      if (!sign) return res.status(400).json({ error: true, message: '總查驗簽章格式錯誤' })
+      const passCount = sessions.filter((s) => s.passSign).length
+      const effectivePaperEdu = paperEducation ?? (existing?.paper_education ? 1 : 0)
+      const effectivePaperDone = (paperCompleted ?? (existing?.paper_completed ? 1 : 0)) && effectivePaperEdu
+      if (passCount < EDUCATION_SESSION_COUNT && !effectivePaperDone) {
+        return res
+          .status(400)
+          .json({ error: true, message: '12 次回示教尚未全數通過（或紙本未完成），不能總查驗' })
+      }
+      finalReviewJson = JSON.stringify({ ...sign, uid: req.user.id })
     }
     if (existing) {
       db.prepare(`
@@ -1203,17 +1248,19 @@ router.put('/:id/education', ...isEditor, (req, res) => {
             topic_queue = COALESCE(?, topic_queue),
             paper_education = COALESCE(?, paper_education),
             paper_completed = COALESCE(?, paper_completed),
+            final_review = CASE WHEN ? THEN ? ELSE final_review END,
             updated_at = datetime('now', 'localtime')
         WHERE patient_id = ?
       `).run(
         JSON.stringify(sessions), admissionDate, modifiedBy,
-        topicQueue ?? null, paperEducation ?? null, paperCompleted ?? null, id,
+        topicQueue ?? null, paperEducation ?? null, paperCompleted ?? null,
+        finalReviewProvided ? 1 : 0, finalReviewJson, id,
       )
     } else {
       db.prepare(`
-        INSERT INTO education_records (id, patient_id, sessions, admission_date, topic_queue, paper_education, paper_completed, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(id, id, JSON.stringify(sessions), admissionDate, topicQueue ?? null, paperEducation ?? 0, paperCompleted ?? 0, modifiedBy)
+        INSERT INTO education_records (id, patient_id, sessions, admission_date, topic_queue, paper_education, paper_completed, final_review, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, id, JSON.stringify(sessions), admissionDate, topicQueue ?? null, paperEducation ?? 0, paperCompleted ?? 0, finalReviewJson, modifiedBy)
     }
 
     res.json({ success: true, sessions, admissionDate })

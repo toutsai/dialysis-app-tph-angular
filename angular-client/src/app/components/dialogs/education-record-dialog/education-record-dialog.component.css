@@ -58,6 +58,28 @@
 .edu-paper-chk input:disabled { cursor: not-allowed; }
 .edu-paper-dim { opacity: 0.55; }
 
+/* 主護總查驗（12 次全通過後的最終查驗） */
+.edu-final-review {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+}
+.edu-final-review.done {
+  color: #2e7d32;
+  cursor: pointer;
+}
+.edu-final-review.pending {
+  color: #9e9e9e;
+  font-weight: 400;
+}
+.edu-final-review-btn {
+  background: #2e7d32;
+  color: #fff;
+  border: none;
+}
+.edu-final-review-btn:hover { background: #1b5e20; }
+
 /* 主護（來源：護理師分配病人照護清單）；未分配以橘色提醒 */
 .edu-nurse { color: #1d6fa5; font-weight: 600; }
 .edu-nurse i { margin-right: 4px; }

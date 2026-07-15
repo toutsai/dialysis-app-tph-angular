@@ -304,6 +304,30 @@
   font-weight: 600;
   white-space: nowrap;
 }
+/* 主護總查驗：已簽=綠、待簽=橘可點（開紀錄簽章）、未達資格=灰 */
+.badge-review-done {
+  color: #16a34a;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.badge-review-pending {
+  border: 1px solid #fdba74;
+  background: #fff7ed;
+  color: #c2410c;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 4px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.badge-review-pending:hover {
+  background: #ffedd5;
+}
+.badge-review-na {
+  color: #cbd5e1;
+}
 
 /* 未衛教整合彈窗 */
 .ue-overlay {

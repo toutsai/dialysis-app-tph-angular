@@ -34,6 +34,8 @@ interface EducationListItem {
   paperCompleted: boolean;
   /** 全數通過（回示教通過 12 次，或紙本已完成） */
   completed: boolean;
+  /** 主護總查驗簽章（全數通過後由主護簽）；null = 尚未查驗 */
+  finalReview: { name: string; date: string } | null;
   lastUpdated: string;
   expectedCount: number;
   uneducatedCount: number;

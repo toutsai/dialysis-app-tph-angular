@@ -67,6 +67,8 @@ export class EducationRecordDialogComponent implements OnInit {
   readonly sessions = signal<EducationSession[]>([]);
   /** 主護（照護清單反查；null = 尚未分配） */
   readonly primaryNurse = signal<PrimaryNurse | null>(null);
+  /** 主護總查驗簽章：12 次回示教全通過（或紙本完成）後由主護做最終查驗 */
+  readonly finalReview = signal<SignOff | null>(null);
   /** 紙本衛教（病人層級）：已紙本衛教者不列入電子未衛教判定；紙本完成視為全數通過 */
   readonly paperEducation = signal(false);
   readonly paperCompleted = signal(false);
@@ -101,6 +103,7 @@ export class EducationRecordDialogComponent implements OnInit {
         this.primaryNurse.set(data.primaryNurse?.nurseName ? data.primaryNurse : null);
         this.paperEducation.set(!!data.paperEducation);
         this.paperCompleted.set(!!data.paperCompleted);
+        this.finalReview.set(this.toSign(data.finalReview));
         this.sessions.set(this.normalize(data.sessions));
         this.initTopicQueue(data.topicQueue);
       } else {
@@ -249,6 +252,31 @@ export class EducationRecordDialogComponent implements OnInit {
     if (!checked) this.paperCompleted.set(false);
   }
 
+  /** 總查驗資格：12 次回示教全數通過，或紙本衛教已完成 */
+  get finalReviewEligible(): boolean {
+    return (
+      this.sessions().filter((s) => !!s.passSign).length >= 12 ||
+      (this.paperEducation() && this.paperCompleted())
+    );
+  }
+
+  /** 主護總查驗簽章／取消（記得按「儲存」才會存檔） */
+  toggleFinalReview(): void {
+    if (!this.canEdit) return;
+    if (this.finalReview()) {
+      if (!confirm('確定取消主護總查驗簽章？')) return;
+      this.finalReview.set(null);
+      return;
+    }
+    if (!this.finalReviewEligible) return;
+    const me = this.authService.currentUser()?.name || '';
+    const nurse = this.primaryNurse()?.nurseName || '';
+    if (nurse && me !== nurse) {
+      if (!confirm(`此病人的主護是「${nurse}」，您（${me}）不是主護，仍要以您的名義簽總查驗？`)) return;
+    }
+    this.finalReview.set({ name: me, date: getToday() });
+  }
+
   /** 主護簽章欄提示：標明這位病人的主護（來源：照護清單） */
   passSignTitle(s: EducationSession): string {
     if (s.passSign) return '點選取消簽核';
@@ -382,6 +410,7 @@ export class EducationRecordDialogComponent implements OnInit {
         topicQueue: this.topicQueue(),
         paperEducation: this.paperEducation(),
         paperCompleted: this.paperCompleted(),
+        finalReview: this.finalReview(),
       });
       this.close.emit();
     } catch (error: any) {
@@ -434,6 +463,7 @@ export class EducationRecordDialogComponent implements OnInit {
         <span>首透日期：${this.esc(this.firstDialysisDate || '')}</span>
         <span>主護：${this.esc(this.primaryNurse()?.nurseName || '未分配')}</span>
         ${this.paperEducation() ? `<span>紙本衛教：${this.paperCompleted() ? '已完成' : '進行中'}</span>` : ''}
+        ${this.finalReview() ? `<span>主護總查驗：${this.esc(this.signLabel(this.finalReview()))}</span>` : ''}
       </div>
       <table>
         <thead><tr>
