@@ -224,6 +224,19 @@
             <button class="fbtn" [class.on]="careWardFilter() === 'icu'" (click)="careWardFilter.set('icu')">加護</button>
             <button class="fbtn" [class.on]="careWardFilter() === 'ward'" (click)="careWardFilter.set('ward')">一般病房</button>
           </div>
+          @if (activeTab() === 'care') {
+            <div class="care-filter">
+              <button class="fbtn" [class.on]="!careStageFilter().size" (click)="clearCareStageFilter()">全部</button>
+              <button class="fbtn" [class.on]="careStageFilter().has(3)" (click)="toggleCareStage(3)">Stage 3</button>
+              <button class="fbtn" [class.on]="careStageFilter().has(2)" (click)="toggleCareStage(2)">Stage 2</button>
+              <button class="fbtn" [class.on]="careStageFilter().has(1)" (click)="toggleCareStage(1)">Stage 1</button>
+            </div>
+            <div class="care-filter">
+              <button class="fbtn" [class.on]="careSignFilter() === 'all'" (click)="careSignFilter.set('all')">全部</button>
+              <button class="fbtn" [class.on]="careSignFilter() === 'unsigned'" (click)="careSignFilter.set('unsigned')">未簽核</button>
+              <button class="fbtn" [class.on]="careSignFilter() === 'signed'" (click)="careSignFilter.set('signed')">已簽核</button>
+            </div>
+          }
           @if (isDischargedView()) {
             <label class="field">
               <span>出院區間</span>
@@ -251,7 +264,7 @@
           @else { 目前無 AKI/ESRD 病人，或尚未上傳資料。 }
         </div>
       } @else if (!displayCareItems().length) {
-        <div class="placeholder">此病房別篩選下沒有病人。</div>
+        <div class="placeholder">此篩選條件下沒有病人。</div>
       } @else {
         <div class="care-table-wrap">
           <table class="care-table">

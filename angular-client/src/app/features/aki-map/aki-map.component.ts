@@ -188,12 +188,32 @@ export class AkiMapComponent implements OnInit {
 
   // 病房別篩選：全部 / 加護 / 一般病房
   readonly careWardFilter = signal<'all' | 'icu' | 'ward'>('all');
+  // AKI 名單專屬篩選：Stage 多選（空集合 = 全部，含疑似 ESRD 等無分期者）、簽核狀態；預設 未簽核 + Stage 3+2
+  readonly careStageFilter = signal<ReadonlySet<number>>(new Set([3, 2]));
+  readonly careSignFilter = signal<'all' | 'unsigned' | 'signed'>('unsigned');
   readonly displayCareItems = computed(() => {
     const f = this.careWardFilter();
-    const items = this.currentCareItems();
-    if (f === 'all') return items;
-    return items.filter((it) => (f === 'icu' ? isIcuWard(it.ward) : !isIcuWard(it.ward)));
+    let items = this.currentCareItems();
+    if (f !== 'all') {
+      items = items.filter((it) => (f === 'icu' ? isIcuWard(it.ward) : !isIcuWard(it.ward)));
+    }
+    if (this.activeTab() === 'care') {
+      const stages = this.careStageFilter();
+      if (stages.size) items = items.filter((it) => it.stage != null && stages.has(it.stage));
+      const sign = this.careSignFilter();
+      if (sign !== 'all') items = items.filter((it) => (sign === 'signed' ? !!it.signedAt : !it.signedAt));
+    }
+    return items;
   });
+  toggleCareStage(stage: number): void {
+    const next = new Set(this.careStageFilter());
+    if (next.has(stage)) next.delete(stage);
+    else next.add(stage);
+    this.careStageFilter.set(next);
+  }
+  clearCareStageFilter(): void {
+    this.careStageFilter.set(new Set());
+  }
   readonly currentCareLoading = computed(() =>
     this.isDischargedView() ? this.dischargedLoading()
       : this.isCkdView() ? this.ckdLoading()
