@@ -220,7 +220,6 @@ CREATE TABLE IF NOT EXISTS education_records (
     topic_queue TEXT,               -- JSON: 此病人的衛教主題輪序佇列（跳過的主題移到最後）；NULL=尚未初始化
     paper_education INTEGER DEFAULT 0,  -- 已紙本衛教（此病人衛教以紙本進行，電子未衛教判定跳過）
     paper_completed INTEGER DEFAULT 0,  -- 紙本衛教已完成（需 paper_education=1；視為全數通過）
-    final_review TEXT,              -- 主護總查驗簽章 JSON {name, uid, date}；NULL=尚未查驗（需全數通過或紙本完成）
     created_by TEXT DEFAULT '{}',
     created_at TEXT DEFAULT (datetime('now', 'localtime')),
     updated_at TEXT DEFAULT (datetime('now', 'localtime'))

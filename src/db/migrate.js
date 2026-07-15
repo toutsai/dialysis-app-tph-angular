@@ -192,8 +192,6 @@ export function runMigrations() {
       // 紙本衛教(病人層級)：paper_education=以紙本進行衛教、paper_completed=紙本衛教已完成
       if (addColumnIfNotExists(db, 'education_records', 'paper_education', 'INTEGER DEFAULT 0')) migrationsApplied++
       if (addColumnIfNotExists(db, 'education_records', 'paper_completed', 'INTEGER DEFAULT 0')) migrationsApplied++
-      // 主護總查驗：12 次全數通過(或紙本完成)後的最終查驗簽章 JSON {name, uid, date}；NULL=尚未查驗
-      if (addColumnIfNotExists(db, 'education_records', 'final_review', 'TEXT')) migrationsApplied++
     }
 
     // ========================================

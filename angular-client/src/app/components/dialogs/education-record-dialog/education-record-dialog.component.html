@@ -41,24 +41,6 @@
                [disabled]="!canEdit || !paperEducation()" />
         紙本衛教已完成
       </label>
-
-      <!-- 主護總查驗：12 次回示教全通過（或紙本完成）後的最終查驗；簽/取消後要按「儲存」 -->
-      @if (finalReview()) {
-        <span class="edu-final-review done"
-              [title]="canEdit ? '點選取消總查驗簽章（取消後記得儲存）' : ''"
-              (click)="toggleFinalReview()">
-          <i class="fas fa-stamp"></i> 主護總查驗：{{ signLabel(finalReview()) }}
-        </span>
-      } @else if (finalReviewEligible && canEdit) {
-        <button class="edu-btn edu-final-review-btn" (click)="toggleFinalReview()"
-                title="12 次已全數通過，由主護做最終查驗（簽章後記得按儲存）">
-          <i class="fas fa-stamp"></i> 主護總查驗
-        </button>
-      } @else if (!isLoading()) {
-        <span class="edu-final-review pending" title="12 次回示教全數通過（或紙本衛教完成）後，才可由主護簽總查驗">
-          <i class="fas fa-stamp"></i> 總查驗：待 12 次通過
-        </span>
-      }
     </div>
 
     <div class="edu-body">
