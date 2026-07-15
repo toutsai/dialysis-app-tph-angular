@@ -6,7 +6,7 @@ import { KiditPatientFormComponent } from './kidit-patient-form.component';
 import { KiditHistoryFormComponent } from './kidit-history-form.component';
 import { KiditVascularFormComponent } from './kidit-vascular-form.component';
 
-type TabKey = 'movement' | 'vascular' | 'profile' | 'history';
+type TabKey = 'movement' | 'vascular' | 'registration';
 
 interface Tab {
   key: TabKey;
@@ -27,7 +27,6 @@ export class KiditDetailModalComponent implements OnChanges {
   /** 開窗時自動選定的病人（例如從待建檔清單點入），null=不預選 */
   @Input() initialPatientId: string | null = null;
   @Output() closeEvent = new EventEmitter<void>();
-  @Output() refreshEvent = new EventEmitter<void>();
 
   activeTab: TabKey = 'movement';
   subTab: 'current' | 'unused' = 'current';
@@ -41,12 +40,22 @@ export class KiditDetailModalComponent implements OnChanges {
   showConfirmDelete = false;
   confirmMessage = '';
 
+  // 病患資料＋病史合併為單一「KiDit 建檔」分頁（一頁填完、一鍵儲存兩份）
   readonly tabs: Tab[] = [
     { key: 'movement', label: '當日病患動態', requiresSelection: false },
     { key: 'vascular', label: '血管通路處置', requiresSelection: true },
-    { key: 'profile', label: 'KiDit 病患資料', requiresSelection: true },
-    { key: 'history', label: 'KiDit 病史原發病', requiresSelection: true },
+    { key: 'registration', label: 'KiDit 建檔', requiresSelection: true },
   ];
+
+  // 非阻斷式儲存提示（取代 alert，避免每存一次就要按一次確定）
+  toastMessage = '';
+  private toastTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private showToast(message: string): void {
+    this.toastMessage = message;
+    if (this.toastTimer) clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => (this.toastMessage = ''), 2500);
+  }
 
   // memoize 成欄位：getter 每輪變更偵測重算並回傳新參照，會反覆觸發子表單重建（專案已知反模式）
   selectedPatient: { id: string; name: string } | null = null;
@@ -117,11 +126,15 @@ export class KiditDetailModalComponent implements OnChanges {
 
   handleTabClick(key: TabKey): void {
     const tab = this.tabs.find(t => t.key === key);
-    if (tab?.requiresSelection && !this.selectedPatientId) {
-      alert('請先在列表中點選一位病人');
-      return;
-    }
+    // 未選病人時分頁鈕已 disabled，此處靜默防護即可（勿再加 alert）
+    if (tab?.requiresSelection && !this.selectedPatientId) return;
     this.activeTab = key;
+  }
+
+  /** 列表每列的直達鈕：一鍵選人＋切分頁 */
+  openFormFor(event: any, tab: TabKey): void {
+    this.selectPatient(event);
+    this.activeTab = tab;
   }
 
   handleDataUpdated(key: string, newData: any): void {
@@ -129,13 +142,25 @@ export class KiditDetailModalComponent implements OnChanges {
     if (targetEvent && key) {
       targetEvent[key] = JSON.parse(JSON.stringify(newData));
     }
-    alert('資料已儲存！');
-    this.refreshEvent.emit();
+    // 月曆彙總改為關窗時由父層更新一次，儲存過程不再整月重抓
+    this.showToast('已儲存 ✓');
+  }
+
+  /** 「KiDit 建檔」分頁的單一儲存鈕：依序存病患資料與病史（同一筆事件） */
+  isSavingRegistration = false;
+  async saveRegistration(profileForm: { saveData: () => Promise<void> }, historyForm: { saveData: () => Promise<void> }): Promise<void> {
+    this.isSavingRegistration = true;
+    try {
+      await profileForm.saveData();
+      await historyForm.saveData();
+    } finally {
+      this.isSavingRegistration = false;
+    }
   }
 
   handleIncompleteClick(event: any): void {
     this.selectPatient(event);
-    this.handleTabClick('profile');
+    this.handleTabClick('registration');
   }
 
   isKiDitDataComplete(event: any): boolean {
@@ -174,8 +199,7 @@ export class KiditDetailModalComponent implements OnChanges {
   async saveAllEvents(): Promise<void> {
     try {
       await kiditService.updateLogEvents(this.date, this.localEvents);
-      alert('動態列表儲存成功！');
-      this.refreshEvent.emit();
+      this.showToast('動態列表已儲存 ✓');
     } catch (e) {
       console.error(e);
       alert('儲存失敗，請稍後再試。');

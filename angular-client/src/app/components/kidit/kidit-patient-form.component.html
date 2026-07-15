@@ -163,7 +163,8 @@
 
         <div class="form-group">
           <label>22 原發病大類</label>
-          <select [(ngModel)]="formData.diagnosisCategory">
+          <select [(ngModel)]="formData.diagnosisCategory" (ngModelChange)="handleCategoryChange()">
+            <option value="">請選擇</option>
             @for (opt of opts.diagnosisCategory; track opt.value) {
               <option [value]="opt.value">{{ opt.label }}</option>
             }
@@ -171,10 +172,10 @@
         </div>
 
         <div class="form-group span-2">
-          <label>23 原發病細類</label>
+          <label>23 原發病細類（依大類過濾）</label>
           <select [(ngModel)]="formData.diagnosisSubcategory">
             <option value="">請選擇</option>
-            @for (opt of opts.diagnosisSubcategory; track opt.value) {
+            @for (opt of filteredSubcategories; track opt.value) {
               <option [value]="opt.value">{{ opt.value }} - {{ opt.label }}</option>
             }
           </select>
@@ -182,10 +183,12 @@
       </div>
     </div>
 
-    <div class="actions">
-      <button class="save-btn" (click)="saveData()" [disabled]="isSaving">
-        <i class="fas fa-save"></i> {{ isSaving ? '儲存中...' : '儲存 KiDit 資料' }}
-      </button>
-    </div>
+    @if (!hideSave) {
+      <div class="actions">
+        <button class="save-btn" (click)="saveData()" [disabled]="isSaving">
+          <i class="fas fa-save"></i> {{ isSaving ? '儲存中...' : '儲存 KiDit 資料' }}
+        </button>
+      </div>
+    }
   </div>
 }

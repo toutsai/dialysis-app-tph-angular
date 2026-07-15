@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { KIDIT_OPTIONS } from '@/utils/kiditHelpers';
+import { KIDIT_OPTIONS, KiditOption } from '@/utils/kiditHelpers';
 import { kiditService } from '@/services/kiditService';
 
 @Component({
@@ -16,12 +16,33 @@ export class KiditPatientFormComponent implements OnChanges {
   @Input() eventId = '';
   @Input() initialData: any = null;
   @Input() masterPatient: any = null;
+  /** true=隱藏表單自身的儲存鈕（由外層「KiDit 建檔」分頁的單一儲存鈕呼叫 saveData） */
+  @Input() hideSave = false;
   @Output() updated = new EventEmitter<any>();
 
   isSaving = false;
   formData: any = {};
 
   readonly opts = KIDIT_OPTIONS;
+
+  // 細類依所選大類過濾（memoize，模板每輪 CD 呼叫不重算）
+  private subcatCache: { cat: string; list: KiditOption[] } | null = null;
+  get filteredSubcategories(): KiditOption[] {
+    const cat = this.formData?.diagnosisCategory || '';
+    if (this.subcatCache?.cat === cat) return this.subcatCache.list;
+    const all = this.opts['diagnosisSubcategory'] as KiditOption[];
+    const list = cat ? all.filter(o => o.value === cat || o.value.startsWith(cat + '-')) : all;
+    this.subcatCache = { cat, list };
+    return list;
+  }
+
+  /** 換大類時，若已選細類不屬於新大類則清空 */
+  handleCategoryChange(): void {
+    const sub = this.formData?.diagnosisSubcategory;
+    if (sub && !this.filteredSubcategories.some(o => o.value === sub)) {
+      this.formData.diagnosisSubcategory = '';
+    }
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['initialData'] || changes['masterPatient']) {

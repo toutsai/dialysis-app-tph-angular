@@ -16,6 +16,8 @@
       <button
         *ngFor="let tab of tabs"
         [class.active]="activeTab === tab.key"
+        [disabled]="tab.requiresSelection && !selectedPatient"
+        [title]="tab.requiresSelection && !selectedPatient ? '請先在列表點選一位病人（或用列尾的直達鈕）' : ''"
         class="tab-btn"
         (click)="handleTabClick(tab.key)"
       >
@@ -80,6 +82,12 @@
                   </label>
                 </td>
                 <td class="text-center action-cell" (click)="$event.stopPropagation()">
+                  <button class="icon-btn goto-btn" (click)="openFormFor(event, 'registration')" title="開啟 KiDit 建檔（病患資料＋病史）">
+                    <i class="fas fa-id-card"></i>
+                  </button>
+                  <button class="icon-btn goto-btn" (click)="openFormFor(event, 'vascular')" title="開啟血管通路處置">
+                    <i class="fas fa-syringe"></i>
+                  </button>
                   <button class="icon-btn delete-btn" (click)="deleteEvent(i)" title="從列表中移除">
                     <i class="fas fa-trash-alt"></i>
                   </button>
@@ -129,27 +137,48 @@
             ></app-kidit-vascular-form>
           </div>
 
-          <app-kidit-patient-form
-            *ngIf="activeTab === 'profile'"
-            [date]="date"
-            [eventId]="selectedEvent.id"
-            [initialData]="getEventData('kidit_profile')"
-            [masterPatient]="selectedPatientData"
-            (updated)="handleDataUpdated('kidit_profile', $event)"
-          ></app-kidit-patient-form>
+          <!-- KiDit 建檔：病患資料＋病史一頁填完，底部單一儲存鈕同時存兩份 -->
+          <div *ngIf="activeTab === 'registration'" class="registration-container">
+            <section class="reg-section">
+              <h4 class="reg-section-title"><i class="fas fa-id-card"></i> 病患資料</h4>
+              <app-kidit-patient-form
+                #profileForm
+                [date]="date"
+                [eventId]="selectedEvent.id"
+                [initialData]="getEventData('kidit_profile')"
+                [masterPatient]="selectedPatientData"
+                [hideSave]="true"
+                (updated)="handleDataUpdated('kidit_profile', $event)"
+              ></app-kidit-patient-form>
+            </section>
 
-          <app-kidit-history-form
-            *ngIf="activeTab === 'history'"
-            [date]="date"
-            [eventId]="selectedEvent.id"
-            [initialData]="getEventData('kidit_history')"
-            [masterPatient]="selectedPatientData"
-            (updated)="handleDataUpdated('kidit_history', $event)"
-          ></app-kidit-history-form>
+            <section class="reg-section">
+              <h4 class="reg-section-title"><i class="fas fa-notes-medical"></i> 病史原發病</h4>
+              <app-kidit-history-form
+                #historyForm
+                [date]="date"
+                [eventId]="selectedEvent.id"
+                [initialData]="getEventData('kidit_history')"
+                [masterPatient]="selectedPatientData"
+                [hideSave]="true"
+                (updated)="handleDataUpdated('kidit_history', $event)"
+              ></app-kidit-history-form>
+            </section>
+
+            <div class="reg-save-bar">
+              <button class="btn-primary" [disabled]="isSavingRegistration" (click)="saveRegistration(profileForm, historyForm)">
+                <i class="fas fa-save"></i>
+                {{ isSavingRegistration ? '儲存中...' : '儲存建檔資料（病患資料＋病史）' }}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </div>
+
+  <!-- 儲存提示 toast（非阻斷） -->
+  <div *ngIf="toastMessage" class="save-toast">{{ toastMessage }}</div>
 
   <!-- Confirm Delete -->
   <div *ngIf="showConfirmDelete" class="confirm-overlay" (click)="cancelDelete(); $event.stopPropagation()">

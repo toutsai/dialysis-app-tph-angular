@@ -16,6 +16,8 @@ export class KiditHistoryFormComponent implements OnChanges {
   @Input() eventId = '';
   @Input() initialData: any = null;
   @Input() masterPatient: any = null;
+  /** true=隱藏表單自身的儲存鈕（由外層「KiDit 建檔」分頁的單一儲存鈕呼叫 saveData） */
+  @Input() hideSave = false;
   @Output() updated = new EventEmitter<any>();
 
   isSaving = false;

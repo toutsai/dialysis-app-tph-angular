@@ -123,9 +123,7 @@ export class KiditReportComponent implements OnInit {
   closeModal(): void {
     this.showModal.set(false);
     this.modalInitialPatientId.set(null);
-  }
-
-  onModalRefresh(): void {
+    // 彈窗內儲存不再逐次重抓整月，改為關窗時更新一次月曆彙總
     this.fetchData();
   }
 

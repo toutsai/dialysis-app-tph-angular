@@ -225,10 +225,12 @@
       </div>
     </div>
 
-    <div class="actions">
-      <button class="save-btn" (click)="saveData()" [disabled]="isSaving">
-        <i class="fas fa-save"></i> {{ isSaving ? '儲存中...' : '儲存病史資料' }}
-      </button>
-    </div>
+    @if (!hideSave) {
+      <div class="actions">
+        <button class="save-btn" (click)="saveData()" [disabled]="isSaving">
+          <i class="fas fa-save"></i> {{ isSaving ? '儲存中...' : '儲存病史資料' }}
+        </button>
+      </div>
+    }
   </div>
 }
