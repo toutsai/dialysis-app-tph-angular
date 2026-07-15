@@ -39,6 +39,10 @@ export class KiditReportComponent implements OnInit {
   readonly showFirstDialysisModal = signal(false);
   readonly isLoadingFirstDialysis = signal(false);
   readonly firstDialysisRows = signal<FirstDialysisRow[]>([]);
+  // KiDit 待建檔清單彈窗（本院初透/首透且基本資料未完整）
+  readonly showPendingRegModal = signal(false);
+  readonly isLoadingPendingReg = signal(false);
+  readonly pendingRegRows = signal<any[]>([]);
   readonly weekDays = ['日', '一', '二', '三', '四', '五', '六'];
 
   // Modal state
@@ -248,6 +252,57 @@ export class KiditReportComponent implements OnInit {
 
   closeFirstDialysisModal(): void {
     this.showFirstDialysisModal.set(false);
+  }
+
+  /** 開啟「KiDit 待建檔清單」：本院初透/首透標記且 KiDit 基本資料未完整的病人（後端即時彙整） */
+  async openPendingRegList(): Promise<void> {
+    this.showPendingRegModal.set(true);
+    this.isLoadingPendingReg.set(true);
+    this.pendingRegRows.set([]);
+    try {
+      this.pendingRegRows.set(await kiditService.fetchPendingRegistrations());
+    } catch (error) {
+      console.error('載入 KiDit 待建檔清單失敗:', error);
+      alert('載入待建檔清單失敗，請稍後再試。');
+    } finally {
+      this.isLoadingPendingReg.set(false);
+    }
+  }
+
+  closePendingRegModal(): void {
+    this.showPendingRegModal.set(false);
+  }
+
+  pendingRegFlagLabel(row: any): string {
+    const parts: string[] = [];
+    if (row.hospitalFirstDialysisDate != null) parts.push('本院初透');
+    if (row.firstDialysisDate != null) parts.push('首透');
+    return parts.join('＋') || '—';
+  }
+
+  pendingRegMissingLabel(row: any): string {
+    const missing: string[] = [];
+    if (!row.hasProfile) missing.push('病患資料');
+    if (!row.hasHistory) missing.push('病史原發病');
+    return missing.join('、') || '—';
+  }
+
+  /** 點列直接開該病人最近 KiDit 事件所在日期的詳情視窗補建檔 */
+  async openPendingRegTarget(row: any): Promise<void> {
+    if (!row.lastEventDate) {
+      alert('該病人尚無 KiDit 事件（工作日誌尚未有病人動態），請先於工作日誌新增動態後再建檔。');
+      return;
+    }
+    try {
+      const log = await kiditService.fetchDayLog(row.lastEventDate);
+      this.selectedDate.set(row.lastEventDate);
+      this.selectedEvents.set(log?.events || []);
+      this.showPendingRegModal.set(false);
+      this.showModal.set(true);
+    } catch (error) {
+      console.error('開啟 KiDit 日誌失敗:', error);
+      alert('開啟該日 KiDit 日誌失敗，請稍後再試。');
+    }
   }
 
   exportFirstDialysisRows(): void {

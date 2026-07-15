@@ -103,6 +103,18 @@
 .vascular-btn:hover:not(:disabled) { background: #e9f2fc; }
 .firstdia-btn { border-color: #7b1fa2; color: #7b1fa2; }
 .firstdia-btn:hover:not(:disabled) { background: #f4e9f7; }
+.pendingreg-btn { border-color: #e65100; color: #e65100; }
+.pendingreg-btn:hover:not(:disabled) { background: #fdefe4; }
+
+/* 待建檔清單 */
+.pr-hint {
+  margin: 0 0 0.6rem;
+  font-size: 0.78rem;
+  color: #78909c;
+}
+.pr-row { cursor: pointer; }
+.pr-row:hover td { background: #fafcff; }
+.pr-missing { color: #c62828; font-weight: 600; }
 
 /* 月曆 */
 .calendar-wrapper {

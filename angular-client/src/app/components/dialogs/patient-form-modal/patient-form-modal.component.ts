@@ -105,6 +105,7 @@ export class PatientFormModalComponent implements OnInit {
       isFirstDialysis: { active: false, date: null },
       isPaused: { active: false, date: null },
       hasBloodDraw: { active: false, date: null },
+      hospitalFirstDialysis: { active: false, date: null },
     };
     data.hospitalInfo = data.hospitalInfo || { source: '', transferOut: '' };
     this.form = data;
@@ -171,6 +172,8 @@ export class PatientFormModalComponent implements OnInit {
     this.form.patientStatus.isFirstDialysis = this.form.patientStatus.isFirstDialysis || { active: false, date: null };
     this.form.patientStatus.isPaused = this.form.patientStatus.isPaused || { active: false, date: null };
     this.form.patientStatus.hasBloodDraw = this.form.patientStatus.hasBloodDraw || { active: false, date: null };
+    // 本院初透：第一次在本院透析（含外院轉入），供 KiDit 建檔追蹤；與「首透」（人生第一次透析）語意不同
+    this.form.patientStatus.hospitalFirstDialysis = this.form.patientStatus.hospitalFirstDialysis || { active: false, date: null };
     this.form.patientStatus.doNotMove = this.form.patientStatus.doNotMove || { active: false, reason: '' };
     // 勿動日期區間欄位（向後相容：舊資料無 rangeType → 視為持續）
     const dnm = this.form.patientStatus.doNotMove;

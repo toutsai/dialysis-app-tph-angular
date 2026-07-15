@@ -163,6 +163,12 @@
                   <input type="date" [(ngModel)]="form.patientStatus.isPaused.date" name="pausedStatusDate" (click)="$event.stopPropagation()" />
                 }
               </div>
+              <div class="status-date-tag" [class.active]="form.patientStatus.hospitalFirstDialysis?.active" (click)="toggleStatus('hospitalFirstDialysis')" title="第一次在本院透析（含外院轉入），供 KiDit 建檔追蹤">
+                <span>本院初透</span>
+                @if (form.patientStatus.hospitalFirstDialysis?.active) {
+                  <input type="date" [(ngModel)]="form.patientStatus.hospitalFirstDialysis.date" name="hospitalFirstDialysisDate" (click)="$event.stopPropagation()" />
+                }
+              </div>
               @if (patientType !== 'opd') {
                 <div class="status-date-tag" [class.active]="form.patientStatus.hasBloodDraw?.active" (click)="toggleStatus('hasBloodDraw')">
                   <span>已抽血</span>

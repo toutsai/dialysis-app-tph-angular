@@ -15,6 +15,15 @@ export const kiditService = {
     return Array.isArray(data) ? data : (data?.data || []);
   },
 
+  async fetchDayLog(dateStr: string): Promise<any> {
+    return await localApi.get(`${ROUTE}/${dateStr}`);
+  },
+
+  async fetchPendingRegistrations(): Promise<any[]> {
+    const data = await localApi.get('/nursing/kidit-pending-registrations');
+    return Array.isArray(data) ? data : [];
+  },
+
   async updateLogEvents(dateStr: string, events: any[]): Promise<void> {
     await localApi.patch(`${ROUTE}/${dateStr}/events`, { events });
   },

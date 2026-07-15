@@ -27,6 +27,9 @@
       <button class="action-btn firstdia-btn" (click)="openFirstDialysisList()" [disabled]="isLoading()">
         <i class="fas fa-user-plus"></i> 當月初次透析名單
       </button>
+      <button class="action-btn pendingreg-btn" (click)="openPendingRegList()" [disabled]="isLoading()">
+        <i class="fas fa-user-clock"></i> 待建檔清單
+      </button>
     </div>
   </header>
 
@@ -189,6 +192,67 @@
               <td>{{ r.physician || '—' }}</td>
               <td>{{ r.isDeleted ? (r.deleteReason || '—') : '' }}</td>
               <td>{{ r.isDeleted ? (r.deletedDate || '—') : '' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- KiDit 待建檔清單彈窗 -->
+  <div class="va-modal-overlay" *ngIf="showPendingRegModal()" (click)="closePendingRegModal()">
+    <div class="va-modal" (click)="$event.stopPropagation()">
+      <div class="va-modal-header">
+        <h3>
+          <i class="fas fa-user-clock"></i>
+          KiDit 待建檔清單
+          <span class="va-count" *ngIf="!isLoadingPendingReg()">（{{ pendingRegRows().length }} 人）</span>
+        </h3>
+        <div class="va-modal-actions">
+          <button class="va-close-btn" (click)="closePendingRegModal()" title="關閉">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="va-modal-body">
+        <p class="pr-hint">
+          <i class="fas fa-info-circle"></i>
+          名單＝勾選「本院初透」或「首透」標記、且 KiDit 病患資料/病史尚未填寫完整的病人。點擊列可直接開啟該病人所在日期的 KiDit 視窗補建檔；建檔完成後自動退出名單。
+        </p>
+
+        <div *ngIf="isLoadingPendingReg()" class="va-loading">
+          <div class="spinner"></div>
+          <p>正在彙整待建檔名單...</p>
+        </div>
+
+        <div *ngIf="!isLoadingPendingReg() && pendingRegRows().length === 0" class="va-empty">
+          目前沒有待建檔的病人。
+        </div>
+
+        <table *ngIf="!isLoadingPendingReg() && pendingRegRows().length > 0" class="va-table">
+          <thead>
+            <tr>
+              <th>姓名</th>
+              <th>病歷號</th>
+              <th>標記</th>
+              <th>標記日期</th>
+              <th>透析模式</th>
+              <th>缺項</th>
+              <th>最近事件日</th>
+              <th>首接護理師</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let r of pendingRegRows()" class="pr-row" (click)="openPendingRegTarget(r)">
+              <td>{{ r.name || '—' }}</td>
+              <td>{{ r.medicalRecordNumber || '—' }}</td>
+              <td>{{ pendingRegFlagLabel(r) }}</td>
+              <td>{{ r.hospitalFirstDialysisDate || r.firstDialysisDate || '—' }}</td>
+              <td>{{ r.dialysisMode || '—' }}</td>
+              <td class="pr-missing">{{ pendingRegMissingLabel(r) }}</td>
+              <td>{{ r.lastEventDate || '尚無事件' }}</td>
+              <td>{{ r.firstNurse ? (r.firstNurse.nurse || r.firstNurse.team) : '—' }}</td>
             </tr>
           </tbody>
         </table>

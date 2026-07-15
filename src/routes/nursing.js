@@ -12,6 +12,7 @@ import {
   updateKiditEvents,
   listKiditLogbooks,
 } from '../services/kiditSync.js'
+import { normalizeDialysisMode } from '../utils/dialysisMode.js'
 
 const router = Router()
 
@@ -1417,6 +1418,130 @@ router.get('/kidit-logbook', authenticate, (req, res) => {
       error: true,
       message: '取得 Kidit 日誌本列表失敗',
     })
+  }
+})
+
+/**
+ * GET /api/nursing/kidit-pending-registrations
+ * KiDit 待建檔清單：勾「本院初透」或「首透」狀態標記、且 KiDit 基本資料未完整的病人。
+ * 完整定義＝任一 KiDit 事件已填 kidit_profile.idNumber 且 kidit_history.diagnosisCategory
+ * （與前端 isKiDitDataComplete 一致）。回傳含標記日期、缺項、最近事件日期與標記日照顧護理師。
+ */
+router.get('/kidit-pending-registrations', authenticate, (req, res) => {
+  try {
+    const db = getDatabase()
+
+    // 1. 找出有「本院初透」或「首透」標記的病人（排除已刪除）
+    const patientRows = db
+      .prepare('SELECT id, name, medical_record_number, patient_status, dialysis_orders FROM patients WHERE is_deleted = 0')
+      .all()
+    const flagged = []
+    for (const p of patientRows) {
+      let ps
+      try {
+        ps = JSON.parse(p.patient_status || '{}')
+      } catch {
+        continue
+      }
+      const hfd = ps?.hospitalFirstDialysis
+      const fd = ps?.isFirstDialysis
+      if (!(hfd?.active || fd?.active)) continue
+      let mode = ''
+      try {
+        const orders = JSON.parse(p.dialysis_orders || '{}')
+        if (orders?.mode != null && String(orders.mode).trim()) mode = normalizeDialysisMode(String(orders.mode))
+      } catch {}
+      flagged.push({
+        patientId: p.id,
+        name: p.name,
+        medicalRecordNumber: p.medical_record_number || '',
+        hospitalFirstDialysisDate: hfd?.active ? hfd.date || '' : null,
+        firstDialysisDate: fd?.active ? fd.date || '' : null,
+        dialysisMode: mode,
+      })
+    }
+    if (flagged.length === 0) return res.json([])
+
+    // 2. 掃 kidit_logbook 彙整每位病人的建檔狀態與最近事件日期
+    const logRows = db.prepare('SELECT date, events FROM kidit_logbook ORDER BY date').all()
+    const kiditByPatient = new Map()
+    for (const row of logRows) {
+      let events
+      try {
+        events = JSON.parse(row.events || '[]')
+      } catch {
+        continue
+      }
+      for (const e of events) {
+        if (!e?.patientId) continue
+        const cur = kiditByPatient.get(e.patientId) || { hasProfile: false, hasHistory: false, lastEventDate: null }
+        if (e.kidit_profile?.idNumber) cur.hasProfile = true
+        if (e.kidit_history?.diagnosisCategory) cur.hasHistory = true
+        cur.lastEventDate = row.date
+        kiditByPatient.set(e.patientId, cur)
+      }
+    }
+
+    // 3. 留下未完整者
+    const pending = flagged
+      .map((f) => {
+        const k = kiditByPatient.get(f.patientId)
+        return {
+          ...f,
+          hasProfile: !!k?.hasProfile,
+          hasHistory: !!k?.hasHistory,
+          lastEventDate: k?.lastEventDate || null,
+        }
+      })
+      .filter((f) => !(f.hasProfile && f.hasHistory))
+
+    // 4. 反查「第一次接病人的護理師」：標記日（本院初透優先）當天的護理分組，
+    //    查無再退最近 KiDit 事件日；格式同 patients.js 未衛教反查（teams/names 巢狀）
+    const lookupDates = [
+      ...new Set(
+        pending
+          .flatMap((f) => [f.hospitalFirstDialysisDate || f.firstDialysisDate, f.lastEventDate])
+          .filter(Boolean),
+      ),
+    ]
+    const assignByDate = new Map()
+    if (lookupDates.length > 0) {
+      const placeholders = lookupDates.map(() => '?').join(',')
+      const assignRows = db
+        .prepare(`SELECT date, teams FROM nurse_assignments WHERE date IN (${placeholders})`)
+        .all(...lookupDates)
+      for (const a of assignRows) {
+        try {
+          const raw = JSON.parse(a.teams || '{}')
+          assignByDate.set(a.date, { teams: raw.teams || raw, names: raw.names || {} })
+        } catch {}
+      }
+    }
+    const lookupNurse = (patientId, date) => {
+      if (!date) return null
+      const payload = assignByDate.get(date)
+      if (!payload) return null
+      for (const sh of ['early', 'noon', 'late']) {
+        const t = payload.teams?.[`${patientId}-${sh}`]
+        const team = t?.nurseTeam || t?.nurseTeamIn || t?.nurseTeamOut || ''
+        if (team) return { team, nurse: payload.names?.[team] || '', date }
+      }
+      return null
+    }
+    for (const f of pending) {
+      const flagDate = f.hospitalFirstDialysisDate || f.firstDialysisDate
+      f.firstNurse = lookupNurse(f.patientId, flagDate) || lookupNurse(f.patientId, f.lastEventDate) || null
+    }
+
+    pending.sort((a, b) =>
+      String(a.hospitalFirstDialysisDate || a.firstDialysisDate || '').localeCompare(
+        String(b.hospitalFirstDialysisDate || b.firstDialysisDate || ''),
+      ),
+    )
+    res.json(pending)
+  } catch (error) {
+    console.error('取得 KiDit 待建檔清單錯誤:', error)
+    res.status(500).json({ error: true, message: '取得 KiDit 待建檔清單失敗' })
   }
 })
 
