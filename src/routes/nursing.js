@@ -1474,15 +1474,17 @@ router.get('/kidit-pending-registrations', authenticate, (req, res) => {
       }
       for (const e of events) {
         if (!e?.patientId) continue
-        const cur = kiditByPatient.get(e.patientId) || { hasProfile: false, hasHistory: false, lastEventDate: null }
+        const cur = kiditByPatient.get(e.patientId) || { hasProfile: false, hasHistory: false, complete: false, lastEventDate: null }
         if (e.kidit_profile?.idNumber) cur.hasProfile = true
         if (e.kidit_history?.diagnosisCategory) cur.hasHistory = true
+        // 完成判定須與前端 isKiDitDataComplete 一致：同一事件內兩欄皆有值
+        if (e.kidit_profile?.idNumber && e.kidit_history?.diagnosisCategory) cur.complete = true
         cur.lastEventDate = row.date
         kiditByPatient.set(e.patientId, cur)
       }
     }
 
-    // 3. 留下未完整者
+    // 3. 留下未完整者（complete=任一單一事件同時有兩欄，與前端一致）
     const pending = flagged
       .map((f) => {
         const k = kiditByPatient.get(f.patientId)
@@ -1490,10 +1492,11 @@ router.get('/kidit-pending-registrations', authenticate, (req, res) => {
           ...f,
           hasProfile: !!k?.hasProfile,
           hasHistory: !!k?.hasHistory,
+          complete: !!k?.complete,
           lastEventDate: k?.lastEventDate || null,
         }
       })
-      .filter((f) => !(f.hasProfile && f.hasHistory))
+      .filter((f) => !f.complete)
 
     // 4. 反查「第一次接病人的護理師」：標記日（本院初透優先）當天的護理分組，
     //    查無再退最近 KiDit 事件日；格式同 patients.js 未衛教反查（teams/names 巢狀）

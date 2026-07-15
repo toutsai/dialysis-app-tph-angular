@@ -284,7 +284,9 @@ export class KiditReportComponent implements OnInit {
     const missing: string[] = [];
     if (!row.hasProfile) missing.push('病患資料');
     if (!row.hasHistory) missing.push('病史原發病');
-    return missing.join('、') || '—';
+    // 兩欄各自填在不同事件上：單一事件內不完整，仍列入名單
+    if (missing.length === 0) return '資料分散於不同事件';
+    return missing.join('、');
   }
 
   /** 點列直接開該病人最近 KiDit 事件所在日期的詳情視窗補建檔 */
