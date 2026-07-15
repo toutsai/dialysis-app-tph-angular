@@ -118,11 +118,13 @@ export async function syncEventsToKiditLogbook(dateStr, dailyLogData) {
 
     console.log(`[KIDIT Sync] 從 daily_log 提取了 ${dailyLogEvents.length} 個事件`)
 
-    // 2-3. 補上病人當前透析模式（同步當下的快照；重新同步時會更新）
+    // 2-3. 補上病人當前透析模式（同步當下的快照；重新同步時會更新）。
+    // 查無模式時不設欄位，讓合併時保留既有值，避免病人資料被清空後抹掉歷史正確模式。
     if (dailyLogEvents.length > 0) {
       const modeMap = buildPatientModeMap(db, dailyLogEvents.map(e => e.patientId))
       dailyLogEvents.forEach(e => {
-        e.dialysisMode = modeMap.get(e.patientId) || ''
+        const mode = modeMap.get(e.patientId)
+        if (mode) e.dialysisMode = mode
       })
     }
 
@@ -174,6 +176,7 @@ export async function syncEventsToKiditLogbook(dateStr, dailyLogData) {
       ...e,
       isRegistered: e.isRegistered || false,
       transferOutHospital: e.transferOutHospital || '',
+      dialysisMode: e.dialysisMode || '',
     }))
 
     db.prepare(`
