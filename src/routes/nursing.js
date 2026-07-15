@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid'
 import XLSX from 'xlsx'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isEditor, isAdmin, logAudit } from '../middleware/auth.js'
-import { getTaipeiTodayString } from '../utils/dateUtils.js'
+import { getTaipeiTodayString, formatDateToTaipeiString } from '../utils/dateUtils.js'
 import {
   syncEventsToKiditLogbook,
   getKiditLogbook,
@@ -1435,6 +1435,11 @@ router.get('/kidit-pending-registrations', authenticate, (req, res) => {
     const patientRows = db
       .prepare('SELECT id, name, medical_record_number, patient_status, dialysis_orders FROM patients WHERE is_deleted = 0')
       .all()
+    // 僅靠「首透」入列者限近 3 個月（使用者指定，避免舊首透病人塞滿名單）；「本院初透」不設限
+    const cutoffDate = new Date()
+    cutoffDate.setMonth(cutoffDate.getMonth() - 3)
+    const firstDialysisCutoff = formatDateToTaipeiString(cutoffDate)
+
     const flagged = []
     for (const p of patientRows) {
       let ps
@@ -1446,6 +1451,7 @@ router.get('/kidit-pending-registrations', authenticate, (req, res) => {
       const hfd = ps?.hospitalFirstDialysis
       const fd = ps?.isFirstDialysis
       if (!(hfd?.active || fd?.active)) continue
+      if (!hfd?.active && fd?.active && fd.date && fd.date < firstDialysisCutoff) continue
       let mode = ''
       try {
         const orders = JSON.parse(p.dialysis_orders || '{}')
@@ -1536,9 +1542,10 @@ router.get('/kidit-pending-registrations', authenticate, (req, res) => {
       f.firstNurse = lookupNurse(f.patientId, flagDate) || lookupNurse(f.patientId, f.lastEventDate) || null
     }
 
+    // 標記日期新 → 舊（使用者指定）
     pending.sort((a, b) =>
-      String(a.hospitalFirstDialysisDate || a.firstDialysisDate || '').localeCompare(
-        String(b.hospitalFirstDialysisDate || b.firstDialysisDate || ''),
+      String(b.hospitalFirstDialysisDate || b.firstDialysisDate || '').localeCompare(
+        String(a.hospitalFirstDialysisDate || a.firstDialysisDate || ''),
       ),
     )
     res.json(pending)

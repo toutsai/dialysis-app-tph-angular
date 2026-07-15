@@ -24,6 +24,8 @@ interface Tab {
 export class KiditDetailModalComponent implements OnChanges {
   @Input() date = '';
   @Input() events: any[] = [];
+  /** 開窗時自動選定的病人（例如從待建檔清單點入），null=不預選 */
+  @Input() initialPatientId: string | null = null;
   @Output() closeEvent = new EventEmitter<void>();
   @Output() refreshEvent = new EventEmitter<void>();
 
@@ -55,6 +57,16 @@ export class KiditDetailModalComponent implements OnChanges {
       this.localEvents = JSON.parse(JSON.stringify(this.events || []));
       this.syncSelectionRefs();
     }
+    if (changes['events'] || changes['initialPatientId']) {
+      this.applyInitialSelection();
+    }
+  }
+
+  /** 依 initialPatientId 預選病人（僅在尚未手動選人時套用） */
+  private applyInitialSelection(): void {
+    if (!this.initialPatientId || this.selectedPatientId) return;
+    const target = this.localEvents.find(e => e.patientId === this.initialPatientId);
+    if (target) this.selectPatient(target);
   }
 
   private syncSelectionRefs(): void {

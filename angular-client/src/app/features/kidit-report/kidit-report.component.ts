@@ -49,6 +49,8 @@ export class KiditReportComponent implements OnInit {
   readonly showModal = signal(false);
   readonly selectedDate = signal('');
   readonly selectedEvents = signal<any[]>([]);
+  /** 從待建檔清單點入時要預選的病人；月曆正常開窗為 null */
+  readonly modalInitialPatientId = signal<string | null>(null);
 
   readonly firstDayOffset = computed(() =>
     new Date(this.currentYear(), this.currentMonth() - 1, 1).getDay()
@@ -112,6 +114,7 @@ export class KiditReportComponent implements OnInit {
   }
 
   openModal(day: DayData): void {
+    this.modalInitialPatientId.set(null);
     this.selectedDate.set(day.dateStr);
     this.selectedEvents.set(day.events);
     this.showModal.set(true);
@@ -119,6 +122,7 @@ export class KiditReportComponent implements OnInit {
 
   closeModal(): void {
     this.showModal.set(false);
+    this.modalInitialPatientId.set(null);
   }
 
   onModalRefresh(): void {
@@ -297,6 +301,7 @@ export class KiditReportComponent implements OnInit {
     }
     try {
       const log = await kiditService.fetchDayLog(row.lastEventDate);
+      this.modalInitialPatientId.set(row.patientId || null);
       this.selectedDate.set(row.lastEventDate);
       this.selectedEvents.set(log?.events || []);
       this.showPendingRegModal.set(false);
