@@ -28,6 +28,11 @@
           </ul>
         }
         </div>
+        @if (highlightedPatientId()) {
+          <button class="btn btn-clear-highlight" (click)="clearSearchHighlight()" title="清除搜尋定位的黃框標記">
+            <i class="fas fa-times"></i> 清除標記
+          </button>
+        }
       </div>
       <div class="toolbar-right">
         <span class="status-text">{{ statusText() }}</span>

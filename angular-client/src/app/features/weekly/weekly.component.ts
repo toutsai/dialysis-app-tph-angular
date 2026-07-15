@@ -107,6 +107,8 @@ export class WeeklyComponent implements OnInit, OnDestroy {
   patientNameForDialog = signal('');
   searchQuery = signal('');
   isSearchFocused = signal(false);
+  // 搜尋定位後持續黃框標記的病人（清除標記或搜尋其他病人才變更）
+  highlightedPatientId = signal<string | null>(null);
 
   get searchQueryValue(): string { return this.searchQuery(); }
   set searchQueryValue(value: string) { this.searchQuery.set(value); }
@@ -336,11 +338,14 @@ export class WeeklyComponent implements OnInit, OnDestroy {
 
   getWeeklyCellStyle = (slotId: string): Record<string, boolean> => {
     const slotData = this.weekScheduleMap()[slotId];
+    const hl = this.highlightedPatientId();
+    const highlight: Record<string, boolean> =
+      hl && slotData?.patientId === hl ? { 'search-highlight': true } : {};
     const patientForStyle = this.getArchivedOrLivePatientInfo(slotData);
-    if (!patientForStyle) return {};
+    if (!patientForStyle) return highlight;
     const patientId = slotData?.patientId;
-    if (!patientId) return getUnifiedCellStyle(slotData, patientForStyle, null, []);
-    return getUnifiedCellStyle(slotData, patientForStyle, null, this.typesMapForThisWeek().get(patientId) || []);
+    if (!patientId) return { ...getUnifiedCellStyle(slotData, patientForStyle, null, []), ...highlight };
+    return { ...getUnifiedCellStyle(slotData, patientForStyle, null, this.typesMapForThisWeek().get(patientId) || []), ...highlight };
   };
 
   updateLeftOffset(newOffset: number): void { this.leftOffset.set(newOffset); }
@@ -349,19 +354,23 @@ export class WeeklyComponent implements OnInit, OnDestroy {
   locatePatientOnGrid(patientId: string): void {
     this.searchQuery.set('');
     this.isSearchFocused.set(false);
-    const targetSlotId = Object.keys(this.weekScheduleMap()).find(slotId => this.weekScheduleMap()[slotId]?.patientId === patientId);
-    if (!targetSlotId) {
+    const map = this.weekScheduleMap();
+    const slotIds = Object.keys(map).filter(slotId => map[slotId]?.patientId === patientId);
+    if (slotIds.length === 0) {
+      this.highlightedPatientId.set(null);
       this.showAlert('提示', '該病人本週無排班。');
       return;
     }
+    // 所有符合格子由 getWeeklyCellStyle 加 search-highlight 持續標記；只捲動到第一格
+    this.highlightedPatientId.set(patientId);
     setTimeout(() => {
-      const el = document.querySelector(`[data-slot-id="${targetSlotId}"]`);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-        el.classList.add('highlight-flash');
-        setTimeout(() => el.classList.remove('highlight-flash'), 2000);
-      }
+      const el = document.querySelector(`[data-slot-id="${slotIds[0]}"]`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
     });
+  }
+
+  clearSearchHighlight(): void {
+    this.highlightedPatientId.set(null);
   }
 
   handleSearchBlur(): void { setTimeout(() => this.isSearchFocused.set(false), 200); }

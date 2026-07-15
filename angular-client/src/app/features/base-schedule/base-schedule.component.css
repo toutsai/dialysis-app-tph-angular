@@ -58,6 +58,20 @@
 ::ng-deep .highlight-flash {
   animation: highlight-animation 2s ease-out;
 }
+/* 搜尋定位：所有頻率日格子持續黃框，按「清除標記」或搜尋其他病人才消失 */
+::ng-deep .search-highlight {
+  outline: 3px solid #f8c000;
+  outline-offset: -3px;
+}
+.btn-clear-highlight {
+  background: #fffbe3;
+  border: 1px solid #f8c000;
+  color: #8a6d00;
+  white-space: nowrap;
+}
+.btn-clear-highlight:hover {
+  background: #fff3bf;
+}
 .page-container {
   display: flex;
   flex-direction: column;

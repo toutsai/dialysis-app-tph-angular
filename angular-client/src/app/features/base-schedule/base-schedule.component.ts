@@ -97,6 +97,8 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
   currentSlotId = signal<string | null>(null);
   searchQueryValue = signal('');
   isSearchFocused = signal(false);
+  // 搜尋定位後持續黃框標記的病人（清除標記或搜尋其他病人才變更）
+  highlightedPatientId = signal<string | null>(null);
   isActionDialogVisible = signal(false);
   actionTarget = signal<{ patientId: string | null; patientName: string }>({ patientId: null, patientName: '' });
   isAssignmentDialogVisible = signal(false);
@@ -137,6 +139,7 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
     const styleMap = new Map<string, CellStyleResult>();
     const wsm = this.weekScheduleMap();
     const pMap = this.patientStore.patientMap();
+    const hl = this.highlightedPatientId();
     for (const slotId in wsm) {
       const slotData = wsm[slotId];
       const patient = pMap.get(slotData?.patientId);
@@ -144,7 +147,11 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
       const freshSlotData = patient
         ? { ...slotData, autoNote: generateAutoNote(patient) }
         : slotData;
-      styleMap.set(slotId, getUnifiedCellStyle(freshSlotData, patient));
+      const style = getUnifiedCellStyle(freshSlotData, patient);
+      styleMap.set(
+        slotId,
+        hl && slotData?.patientId === hl ? ({ ...style, 'search-highlight': true } as CellStyleResult) : style,
+      );
     }
     return styleMap;
   });
@@ -240,22 +247,24 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
     if (!record || !record.schedule) return;
     const ruleData = record.schedule[patientId];
     if (!ruleData) {
+      this.highlightedPatientId.set(null);
       this.showAlert('提示', '該病人未被排入總床位表。');
       return;
     }
     const dayIndices = this.resolveFreqDays(ruleData.freq);
     if (dayIndices.length === 0) return;
+    // 所有頻率日的格子由 weeklyCellStyleMap 加 search-highlight 持續標記；只捲動到第一格
+    this.highlightedPatientId.set(patientId);
     const { bedNum, shiftIndex } = ruleData;
-    const firstDayIndex = dayIndices[0];
-    const targetSlotId = `${bedNum}-${shiftIndex}-${firstDayIndex}`;
+    const targetSlotId = `${bedNum}-${shiftIndex}-${dayIndices[0]}`;
     setTimeout(() => {
       const targetElement = document.querySelector(`[data-slot-id="${targetSlotId}"]`);
-      if (targetElement) {
-        targetElement.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-        targetElement.classList.add('highlight-flash');
-        setTimeout(() => targetElement.classList.remove('highlight-flash'), 2000);
-      }
+      if (targetElement) targetElement.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
     });
+  }
+
+  clearSearchHighlight(): void {
+    this.highlightedPatientId.set(null);
   }
 
   handleGridClick(slotId: string): void {
