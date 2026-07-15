@@ -40,18 +40,19 @@
           <table class="modern-table">
             <thead>
               <tr>
-                <th style="width:10%">類型</th>
-                <th style="width:12%">姓名</th>
-                <th style="width:12%">病歷號</th>
-                <th style="width:26%">詳細內容</th>
-                <th style="width:20%">轉出院所</th>
+                <th style="width:9%">類型</th>
+                <th style="width:11%">姓名</th>
+                <th style="width:11%">病歷號</th>
+                <th style="width:9%">透析模式</th>
+                <th style="width:24%">詳細內容</th>
+                <th style="width:16%">轉出院所</th>
                 <th style="width:10%" class="text-center">KiDit 登錄</th>
                 <th style="width:10%" class="text-center">操作</th>
               </tr>
             </thead>
             <tbody>
               <tr
-                *ngFor="let event of localEvents; let i = index"
+                *ngFor="let event of localEvents; let i = index; trackBy: trackByEventId"
                 [class.is-selected]="selectedPatientId === event.patientId"
                 (click)="selectPatient(event)"
               >
@@ -62,6 +63,7 @@
                 </td>
                 <td class="font-medium">{{ event.patientName }}</td>
                 <td class="text-muted">{{ event.medicalRecordNumber || '-' }}</td>
+                <td class="text-muted">{{ event.dialysisMode || '-' }}</td>
                 <td class="text-muted">{{ event.details }}</td>
                 <td (click)="$event.stopPropagation()">
                   <input
@@ -90,7 +92,7 @@
                 </td>
               </tr>
               <tr *ngIf="localEvents.length === 0">
-                <td colspan="7" class="empty-row">本日無相關動態紀錄</td>
+                <td colspan="8" class="empty-row">本日無相關動態紀錄</td>
               </tr>
             </tbody>
           </table>
@@ -150,7 +152,7 @@
   </div>
 
   <!-- Confirm Delete -->
-  <div *ngIf="showConfirmDelete" class="confirm-overlay" (click)="cancelDelete()">
+  <div *ngIf="showConfirmDelete" class="confirm-overlay" (click)="cancelDelete(); $event.stopPropagation()">
     <div class="confirm-box" (click)="$event.stopPropagation()">
       <h4>確認移除</h4>
       <p>{{ confirmMessage }}</p>

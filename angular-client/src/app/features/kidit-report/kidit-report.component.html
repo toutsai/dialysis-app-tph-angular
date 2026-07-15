@@ -40,7 +40,7 @@
       <div *ngFor="let n of emptySlots()" class="day-cell empty"></div>
 
       <div
-        *ngFor="let day of daysData()"
+        *ngFor="let day of daysData(); trackBy: trackByDate"
         class="day-cell"
         [class.has-data]="day.events.length > 0"
         [class.is-today]="isToday(day.dateStr)"

@@ -56,6 +56,10 @@ export class KiditReportComponent implements OnInit {
     this.fetchData();
   }
 
+  trackByDate(_index: number, day: DayData): string {
+    return day.dateStr;
+  }
+
   isToday(dateStr: string): boolean {
     const today = new Date();
     const y = today.getFullYear();

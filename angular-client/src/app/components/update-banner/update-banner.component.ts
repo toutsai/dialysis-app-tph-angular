@@ -97,23 +97,27 @@ export class UpdateBannerComponent implements OnInit, OnDestroy {
     this.countdown.set(this.COUNTDOWN_START);
     this.visible.set(true);
     this.zone.runOutsideAngular(() => {
-      this.tickTimer = setInterval(() => this.zone.run(() => this.tick()), 1000);
+      this.tickTimer = setInterval(() => this.tick(), 1000);
     });
   }
 
+  // 整個 tick 在 zone 外跑，只有畫面真的要變（暫停狀態翻轉/倒數數字）才進 zone。
+  // 勿改回每秒 zone.run：彈窗開著時每秒強制全站變更偵測，弱 GPU 電腦會讓開啟中的視窗閃爍。
   private tick(): void {
     // 有彈窗/表單開著 → 暫停倒數，避免清掉未存資料
     if (this.isModalOpen()) {
-      this.paused.set(true);
+      if (!this.paused()) this.zone.run(() => this.paused.set(true));
       return;
     }
-    this.paused.set(false);
-    const next = this.countdown() - 1;
-    if (next <= 0) {
-      this.reloadNow();
-    } else {
-      this.countdown.set(next);
-    }
+    this.zone.run(() => {
+      this.paused.set(false);
+      const next = this.countdown() - 1;
+      if (next <= 0) {
+        this.reloadNow();
+      } else {
+        this.countdown.set(next);
+      }
+    });
   }
 
   private isModalOpen(): boolean {

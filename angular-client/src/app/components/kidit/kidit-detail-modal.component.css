@@ -4,8 +4,8 @@
   left: 0;
   width: 100%;
   height: 100%;
+  /* 勿加 backdrop-filter：blur 疊在動畫元素(如更新橫幅)上，院內弱 GPU 電腦會整窗閃爍 */
   background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(2px);
   display: flex;
   justify-content: center;
   align-items: center;

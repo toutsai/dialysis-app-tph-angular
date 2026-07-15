@@ -4,10 +4,31 @@
  */
 
 import { getDatabase } from '../db/init.js'
+import { normalizeDialysisMode } from '../utils/dialysisMode.js'
 
 // 不納入 KiDit 申報的病人動態類型。
 // KiDit 日誌本以入院/出院/轉床等異動申報為主；「更改模式」「勿動」只記在工作日誌。
 const KIDIT_EXCLUDED_MOVEMENT_TYPES = new Set(['更改模式', '勿動'])
+
+// 建立「病人 id → 正規化透析模式」對照表（含已刪除病人：結案事件仍需顯示模式）
+function buildPatientModeMap(db, patientIds) {
+  const map = new Map()
+  const ids = [...new Set(patientIds)].filter(Boolean)
+  if (!ids.length) return map
+  const placeholders = ids.map(() => '?').join(',')
+  const rows = db
+    .prepare(`SELECT id, dialysis_orders FROM patients WHERE id IN (${placeholders})`)
+    .all(...ids)
+  for (const row of rows) {
+    try {
+      const orders = JSON.parse(row.dialysis_orders || '{}')
+      if (orders && orders.mode != null && String(orders.mode).trim()) {
+        map.set(row.id, normalizeDialysisMode(String(orders.mode)))
+      }
+    } catch {}
+  }
+  return map
+}
 
 /**
  * 同步每日日誌到 Kidit 日誌本
@@ -96,6 +117,14 @@ export async function syncEventsToKiditLogbook(dateStr, dailyLogData) {
     })
 
     console.log(`[KIDIT Sync] 從 daily_log 提取了 ${dailyLogEvents.length} 個事件`)
+
+    // 2-3. 補上病人當前透析模式（同步當下的快照；重新同步時會更新）
+    if (dailyLogEvents.length > 0) {
+      const modeMap = buildPatientModeMap(db, dailyLogEvents.map(e => e.patientId))
+      dailyLogEvents.forEach(e => {
+        e.dialysisMode = modeMap.get(e.patientId) || ''
+      })
+    }
 
     // 3. 如果沒有事件，清空並返回
     if (dailyLogEvents.length === 0) {

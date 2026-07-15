@@ -46,23 +46,30 @@ export class KiditDetailModalComponent implements OnChanges {
     { key: 'history', label: 'KiDit 病史原發病', requiresSelection: true },
   ];
 
+  // memoize 成欄位：getter 每輪變更偵測重算並回傳新參照，會反覆觸發子表單重建（專案已知反模式）
+  selectedPatient: { id: string; name: string } | null = null;
+  selectedEvent: any = {};
+
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['events']) {
       this.localEvents = JSON.parse(JSON.stringify(this.events || []));
+      this.syncSelectionRefs();
     }
   }
 
-  get selectedPatient() {
-    if (!this.selectedPatientId) return null;
-    return { id: this.selectedPatientId, name: this.selectedPatientName };
-  }
-
-  get selectedEvent() {
-    return this.localEvents.find(e => e.patientId === this.selectedPatientId) || {};
+  private syncSelectionRefs(): void {
+    this.selectedPatient = this.selectedPatientId
+      ? { id: this.selectedPatientId, name: this.selectedPatientName }
+      : null;
+    this.selectedEvent = this.localEvents.find(e => e.patientId === this.selectedPatientId) || {};
   }
 
   getEventData(key: string) {
     return this.selectedEvent[key] || null;
+  }
+
+  trackByEventId(_index: number, event: any): string {
+    return event.id;
   }
 
   translateType(type: string): string {
@@ -84,6 +91,7 @@ export class KiditDetailModalComponent implements OnChanges {
   selectPatient(event: any): void {
     this.selectedPatientId = event.patientId;
     this.selectedPatientName = event.patientName;
+    this.syncSelectionRefs();
     this.loadPatientMasterData();
   }
 
@@ -140,6 +148,7 @@ export class KiditDetailModalComponent implements OnChanges {
         this.selectedPatientId = null;
         this.selectedPatientName = '';
       }
+      this.syncSelectionRefs();
       this.pendingDeleteIndex = -1;
     }
     this.showConfirmDelete = false;
@@ -165,5 +174,6 @@ export class KiditDetailModalComponent implements OnChanges {
     this.closeEvent.emit();
     this.activeTab = 'movement';
     this.selectedPatientId = null;
+    this.syncSelectionRefs();
   }
 }
