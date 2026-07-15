@@ -165,7 +165,7 @@
             <div class="ward-counts">
               @for (def of categoryDefs; track def.key) {
                 @if (g.counts[def.key]) {
-                  <span class="mini" [style.background]="def.color" [title]="def.label">
+                  <span class="mini" [style.background]="def.color" [style.color]="def.fg || '#fff'" [title]="def.label">
                     {{ g.counts[def.key] }}
                   </span>
                 }
@@ -183,7 +183,7 @@
                 <span class="bed-cr">
                   @if (p.latestCr != null) { Cr {{ p.latestCr }} } @else { — }
                 </span>
-                @if (p.stage) { <span class="bed-stage">S{{ p.stage }}</span> }
+                @if (p.stage) { <span class="bed-stage" [style.color]="fgColor(p.category)">S{{ p.stage }}</span> }
                 @if (courseBadges(p).length) {
                   <span class="bed-badges">
                     @for (b of courseBadges(p); track b.label) {
@@ -302,7 +302,7 @@
                     <td class="nowrap num">{{ it.latestEgfr ?? '—' }}</td>
                   } @else {
                     <td class="nowrap">
-                      <span class="stage-badge" [style.background]="color(it.category)">{{ stageLabel(it) }}</span>
+                      <span class="stage-badge" [style.background]="color(it.category)" [style.color]="fgColor(it.category)">{{ stageLabel(it) }}</span>
                     </td>
                   }
                   <td class="nowrap course-cell">
@@ -450,7 +450,7 @@
 
           <!-- 分期結論 -->
           <div class="verdict" [style.--c]="color(d.staging.category)">
-            <span class="verdict-badge" [style.background]="color(d.staging.category)">
+            <span class="verdict-badge" [style.background]="color(d.staging.category)" [style.color]="fgColor(d.staging.category)">
               {{ label(d.staging.category) }}
             </span>
             @if (d.staging.baseline && d.staging.peak) {

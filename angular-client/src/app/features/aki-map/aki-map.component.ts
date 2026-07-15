@@ -44,13 +44,15 @@ interface CategoryDef {
   key: AkiCategory;
   label: string;
   color: string;
+  /** 以 color 為底色時的文字色，預設白字；淡色底需指定深色字 */
+  fg?: string;
 }
 
 // 分期顯示順序、標籤、色碼（與後端 AKI_CATEGORIES 對齊）
 const CATEGORY_DEFS: CategoryDef[] = [
   { key: 'stage-3', label: 'Stage 3', color: '#d32f2f' },
   { key: 'stage-2', label: 'Stage 2', color: '#f57c00' },
-  { key: 'stage-1', label: 'Stage 1', color: '#f9a825' },
+  { key: 'stage-1', label: 'Stage 1', color: '#fdd835', fg: '#424242' },
   { key: 'esrd', label: '疑似 ESRD', color: '#7b1fa2' },
   { key: 'stage-0', label: '無 AKI', color: '#388e3c' },
   { key: 'single', label: '單筆無法判定', color: '#607d8b' },
@@ -344,6 +346,11 @@ export class AkiMapComponent implements OnInit {
 
   color(cat: AkiCategory): string {
     return this.colorMap.get(cat)?.color || '#b0bec5';
+  }
+
+  /** 分期色當底色時的文字色（淡黃底回深色字，其餘白字） */
+  fgColor(cat: AkiCategory): string {
+    return this.colorMap.get(cat)?.fg || '#fff';
   }
 
   /** 床卡外框樣式：AKI/ESRD 彩色加粗、無 AKI 與單筆黑框、無 Cr 資料虛線灰框 */
