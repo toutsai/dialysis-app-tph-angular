@@ -5,7 +5,7 @@ import { getDatabase } from '../db/init.js'
 import { authenticate, isEditor, logAudit } from '../middleware/auth.js'
 import { syncMasterScheduleToFuture, initializeFutureSchedules, mergeExceptionsIntoSchedules, generateDailyScheduleFromRules, rebuildSingleDaySchedule } from '../services/scheduleSync.js'
 import { processScheduleException } from '../services/exceptionHandler.js'
-import { isSingleDayMove, reconcileSingleDayMove, resolveSourceConflict } from '../services/exceptionReconcile.js'
+import { isSingleDayMove, reconcileSingleDayMove, resolveSourceConflict, retargetConflict } from '../services/exceptionReconcile.js'
 import { syncEventsToKiditLogbook } from '../services/kiditSync.js'
 import { getTaipeiTodayString, formatDateToYYYYMMDD, formatDateToTaipeiString, getTaipeiDayIndex } from '../utils/dateUtils.js'
 import { SHIFTS, FREQ_MAP_TO_DAY_INDEX, getScheduleKey } from '../utils/scheduleUtils.js'
@@ -1325,18 +1325,19 @@ router.put('/exceptions/:id', ...isEditor, updateExceptionStatus)
 
 /**
  * POST /api/schedules/exceptions/:id/resolve-conflict
- * 解決「總表修正後病人不在原床位」衝突
- * body: { choice: 'keep_base' | 'keep_exception' }
+ * 解決調班衝突
+ * body: { choice: 'keep_base' | 'keep_exception' | 'retarget', to?: { bedNum, shiftCode } }
  *   keep_base      → 取消調班，回歸新總表床位
  *   keep_exception → 把 from 重新錨定到病人新常規位置，維持調班後床位
+ *   retarget       → 就地改目標床位（重新選床），需帶 to
  */
 router.post('/exceptions/:id/resolve-conflict', ...isEditor, async (req, res) => {
   try {
     const { id } = req.params
-    const { choice } = req.body
+    const { choice, to } = req.body
 
-    if (choice !== 'keep_base' && choice !== 'keep_exception') {
-      return res.status(400).json({ error: true, message: 'choice 必須為 keep_base 或 keep_exception' })
+    if (choice !== 'keep_base' && choice !== 'keep_exception' && choice !== 'retarget') {
+      return res.status(400).json({ error: true, message: 'choice 必須為 keep_base、keep_exception 或 retarget' })
     }
 
     const db = getDatabase()
@@ -1349,13 +1350,16 @@ router.post('/exceptions/:id/resolve-conflict', ...isEditor, async (req, res) =>
     patients.forEach((p) => patientsMap.set(p.id, p))
     const modifiedBy = { uid: req.user.id, name: req.user.name }
 
-    const result = resolveSourceConflict(db, id, choice, masterRules, patientsMap, modifiedBy)
+    const result = choice === 'retarget'
+      ? retargetConflict(db, id, to, masterRules, patientsMap, modifiedBy)
+      : resolveSourceConflict(db, id, choice, masterRules, patientsMap, modifiedBy)
     if (!result.ok) {
       return res.status(400).json({ error: true, message: result.message })
     }
 
     await logAudit('EXCEPTION_RESOLVE_CONFLICT', req.user.id, req.user.name, 'schedule_exceptions', id, {
       choice,
+      ...(choice === 'retarget' ? { to } : {}),
     })
 
     emitExceptionChange('updated', {

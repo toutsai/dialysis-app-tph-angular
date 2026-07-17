@@ -86,8 +86,18 @@
         >
           撤銷此申請
         </button>
+        <!-- 佔床型衝突：主打重新選床 -->
         <button
-          *ngIf="currentActionData()?.status === 'conflict_requires_resolution' && currentActionData()?.type === 'MOVE'"
+          *ngIf="canRetargetConflict(currentActionData())"
+          class="btn btn-primary"
+          (click)="openRetargetPicker()"
+          [disabled]="isPageLocked()"
+        >
+          <i class="fas fa-bed"></i> 重新選床
+        </button>
+        <!-- 來源失效型（總表修正後）：二選一 -->
+        <button
+          *ngIf="currentActionData()?.status === 'conflict_requires_resolution' && currentActionData()?.type === 'MOVE' && !canRetargetConflict(currentActionData())"
           class="btn btn-secondary"
           (click)="resolveSourceConflict('keep_base')"
           [disabled]="isPageLocked()"
@@ -95,7 +105,7 @@
           維持新常規床位
         </button>
         <button
-          *ngIf="currentActionData()?.status === 'conflict_requires_resolution' && currentActionData()?.type === 'MOVE'"
+          *ngIf="currentActionData()?.status === 'conflict_requires_resolution' && currentActionData()?.type === 'MOVE' && !canRetargetConflict(currentActionData())"
           class="btn btn-primary"
           (click)="resolveSourceConflict('keep_exception')"
           [disabled]="isPageLocked()"
@@ -112,6 +122,22 @@
     [message]="alertDialogMessage()"
     (confirm)="closeAlertDialog()"
   ></app-alert-dialog>
+
+  <!-- 衝突重新選床 Picker（只列目標日空床） -->
+  <app-bed-assignment-dialog
+    *ngIf="retargetDate()"
+    [isVisible]="isRetargetPickerVisible()"
+    title="重新選床（解決調班衝突）"
+    [allPatients]="retargetPatientAsArray"
+    [bedLayout]="retargetBedLayout"
+    [scheduleData]="retargetScheduleData()"
+    [targetDate]="retargetDate()"
+    [shifts]="retargetShifts"
+    assignmentMode="singleDay"
+    [hidePatientList]="true"
+    (close)="isRetargetPickerVisible.set(false)"
+    (assignBed)="handleRetargetBedAssigned($event)"
+  ></app-bed-assignment-dialog>
 
   <!-- 合併確認 Dialog -->
   <app-confirm-dialog

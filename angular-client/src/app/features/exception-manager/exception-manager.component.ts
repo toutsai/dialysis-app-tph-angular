@@ -27,6 +27,7 @@ import { NotificationService } from '@app/core/services/notification.service';
 import { AlertDialogComponent } from '@app/components/dialogs/alert-dialog/alert-dialog.component';
 import { ConfirmDialogComponent } from '@app/components/dialogs/confirm-dialog/confirm-dialog.component';
 import { ExceptionCreateDialogComponent } from '@app/components/dialogs/exception-create-dialog/exception-create-dialog.component';
+import { BedAssignmentDialogComponent } from '@app/components/dialogs/bed-assignment-dialog/bed-assignment-dialog.component';
 import { MonthYearPickerComponent } from '@app/components/dialogs/month-year-picker/month-year-picker.component';
 import { formatDateTimeToLocal, parseFirestoreTimestamp } from '@/utils/dateUtils';
 
@@ -39,6 +40,7 @@ import { formatDateTimeToLocal, parseFirestoreTimestamp } from '@/utils/dateUtil
     AlertDialogComponent,
     ConfirmDialogComponent,
     ExceptionCreateDialogComponent,
+    BedAssignmentDialogComponent,
     MonthYearPickerComponent,
   ],
   templateUrl: './exception-manager.component.html',
@@ -57,6 +59,7 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
   private readonly exceptionsApi = this.apiManager.create<FirestoreRecord>('schedule_exceptions');
   private readonly exceptionsListApi = this.apiManager.create<FirestoreRecord>('schedule_exceptions_list');
   private readonly tasksApi = this.apiManager.create<FirestoreRecord>('tasks');
+  private readonly schedulesApi = this.apiManager.create<FirestoreRecord>('schedules');
 
   readonly allPatients = this.patientStore.allPatients;
   readonly currentUser = this.authService.currentUser;
@@ -118,6 +121,7 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
         error: { color: '#dc3545', prefix: '[!] ' },
         conflict_requires_resolution: { color: '#fd7e14', prefix: '[衝突]' },
         cancelled: { color: '#6c757d', prefix: '[撤銷]' },
+        expired: { color: '#adb5bd', prefix: '[過期]' },
       };
       const baseColorMap: Record<string, string> = {
         MOVE: '#17a2b8',
@@ -453,6 +457,91 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
 
   handleDeleteFromChild(id: any): void {
     this.notificationService.createGlobalNotification('成功撤銷衝突的調班申請', 'success');
+  }
+
+  // --- 衝突重新選床（retarget，與排程頁/護理分組同款）---
+
+  /** retarget picker 用的床位清單：一般床 + 外圍床（與調班申請選床相同） */
+  readonly retargetBedLayout: (string | number)[] = [
+    1,2,3,5,6,7,8,9,11,12,13,15,16,17,18,19,21,22,23,25,26,27,28,29,31,32,33,35,36,37,38,39,
+    51,52,53,55,56,57,58,59,61,62,63,65,
+    ...Array.from({ length: 6 }, (_, i) => `peripheral-${i + 1}`),
+  ];
+  readonly retargetShifts = ['early', 'noon', 'late'];
+  isRetargetPickerVisible = signal(false);
+  retargetScheduleData = signal<Record<string, any>>({});
+  retargetDate = signal<string | null>(null);
+  private retargetConflictRef: any = null;
+
+  /** 來源失效型衝突（總表修正後病人不在原床）→ 維持二選一；其餘為佔床型 → 重新選床 */
+  isSourceInvalidConflict(conflict: any): boolean {
+    return /已不在原床位|已不再是/.test(conflict?.['errorMessage'] || '');
+  }
+
+  canRetargetConflict(conflict: any): boolean {
+    return (
+      conflict?.['status'] === 'conflict_requires_resolution' &&
+      (conflict?.['type'] === 'MOVE' || conflict?.['type'] === 'ADD_SESSION') &&
+      !this.isSourceInvalidConflict(conflict)
+    );
+  }
+
+  get retargetPatientAsArray(): any[] {
+    const c = this.retargetConflictRef;
+    if (!c?.patientId) return [];
+    const patient: any = (this.allPatients() || []).find((p: any) => p.id === c.patientId) || {};
+    // singleDay 模式列床不用 freq，但 picker 的顯示閘門要求 freq 為真值
+    return [{
+      ...patient,
+      id: c.patientId,
+      name: patient.name || c.patientName || '',
+      freq: patient.freq || patient.scheduleRule?.freq || '每日',
+    }];
+  }
+
+  async openRetargetPicker(): Promise<void> {
+    const conflict = this.currentActionData();
+    if (!conflict) return;
+    const goalDate = conflict['to']?.goalDate || conflict['date'];
+    if (!goalDate) return;
+    this.retargetConflictRef = conflict;
+    let scheduleData: Record<string, any> = {};
+    try {
+      const scheduleDoc: any = await this.schedulesApi.fetchById(goalDate);
+      scheduleData = scheduleDoc?.schedule || {};
+    } catch (error) {
+      console.error('查詢目標日排班失敗:', error);
+    }
+    this.retargetScheduleData.set(scheduleData);
+    this.retargetDate.set(goalDate);
+    this.isActionDialogVisible.set(false);
+    this.isRetargetPickerVisible.set(true);
+  }
+
+  async handleRetargetBedAssigned(event: any): Promise<void> {
+    const conflict = this.retargetConflictRef;
+    if (!conflict?.id) return;
+    this.isRetargetPickerVisible.set(false);
+    try {
+      await firstValueFrom(
+        this.api.post(`/schedules/exceptions/${conflict.id}/resolve-conflict`, {
+          choice: 'retarget',
+          to: { bedNum: event.bedNum, shiftCode: event.shiftCode },
+        }),
+      );
+      this.notificationService.createGlobalNotification(
+        `已重新選床: ${conflict.patientName || ''} → ${event.bedNum}`,
+        'success',
+      );
+    } catch (error: any) {
+      console.error('重新選床失敗:', error);
+      this.alertDialogTitle.set('重新選床失敗');
+      this.alertDialogMessage.set(error?.error?.message || error?.message || '重新選床失敗，請重試');
+      this.isAlertDialogVisible.set(true);
+    } finally {
+      this.currentActionData.set(null);
+      this.retargetConflictRef = null;
+    }
   }
 
   /**

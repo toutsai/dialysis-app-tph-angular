@@ -749,6 +749,98 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     return lines.join('\n');
   }
 
+  // --- 衝突重新選床（retarget）---
+
+  /** retarget picker 用的床位清單：一般床 + 外圍床（衝突可能發生在外圍） */
+  readonly retargetBedLayout: (string | number)[] = [
+    ...ALL_BED_NUMBERS,
+    ...Array.from({ length: PERIPHERAL_BED_COUNT }, (_, i) => `peripheral-${i + 1}`),
+  ];
+  readonly isRetargetPickerVisible = signal(false);
+  readonly retargetScheduleData = signal<Record<string, any>>({});
+  readonly retargetDate = signal<string | null>(null);
+  private retargetConflictRef: any = null;
+
+  /** 來源失效型衝突（總表修正後病人不在原床）→ 維持二選一；其餘為佔床型 → 重新選床 */
+  isSourceInvalidConflict(conflict: any): boolean {
+    return /已不在原床位|已不再是/.test(conflict?.errorMessage || '');
+  }
+
+  canRetargetConflict(conflict: any): boolean {
+    return (
+      (conflict?.type === 'MOVE' || conflict?.type === 'ADD_SESSION') &&
+      !this.isSourceInvalidConflict(conflict)
+    );
+  }
+
+  get retargetPatientAsArray(): any[] {
+    const c = this.retargetConflictRef;
+    if (!c?.patientId) return [];
+    const patient: any = this.patientMap().get(c.patientId) || {};
+    // singleDay 模式列床不用 freq，但 picker 的顯示閘門要求 freq 為真值
+    return [{
+      ...patient,
+      id: c.patientId,
+      name: patient.name || c.patientName || '',
+      freq: patient.freq || patient.scheduleRule?.freq || '每日',
+    }];
+  }
+
+  async openRetargetPicker(): Promise<void> {
+    const conflict = this.conflictForDialog();
+    if (!conflict) return;
+    const goalDate = conflict.to?.goalDate || conflict.date;
+    if (!goalDate) return;
+    this.retargetConflictRef = conflict;
+    let scheduleData: Record<string, any> = {};
+    if (goalDate === this.currentDateDisplay()) {
+      scheduleData = { ...this.currentRecord.schedule };
+    } else {
+      try {
+        const record = await this.fetchLiveSchedule(goalDate);
+        scheduleData = (record?.['schedule'] as Record<string, any>) || {};
+      } catch (error) {
+        console.error('查詢目標日排班失敗:', error);
+      }
+    }
+    this.retargetScheduleData.set(scheduleData);
+    this.retargetDate.set(goalDate);
+    this.isConflictDialogVisible.set(false);
+    this.isRetargetPickerVisible.set(true);
+  }
+
+  async handleRetargetBedAssigned(event: any): Promise<void> {
+    const conflict = this.retargetConflictRef;
+    if (!conflict?.id || this.isResolvingConflict()) return;
+    this.isRetargetPickerVisible.set(false);
+    this.isResolvingConflict.set(true);
+    try {
+      await firstValueFrom(
+        this.api.post(`/schedules/exceptions/${conflict.id}/resolve-conflict`, {
+          choice: 'retarget',
+          to: { bedNum: event.bedNum, shiftCode: event.shiftCode },
+        }),
+      );
+      this.notificationService.createGlobalNotification(
+        `已重新選床: ${conflict.patientName || ''} → ${event.bedNum} ${this.getShiftDisplayName(event.shiftCode)}`,
+        'success',
+      );
+      this.closeConflictDialog();
+      await Promise.all([
+        this.loadDataForDay(this.currentDate()),
+        this.loadConflictExceptions(),
+      ]);
+    } catch (error: any) {
+      console.error('重新選床失敗:', error);
+      this.alertDialogTitle.set('重新選床失敗');
+      this.alertDialogMessage.set(error?.error?.message || error?.message || '重新選床失敗，請重試');
+      this.isAlertDialogVisible.set(true);
+    } finally {
+      this.isResolvingConflict.set(false);
+      this.retargetConflictRef = null;
+    }
+  }
+
   async resolveCellConflict(choice: 'keep_base' | 'keep_exception'): Promise<void> {
     const conflict = this.conflictForDialog();
     if (!conflict?.id || this.isResolvingConflict()) return;

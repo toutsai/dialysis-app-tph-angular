@@ -3,7 +3,7 @@
 // to 換成最新位置；拖回常規原位則取消），並把鏡像對（甲↔乙互換）收斂成一筆 SWAP。
 // 帳本整併後一律以 rebuildSingleDaySchedule 重算當日排程寫回，確保「存檔不會錯」。
 import { v4 as uuidv4 } from 'uuid'
-import { getTaipeiDayIndex } from '../utils/dateUtils.js'
+import { getTaipeiDayIndex, getTaipeiTodayString } from '../utils/dateUtils.js'
 import { SHIFTS, FREQ_MAP_TO_DAY_INDEX, getScheduleKey } from '../utils/scheduleUtils.js'
 import { rebuildSingleDaySchedule } from './scheduleSync.js'
 
@@ -326,6 +326,10 @@ export function resolveSourceConflict(db, exceptionId, choice, masterRules, pati
       `).run(JSON.stringify(fromData), exceptionId)
     }
 
+    // 過去日不重算：該日已結束（多半已歸檔，即時檔不存在），重算寫不回文件，
+    // 只會把當日其他調班重播一輪、誤掛新衝突旗（比照 EXCEPTION_DELETE 的過去日防護）。
+    if (dateStr < getTaipeiTodayString()) return null
+
     const finalSchedule = rebuildSingleDaySchedule(dateStr, masterRules, patientsMap)
     const existing = db.prepare(`SELECT id FROM schedules WHERE date = ?`).get(dateStr)
     if (existing) {
@@ -341,4 +345,68 @@ export function resolveSourceConflict(db, exceptionId, choice, masterRules, pati
 
   const schedule = run()
   return { ok: true, action: choice, schedule, dateStr }
+}
+
+/**
+ * 就地修改衝突調班的目標床位（重新選床）
+ * 取代前端「撤舊建新」的重提流程：保留原筆 id/歷史，只改 to_data 後重算當日。
+ * 新床位在重算後仍衝突則整筆回滾（交易內），不會留下半套狀態。
+ * @param {{ bedNum: string|number, shiftCode: string }} to - 新目標床位
+ * @returns {{ ok: boolean, action?: string, schedule?: object, dateStr?: string, message?: string }}
+ */
+export function retargetConflict(db, exceptionId, to, masterRules, patientsMap, modifiedBy = {}) {
+  const row = db.prepare(`SELECT * FROM schedule_exceptions WHERE id = ?`).get(exceptionId)
+  if (!row) return { ok: false, message: '調班申請不存在' }
+  if (row.type !== 'MOVE' && row.type !== 'ADD_SESSION') {
+    return { ok: false, message: '僅支援 MOVE / ADD_SESSION 類型的重新選床' }
+  }
+  if (to?.bedNum === undefined || to?.bedNum === null || to?.bedNum === '' || !to?.shiftCode) {
+    return { ok: false, message: '缺少新目標床位資訊' }
+  }
+
+  const ex = parseExceptionRow(row)
+  const dateStr = ex.to?.goalDate || ex.date || ex.from?.sourceDate
+  if (!dateStr) return { ok: false, message: '調班缺少日期資訊' }
+  if (dateStr < getTaipeiTodayString()) {
+    return { ok: false, message: '該調班日期已過，無法重新選床' }
+  }
+
+  const newToData = { ...ex.to, goalDate: dateStr, bedNum: to.bedNum, shiftCode: to.shiftCode }
+
+  const run = db.transaction(() => {
+    db.prepare(`
+      UPDATE schedule_exceptions
+      SET to_data = ?, status = 'applied', error_message = NULL,
+          updated_at = datetime('now', 'localtime')
+      WHERE id = ?
+    `).run(JSON.stringify(newToData), exceptionId)
+
+    const finalSchedule = rebuildSingleDaySchedule(dateStr, masterRules, patientsMap)
+
+    // 防禦：picker 只給空床，但併發下新床可能剛被佔走——重算後此筆仍衝突就回滾
+    const after = db
+      .prepare(`SELECT status, error_message FROM schedule_exceptions WHERE id = ?`)
+      .get(exceptionId)
+    if (after?.status === 'conflict_requires_resolution') {
+      throw new Error(after.error_message || '新選的床位仍有衝突，請重新選擇')
+    }
+
+    const existing = db.prepare(`SELECT id FROM schedules WHERE date = ?`).get(dateStr)
+    if (existing) {
+      db.prepare(`
+        UPDATE schedules
+        SET schedule = ?, sync_method = 'reconcile_exception',
+            last_modified_by = ?, updated_at = datetime('now', 'localtime')
+        WHERE date = ?
+      `).run(JSON.stringify(finalSchedule), JSON.stringify(modifiedBy), dateStr)
+    }
+    return finalSchedule
+  })
+
+  try {
+    const schedule = run()
+    return { ok: true, action: 'retarget', schedule, dateStr }
+  } catch (error) {
+    return { ok: false, message: error?.message || '重新選床失敗' }
+  }
 }

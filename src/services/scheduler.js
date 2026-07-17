@@ -329,6 +329,44 @@ async function archiveDailySchedule() {
   } catch (error) {
     console.error(`[Scheduler] ❌ 歸檔排程 ${dateStr} 失敗:`, error)
   }
+
+  expireStaleConflicts()
+}
+
+// ========================================
+// 過期衝突自動失效
+// 影響日期整個已過的衝突旗已無法就地處理（過去日不再重算、自動收回永不觸發），
+// 不清理會永遠掛在調班管理頁。隨每日歸檔任務執行。
+// ========================================
+
+export function expireStaleConflicts() {
+  const db = getDatabase()
+  const todayStr = getTaipeiTodayString()
+  try {
+    const result = db.prepare(`
+      UPDATE schedule_exceptions
+      SET status = 'expired',
+          updated_at = datetime('now', 'localtime')
+      WHERE status = 'conflict_requires_resolution'
+        AND MAX(
+          COALESCE(end_date, ''),
+          COALESCE(date, ''),
+          COALESCE(json_extract(from_data, '$.sourceDate'), ''),
+          COALESCE(json_extract(to_data, '$.goalDate'), '')
+        ) != ''
+        AND MAX(
+          COALESCE(end_date, ''),
+          COALESCE(date, ''),
+          COALESCE(json_extract(from_data, '$.sourceDate'), ''),
+          COALESCE(json_extract(to_data, '$.goalDate'), '')
+        ) < ?
+    `).run(todayStr)
+    if (result.changes > 0) {
+      console.log(`[Scheduler] ⏳ 已將 ${result.changes} 筆過期衝突調班標記為 expired`)
+    }
+  } catch (error) {
+    console.error('[Scheduler] 過期衝突清理失敗:', error)
+  }
 }
 
 // ========================================

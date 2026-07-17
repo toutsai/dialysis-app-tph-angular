@@ -440,8 +440,8 @@ function applySingleException(schedule, ex, dateStr) {
 
         const targetKey = getScheduleKey(ex.to.bedNum, ex.to.shiftCode)
 
-        // 目標床位已被佔用（且不是自己）視為衝突
-        if (schedule[targetKey] && schedule[targetKey].patientId !== ex.patientId) {
+        // 目標床位已被佔用（且不是自己）視為衝突；沒有 patientId 的空殼格不算佔用
+        if (schedule[targetKey]?.patientId && schedule[targetKey].patientId !== ex.patientId) {
           const targetLabel = formatSlotLabel(ex.to.bedNum, ex.to.shiftCode)
           const occupantName = schedule[targetKey]?.patientName || '其他病人'
           const reason = `目標床位 ${targetLabel} 已被 ${occupantName} 佔用，請重新安排床位。`
@@ -536,16 +536,27 @@ function applySingleException(schedule, ex, dateStr) {
  */
 function recalculateDailySchedule(dateStr, masterRules, todaysExceptions, patientsMap = null) {
   let finalSchedule = generateDailyScheduleFromRules(masterRules, dateStr, patientsMap)
-  const conflictingExceptions = []
 
-  for (const ex of todaysExceptions) {
-    const result = applySingleException(finalSchedule, ex, dateStr)
-    if (result !== 'ok') {
-      conflictingExceptions.push({ ex, reason: result.reason })
+  // 多輪收斂重播：連環讓位（甲讓床給乙、乙再讓給丙）若只按建立順序單輪重播，
+  // 讓位者還沒重播到就會誤判「目標床被佔」，一筆誤判整串連鎖。
+  // 失敗的調班留到下一輪重試（失敗路徑不動 schedule，重試安全），
+  // 直到一輪內沒有任何新成功；此時仍失敗的才是真衝突。
+  let pending = todaysExceptions
+  while (pending.length > 0) {
+    const failed = []
+    for (const ex of pending) {
+      const result = applySingleException(finalSchedule, ex, dateStr)
+      if (result !== 'ok') {
+        failed.push({ ex, reason: result.reason })
+      }
     }
+    if (failed.length === pending.length) {
+      return { finalSchedule, conflictingExceptions: failed }
+    }
+    pending = failed.map(({ ex }) => ex)
   }
 
-  return { finalSchedule, conflictingExceptions }
+  return { finalSchedule, conflictingExceptions: [] }
 }
 
 /**

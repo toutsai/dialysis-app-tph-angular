@@ -42,6 +42,7 @@ import { fetchEffectiveOrders } from '@/services/effectiveOrdersService';
 import { DailyInjectionListDialogComponent } from '@app/components/dialogs/daily-injection-list-dialog/daily-injection-list-dialog.component';
 import { DialysisOrderModalComponent } from '@app/components/dialogs/dialysis-order-modal/dialysis-order-modal.component';
 import { ExceptionCreateDialogComponent } from '@app/components/dialogs/exception-create-dialog/exception-create-dialog.component';
+import { BedAssignmentDialogComponent } from '@app/components/dialogs/bed-assignment-dialog/bed-assignment-dialog.component';
 import { NewUpdateTypeDialogComponent } from '@app/components/dialogs/new-update-type-dialog/new-update-type-dialog.component';
 import { PatientUpdateSchedulerDialogComponent } from '@app/components/dialogs/patient-update-scheduler-dialog/patient-update-scheduler-dialog.component';
 
@@ -101,6 +102,7 @@ const dutyAssignments: Record<string, Record<string, string | string[]>> = {
     DailyInjectionListDialogComponent,
     DialysisOrderModalComponent,
     ExceptionCreateDialogComponent,
+    BedAssignmentDialogComponent,
     NewUpdateTypeDialogComponent,
     PatientUpdateSchedulerDialogComponent,
     PreparationPopoverComponent,
@@ -650,6 +652,93 @@ export class StatsComponent implements OnInit, OnDestroy {
     if (ex.to?.goalDate) lines.push(`新班：${ex.to.goalDate} ${formatSlot(ex.to)}`);
     if (ex.errorMessage) lines.push(`衝突原因：${ex.errorMessage}`);
     return lines.join('\n');
+  }
+
+  // --- 衝突重新選床（retarget，與每日排程頁同款）---
+
+  /** retarget picker 用的床位清單：一般床 + 外圍床（與調班申請選床相同） */
+  readonly retargetBedLayout: (string | number)[] = [
+    1,2,3,5,6,7,8,9,11,12,13,15,16,17,18,19,21,22,23,25,26,27,28,29,31,32,33,35,36,37,38,39,
+    51,52,53,55,56,57,58,59,61,62,63,65,
+    ...Array.from({ length: 6 }, (_, i) => `peripheral-${i + 1}`),
+  ];
+  readonly retargetShifts = ['early', 'noon', 'late'];
+  isRetargetPickerVisible = false;
+  retargetScheduleData: Record<string, any> = {};
+  retargetDate: string | null = null;
+  private retargetConflictRef: any = null;
+
+  /** 來源失效型衝突（總表修正後病人不在原床）→ 維持二選一；其餘為佔床型 → 重新選床 */
+  isSourceInvalidConflict(conflict: any): boolean {
+    return /已不在原床位|已不再是/.test(conflict?.errorMessage || '');
+  }
+
+  canRetargetConflict(conflict: any): boolean {
+    return (
+      (conflict?.type === 'MOVE' || conflict?.type === 'ADD_SESSION') &&
+      !this.isSourceInvalidConflict(conflict)
+    );
+  }
+
+  get retargetPatientAsArray(): any[] {
+    const c = this.retargetConflictRef;
+    if (!c?.patientId) return [];
+    const patient: any = this.patientMap.get(c.patientId) || {};
+    // singleDay 模式列床不用 freq，但 picker 的顯示閘門要求 freq 為真值
+    return [{
+      ...patient,
+      id: c.patientId,
+      name: patient.name || c.patientName || '',
+      freq: patient.freq || patient.scheduleRule?.freq || '每日',
+    }];
+  }
+
+  async openRetargetPicker(): Promise<void> {
+    const conflict = this.conflictForDialog;
+    if (!conflict) return;
+    const goalDate = conflict.to?.goalDate || conflict.date;
+    if (!goalDate) return;
+    this.retargetConflictRef = conflict;
+    let scheduleData: Record<string, any> = {};
+    try {
+      const record: any = await this.fetchLiveSchedule(goalDate);
+      scheduleData = record?.schedule || {};
+    } catch (error) {
+      console.error('查詢目標日排班失敗:', error);
+    }
+    this.retargetScheduleData = scheduleData;
+    this.retargetDate = goalDate;
+    this.isConflictDialogVisible = false;
+    this.isRetargetPickerVisible = true;
+  }
+
+  async handleRetargetBedAssigned(event: any): Promise<void> {
+    const conflict = this.retargetConflictRef;
+    if (!conflict?.id || this.isResolvingConflict) return;
+    this.isRetargetPickerVisible = false;
+    this.isResolvingConflict = true;
+    try {
+      await firstValueFrom(
+        this.api.post(`/schedules/exceptions/${conflict.id}/resolve-conflict`, {
+          choice: 'retarget',
+          to: { bedNum: event.bedNum, shiftCode: event.shiftCode },
+        }),
+      );
+      this.notificationService.createGlobalNotification(
+        `已重新選床: ${conflict.patientName || ''} → ${event.bedNum}`,
+        'success',
+      );
+      this.closeConflictDialog();
+      await this.loadData(new Date(this.currentDate));
+    } catch (error: any) {
+      console.error('重新選床失敗:', error);
+      this.alertDialogTitle = '重新選床失敗';
+      this.alertDialogMessage = error?.error?.message || error?.message || '重新選床失敗，請重試';
+      this.isAlertDialogVisible = true;
+    } finally {
+      this.isResolvingConflict = false;
+      this.retargetConflictRef = null;
+    }
   }
 
   async resolveCellConflict(choice: 'keep_base' | 'keep_exception'): Promise<void> {

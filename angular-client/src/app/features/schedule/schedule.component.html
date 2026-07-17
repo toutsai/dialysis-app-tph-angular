@@ -729,7 +729,20 @@
           <p style="white-space: pre-wrap;">{{ buildConflictMessage(conflict) }}</p>
           <div class="dialog-actions">
             <button class="btn" [disabled]="isResolvingConflict()" (click)="closeConflictDialog()">取消</button>
-            @if (conflict.type === 'MOVE' && auth.canEditSchedules()) {
+            @if (auth.canEditSchedules() && canRetargetConflict(conflict)) {
+              <!-- 佔床型衝突：主打重新選床，撤銷降為次要 -->
+              <button
+                class="btn btn-info"
+                [disabled]="isResolvingConflict()"
+                (click)="resolveCellConflict('keep_base')"
+              >撤銷調班</button>
+              <button
+                class="btn btn-success"
+                [disabled]="isResolvingConflict()"
+                (click)="openRetargetPicker()"
+              ><i class="fas fa-bed"></i> 重新選床</button>
+            } @else if (conflict.type === 'MOVE' && auth.canEditSchedules()) {
+              <!-- 來源失效型（總表修正後）：二選一 -->
               <button
                 class="btn btn-info"
                 [disabled]="isResolvingConflict()"
@@ -765,6 +778,24 @@
   (close)="isAssignmentDialogVisible.set(false)"
   (assignBed)="handleAssignBed($event)"
 ></app-bed-assignment-dialog>
+
+<!-- 衝突重新選床 Picker（只列目標日空床） -->
+@if (retargetDate(); as retargetDateStr) {
+  <app-bed-assignment-dialog
+    [isVisible]="isRetargetPickerVisible()"
+    title="重新選床（解決調班衝突）"
+    [allPatients]="retargetPatientAsArray"
+    [bedLayout]="retargetBedLayout"
+    [scheduleData]="retargetScheduleData()"
+    [targetDate]="retargetDateStr"
+    [shifts]="ORDERED_SHIFT_CODES"
+    [freqMap]="freqToDays"
+    assignmentMode="singleDay"
+    [hidePatientList]="true"
+    (close)="isRetargetPickerVisible.set(false)"
+    (assignBed)="handleRetargetBedAssigned($event)"
+  ></app-bed-assignment-dialog>
+}
 
 <!-- Patient Select Dialog（點擊空床位加入病人） -->
 <app-patient-select-dialog

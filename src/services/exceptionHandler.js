@@ -40,6 +40,18 @@ function formatSlotLabel(bedNum, shiftCode) {
  * @param {object} exceptionData - 調班申請資料
  * @returns {Promise<object>} 處理結果
  */
+/**
+ * 目標床位被佔用的衝突（有人的床不覆蓋）：
+ * 與重算引擎同語意「常規 > 調班、佔用即衝突」，讓外層標成
+ * conflict_requires_resolution（可由組長就地重新選床解決）而非 error。
+ */
+class ScheduleConflictError extends Error {
+  constructor(message) {
+    super(message)
+    this.isConflict = true
+  }
+}
+
 export async function processScheduleException(exceptionId, exceptionData) {
   console.log(`🚀 [ExceptionHandler] 開始處理調班: ${exceptionId} (${exceptionData.type})`)
 
@@ -118,15 +130,16 @@ export async function processScheduleException(exceptionId, exceptionData) {
   } catch (error) {
     console.error(`❌ [ExceptionHandler] 處理調班 ${exceptionId} 失敗:`, error)
 
-    // 更新狀態為錯誤
+    // 佔床衝突標成可就地解決的 conflict_requires_resolution，其餘才是 error
+    const failStatus = error?.isConflict === true ? 'conflict_requires_resolution' : 'error'
     try {
       db.prepare(`
         UPDATE schedule_exceptions
-        SET status = 'error',
+        SET status = ?,
             error_message = ?,
             updated_at = datetime('now', 'localtime')
         WHERE id = ?
-      `).run(error.message, exceptionId)
+      `).run(failStatus, error.message, exceptionId)
     } catch (e) {
       console.error('更新錯誤狀態失敗:', e)
     }
@@ -134,7 +147,7 @@ export async function processScheduleException(exceptionId, exceptionData) {
     emitExceptionChange('updated', {
       id: exceptionId,
       type: exceptionData.type,
-      status: 'error',
+      status: failStatus,
       patientId: exceptionData.patientId,
       errorMessage: error.message,
       affectedDates: getAffectedDates(exceptionData),
@@ -202,17 +215,13 @@ async function handleMove(db, exceptionId, data) {
   }
 
   // 檢查衝突（在任何寫庫動作之前，throw 時來源仍完好）
-  if (targetSchedule[targetKey]) {
-    const occupant = targetSchedule[targetKey]
-    if (occupant.exceptionId) {
-      throw new Error(`目標床位已被 ${occupant.patientName} 的調班佔用，請選擇其他床位`)
-    }
-    conflicts.push({
-      date: to.goalDate,
-      position: targetKey,
-      occupiedBy: occupant.patientName || occupant.patientId,
-    })
-    newSlotData.manualNote = `(換班-覆蓋)`
+  // 佔用即衝突：不論佔用者是常規或調班，一律不覆蓋（常規 > 調班 的統一語意）；
+  // 沒有 patientId 的空殼格不算佔用
+  const occupant = targetSchedule[targetKey]
+  if (occupant?.patientId && occupant.patientId !== patientId) {
+    throw new ScheduleConflictError(
+      `目標床位已被 ${occupant.patientName || '其他病人'} 佔用，請重新選床。`,
+    )
   }
 
   targetSchedule[targetKey] = newSlotData
@@ -328,18 +337,12 @@ async function handleAddSession(db, exceptionId, data) {
     newSlotData.modeOverride = to.mode
   }
 
-  // 檢查衝突
-  if (schedule[targetKey]) {
-    const occupant = schedule[targetKey]
-    if (occupant.exceptionId) {
-      throw new Error(`目標床位已被 ${occupant.patientName} 的調班佔用，請選擇其他床位`)
-    }
-    conflicts.push({
-      date: targetDate,
-      position: targetKey,
-      occupiedBy: occupant.patientName || occupant.patientId,
-    })
-    newSlotData.manualNote = `(臨時加洗-覆蓋)`
+  // 檢查衝突：佔用即衝突，一律不覆蓋（同 handleMove 的統一語意）
+  const occupant = schedule[targetKey]
+  if (occupant?.patientId && occupant.patientId !== patientId) {
+    throw new ScheduleConflictError(
+      `目標床位已被 ${occupant.patientName || '其他病人'} 佔用，請重新選床。`,
+    )
   }
 
   schedule[targetKey] = newSlotData
