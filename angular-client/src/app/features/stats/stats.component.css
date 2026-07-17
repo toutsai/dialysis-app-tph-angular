@@ -1082,8 +1082,8 @@ button:disabled {
   50% { opacity: 0.45; }
 }
 
-/* 病人卡片含衝突圖示時加黃色呼吸光暈 */
-.patient-main-info:has(.conflict-icon-inline) {
+/* 病人卡片含衝突圖示時加黃色呼吸光暈（掛在整張床位卡上，不只姓名列） */
+div:has(> .patient-main-info .conflict-icon-inline) {
   border-radius: 4px;
   animation: conflict-cell-pulse 1.6s ease-in-out infinite;
 }
