@@ -205,6 +205,17 @@
               </li>
             }
 
+            <!-- [醫師藥物調整] Admin, Contributor (Doc) -->
+            @if (canAccessPage('medAdjustment')) {
+              <li>
+                <a routerLink="/med-adjustment" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
+                  <div class="nav-item-content">
+                    <span class="nav-title">醫師藥物調整</span>
+                  </div>
+                </a>
+              </li>
+            }
+
             <!-- 7. [庫存管理] Admin, Viewer -->
             @if (canAccessPage('inventory')) {
               <li>

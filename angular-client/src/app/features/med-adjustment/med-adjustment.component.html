@@ -1,0 +1,99 @@
+<div class="page-container">
+  <header class="page-header">
+    <h1 class="page-title">醫師藥物調整</h1>
+    <div class="toolbar">
+      <select [(ngModel)]="groupFreq" (ngModelChange)="rebuildPatientList()">
+        <option value="一三五">一三五</option>
+        <option value="二四六">二四六</option>
+        <option value="other">其他頻率</option>
+      </select>
+      <select [(ngModel)]="groupShift" (ngModelChange)="rebuildPatientList()">
+        <option value="early">早班</option>
+        <option value="noon">午班</option>
+        <option value="late">晚班</option>
+      </select>
+      <button class="btn" (click)="prevPatient()" [disabled]="selectedIndex() === 0">‹ 上一位</button>
+      <select class="patient-select" [ngModel]="selectedIndex()" (ngModelChange)="onSelectChange($event)">
+        @for (p of patientList(); track p.patientId; let i = $index) {
+          <option [value]="i">{{ p.bedNum }}床 - {{ p.patientName }}</option>
+        }
+      </select>
+      <button class="btn" (click)="nextPatient()" [disabled]="selectedIndex() >= patientList().length - 1">下一位 ›</button>
+      <span class="patient-counter">{{ patientList().length ? selectedIndex() + 1 : 0 }} / {{ patientList().length }}</span>
+      <span class="month-nav">
+        <button class="btn" (click)="shiftMonths(1)">‹</button>
+        <span class="month-range">{{ months()[0] }} ~ {{ months()[5] }}</span>
+        <button class="btn" (click)="shiftMonths(-1)" [disabled]="monthOffset() === 0">›</button>
+      </span>
+      @if (isLoading()) { <span class="loading-hint">載入中…</span> }
+    </div>
+  </header>
+
+  @if (currentPatient; as patient) {
+    <!-- 上半：三頁籤 -->
+    <section class="half-section">
+      <div class="tab-bar">
+        <button class="tab-btn" [class.active]="activeTab === 'orders'" (click)="activeTab = 'orders'">醫囑調整</button>
+        <button class="tab-btn" [class.active]="activeTab === 'anemia'" (click)="activeTab = 'anemia'">貧血藥物調整</button>
+        <button class="tab-btn" [class.active]="activeTab === 'capho'" (click)="activeTab = 'capho'">鈣磷恆定</button>
+      </div>
+      <div class="table-scroll">
+        <table class="matrix-table">
+          <thead>
+            <tr>
+              <th class="sticky-col">項目</th>
+              @for (m of months(); track m) { <th>{{ m }}</th> }
+            </tr>
+          </thead>
+          <tbody>
+            @if (activeTab === 'orders') {
+              @for (row of ORDER_ROWS; track row.key) {
+                <tr>
+                  <td class="sticky-col row-label">{{ row.label }}</td>
+                  @for (m of months(); track m) {
+                    <td [class.cell-changed]="orderCell(row.key, m).changed">{{ orderCell(row.key, m).text }}</td>
+                  }
+                </tr>
+              }
+            } @else {
+              @for (drug of activeTab === 'anemia' ? ANEMIA_DRUGS : CAPHO_DRUGS; track drug.label) {
+                <tr>
+                  <td class="sticky-col row-label">{{ drug.label }}</td>
+                  @for (m of months(); track m) { <td>{{ drugCell(drug, m) }}</td> }
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (activeTab === 'orders') {
+        <div class="table-hint">底色標示 = 該月有醫囑調整；數值為該月最後生效的設定</div>
+      }
+    </section>
+
+    <!-- 下半：每月累積報告 -->
+    <section class="half-section">
+      <h2 class="section-title">每月累積報告</h2>
+      <div class="table-scroll labs-scroll">
+        <table class="matrix-table">
+          <thead>
+            <tr>
+              <th class="sticky-col">項目</th>
+              @for (m of months(); track m) { <th>{{ m }}</th> }
+            </tr>
+          </thead>
+          <tbody>
+            @for (item of LAB_ROWS; track item) {
+              <tr>
+                <td class="sticky-col row-label">{{ labRowLabel(item) }}</td>
+                @for (m of months(); track m) { <td>{{ labCell(item, m) }}</td> }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  } @else {
+    <div class="empty-state">此群組沒有病人，請調整頻率/班別。</div>
+  }
+</div>

@@ -125,6 +125,12 @@ export const PAGE_ACCESS = {
     roles: DOCTOR_ROLES,
     roleLabel: '管理員、貢獻者',
   },
+  medAdjustment: {
+    path: '/med-adjustment',
+    title: '醫師藥物調整',
+    roles: DOCTOR_ROLES,
+    roleLabel: '管理員、貢獻者',
+  },
   inventory: {
     path: '/inventory',
     title: '庫存管理',

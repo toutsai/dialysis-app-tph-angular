@@ -231,6 +231,15 @@ export const routes: Routes = [
         data: { title: PAGE_ACCESS.orders.title, roles: PAGE_ACCESS.orders.roles },
       },
       {
+        path: 'med-adjustment',
+        loadComponent: () =>
+          import('./features/med-adjustment/med-adjustment.component').then(
+            (m) => m.MedAdjustmentComponent
+          ),
+        canActivate: [roleGuard],
+        data: { title: PAGE_ACCESS.medAdjustment.title, roles: PAGE_ACCESS.medAdjustment.roles },
+      },
+      {
         path: 'my-patients',
         loadComponent: () =>
           import('./features/my-patients/my-patients.component').then(
