@@ -153,7 +153,7 @@
                   <div *ngFor="let patient of effectiveStatsData.early[teamName]?.earlyShift?.patients" [class]="patient.classes" [attr.draggable]="!isPageLocked" (dragstart)="!isPageLocked && onDragStart($event, patient, 'earlyShift')">
                     <div class="patient-main-info" (click)="!isPageLocked && openBedChangeDialog(patient)" title="點擊換床">
                       <div class="patient-line-one">
-                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}</span>
+                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}@if (getPatientConflict(patient.id); as conflict) {<i class="fas fa-exclamation-triangle conflict-icon-inline" title="調班衝突：點擊處理" (click)="$event.stopPropagation(); openConflictDialog(conflict)"></i>}</span>
                         <span class="patient-icon-wrapper" (click)="$event.stopPropagation()">
                           <app-patient-messages-icon [patientId]="patient.id" [messageTypes]="patient.messageTypes" context="dialog" (iconClick)="handleIconClick($event)"></app-patient-messages-icon>
                         </span>
@@ -181,7 +181,7 @@
                   <div *ngFor="let patient of effectiveStatsData.early[teamName]?.noonShiftOn?.patients" [class]="patient.classes" [attr.draggable]="!isPageLocked" (dragstart)="!isPageLocked && onDragStart($event, patient, 'noonShiftOn')">
                     <div class="patient-main-info" (click)="!isPageLocked && openBedChangeDialog(patient)" title="點擊換床">
                       <div class="patient-line-one">
-                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}</span>
+                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}@if (getPatientConflict(patient.id); as conflict) {<i class="fas fa-exclamation-triangle conflict-icon-inline" title="調班衝突：點擊處理" (click)="$event.stopPropagation(); openConflictDialog(conflict)"></i>}</span>
                         <span class="patient-icon-wrapper" (click)="$event.stopPropagation()">
                           <app-patient-messages-icon [patientId]="patient.id" [messageTypes]="patient.messageTypes" context="dialog" (iconClick)="handleIconClick($event)"></app-patient-messages-icon>
                         </span>
@@ -217,7 +217,7 @@
                     <div *ngFor="let patient of effectiveStatsData.early[teamName]?.noonShiftOff?.patients" [class]="patient.classes" [attr.draggable]="!isPageLocked" (dragstart)="!isPageLocked && onDragStart($event, patient, 'noonShiftOff')">
                       <div class="patient-main-info" (click)="!isPageLocked && openBedChangeDialog(patient)" title="點擊換床">
                         <div class="patient-line-one">
-                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}</span>
+                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}@if (getPatientConflict(patient.id); as conflict) {<i class="fas fa-exclamation-triangle conflict-icon-inline" title="調班衝突：點擊處理" (click)="$event.stopPropagation(); openConflictDialog(conflict)"></i>}</span>
                         <span class="patient-icon-wrapper" (click)="$event.stopPropagation()">
                           <app-patient-messages-icon [patientId]="patient.id" [messageTypes]="patient.messageTypes" context="dialog" (iconClick)="handleIconClick($event)"></app-patient-messages-icon>
                         </span>
@@ -277,7 +277,7 @@
                     <div *ngFor="let patient of effectiveStatsData.late[teamName]?.noonShiftOff?.patients" [class]="patient.classes" [attr.draggable]="!isPageLocked" (dragstart)="!isPageLocked && onDragStart($event, patient, 'noonShiftOff')">
                       <div class="patient-main-info" (click)="!isPageLocked && openBedChangeDialog(patient)" title="點擊換床">
                         <div class="patient-line-one">
-                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}</span>
+                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}@if (getPatientConflict(patient.id); as conflict) {<i class="fas fa-exclamation-triangle conflict-icon-inline" title="調班衝突：點擊處理" (click)="$event.stopPropagation(); openConflictDialog(conflict)"></i>}</span>
                         <span class="patient-icon-wrapper" (click)="$event.stopPropagation()">
                           <app-patient-messages-icon [patientId]="patient.id" [messageTypes]="patient.messageTypes" context="dialog" (iconClick)="handleIconClick($event)"></app-patient-messages-icon>
                         </span>
@@ -306,7 +306,7 @@
                   <div *ngFor="let patient of effectiveStatsData.late[teamName]?.lateShift?.patients" [class]="patient.classes" [attr.draggable]="!isPageLocked" (dragstart)="!isPageLocked && onDragStart($event, patient, 'lateShift')">
                     <div class="patient-main-info" (click)="!isPageLocked && openBedChangeDialog(patient)" title="點擊換床">
                       <div class="patient-line-one">
-                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}</span>
+                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}@if (getPatientConflict(patient.id); as conflict) {<i class="fas fa-exclamation-triangle conflict-icon-inline" title="調班衝突：點擊處理" (click)="$event.stopPropagation(); openConflictDialog(conflict)"></i>}</span>
                         <span class="patient-icon-wrapper" (click)="$event.stopPropagation()">
                           <app-patient-messages-icon [patientId]="patient.id" [messageTypes]="patient.messageTypes" context="dialog" (iconClick)="handleIconClick($event)"></app-patient-messages-icon>
                         </span>
@@ -363,7 +363,7 @@
                   <div *ngFor="let patient of effectiveStatsData.lateTakeOff[teamName]?.lateShiftTakeOff?.patients" [class]="patient.classes" [attr.draggable]="!isPageLocked" (dragstart)="!isPageLocked && onDragStart($event, patient, 'lateShiftTakeOff')">
                     <div class="patient-main-info" (click)="!isPageLocked && openBedChangeDialog(patient)" title="點擊換床">
                       <div class="patient-line-one">
-                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}</span>
+                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}@if (getPatientConflict(patient.id); as conflict) {<i class="fas fa-exclamation-triangle conflict-icon-inline" title="調班衝突：點擊處理" (click)="$event.stopPropagation(); openConflictDialog(conflict)"></i>}</span>
                         <span class="patient-icon-wrapper" (click)="$event.stopPropagation()">
                           <app-patient-messages-icon [patientId]="patient.id" [messageTypes]="patient.messageTypes" context="dialog" (iconClick)="handleIconClick($event)"></app-patient-messages-icon>
                         </span>
@@ -405,7 +405,7 @@
               <div *ngFor="let patient of effectiveStatsData.early[teamName]?.earlyShift?.patients" [class]="patient.classes">
                 <div class="patient-main-info">
                   <div class="patient-line-one">
-                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}</span>
+                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}@if (getPatientConflict(patient.id); as conflict) {<i class="fas fa-exclamation-triangle conflict-icon-inline" title="調班衝突：點擊處理" (click)="$event.stopPropagation(); openConflictDialog(conflict)"></i>}</span>
                         <span class="patient-icon-wrapper" (click)="$event.stopPropagation()">
                           <app-patient-messages-icon [patientId]="patient.id" [messageTypes]="patient.messageTypes" context="dialog" (iconClick)="handleIconClick($event)"></app-patient-messages-icon>
                         </span>
@@ -423,7 +423,7 @@
               <div *ngFor="let patient of effectiveStatsData.early[teamName]?.noonShiftOn?.patients" [class]="patient.classes">
                 <div class="patient-main-info">
                   <div class="patient-line-one">
-                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}</span>
+                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}@if (getPatientConflict(patient.id); as conflict) {<i class="fas fa-exclamation-triangle conflict-icon-inline" title="調班衝突：點擊處理" (click)="$event.stopPropagation(); openConflictDialog(conflict)"></i>}</span>
                         <span class="patient-icon-wrapper" (click)="$event.stopPropagation()">
                           <app-patient-messages-icon [patientId]="patient.id" [messageTypes]="patient.messageTypes" context="dialog" (iconClick)="handleIconClick($event)"></app-patient-messages-icon>
                         </span>
@@ -445,7 +445,7 @@
                 <div *ngFor="let patient of effectiveStatsData.early[teamName]?.noonShiftOff?.patients" [class]="patient.classes">
                   <div class="patient-main-info">
                     <div class="patient-line-one">
-                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}</span>
+                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}@if (getPatientConflict(patient.id); as conflict) {<i class="fas fa-exclamation-triangle conflict-icon-inline" title="調班衝突：點擊處理" (click)="$event.stopPropagation(); openConflictDialog(conflict)"></i>}</span>
                         <span class="patient-icon-wrapper" (click)="$event.stopPropagation()">
                           <app-patient-messages-icon [patientId]="patient.id" [messageTypes]="patient.messageTypes" context="dialog" (iconClick)="handleIconClick($event)"></app-patient-messages-icon>
                         </span>
@@ -486,7 +486,7 @@
                 <div *ngFor="let patient of effectiveStatsData.late[teamName]?.noonShiftOff?.patients" [class]="patient.classes">
                   <div class="patient-main-info">
                     <div class="patient-line-one">
-                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}</span>
+                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}@if (getPatientConflict(patient.id); as conflict) {<i class="fas fa-exclamation-triangle conflict-icon-inline" title="調班衝突：點擊處理" (click)="$event.stopPropagation(); openConflictDialog(conflict)"></i>}</span>
                         <span class="patient-icon-wrapper" (click)="$event.stopPropagation()">
                           <app-patient-messages-icon [patientId]="patient.id" [messageTypes]="patient.messageTypes" context="dialog" (iconClick)="handleIconClick($event)"></app-patient-messages-icon>
                         </span>
@@ -505,7 +505,7 @@
               <div *ngFor="let patient of effectiveStatsData.late[teamName]?.lateShift?.patients" [class]="patient.classes">
                 <div class="patient-main-info">
                   <div class="patient-line-one">
-                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}</span>
+                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}@if (getPatientConflict(patient.id); as conflict) {<i class="fas fa-exclamation-triangle conflict-icon-inline" title="調班衝突：點擊處理" (click)="$event.stopPropagation(); openConflictDialog(conflict)"></i>}</span>
                         <span class="patient-icon-wrapper" (click)="$event.stopPropagation()">
                           <app-patient-messages-icon [patientId]="patient.id" [messageTypes]="patient.messageTypes" context="dialog" (iconClick)="handleIconClick($event)"></app-patient-messages-icon>
                         </span>
@@ -541,7 +541,7 @@
               <div *ngFor="let patient of effectiveStatsData.lateTakeOff[teamName]?.lateShiftTakeOff?.patients" [class]="patient.classes">
                 <div class="patient-main-info">
                   <div class="patient-line-one">
-                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}</span>
+                        <span class="patient-name-text">{{ patient.dialysisBed }} - {{ patient.name }}@if (isDoNotMove(patient.id)) {<i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patient.id)"></i>}@if (getPatientConflict(patient.id); as conflict) {<i class="fas fa-exclamation-triangle conflict-icon-inline" title="調班衝突：點擊處理" (click)="$event.stopPropagation(); openConflictDialog(conflict)"></i>}</span>
                         <span class="patient-icon-wrapper" (click)="$event.stopPropagation()">
                           <app-patient-messages-icon [patientId]="patient.id" [messageTypes]="patient.messageTypes" context="dialog" (iconClick)="handleIconClick($event)"></app-patient-messages-icon>
                         </span>
@@ -703,6 +703,34 @@
     (close)="isSchedulerDialogVisible = false"
     (submit)="handleScheduledUpdate($event)"
   ></app-patient-update-scheduler-dialog>
+
+  <!-- Conflict Resolve Dialog（點病人旁的衝突三角形開啟，就地二選一） -->
+  <div class="conflict-dialog-overlay" *ngIf="isConflictDialogVisible" (click)="closeConflictDialog()">
+    <div class="conflict-dialog-box" (click)="$event.stopPropagation()">
+      <h3><i class="fas fa-exclamation-triangle conflict-dialog-title-icon"></i> 調班衝突待處理</h3>
+      <ng-container *ngIf="conflictForDialog as conflict">
+        <p style="white-space: pre-wrap;">{{ buildConflictMessage(conflict) }}</p>
+        <div class="conflict-dialog-actions">
+          <button class="btn btn-secondary" [disabled]="isResolvingConflict" (click)="closeConflictDialog()">取消</button>
+          <ng-container *ngIf="conflict.type === 'MOVE' && hasPermission('editor'); else goManager">
+            <button
+              class="btn btn-info"
+              [disabled]="isResolvingConflict"
+              (click)="resolveCellConflict('keep_base')"
+            >維持新常規床位</button>
+            <button
+              class="btn btn-primary"
+              [disabled]="isResolvingConflict"
+              (click)="resolveCellConflict('keep_exception')"
+            >維持調班後床位</button>
+          </ng-container>
+          <ng-template #goManager>
+            <button class="btn btn-info" (click)="goToExceptionManager()">前往調班管理</button>
+          </ng-template>
+        </div>
+      </ng-container>
+    </div>
+  </div>
 
   <!-- Mobile FAB -->
   <button class="fab-mobile mobile-only" (click)="isCreateTaskModalVisible = true" [disabled]="!hasPermission('viewer')">

@@ -2,7 +2,9 @@
 import { Component, inject, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { AuthService } from '@app/core/services/auth.service';
+import { ApiService } from '@app/core/services/api.service';
 import { ApiConfigService } from '@services/api-config.service';
 import { ApiManagerService, type FirestoreRecord } from '@services/api-manager.service';
 import { PatientStoreService } from '@services/patient-store.service';
@@ -12,7 +14,7 @@ import { ArchiveStoreService } from '@services/archive-store.service';
 import { NotificationService } from '@services/notification.service';
 import { DateStateService } from '@app/core/services/date-state.service';
 import { UserDirectoryService } from '@services/user-directory.service';
-import { Subject, Subscription } from 'rxjs';
+import { Subject, Subscription, firstValueFrom } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { SHIFT_CODES, earlyTeams as importedEarlyTeams, lateTeams as importedLateTeams, baseTeams } from '@/constants/scheduleConstants';
 import { generateAutoNote, getUnifiedCellStyle } from '@/utils/scheduleUtils';
@@ -123,10 +125,13 @@ export class StatsComponent implements OnInit, OnDestroy {
   private readonly notificationService = inject(NotificationService);
   private readonly dateState = inject(DateStateService);
   private readonly userDirectory = inject(UserDirectoryService);
+  private readonly api = inject(ApiService);
+  private readonly router = inject(Router);
 
   // API instances
   private readonly schedulesApi = this.apiManager.create<FirestoreRecord>('schedules');
   private readonly usersApi = this.apiManager.create<FirestoreRecord>('users');
+  private readonly exceptionsListApi = this.apiManager.create<FirestoreRecord>('schedule_exceptions_list');
 
   // --- Constants exposed to template ---
   readonly nurseNameList = nurseNameList;
@@ -151,6 +156,13 @@ export class StatsComponent implements OnInit, OnDestroy {
   private exceptionEventSource: EventSource | null = null;
   private exceptionRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   noonTakeoffVisibility: Record<string, boolean> = { early: false, late: false };
+
+  // --- 調班衝突（標在病人項目上，點三角形就地解決） ---
+  private conflictExceptions: any[] = [];
+  private conflictByPatientId = new Map<string, any>();
+  isConflictDialogVisible = false;
+  conflictForDialog: any = null;
+  isResolvingConflict = false;
 
   // --- Dialog State ---
   isBedChangeDialogVisible = false;
@@ -556,6 +568,115 @@ export class StatsComponent implements OnInit, OnDestroy {
     }, 800);
   }
 
+  // ---------------------------------------------------------------------------
+  // 調班衝突：病人項目標記與就地解決（與每日排程頁同款）
+  // ---------------------------------------------------------------------------
+
+  private async loadConflictExceptions(): Promise<void> {
+    try {
+      const rows = await this.exceptionsListApi.fetchAll();
+      this.conflictExceptions =
+        ((rows as any[]) || []).filter((ex) => ex?.status === 'conflict_requires_resolution');
+    } catch (error) {
+      console.warn('[Stats] 載入衝突調班失敗:', error);
+      this.conflictExceptions = [];
+    }
+    this.rebuildConflictMap();
+  }
+
+  private rebuildConflictMap(): void {
+    const dateStr = this.formatDate(this.currentDate);
+    const map = new Map<string, any>();
+    for (const ex of this.conflictExceptions) {
+      if (ex.type === 'SWAP') {
+        if (ex.date === dateStr) {
+          if (ex.patient1?.patientId && !map.has(ex.patient1.patientId)) map.set(ex.patient1.patientId, ex);
+          if (ex.patient2?.patientId && !map.has(ex.patient2.patientId)) map.set(ex.patient2.patientId, ex);
+        }
+        continue;
+      }
+      if (!ex.patientId) continue;
+      const hitsDate =
+        ex.to?.goalDate === dateStr || ex.from?.sourceDate === dateStr || ex.date === dateStr;
+      if (hitsDate && !map.has(ex.patientId)) map.set(ex.patientId, ex);
+    }
+    this.conflictByPatientId = map;
+  }
+
+  getPatientConflict(patientId: string): any | null {
+    return this.conflictByPatientId.get(patientId) || null;
+  }
+
+  openConflictDialog(conflict: any): void {
+    this.conflictForDialog = conflict;
+    this.isConflictDialogVisible = true;
+  }
+
+  closeConflictDialog(): void {
+    this.isConflictDialogVisible = false;
+    this.conflictForDialog = null;
+  }
+
+  buildConflictMessage(ex: any): string {
+    const shiftMap: Record<string, string> = { early: '早班', noon: '午班', late: '晚班' };
+    const formatSlot = (data: any): string => {
+      const bedNum = data?.fromBedNum ?? data?.bedNum;
+      const shiftCode = data?.fromShiftCode ?? data?.shiftCode;
+      if (bedNum === undefined || bedNum === null || !shiftCode) return 'N/A';
+      const bedDisplay = String(bedNum).startsWith('peripheral')
+        ? `外圍 ${String(bedNum).split('-')[1] || ''}`
+        : `${bedNum}床`;
+      return `${bedDisplay} / ${shiftMap[shiftCode] || shiftCode}`;
+    };
+    const typeMap: Record<string, string> = {
+      MOVE: '臨時調班', SUSPEND: '區間暫停', ADD_SESSION: '臨時加洗',
+      RANGE_MOVE: '區間調班', SWAP: '同日互調',
+    };
+    const lines: string[] = [];
+    if (ex.type === 'SWAP') {
+      const name1 = ex.patient1?.patientName || ex.patient1?.name || '';
+      const name2 = ex.patient2?.patientName || ex.patient2?.name || '';
+      lines.push(`病人：${[name1, name2].filter(Boolean).join(' ⇄ ') || '未指定'}`);
+    } else {
+      lines.push(`病人：${ex.patientName || '未指定'}`);
+    }
+    lines.push(`類型：${typeMap[ex.type] || ex.type}`);
+    if (ex.from?.sourceDate) lines.push(`原班：${ex.from.sourceDate} ${formatSlot(ex.from)}`);
+    if (ex.to?.goalDate) lines.push(`新班：${ex.to.goalDate} ${formatSlot(ex.to)}`);
+    if (ex.errorMessage) lines.push(`衝突原因：${ex.errorMessage}`);
+    return lines.join('\n');
+  }
+
+  async resolveCellConflict(choice: 'keep_base' | 'keep_exception'): Promise<void> {
+    const conflict = this.conflictForDialog;
+    if (!conflict?.id || this.isResolvingConflict) return;
+    this.isResolvingConflict = true;
+    try {
+      await firstValueFrom(
+        this.api.post(`/schedules/exceptions/${conflict.id}/resolve-conflict`, { choice }),
+      );
+      const msg =
+        choice === 'keep_base'
+          ? `已維持新常規床位，原調班已取消: ${conflict.patientName || ''}`
+          : `已維持調班後床位: ${conflict.patientName || ''}`;
+      this.notificationService.createGlobalNotification(msg, 'success');
+      this.closeConflictDialog();
+      await this.loadData(new Date(this.currentDate));
+    } catch (error: any) {
+      console.error('解決衝突失敗:', error);
+      this.alertDialogTitle = '解決衝突失敗';
+      this.alertDialogMessage = `執行解決衝突時發生錯誤: ${error?.message || error}`;
+      this.isAlertDialogVisible = true;
+    } finally {
+      this.isResolvingConflict = false;
+    }
+  }
+
+  goToExceptionManager(): void {
+    this.closeConflictDialog();
+    this.router.navigate(['/exception-manager']);
+  }
+
   private exceptionAffectsDate(payload: any, dateStr: string): boolean {
     const exception = payload?.exception || payload || {};
     const affectedDates = new Set<string>();
@@ -709,6 +830,8 @@ export class StatsComponent implements OnInit, OnDestroy {
     this.hasUnsavedTeamChanges = false;
     this.statusIndicator = '讀取中...';
     this.isLoading = true;
+    // 衝突調班清單並行更新（不阻塞主載入）
+    this.loadConflictExceptions();
     const dateStr = this.formatDate(date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
