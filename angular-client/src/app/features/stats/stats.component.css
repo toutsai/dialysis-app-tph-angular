@@ -1063,6 +1063,40 @@ button:disabled {
   font-size: 0.85em;
 }
 
+/* ===== 空床顯示（未分組格，組長一眼掃出可用床位） ===== */
+.empty-bed-block {
+  margin-top: 6px;
+  padding: 4px 6px;
+  border: 1px dashed #adb5bd;
+  border-radius: 4px;
+  background: #f8f9fa;
+}
+
+.empty-bed-title {
+  font-size: 0.72em;
+  color: #868e96;
+  margin-bottom: 3px;
+}
+
+.empty-bed-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.empty-bed-chip {
+  display: inline-block;
+  min-width: 22px;
+  padding: 1px 4px;
+  border: 1px dashed #ced4da;
+  border-radius: 3px;
+  background: #fff;
+  color: #868e96;
+  font-size: 0.78em;
+  text-align: center;
+  line-height: 1.4;
+}
+
 /* ===== 調班衝突標記（病人項目黃色光暈 + 三角形，點擊就地解決） ===== */
 .conflict-icon-inline {
   color: #e8590c;

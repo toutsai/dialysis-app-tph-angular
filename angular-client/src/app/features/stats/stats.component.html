@@ -166,6 +166,10 @@
                     </div>
                   </div>
                 </div>
+                <div class="empty-bed-block" *ngIf="teamName.includes('未分組') && emptyBedsByShift.early.length">
+                  <div class="empty-bed-title">空床 ({{ emptyBedsByShift.early.length }})</div>
+                  <div class="empty-bed-chips"><span class="empty-bed-chip" *ngFor="let bed of emptyBedsByShift.early">{{ formatEmptyBed(bed) }}</span></div>
+                </div>
                 <div class="cell-actions-container">
                   <div class="prep-list-trigger" *ngIf="effectiveStatsData.early[teamName]?.earlyShift?.patients?.length > 0" (click)="showPrepPopover($event, effectiveStatsData.early[teamName], 'earlyShift')" title="顯示備物清單">📋</div>
                   <div class="injection-list-trigger" *ngIf="effectiveStatsData.early[teamName]?.earlyShift?.patients?.length > 0" (click)="showInjectionList(effectiveStatsData.early[teamName], 'earlyShift')" title="顯示本日應打針劑">💉</div>
@@ -193,6 +197,10 @@
                       </div>
                     </div>
                   </div>
+                </div>
+                <div class="empty-bed-block" *ngIf="teamName.includes('未分組') && emptyBedsByShift.noon.length">
+                  <div class="empty-bed-title">空床 ({{ emptyBedsByShift.noon.length }})</div>
+                  <div class="empty-bed-chips"><span class="empty-bed-chip" *ngFor="let bed of emptyBedsByShift.noon">{{ formatEmptyBed(bed) }}</span></div>
                 </div>
                 <div class="cell-actions-container">
                   <div class="prep-list-trigger" *ngIf="effectiveStatsData.early[teamName]?.noonShiftOn?.patients?.length > 0" (click)="showPrepPopover($event, effectiveStatsData.early[teamName], 'noonShiftOn')" title="顯示備物清單">📋</div>
@@ -318,6 +326,10 @@
                       </div>
                     </div>
                   </div>
+                </div>
+                <div class="empty-bed-block" *ngIf="teamName.includes('未分組') && emptyBedsByShift.late.length">
+                  <div class="empty-bed-title">空床 ({{ emptyBedsByShift.late.length }})</div>
+                  <div class="empty-bed-chips"><span class="empty-bed-chip" *ngFor="let bed of emptyBedsByShift.late">{{ formatEmptyBed(bed) }}</span></div>
                 </div>
                 <div class="cell-actions-container">
                   <div class="prep-list-trigger" *ngIf="effectiveStatsData.late[teamName]?.lateShift?.patients?.length > 0" (click)="showPrepPopover($event, effectiveStatsData.late[teamName], 'lateShift')" title="顯示備物清單">📋</div>

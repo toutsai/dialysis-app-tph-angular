@@ -668,6 +668,33 @@ export class StatsComponent implements OnInit, OnDestroy {
   retargetDate: string | null = null;
   private retargetConflictRef: any = null;
 
+  // --- 空床顯示（未分組格，供組長一眼掃出可用床位） ---
+
+  /** 各班別空床清單，於 loadData 載入排程後重算（memoize 避免模板 getter 每輪 CD 重算） */
+  emptyBedsByShift: Record<'early' | 'noon' | 'late', (string | number)[]> = {
+    early: [], noon: [], late: [],
+  };
+
+  private rebuildEmptyBeds(): void {
+    const sched: Record<string, any> = this.currentRecord?.schedule || {};
+    const result: Record<'early' | 'noon' | 'late', (string | number)[]> = {
+      early: [], noon: [], late: [],
+    };
+    for (const shiftCode of ['early', 'noon', 'late'] as const) {
+      for (const bed of this.retargetBedLayout) {
+        const key = String(bed).startsWith('peripheral')
+          ? `${bed}-${shiftCode}`
+          : `bed-${bed}-${shiftCode}`;
+        if (!sched[key]?.patientId) result[shiftCode].push(bed);
+      }
+    }
+    this.emptyBedsByShift = result;
+  }
+
+  formatEmptyBed(bed: string | number): string {
+    return String(bed).startsWith('peripheral') ? '外' + String(bed).split('-')[1] : String(bed);
+  }
+
   /** 來源失效型衝突（總表修正後病人不在原床）→ 維持二選一；其餘為佔床型 → 重新選床 */
   isSourceInvalidConflict(conflict: any): boolean {
     return /已不在原床位|已不再是/.test(conflict?.errorMessage || '');
@@ -945,6 +972,7 @@ export class StatsComponent implements OnInit, OnDestroy {
       const teamsData = await fetchTeamsByDate(dateStr);
 
       Object.assign(this.currentRecord, scheduleRecord);
+      this.rebuildEmptyBeds();
       this.currentTeamsRecord = teamsData || { id: null, date: dateStr, teams: {}, names: {} };
 
       // Note: Orders are NOT eagerly fetched here to avoid N individual Firestore queries.
