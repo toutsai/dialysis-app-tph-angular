@@ -418,6 +418,8 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   readonly conflictCellMap = computed(() => {
     const dateStr = this.currentDateDisplay();
     const map = new Map<string, any>();
+    // 歷史日期唯讀，衝突已無法就地處理，不標示
+    if (dateStr < this.formatDate(new Date())) return map;
     const put = (bedNum: unknown, shiftCode: unknown, ex: any) => {
       if (bedNum === undefined || bedNum === null || bedNum === '' || !shiftCode) return;
       const key = this.buildCellKey(String(bedNum), String(shiftCode));

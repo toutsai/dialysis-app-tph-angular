@@ -160,16 +160,8 @@
                   @for (shiftCode of ORDERED_SHIFT_CODES; track shiftCode) {
                     <td
                       [ngClass]="getPatientCellStyle('bed-' + bedNum + '-' + shiftCode)"
-                      [class.conflict-cell]="!!getCellConflict('bed-' + bedNum + '-' + shiftCode)"
                       (click)="handleSimplifiedCellClick('bed-' + bedNum + '-' + shiftCode)"
                     >
-                      @if (getCellConflict('bed-' + bedNum + '-' + shiftCode); as conflict) {
-                        <button
-                          class="conflict-icon-btn"
-                          title="調班衝突：點擊處理"
-                          (click)="$event.stopPropagation(); openConflictDialog(conflict)"
-                        ><i class="fas fa-exclamation-triangle"></i></button>
-                      }
                       @if (currentRecord.schedule['bed-' + bedNum + '-' + shiftCode]?.patientId; as patientId) {
                         <div class="patient-info-cell">
                           <div class="patient-mrn-name">

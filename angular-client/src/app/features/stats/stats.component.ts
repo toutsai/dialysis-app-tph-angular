@@ -587,6 +587,11 @@ export class StatsComponent implements OnInit, OnDestroy {
   private rebuildConflictMap(): void {
     const dateStr = this.formatDate(this.currentDate);
     const map = new Map<string, any>();
+    // 歷史日期唯讀，衝突已無法就地處理，不標示
+    if (dateStr < this.formatDate(new Date())) {
+      this.conflictByPatientId = map;
+      return;
+    }
     for (const ex of this.conflictExceptions) {
       if (ex.type === 'SWAP') {
         if (ex.date === dateStr) {
