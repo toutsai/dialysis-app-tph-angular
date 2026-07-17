@@ -10,6 +10,7 @@ import {
   type FirestoreRecord,
 } from '@services/api-manager.service';
 import { PatientStoreService } from '@services/patient-store.service';
+import { LAB_ITEM_DISPLAY_NAMES } from '@/constants/labAlertConstants';
 
 interface DrugDef {
   label: string;
@@ -85,12 +86,11 @@ export class MedAdjustmentComponent implements OnInit {
     { key: 'time', label: '透析時間' },
     { key: 'ak', label: 'AK 人工腎臟' },
   ];
-  // 下半每月報告的項目（值取當月最後一次報告）
+  // 下半每月報告的項目與順序：比照檢驗報告管理頁 prioritizedLabItems（值取當月最後一次報告）
   readonly LAB_ROWS = [
-    'Hb', 'Hct', 'MCV', 'Ferritin', 'Iron', 'TIBC', 'TSAT',
-    'Ca', 'P', 'CaxP', 'iPTH', 'Albumin',
-    'BUN', 'PostBUN', 'Creatinine', 'K', 'Na', 'UricAcid',
-    'GlucoseAC', 'Cholesterol', 'Triglyceride', 'ALT',
+    'WBC', 'Platelet', 'Hb', 'Ferritin', 'TSAT', 'GlucoseAC', 'Triglyceride',
+    'LDL', 'UricAcid', 'Albumin', 'ALT', 'Na', 'K', 'P', 'Ca', 'CaXP', 'iPTH',
+    'BUN', 'PostBUN', 'Creatinine', 'Kt/V', 'URR',
   ];
 
   // --- 病人資料 ---
@@ -307,22 +307,32 @@ export class MedAdjustmentComponent implements OnInit {
       const v = parseFloat(String(data[k] ?? ''));
       return isNaN(v) ? null : v;
     };
+    // 衍生項計算比照檢驗報告管理頁
     if (item === 'TSAT') {
       const iron = num('Iron');
       const tibc = num('TIBC');
-      return iron !== null && tibc ? `${((iron / tibc) * 100).toFixed(1)}%` : '-';
+      return iron !== null && tibc ? ((iron / tibc) * 100).toFixed(1) : '-';
     }
-    if (item === 'CaxP') {
+    if (item === 'CaXP') {
       const ca = num('Ca');
       const p = num('P');
       return ca !== null && p !== null ? (ca * p).toFixed(1) : '-';
+    }
+    if (item === 'URR') {
+      const bun = num('BUN');
+      const post = num('PostBUN');
+      return bun && post !== null ? (((bun - post) / bun) * 100).toFixed(1) : '-';
+    }
+    if (item === 'Kt/V') {
+      const bun = num('BUN');
+      const post = num('PostBUN');
+      return bun && post ? Math.log(bun / post).toFixed(2) : '-';
     }
     const v = data[item];
     return v === undefined || v === null || v === '' ? '-' : String(v);
   }
 
   labRowLabel(item: string): string {
-    const map: Record<string, string> = { CaxP: 'Ca×P', GlucoseAC: 'Glucose AC', UricAcid: 'Uric Acid' };
-    return map[item] || item;
+    return (LAB_ITEM_DISPLAY_NAMES as Record<string, string>)[item] || item;
   }
 }
