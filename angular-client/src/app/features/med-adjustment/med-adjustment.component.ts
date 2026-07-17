@@ -99,11 +99,47 @@ export class MedAdjustmentComponent implements OnInit {
   private labByMonth = new Map<string, Record<string, unknown>>();
   readonly dataRevision = signal(0);
 
+  private readonly draftsApi: ApiManager<FirestoreRecord>;
+
+  // --- 當月藥物修正（醫師填寫，存 medication_drafts，kind 區隔不干擾班次草稿） ---
+  adjustNotes: Record<string, string> = {};
+  readonly isDirty = signal(false);
+  readonly isSaving = signal(false);
+  readonly savedHint = signal('');
+  readonly currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+
   constructor() {
     this.baseSchedulesApi = this.apiManager.create<FirestoreRecord>('base_schedules');
     this.historyApi = this.apiManager.create<FirestoreRecord>('dialysis_orders_history');
     this.medsApi = this.apiManager.create<FirestoreRecord>('medication_orders');
     this.labsApi = this.apiManager.create<FirestoreRecord>('lab_reports');
+    this.draftsApi = this.apiManager.create<FirestoreRecord>('medication_drafts');
+  }
+
+  markDirty(): void {
+    this.isDirty.set(true);
+    this.savedHint.set('');
+  }
+
+  async saveAdjustments(): Promise<void> {
+    const patient = this.currentPatient;
+    if (!patient || this.isSaving()) return;
+    this.isSaving.set(true);
+    try {
+      await this.draftsApi.save({
+        patientId: patient.patientId,
+        kind: 'med_adjustment',
+        month: this.currentMonth,
+        notes: { ...this.adjustNotes },
+      } as any);
+      this.isDirty.set(false);
+      this.savedHint.set('已儲存');
+    } catch (error) {
+      console.error('儲存藥物修正失敗:', error);
+      this.savedHint.set('儲存失敗，請重試');
+    } finally {
+      this.isSaving.set(false);
+    }
   }
 
   async ngOnInit(): Promise<void> {
@@ -168,14 +204,23 @@ export class MedAdjustmentComponent implements OnInit {
     this.historyRows = [];
     this.medRows = [];
     this.labByMonth = new Map();
+    this.adjustNotes = {};
+    this.isDirty.set(false);
+    this.savedHint.set('');
     if (!patient) { this.dataRevision.update((v) => v + 1); return; }
     this.isLoading.set(true);
     try {
-      const [history, meds, labs] = await Promise.all([
+      const [history, meds, labs, drafts] = await Promise.all([
         this.historyApi.fetchWhere({ patientId: patient.patientId }),
         this.medsApi.fetchWhere({ patientId: patient.patientId }),
         this.labsApi.fetchWhere({ patientId: patient.patientId }),
+        this.draftsApi.fetchWhere({ patientId: patient.patientId }),
       ]);
+      // 當月藥物修正：取本月最新一份
+      const adjustDoc = ((drafts as any[]) || [])
+        .filter((d: any) => d.kind === 'med_adjustment' && d.month === this.currentMonth)
+        .sort((a: any, b: any) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0];
+      this.adjustNotes = { ...(adjustDoc?.notes || {}) };
       // 醫囑歷史：依生效日(退 createdAt)由舊到新
       this.historyRows = ((history as any[]) || [])
         .map((h: any) => ({

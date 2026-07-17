@@ -36,6 +36,12 @@
         <button class="tab-btn" [class.active]="activeTab === 'orders'" (click)="activeTab = 'orders'">醫囑調整</button>
         <button class="tab-btn" [class.active]="activeTab === 'anemia'" (click)="activeTab = 'anemia'">貧血藥物調整</button>
         <button class="tab-btn" [class.active]="activeTab === 'capho'" (click)="activeTab = 'capho'">鈣磷恆定</button>
+        <span class="tab-actions">
+          @if (savedHint()) { <span class="saved-hint">{{ savedHint() }}</span> }
+          <button class="btn btn-save" (click)="saveAdjustments()" [disabled]="isSaving() || !isDirty()">
+            {{ isSaving() ? '儲存中…' : '儲存修正' }}
+          </button>
+        </span>
       </div>
       <div class="table-scroll">
         <table class="matrix-table">
@@ -43,6 +49,7 @@
             <tr>
               <th class="sticky-col">項目</th>
               @for (m of months(); track m) { <th>{{ m }}</th> }
+              <th class="adjust-col-head">當月藥物修正</th>
             </tr>
           </thead>
           <tbody>
@@ -53,6 +60,9 @@
                   @for (m of months(); track m) {
                     <td [class.cell-changed]="orderCell(row.key, m).changed">{{ orderCell(row.key, m).text }}</td>
                   }
+                  <td class="adjust-cell">
+                    <input class="adjust-input" [(ngModel)]="adjustNotes[row.key]" (ngModelChange)="markDirty()" placeholder="" />
+                  </td>
                 </tr>
               }
             } @else {
@@ -60,6 +70,9 @@
                 <tr>
                   <td class="sticky-col row-label">{{ drug.label }}</td>
                   @for (m of months(); track m) { <td>{{ drugCell(drug, m) }}</td> }
+                  <td class="adjust-cell">
+                    <input class="adjust-input" [(ngModel)]="adjustNotes[drug.label]" (ngModelChange)="markDirty()" placeholder="" />
+                  </td>
                 </tr>
               }
             }
@@ -74,19 +87,20 @@
     <!-- 下半：每月累積報告 -->
     <section class="half-section">
       <h2 class="section-title">每月累積報告</h2>
+      <!-- 轉置：項目橫排、年月直排 -->
       <div class="table-scroll labs-scroll">
         <table class="matrix-table">
           <thead>
             <tr>
-              <th class="sticky-col">項目</th>
-              @for (m of months(); track m) { <th>{{ m }}</th> }
+              <th class="sticky-col">年月</th>
+              @for (item of LAB_ROWS; track item) { <th>{{ labRowLabel(item) }}</th> }
             </tr>
           </thead>
           <tbody>
-            @for (item of LAB_ROWS; track item) {
+            @for (m of months(); track m) {
               <tr>
-                <td class="sticky-col row-label">{{ labRowLabel(item) }}</td>
-                @for (m of months(); track m) { <td>{{ labCell(item, m) }}</td> }
+                <td class="sticky-col row-label">{{ m }}</td>
+                @for (item of LAB_ROWS; track item) { <td>{{ labCell(item, m) }}</td> }
               </tr>
             }
           </tbody>

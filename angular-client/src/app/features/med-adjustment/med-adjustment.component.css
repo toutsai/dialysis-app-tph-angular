@@ -28,4 +28,12 @@ thead .sticky-col { z-index: 3; }
 .row-label { font-weight: 600; color: #343a40; }
 .cell-changed { background: #fff3bf; font-weight: 700; }
 .table-hint { margin-top: 6px; font-size: 0.78em; color: #868e96; }
+.tab-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.btn-save { background: #1971c2; color: #fff; border-color: #1971c2; }
+.btn-save:hover:not(:disabled) { background: #1864ab; }
+.saved-hint { color: #2b8a3e; font-size: 0.85em; }
+.adjust-col-head { background: #e7f5ff !important; min-width: 180px; }
+.adjust-cell { background: #f8fbff; padding: 2px 4px; }
+.adjust-input { width: 100%; min-width: 170px; border: 1px solid #c5dbf0; border-radius: 3px; padding: 4px 6px; font-size: 1em; }
+.adjust-input:focus { outline: none; border-color: #1971c2; }
 .empty-state { padding: 40px; text-align: center; color: #868e96; }
