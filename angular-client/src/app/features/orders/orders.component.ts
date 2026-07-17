@@ -33,6 +33,9 @@ interface OrderRecord extends FirestoreRecord {
   dose?: string;
   note?: string;
   frequency?: string;
+  startDate?: string;
+  endDate?: string;
+  prescriber?: string;
   changeDate?: string;
   uploadTimestamp?: { toDate: () => Date };
 }
@@ -111,10 +114,43 @@ export class OrdersComponent implements OnInit {
     { code: 'OUCA1', tradeName: 'U-Ca', unit: '顆' },
   ];
 
+  /** master 清單外的已知藥碼顯示名（新版含停止日 Excel 會帶入更多藥品） */
+  private readonly EXTRA_MED_NAMES: Record<string, string> = {
+    OFOL: 'Folinate(葉酸)',
+    OKEN: '維他命B群',
+    OFOS5: 'Lanclean',
+    XX88: '自備藥',
+  };
+
+  /** 查詢結果中出現、但不在 master 清單的藥碼（動態欄位：有上傳的藥品都呈現） */
+  readonly extraMeds = signal<MedicationMaster[]>([]);
+
   readonly allMedications = computed(() => [
     ...this.INJECTION_MEDS_MASTER,
     ...this.ORAL_MEDS_MASTER,
+    ...this.extraMeds(),
   ]);
+
+  /** 從查詢結果蒐集 master 清單外的藥碼，動態加欄 */
+  private collectExtraMeds(orders: any[]): void {
+    const knownCodes = new Set([
+      ...this.INJECTION_MEDS_MASTER.map((m) => m.code),
+      ...this.ORAL_MEDS_MASTER.map((m) => m.code),
+    ]);
+    const extras = new Map<string, MedicationMaster>();
+    for (const o of orders) {
+      const code = o?.orderCode;
+      if (!code || knownCodes.has(code) || extras.has(code)) continue;
+      extras.set(code, {
+        code,
+        tradeName: this.EXTRA_MED_NAMES[code] || code,
+        unit: '',
+      });
+    }
+    this.extraMeds.set(
+      [...extras.values()].sort((a, b) => a.code.localeCompare(b.code)),
+    );
+  }
 
   // --- Upload Tab State ---
   readonly selectedFile = signal<File | null>(null);
@@ -151,36 +187,45 @@ export class OrdersComponent implements OnInit {
     return this.SHIFT_INDEX_MAP[shiftIndex] ?? 'N/A';
   }
 
-  formatOrderCell(orders: OrderRecord[] | undefined): string {
+  formatOrderCell(orders: OrderRecord[] | undefined, monthKey?: string): string {
     if (!orders || orders.length === 0) return '-';
-    // 同藥同月多筆（不同頻率/開立日期）全部顯示，依開立日期排序。
+    // 同藥同月多筆（不同頻率/開立日期）全部顯示，依開始日/開立日期排序。
     // 不標日期：以各筆自帶的頻率/備註(formatSingleOrder 的括號內容)區分即可（例：NESP QW2 / QW4）
     const parts = [...orders]
       .sort(
         (a, b) =>
-          new Date(a.changeDate || 0).getTime() -
-          new Date(b.changeDate || 0).getTime(),
+          new Date(a.startDate || a.changeDate || 0).getTime() -
+          new Date(b.startDate || b.changeDate || 0).getTime(),
       )
-      .map((o) => this.formatSingleOrder(o))
+      .map((o) => this.formatSingleOrder(o, monthKey))
       .filter((text) => text !== '-');
     return parts.length ? parts.join('；') : '-';
   }
 
-  private formatSingleOrder(order: OrderRecord): string {
+  private formatSingleOrder(order: OrderRecord, monthKey?: string): string {
     const dose = order.dose || '';
     if (!dose) return '-';
     const masterMed = this.allMedications().find(
       (med) => med.code === order.orderCode,
     );
     const unit = masterMed?.unit ? ` ${masterMed.unit}` : '';
-    let details = '';
-    if (order.orderType === 'injection') {
-      details = order.note || '';
-    } else if (order.orderType === 'oral') {
-      details = order.frequency || '';
+    const detailParts: string[] = [];
+    if (order.orderCode === 'XX88') {
+      // 自備藥：實際藥名在備註欄
+      if (order.note) detailParts.push(order.note);
+      if (order.frequency) detailParts.push(order.frequency);
+    } else if (order.orderType === 'injection') {
+      if (order.note) detailParts.push(order.note);
+    } else if (order.frequency) {
+      detailParts.push(order.frequency);
     }
-    if (details) {
-      return `${dose}${unit} (${details})`;
+    // 區間模型：處方在查詢月內（或之前）結束 → 標記停用日；仍持續中不標
+    if (order.endDate && monthKey && order.endDate <= `${monthKey}-31`) {
+      const [, m, d] = order.endDate.split('-');
+      detailParts.push(`至${Number(m)}/${Number(d)}止`);
+    }
+    if (detailParts.length) {
+      return `${dose}${unit} (${detailParts.join('，')})`;
     }
     return `${dose}${unit}`;
   }
@@ -260,6 +305,8 @@ export class OrdersComponent implements OnInit {
         const allOrders: any[] = Array.isArray(data) ? data : data.data || [];
         const patientIdSet = new Set(patientList.map((p: any) => p.patientId));
         const filteredOrders = allOrders.filter((o: any) => patientIdSet.has(o.patientId));
+        // 動態欄位：master 清單外的藥碼也要呈現
+        this.collectExtraMeds(filteredOrders);
         // 不整併：同一藥物同月的每一筆（含不同頻率/開立日期）全部保留
         filteredOrders.forEach((order: any) => {
           const patientData = patientOrdersMap.get(order.patientId);
@@ -306,11 +353,10 @@ export class OrdersComponent implements OnInit {
     const year = this.individualSearchYear();
 
     const allYearlyOrders = await this.ordersApi.fetchAll();
-    const filteredOrders = allYearlyOrders.filter((o: any) => 
-      o.patientId === foundPatient.id &&
-      o.uploadMonth >= `${year}-01` &&
-      o.uploadMonth <= `${year}-12`
+    const patientOrders = allYearlyOrders.filter(
+      (o: any) => o.patientId === foundPatient.id,
     );
+    this.collectExtraMeds(patientOrders);
 
     const monthlyOrdersMap = new Map<string, IndividualSearchResult>();
     for (let i = 1; i <= 12; i++) {
@@ -318,16 +364,32 @@ export class OrdersComponent implements OnInit {
       monthlyOrdersMap.set(monthKey, { month: monthKey, orders: {} });
     }
 
-    // 不整併：同一藥物同月的每一筆（含不同頻率/開立日期）全部保留
-    filteredOrders.forEach((order: any) => {
-      const monthKey = order.uploadMonth;
-
+    const pushToMonth = (monthKey: string, order: any) => {
       const monthData = monthlyOrdersMap.get(monthKey);
-      if (monthData) {
-        if (!monthData.orders[order.orderCode]) {
-          monthData.orders[order.orderCode] = [];
+      if (!monthData) return;
+      if (!monthData.orders[order.orderCode]) {
+        monthData.orders[order.orderCode] = [];
+      }
+      monthData.orders[order.orderCode].push(order);
+    };
+
+    // 不整併：同一藥物同月的每一筆（含不同頻率/開立日期）全部保留
+    patientOrders.forEach((order: any) => {
+      if (order.startDate) {
+        // 區間模型：處方涵蓋的每個月都呈現（開始日 <= 月底，且未結束或結束日 >= 月初）
+        for (let i = 1; i <= 12; i++) {
+          const monthKey = `${year}-${String(i).padStart(2, '0')}`;
+          const activeInMonth =
+            order.startDate <= `${monthKey}-31` &&
+            (!order.endDate || order.endDate >= `${monthKey}-01`);
+          if (activeInMonth) pushToMonth(monthKey, order);
         }
-        monthData.orders[order.orderCode].push(order);
+      } else if (
+        order.uploadMonth >= `${year}-01` &&
+        order.uploadMonth <= `${year}-12`
+      ) {
+        // 舊月快照模型：依上傳月份歸檔
+        pushToMonth(order.uploadMonth, order);
       }
     });
 
@@ -384,7 +446,7 @@ export class OrdersComponent implements OnInit {
           ];
           this.allMedications().forEach((med) => {
             const order = patientRow.orders[med.code];
-            row.push(this.formatOrderCell(order));
+            row.push(this.formatOrderCell(order, month));
           });
           return row;
         });
@@ -400,7 +462,7 @@ export class OrdersComponent implements OnInit {
           const row = [monthRow.month];
           this.allMedications().forEach((med) => {
             const order = monthRow.orders[med.code];
-            row.push(this.formatOrderCell(order));
+            row.push(this.formatOrderCell(order, monthRow.month));
           });
           return row;
         });

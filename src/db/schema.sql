@@ -518,6 +518,7 @@ CREATE TABLE IF NOT EXISTS medication_orders (
 );
 
 -- 針劑藥囑訂單 (Excel 匯入的藥囑記錄)
+-- 藥囑（Excel 匯入）。2026-07-18 起支援區間模型：start_date/end_date（結束日空=持續使用）
 CREATE TABLE IF NOT EXISTS injection_orders (
     id TEXT PRIMARY KEY,
     patient_id TEXT,
@@ -533,6 +534,9 @@ CREATE TABLE IF NOT EXISTS injection_orders (
     action TEXT DEFAULT 'MODIFY',
     order_type TEXT,
     source_file TEXT,
+    start_date TEXT,
+    end_date TEXT,
+    prescriber TEXT,
     created_at TEXT DEFAULT (datetime('now', 'localtime')),
     updated_at TEXT DEFAULT (datetime('now', 'localtime'))
 );

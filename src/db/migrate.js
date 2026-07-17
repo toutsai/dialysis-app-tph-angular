@@ -452,6 +452,19 @@ export function runMigrations() {
         migrationsApplied++
     }
 
+    // ========================================
+    // 藥囑區間模型（2026-07-18）：Excel 改含開始日/結束日
+    // ========================================
+    const injectionOrdersExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='injection_orders'")
+      .get()
+    if (injectionOrdersExists) {
+      console.log('📋 檢查 injection_orders 表格...')
+      if (addColumnIfNotExists(db, 'injection_orders', 'start_date', 'TEXT')) migrationsApplied++
+      if (addColumnIfNotExists(db, 'injection_orders', 'end_date', 'TEXT')) migrationsApplied++
+      if (addColumnIfNotExists(db, 'injection_orders', 'prescriber', 'TEXT')) migrationsApplied++
+    }
+
     if (migrationsApplied > 0) {
       console.log(`✅ 已完成 ${migrationsApplied} 項遷移`)
     } else {

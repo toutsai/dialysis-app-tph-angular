@@ -38,6 +38,10 @@ export interface InjectionOrder extends BaseEntity {
   action?: string;
   orderType?: string;
   sourceFile?: string;
+  /** 區間模型（新版含停止日 Excel）：處方起訖日，endDate 空 = 持續使用 */
+  startDate?: string;
+  endDate?: string;
+  prescriber?: string;
 }
 
 /** 藥物草稿 */

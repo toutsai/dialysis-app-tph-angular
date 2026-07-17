@@ -100,7 +100,7 @@
                 <td class="sticky-col col-bed">{{ $any(patientRow).bedNum }}</td>
                 <td class="sticky-col col-name">{{ $any(patientRow).patientName }}</td>
                 <td *ngFor="let med of allMedications()">
-                  {{ formatOrderCell($any(patientRow).orders[med.code]) }}
+                  {{ formatOrderCell($any(patientRow).orders[med.code], groupSearchParams.month) }}
                 </td>
               </tr>
             </tbody>
@@ -118,7 +118,7 @@
               <tr *ngFor="let monthRow of searchResult()">
                 <td class="sticky-col col-month">{{ $any(monthRow).month }}</td>
                 <td *ngFor="let med of allMedications()">
-                  {{ formatOrderCell($any(monthRow).orders[med.code]) }}
+                  {{ formatOrderCell($any(monthRow).orders[med.code], $any(monthRow).month) }}
                 </td>
               </tr>
             </tbody>

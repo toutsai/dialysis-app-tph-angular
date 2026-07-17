@@ -192,6 +192,9 @@ function ensureTablesExist(db) {
       action TEXT DEFAULT 'MODIFY',
       order_type TEXT,
       source_file TEXT,
+      start_date TEXT,
+      end_date TEXT,
+      prescriber TEXT,
       created_at TEXT DEFAULT (datetime('now', 'localtime')),
       updated_at TEXT DEFAULT (datetime('now', 'localtime'))
     );
@@ -502,7 +505,9 @@ router.get('/medications', authenticate, (req, res) => {
       orderName: o.order_name,
       orderType: o.order_type,
       changeDate: o.change_date,
-      uploadMonth: o.upload_month,
+      // 區間模型列（新版含停止日 Excel）以「開始日所屬月」作為月份鍵，
+      // 讓沿用 uploadMonth 分月的讀取端（個人查詢、檢驗-用藥對照）維持可用
+      uploadMonth: o.start_date ? o.start_date.slice(0, 7) : o.upload_month,
       // 前端以 uploadTimestamp 過濾/排序（無此欄位則整筆被丟棄）
       uploadTimestamp: o.created_at || o.change_date,
       dose: o.dose,
@@ -510,6 +515,9 @@ router.get('/medications', authenticate, (req, res) => {
       note: o.note,
       action: o.action,
       sourceFile: o.source_file,
+      startDate: o.start_date || '',
+      endDate: o.end_date || '',
+      prescriber: o.prescriber || '',
       createdAt: o.created_at,
       updatedAt: o.updated_at,
     }))
@@ -1711,13 +1719,46 @@ router.post('/medications/upload', ...isDoctorRole, async (req, res) => {
       if (header) headerToIndex[header.trim()] = index
     })
 
-    const requiredHeaders = ['病歷號', '醫令碼', '名稱', '異動日期', '次劑量']
+    // 新版「洗腎醫囑(含停止日)」格式：含 開始日/結束日 欄位，結束日空白 = 持續使用。
+    // 檔案涵蓋全部歷史處方（非月快照），採整表覆蓋 + 區間查詢模型。
+    const isIntervalFormat = headerToIndex['開始日'] !== undefined
+
+    const requiredHeaders = isIntervalFormat
+      ? ['病歷號', '醫令碼', '名稱', '次劑量', '開始日']
+      : ['病歷號', '醫令碼', '名稱', '異動日期', '次劑量']
     const missingHeaders = requiredHeaders.filter((h) => headerToIndex[h] === undefined)
     if (missingHeaders.length > 0) {
       return res.status(400).json({
         error: true,
         message: `Excel 檔案缺少必要的欄位: ${missingHeaders.join(', ')}`,
       })
+    }
+
+    // 日期解析：YYYYMMDD…（取前8碼）或可被 Date 解析的字串 → YYYY-MM-DD；無效回 ''
+    const parseExcelDate = (raw) => {
+      if (raw === undefined || raw === null) return ''
+      const dateStr = String(raw).trim()
+      if (!dateStr) return ''
+      if (/^\d{8,}/.test(dateStr)) {
+        const year = dateStr.substring(0, 4)
+        const month = dateStr.substring(4, 6)
+        const day = dateStr.substring(6, 8)
+        if (parseInt(month) >= 1 && parseInt(month) <= 12 && parseInt(day) >= 1 && parseInt(day) <= 31) {
+          return `${year}-${month}-${day}`
+        }
+      }
+      try {
+        const dateObj = new Date(dateStr)
+        if (!isNaN(dateObj.getTime())) {
+          const year = dateObj.getUTCFullYear()
+          const month = (dateObj.getUTCMonth() + 1).toString().padStart(2, '0')
+          const day = dateObj.getUTCDate().toString().padStart(2, '0')
+          return `${year}-${month}-${day}`
+        }
+      } catch (e) {
+        /* 忽略解析錯誤 */
+      }
+      return ''
     }
 
     // upload_month 統一使用當前月份，代表「這份 Excel 是哪個月上傳的藥囑單」
@@ -1755,52 +1796,28 @@ router.post('/medications/upload', ...isDoctorRole, async (req, res) => {
         .replace(/^0+/, '')
       const orderCode = String(row[headerToIndex['醫令碼']] || '').trim()
       const orderName = String(row[headerToIndex['名稱']] || '').trim()
-      const rawChangeDate = row[headerToIndex['異動日期']]
-      let changeDate = ''
+      const changeDate = parseExcelDate(row[headerToIndex['異動日期']])
+      const startDate = isIntervalFormat ? parseExcelDate(row[headerToIndex['開始日']]) : ''
+      const endDate = isIntervalFormat ? parseExcelDate(row[headerToIndex['結束日']]) : ''
 
-      // 解析日期
-      if (rawChangeDate) {
-        const dateStr = String(rawChangeDate).trim()
-        if (/^\d{8,}/.test(dateStr)) {
-          const year = dateStr.substring(0, 4)
-          const month = dateStr.substring(4, 6)
-          const day = dateStr.substring(6, 8)
-          if (
-            parseInt(month) >= 1 &&
-            parseInt(month) <= 12 &&
-            parseInt(day) >= 1 &&
-            parseInt(day) <= 31
-          ) {
-            changeDate = `${year}-${month}-${day}`
-          }
-        }
-        if (!changeDate) {
-          try {
-            const dateObj = new Date(rawChangeDate)
-            if (!isNaN(dateObj.getTime())) {
-              const year = dateObj.getUTCFullYear()
-              const month = (dateObj.getUTCMonth() + 1).toString().padStart(2, '0')
-              const day = dateObj.getUTCDate().toString().padStart(2, '0')
-              changeDate = `${year}-${month}-${day}`
-            }
-          } catch (e) {
-            /* 忽略解析錯誤 */
-          }
-        }
+      if (!medicalRecordNumber || !orderCode || !orderName) {
+        errors.push({ rowNumber: i + 1, reason: '缺少病歷號/醫令碼/名稱' })
+        continue
       }
-
-      if (
-        !medicalRecordNumber ||
-        !orderCode ||
-        !orderName ||
-        !changeDate ||
-        !/^\d{4}-\d{2}-\d{2}$/.test(changeDate)
-      ) {
-        let reason = '缺少必要欄位或日期格式不正確'
-        if (!changeDate || !/^\d{4}-\d{2}-\d{2}$/.test(changeDate)) {
-          reason = `異動日期格式錯誤或為空 (應為 YYYY-MM-DD)，讀取到的值為: "${rawChangeDate}"`
+      if (isIntervalFormat) {
+        // 區間格式：開始日必填，異動日期缺漏時以開始日代用
+        if (!startDate) {
+          errors.push({
+            rowNumber: i + 1,
+            reason: `開始日格式錯誤或為空，讀取到的值為: "${row[headerToIndex['開始日']]}"`,
+          })
+          continue
         }
-        errors.push({ rowNumber: i + 1, reason })
+      } else if (!changeDate) {
+        errors.push({
+          rowNumber: i + 1,
+          reason: `異動日期格式錯誤或為空 (應為 YYYY-MM-DD)，讀取到的值為: "${row[headerToIndex['異動日期']]}"`,
+        })
         continue
       }
 
@@ -1821,14 +1838,29 @@ router.post('/medications/upload', ...isDoctorRole, async (req, res) => {
         medicalRecordNumber: patientData.medical_record_number,
         orderCode,
         orderName,
-        changeDate,
+        changeDate: changeDate || startDate,
         uploadMonth: recordUploadMonth,
         dose: String(row[headerToIndex['次劑量']] || ''),
         action: 'MODIFY',
         sourceFile: fileName,
+        startDate,
+        endDate,
+        prescriber: isIntervalFormat ? String(row[headerToIndex['異動者']] || '').trim() : '',
       }
 
-      if (ORAL_MED_CODES.includes(orderCode)) {
+      if (isIntervalFormat) {
+        // 區間格式：所有上傳的藥品都收（使用者需求「有上傳的藥品都呈現」），
+        // 分類優先用既有白名單，未知藥碼以字首判斷（I=針劑，其餘視為口服/自備）
+        if (INJECTION_MED_CODES.includes(orderCode)) {
+          orderType = 'injection'
+        } else if (ORAL_MED_CODES.includes(orderCode)) {
+          orderType = 'oral'
+        } else {
+          orderType = orderCode.startsWith('I') ? 'injection' : 'oral'
+        }
+        orderPayload.frequency = String(row[headerToIndex['頻率服法']] || '').trim()
+        orderPayload.note = String(row[headerToIndex['備註']] || '').trim()
+      } else if (ORAL_MED_CODES.includes(orderCode)) {
         orderType = 'oral'
         orderPayload.frequency = String(row[headerToIndex['頻率服法']] || '')
       } else if (INJECTION_MED_CODES.includes(orderCode)) {
@@ -1846,20 +1878,27 @@ router.post('/medications/upload', ...isDoctorRole, async (req, res) => {
     // 批次寫入資料庫
     if (ordersToInsert.length > 0) {
       const insertStmt = db.prepare(`
-        INSERT INTO injection_orders (id, patient_id, patient_name, medical_record_number, order_code, order_name, change_date, upload_month, dose, frequency, note, action, order_type, source_file)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO injection_orders (id, patient_id, patient_name, medical_record_number, order_code, order_name, change_date, upload_month, dose, frequency, note, action, order_type, source_file, start_date, end_date, prescriber)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
 
-      const deleteStmt = db.prepare(`DELETE FROM injection_orders WHERE upload_month = ?`)
-
       const insertMany = db.transaction((orders) => {
-        // 同月重傳採「整月覆蓋」：醫院每月上傳一份全院完整藥囑檔，
-        // 故先清掉本次上傳月份的既有資料，避免重複累加。
-        const deleted = deleteStmt.run(batchUploadMonth).changes
-        if (deleted > 0) {
-          console.log(
-            `[ProcessOrders] upload_month=${batchUploadMonth} 已有 ${deleted} 筆舊藥囑，整月覆蓋前先清除。`,
-          )
+        if (isIntervalFormat) {
+          // 區間格式檔涵蓋全部歷史處方（含起訖日），是權威資料來源：
+          // 整表覆蓋，同時淘汰舊「月快照」資料（已被區間資料完整涵蓋）。
+          const deleted = db.prepare(`DELETE FROM injection_orders`).run().changes
+          console.log(`[ProcessOrders] 區間格式上傳：整表覆蓋，已清除 ${deleted} 筆舊藥囑。`)
+        } else {
+          // 舊格式：同月重傳採「整月覆蓋」：醫院每月上傳一份全院完整藥囑檔，
+          // 故先清掉本次上傳月份的既有資料，避免重複累加。
+          const deleted = db
+            .prepare(`DELETE FROM injection_orders WHERE upload_month = ?`)
+            .run(batchUploadMonth).changes
+          if (deleted > 0) {
+            console.log(
+              `[ProcessOrders] upload_month=${batchUploadMonth} 已有 ${deleted} 筆舊藥囑，整月覆蓋前先清除。`,
+            )
+          }
         }
         for (const order of orders) {
           insertStmt.run(
@@ -1877,6 +1916,9 @@ router.post('/medications/upload', ...isDoctorRole, async (req, res) => {
             order.action,
             order.orderType,
             order.sourceFile,
+            order.startDate || '',
+            order.endDate || '',
+            order.prescriber || '',
           )
         }
       })
@@ -1985,8 +2027,28 @@ router.get('/injection-orders', authenticate, (req, res) => {
     let query
     const params = []
 
-    if (effectiveMonth) {
-      // 每位病人取 <= effectiveMonth 的最新上傳月份
+    // 區間模型資料存在時（新版含停止日 Excel），月查詢改用起訖日判斷
+    const hasIntervalData = !!db
+      .prepare(`SELECT 1 FROM injection_orders WHERE start_date IS NOT NULL AND start_date != '' LIMIT 1`)
+      .get()
+
+    if (effectiveMonth && hasIntervalData) {
+      // 取「該月內任一天有效」的處方：開始日 <= 月底，且（未結束 或 結束日 >= 月初）
+      const monthStart = `${effectiveMonth}-01`
+      const monthEnd = `${effectiveMonth}-31`
+      query = `
+        SELECT * FROM injection_orders
+        WHERE start_date != '' AND start_date <= ?
+          AND (end_date = '' OR end_date IS NULL OR end_date >= ?)
+          ${patientId ? 'AND patient_id = ?' : ''}
+          ${orderType ? 'AND order_type = ?' : ''}
+        ORDER BY start_date DESC, created_at DESC
+      `
+      params.push(monthEnd, monthStart)
+      if (patientId) params.push(patientId)
+      if (orderType) params.push(orderType)
+    } else if (effectiveMonth) {
+      // 舊月快照模型：每位病人取 <= effectiveMonth 的最新上傳月份
       // (跨月時若該月未上傳新藥囑，沿用最近一次的設定)
       query = `
         WITH latest_per_patient AS (
@@ -2050,6 +2112,9 @@ router.get('/injection-orders', authenticate, (req, res) => {
         action: o.action,
         orderType: o.order_type,
         sourceFile: o.source_file,
+        startDate: o.start_date || '',
+        endDate: o.end_date || '',
+        prescriber: o.prescriber || '',
         createdAt: o.created_at,
       })),
     )

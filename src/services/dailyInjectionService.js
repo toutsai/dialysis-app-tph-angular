@@ -169,6 +169,34 @@ function queryLatestInjectionOrders(db, patientIds, targetMonth) {
     .all(...patientIds, targetMonth)
 }
 
+/**
+ * 區間模型查詢（新版含停止日 Excel）：
+ * 取目標日落在 [start_date, end_date] 內的針劑處方（end_date 空 = 持續使用）。
+ * 已停用的針劑自然被過濾，不再有「沿用上月復活已停針劑」的問題。
+ */
+function queryActiveInjectionOrders(db, patientIds, targetDate) {
+  if (patientIds.length === 0) return []
+  const placeholders = patientIds.map(() => '?').join(',')
+  return db
+    .prepare(
+      `
+      SELECT * FROM injection_orders
+      WHERE patient_id IN (${placeholders})
+        AND order_type = 'injection'
+        AND start_date != '' AND start_date <= ?
+        AND (end_date = '' OR end_date IS NULL OR end_date >= ?)
+      ORDER BY patient_id, order_code, start_date DESC, created_at DESC
+    `,
+    )
+    .all(...patientIds, targetDate, targetDate)
+}
+
+function hasIntervalData(db) {
+  return !!db
+    .prepare(`SELECT 1 FROM injection_orders WHERE start_date IS NOT NULL AND start_date != '' LIMIT 1`)
+    .get()
+}
+
 function getPatientNameMap(db, patientIds) {
   if (patientIds.length === 0) return new Map()
   const placeholders = patientIds.map(() => '?').join(',')
@@ -186,7 +214,9 @@ export function getDailyInjections(db, targetDate, patientIds) {
   const uniquePatientIds = [...new Set((patientIds || []).filter(Boolean))]
   if (uniquePatientIds.length === 0) return []
 
-  const orders = queryLatestInjectionOrders(db, uniquePatientIds, targetDate.slice(0, 7))
+  const orders = hasIntervalData(db)
+    ? queryActiveInjectionOrders(db, uniquePatientIds, targetDate)
+    : queryLatestInjectionOrders(db, uniquePatientIds, targetDate.slice(0, 7))
 
   // 不再以「病人+藥碼」只留最新一筆 —— 同藥同月可能有多個頻率（例 NESP QW2 與 QW4，
   // note/開立日期不同），各自決定施打日，全部保留。只去除「完全相同」的重複列。
