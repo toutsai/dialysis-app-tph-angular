@@ -1412,6 +1412,8 @@ router.delete('/exceptions/:id', ...isEditor, async (req, res) => {
     console.log(`[ExceptionDelete] 已刪除調班 ${id}`)
 
     // 🔥 如果是已生效的調班，需要重建受影響的排程
+    // 只重建明天以後：重建會拿「當下最新總表」整天重算，總表若已改動會把新規則
+    // 提前套進今天（總表同步刻意從明天起）。今天的排程由現場組長手動調整。
     if (exData.status === 'applied' || exData.status === 'conflict_requires_resolution') {
       const todayStr = getTaipeiTodayString()
 
@@ -1424,7 +1426,7 @@ router.delete('/exceptions/:id', ...isEditor, async (req, res) => {
         const end = new Date(exData.endDate + 'T00:00:00Z')
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
           const dateStr = formatDateToYYYYMMDD(d)
-          if (dateStr >= todayStr) {
+          if (dateStr > todayStr) {
             datesToRebuild.add(dateStr)
           }
         }
@@ -1438,7 +1440,7 @@ router.delete('/exceptions/:id', ...isEditor, async (req, res) => {
         ].filter(Boolean)
 
         relevantDates.forEach(d => {
-          if (d >= todayStr) {
+          if (d > todayStr) {
             datesToRebuild.add(d)
           }
         })
