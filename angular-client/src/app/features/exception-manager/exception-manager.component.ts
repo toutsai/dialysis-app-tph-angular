@@ -486,6 +486,12 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
     );
   }
 
+  /** 此衝突有專屬解決按鈕（重新選床或二選一）→ 隱藏通用的修改/撤銷此申請，避免按鈕爆版 */
+  hasConflictResolveButtons(conflict: any): boolean {
+    if (conflict?.['status'] !== 'conflict_requires_resolution') return false;
+    return this.canRetargetConflict(conflict) || conflict?.['type'] === 'MOVE';
+  }
+
   get retargetPatientAsArray(): any[] {
     const c = this.retargetConflictRef;
     if (!c?.patientId) return [];

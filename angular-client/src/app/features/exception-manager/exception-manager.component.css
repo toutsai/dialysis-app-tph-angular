@@ -188,12 +188,16 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   width: 100%;
   padding: 1rem 1.5rem;
   border-top: 1px solid #e9ecef;
 }
 .footer-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 0.75rem;
 }
 

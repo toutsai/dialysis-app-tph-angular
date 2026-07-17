@@ -70,8 +70,9 @@
     <div footer class="dialog-footer-custom">
       <button class="btn btn-secondary" (click)="closeActionDialog()">關閉</button>
       <div class="footer-actions">
+        <!-- 非衝突項（或無專屬解法的衝突類型）：修改/撤銷此申請 -->
         <button
-          *ngIf="currentActionData() && isCancellable(currentActionData())"
+          *ngIf="currentActionData() && isCancellable(currentActionData()) && !hasConflictResolveButtons(currentActionData())"
           class="btn btn-primary"
           (click)="handleEdit()"
           [disabled]="isPageLocked()"
@@ -79,14 +80,22 @@
           修改
         </button>
         <button
-          *ngIf="currentActionData() && isCancellable(currentActionData())"
+          *ngIf="currentActionData() && isCancellable(currentActionData()) && !hasConflictResolveButtons(currentActionData())"
           class="btn btn-danger"
           (click)="handleDelete()"
           [disabled]="isPageLocked()"
         >
           撤銷此申請
         </button>
-        <!-- 佔床型衝突：主打重新選床 -->
+        <!-- 佔床型衝突：與每日排程/護理分組同款（撤銷調班+重新選床） -->
+        <button
+          *ngIf="canRetargetConflict(currentActionData())"
+          class="btn btn-secondary"
+          (click)="resolveSourceConflict('keep_base')"
+          [disabled]="isPageLocked()"
+        >
+          撤銷調班
+        </button>
         <button
           *ngIf="canRetargetConflict(currentActionData())"
           class="btn btn-primary"
