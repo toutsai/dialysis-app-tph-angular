@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { getTaipeiDayIndex, getTaipeiTodayString } from '../utils/dateUtils.js'
 import { SHIFTS, FREQ_MAP_TO_DAY_INDEX, getScheduleKey } from '../utils/scheduleUtils.js'
 import { rebuildSingleDaySchedule } from './scheduleSync.js'
+import { removeAutoMovementFromDailyLog } from './dailyLogMovementSync.js'
 
 // 視為「已生效或待生效」的調班狀態（整併/鏡像偵測時需納入考量）
 const ACTIVE_STATUSES = ['pending', 'processing', 'applied', 'conflict_requires_resolution']
@@ -302,7 +303,10 @@ export function reconcileSingleDayMove(db, data, masterRules, patientsMap, creat
 export function resolveSourceConflict(db, exceptionId, choice, masterRules, patientsMap, modifiedBy = {}) {
   const row = db.prepare(`SELECT * FROM schedule_exceptions WHERE id = ?`).get(exceptionId)
   if (!row) return { ok: false, message: '調班申請不存在' }
-  if (row.type !== 'MOVE') return { ok: false, message: '僅支援 MOVE 類型的來源衝突解決' }
+  // MOVE 支援兩種選擇；ADD_SESSION（臨時加洗）只有「撤銷」有意義（無常規原位可回歸/錨定）
+  if (row.type !== 'MOVE' && !(row.type === 'ADD_SESSION' && choice === 'keep_base')) {
+    return { ok: false, message: '此調班類型僅支援撤銷或重新選床' }
+  }
 
   const ex = parseExceptionRow(row)
   const dateStr = ex.to?.goalDate || ex.from?.sourceDate
@@ -311,6 +315,10 @@ export function resolveSourceConflict(db, exceptionId, choice, masterRules, pati
   const run = db.transaction(() => {
     if (choice === 'keep_base') {
       // 維持新總表床位 → 取消調班，回歸常規
+      if (row.type === 'ADD_SESSION') {
+        // 比照 EXCEPTION_DELETE：連動移除工作日誌的「臨時加洗」自動動態
+        removeAutoMovementFromDailyLog(db, dateStr, `auto_add_session_${exceptionId}`)
+      }
       cancelException(db, exceptionId)
     } else {
       // 維持調班後新床位 → 把 from 重新錨定到病人的新常規位置，再重新生效
