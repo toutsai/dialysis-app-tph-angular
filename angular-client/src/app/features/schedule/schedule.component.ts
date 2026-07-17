@@ -14,9 +14,11 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import * as XLSX from 'xlsx';
 
 import { AuthService } from '@app/core/services/auth.service';
+import { ApiService } from '@app/core/services/api.service';
 import { ApiConfigService } from '@app/core/services/api-config.service';
 import { PatientStoreService } from '@app/core/services/patient-store.service';
 import { TaskStoreService } from '@app/core/services/task-store.service';
@@ -237,6 +239,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   private readonly archiveStore = inject(ArchiveStoreService);
   private readonly medicationStore = inject(MedicationStoreService);
   private readonly apiManagerService = inject(ApiManagerService);
+  private readonly api = inject(ApiService);
   private readonly notificationService = inject(NotificationService);
   private readonly dateState = inject(DateStateService);
   private readonly userDirectory = inject(UserDirectoryService);
@@ -249,6 +252,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   private readonly schedulesApi: ApiManager<FirestoreRecord>;
   private readonly physicianSchedulesApi: ApiManager<FirestoreRecord>;
   private readonly physiciansApi: ApiManager<FirestoreRecord>;
+  private readonly exceptionsListApi: ApiManager<FirestoreRecord>;
 
   // Expose constants to template
   readonly ORDERED_SHIFT_CODES = ORDERED_SHIFT_CODES;
@@ -329,6 +333,12 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   readonly crrtOrderHistory = signal<Record<string, unknown>[]>([]);
   readonly noonTakeoffVisibility = signal({ early: false, late: false });
 
+  // 調班衝突（直接標在格子上，點三角形可就地解決）
+  readonly conflictExceptions = signal<any[]>([]);
+  readonly isConflictDialogVisible = signal(false);
+  readonly conflictForDialog = signal<any>(null);
+  readonly isResolvingConflict = signal(false);
+
   readonly dailyPhysicians = signal<Record<string, unknown | null>>({ early: null, noon: null, late: null });
   readonly dailyConsultPhysicians = signal<Record<string, unknown | null>>({ morning: null, afternoon: null, night: null });
 
@@ -402,6 +412,33 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     }
 
     return views;
+  });
+
+  // 當前檢視日期的「衝突格」對照表：格子 key → 衝突調班
+  readonly conflictCellMap = computed(() => {
+    const dateStr = this.currentDateDisplay();
+    const map = new Map<string, any>();
+    const put = (bedNum: unknown, shiftCode: unknown, ex: any) => {
+      if (bedNum === undefined || bedNum === null || bedNum === '' || !shiftCode) return;
+      const key = this.buildCellKey(String(bedNum), String(shiftCode));
+      if (key && !map.has(key)) map.set(key, ex);
+    };
+    for (const ex of this.conflictExceptions()) {
+      if (ex?.status !== 'conflict_requires_resolution') continue;
+      if (ex.type === 'SWAP') {
+        if (ex.date === dateStr) {
+          put(ex.patient1?.fromBedNum, ex.patient1?.fromShiftCode, ex);
+          put(ex.patient2?.fromBedNum, ex.patient2?.fromShiftCode, ex);
+        }
+        continue;
+      }
+      if (ex.to?.goalDate === dateStr) {
+        put(ex.to.bedNum, ex.to.shiftCode, ex);
+      } else if (ex.from?.sourceDate === dateStr) {
+        put(ex.from.bedNum, ex.from.shiftCode, ex);
+      }
+    }
+    return map;
   });
 
   readonly scheduledPatientIdsComputed = computed(() => {
@@ -518,6 +555,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     this.schedulesApi = this.apiManagerService.create<FirestoreRecord>('schedules');
     this.physicianSchedulesApi = this.apiManagerService.create<FirestoreRecord>('physician_schedules');
     this.physiciansApi = this.apiManagerService.create<FirestoreRecord>('physicians');
+    this.exceptionsListApi = this.apiManagerService.create<FirestoreRecord>('schedule_exceptions_list');
 
     // Watch currentDate changes
     effect(() => {
@@ -641,6 +679,105 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     }
 
     return affectedDates.size === 0 || affectedDates.has(dateStr);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 調班衝突：格子標記與就地解決
+  // ---------------------------------------------------------------------------
+
+  /** 對齊後端 utils/scheduleUtils.getScheduleKey 的床號格式（數字、peripheral-X、外X） */
+  private buildCellKey(bedNum: string, shiftCode: string): string {
+    if (bedNum.startsWith('peripheral')) return `${bedNum}-${shiftCode}`;
+    if (bedNum.startsWith('外')) return `peripheral-${bedNum.replace('外', '')}-${shiftCode}`;
+    return `bed-${bedNum}-${shiftCode}`;
+  }
+
+  private async loadConflictExceptions(): Promise<void> {
+    try {
+      const rows = await this.exceptionsListApi.fetchAll();
+      this.conflictExceptions.set(
+        ((rows as any[]) || []).filter((ex) => ex?.status === 'conflict_requires_resolution'),
+      );
+    } catch (error) {
+      console.warn('[Schedule] 載入衝突調班失敗:', error);
+    }
+  }
+
+  getCellConflict(shiftId: string): any | null {
+    return this.conflictCellMap().get(shiftId) || null;
+  }
+
+  openConflictDialog(conflict: any): void {
+    this.conflictForDialog.set(conflict);
+    this.isConflictDialogVisible.set(true);
+  }
+
+  closeConflictDialog(): void {
+    this.isConflictDialogVisible.set(false);
+    this.conflictForDialog.set(null);
+  }
+
+  buildConflictMessage(ex: any): string {
+    const shiftMap: Record<string, string> = { early: '早班', noon: '午班', late: '晚班' };
+    const formatSlot = (data: any): string => {
+      const bedNum = data?.fromBedNum ?? data?.bedNum;
+      const shiftCode = data?.fromShiftCode ?? data?.shiftCode;
+      if (bedNum === undefined || bedNum === null || !shiftCode) return 'N/A';
+      const bedDisplay = String(bedNum).startsWith('peripheral')
+        ? `外圍 ${String(bedNum).split('-')[1] || ''}`
+        : `${bedNum}床`;
+      return `${bedDisplay} / ${shiftMap[shiftCode] || shiftCode}`;
+    };
+    const typeMap: Record<string, string> = {
+      MOVE: '臨時調班', SUSPEND: '區間暫停', ADD_SESSION: '臨時加洗',
+      RANGE_MOVE: '區間調班', SWAP: '同日互調',
+    };
+    const lines: string[] = [];
+    if (ex.type === 'SWAP') {
+      const name1 = ex.patient1?.patientName || ex.patient1?.name || '';
+      const name2 = ex.patient2?.patientName || ex.patient2?.name || '';
+      lines.push(`病人：${[name1, name2].filter(Boolean).join(' ⇄ ') || '未指定'}`);
+    } else {
+      lines.push(`病人：${ex.patientName || '未指定'}`);
+    }
+    lines.push(`類型：${typeMap[ex.type] || ex.type}`);
+    if (ex.from?.sourceDate) lines.push(`原班：${ex.from.sourceDate} ${formatSlot(ex.from)}`);
+    if (ex.to?.goalDate) lines.push(`新班：${ex.to.goalDate} ${formatSlot(ex.to)}`);
+    if (ex.errorMessage) lines.push(`衝突原因：${ex.errorMessage}`);
+    return lines.join('\n');
+  }
+
+  async resolveCellConflict(choice: 'keep_base' | 'keep_exception'): Promise<void> {
+    const conflict = this.conflictForDialog();
+    if (!conflict?.id || this.isResolvingConflict()) return;
+    this.isResolvingConflict.set(true);
+    try {
+      await firstValueFrom(
+        this.api.post(`/schedules/exceptions/${conflict.id}/resolve-conflict`, { choice }),
+      );
+      const msg =
+        choice === 'keep_base'
+          ? `已維持新常規床位，原調班已取消: ${conflict.patientName || ''}`
+          : `已維持調班後床位: ${conflict.patientName || ''}`;
+      this.notificationService.createGlobalNotification(msg, 'success');
+      this.closeConflictDialog();
+      await Promise.all([
+        this.loadDataForDay(this.currentDate()),
+        this.loadConflictExceptions(),
+      ]);
+    } catch (error: any) {
+      console.error('解決衝突失敗:', error);
+      this.alertDialogTitle.set('解決衝突失敗');
+      this.alertDialogMessage.set(`執行解決衝突時發生錯誤: ${error?.message || error}`);
+      this.isAlertDialogVisible.set(true);
+    } finally {
+      this.isResolvingConflict.set(false);
+    }
+  }
+
+  goToExceptionManager(): void {
+    this.closeConflictDialog();
+    this.router.navigate(['/exception-manager']);
   }
 
   // ---------------------------------------------------------------------------
@@ -1797,6 +1934,8 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     targetDate.setHours(0, 0, 0, 0);
     try {
       const isPastDate = targetDate < today;
+      // 衝突調班清單並行更新（不阻塞主載入；signal 更新後格子標記自動重算）
+      this.loadConflictExceptions();
       // ✅ 優化：病人、排程、護理分組三者完全並行載入
       const [, scheduleRecord, teamsData] = await Promise.all([
         isPastDate ? Promise.resolve() : this.patientStore.fetchPatientsIfNeeded(),

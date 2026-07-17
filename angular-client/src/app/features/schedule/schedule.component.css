@@ -986,3 +986,56 @@ button:disabled {
   margin-left: 4px;
   font-size: 0.85em;
 }
+
+/* ===== 調班衝突格標記（黃色呼吸光暈 + 三角形，點擊就地解決） ===== */
+.conflict-cell {
+  position: relative;
+}
+
+.shift-row.conflict-cell,
+.peripheral-shift-row.conflict-cell,
+td.conflict-cell {
+  animation: conflict-cell-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes conflict-cell-pulse {
+  0%, 100% {
+    box-shadow: inset 0 0 0 2px #f59f00;
+  }
+  50% {
+    box-shadow: inset 0 0 0 2px #ffd43b, 0 0 8px 2px rgba(255, 212, 59, 0.85);
+  }
+}
+
+.conflict-icon-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 6;
+  border: none;
+  background: transparent;
+  padding: 1px 3px;
+  cursor: pointer;
+  color: #e8590c;
+  font-size: 12px;
+  line-height: 1;
+  animation: conflict-icon-blink 1.6s ease-in-out infinite;
+}
+
+.conflict-icon-btn:hover {
+  color: #d9480f;
+  transform: scale(1.2);
+}
+
+@keyframes conflict-icon-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.conflict-dialog-title-icon {
+  color: #f59f00;
+}
+
+.conflict-dialog-box {
+  max-width: 420px;
+}
