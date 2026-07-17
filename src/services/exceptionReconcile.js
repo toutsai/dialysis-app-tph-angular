@@ -344,7 +344,7 @@ export function resolveSourceConflict(db, exceptionId, choice, masterRules, pati
   })
 
   const schedule = run()
-  return { ok: true, action: choice, schedule, dateStr }
+  return { ok: true, action: choice, schedule, dateStr, type: row.type }
 }
 
 /**
@@ -405,7 +405,7 @@ export function retargetConflict(db, exceptionId, to, masterRules, patientsMap, 
 
   try {
     const schedule = run()
-    return { ok: true, action: 'retarget', schedule, dateStr }
+    return { ok: true, action: 'retarget', schedule, dateStr, type: row.type }
   } catch (error) {
     return { ok: false, message: error?.message || '重新選床失敗' }
   }

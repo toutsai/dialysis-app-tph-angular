@@ -1364,7 +1364,7 @@ router.post('/exceptions/:id/resolve-conflict', ...isEditor, async (req, res) =>
 
     emitExceptionChange('updated', {
       id,
-      type: 'MOVE',
+      type: result.type || 'MOVE',
       status: choice === 'keep_base' ? 'cancelled' : 'applied',
       affectedDates: result.dateStr ? [result.dateStr] : [],
       date: result.dateStr,
