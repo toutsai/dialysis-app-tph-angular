@@ -183,26 +183,28 @@ export class UpdateSchedulerComponent implements OnInit, OnDestroy {
 
   // --- Format ---
   formatPayload(update: any): string {
-    const { changeType, payload } = update;
+    const changeType = update?.changeType;
+    // 後端清單 API 回傳欄位是 changeData（DB 存 change_data）；payload 僅前端送出時使用
+    const payload = update?.payload || update?.changeData || {};
     switch (changeType) {
       case 'UPDATE_STATUS':
-        return `新身分: ${payload.status.toUpperCase()}${payload.wardNumber ? ` (${payload.wardNumber})` : ''}`;
+        return `新身分: ${(payload.status || '?').toUpperCase()}${payload.wardNumber ? ` (${payload.wardNumber})` : ''}`;
       case 'UPDATE_MODE':
-        return `新模式: ${payload.mode}`;
+        return `新模式: ${payload.mode || '?'}`;
       case 'UPDATE_FREQ':
-        return `新頻率: ${payload.freq}`;
+        return `新頻率: ${payload.freq || '?'}`;
       case 'UPDATE_BASE_SCHEDULE_RULE': {
         const shiftMap: Record<number, string> = { 0: '早', 1: '午', 2: '晚' };
         const bed = String(payload.bedNum).startsWith('p')
           ? `外圍${String(payload.bedNum).slice(-1)}`
           : `${payload.bedNum}床`;
-        return `新規則: ${bed} / ${shiftMap[payload.shiftIndex]}班 / ${payload.freq}`;
+        return `新規則: ${bed} / ${shiftMap[payload.shiftIndex] || '?'}班 / ${payload.freq || '?'}`;
       }
       case 'DELETE_PATIENT':
-        return `原因: ${payload.deleteReason}${payload.remarks ? ` (${payload.remarks})` : ''}`;
+        return `原因: ${payload.deleteReason || '未填'}${payload.remarks ? ` (${payload.remarks})` : ''}`;
       case 'RESTORE_PATIENT': {
         const statusMap: Record<string, string> = { opd: '門診', ipd: '住院', er: '急診' };
-        return `復原至: ${statusMap[payload.status] || payload.status.toUpperCase()}${payload.wardNumber ? ` (${payload.wardNumber})` : ''}`;
+        return `復原至: ${statusMap[payload.status] || (payload.status || '?').toUpperCase()}${payload.wardNumber ? ` (${payload.wardNumber})` : ''}`;
       }
       default:
         return JSON.stringify(payload);
@@ -264,8 +266,9 @@ export class UpdateSchedulerComponent implements OnInit, OnDestroy {
   }
 
   canDeleteUpdate(update: any): boolean {
-    if (!update || update.status !== 'pending') return false;
-    return new Date(update.effectiveDate) >= new Date(new Date().toISOString().split('T')[0]);
+    // pending 一律可撤銷：生效日已過的 pending 是漏執行的殭屍（cron 只套用當日），
+    // 更需要讓組長撤銷清掉，不做日期限制
+    return update?.status === 'pending';
   }
 
   // --- Dialog Functions ---

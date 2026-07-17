@@ -66,9 +66,10 @@
     [isVisible]="isConfirmDialogVisible()"
     [title]="confirmDialogTitle()"
     [message]="confirmDialogMessage()"
+    [hasCustomFooter]="true"
     (cancel)="closeConfirmDialog()"
   >
-    <div class="dialog-footer-custom">
+    <div footer class="dialog-footer-custom">
       <button class="btn btn-secondary" (click)="closeConfirmDialog()">關閉</button>
       <div>
         <button
