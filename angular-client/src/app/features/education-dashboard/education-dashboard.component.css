@@ -244,6 +244,10 @@
   min-width: 34px;
   text-align: right;
 }
+/* 三段式進度文字（已衛教/應衛教/總次數）需要較寬欄位 */
+.prog-text.three {
+  min-width: 62px;
+}
 
 .col-updated {
   color: #64748b;

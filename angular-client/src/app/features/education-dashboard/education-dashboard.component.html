@@ -63,8 +63,8 @@
             <th>初透日</th>
             <th title="來源：使用者管理的護理師分配病人照護清單">主護</th>
             <th>檢視／編輯</th>
-            <th class="col-prog">已衛教</th>
-            <th class="col-uneducated">未衛教</th>
+            <th class="col-prog" title="已衛教次數 / 應衛教次數（初透日起的非外圍透析日，最多12）/ 總次數">已衛教</th>
+            <th class="col-uneducated" title="應衛教日中尚未衛教的天數">未衛教</th>
             <th class="col-prog">回示教通過</th>
             <th>最後更新</th>
           </tr>
@@ -90,9 +90,9 @@
                 </button>
               </td>
               <td class="col-prog">
-                <div class="prog">
+                <div class="prog" [title]="'已衛教 ' + r.educatedCount + ' 次／應衛教 ' + r.expectedCount + ' 次（排除外圍床）／全程共 ' + r.total + ' 次'">
                   <div class="prog-bar"><span class="fill educ" [style.width.%]="pct(r.educatedCount, r.total)"></span></div>
-                  <span class="prog-text">{{ r.educatedCount }}/{{ r.total }}</span>
+                  <span class="prog-text three">{{ r.educatedCount }}/{{ r.expectedCount }}/{{ r.total }}</span>
                 </div>
               </td>
               <td class="col-uneducated">
@@ -111,7 +111,7 @@
                     {{ r.uneducatedCount }} 天
                   </button>
                 } @else {
-                  <span class="badge-ok" [title]="'應衛教 ' + r.expectedCount + ' 天（排除外圍床）'">無</span>
+                  <span class="badge-ok" [title]="'應衛教 ' + r.expectedCount + ' 天（排除外圍床）皆已衛教'">已跟上</span>
                 }
               </td>
               <td class="col-prog">
@@ -147,10 +147,10 @@
             <span>更新：{{ formatDate(r.lastUpdated) }}</span>
           </div>
           <div class="ec-prog-block">
-            <div class="ec-prog-row">
+            <div class="ec-prog-row" [title]="'已衛教 ' + r.educatedCount + ' 次／應衛教 ' + r.expectedCount + ' 次（排除外圍床）／全程共 ' + r.total + ' 次'">
               <span class="ec-prog-label">已衛教</span>
               <div class="prog-bar"><span class="fill educ" [style.width.%]="pct(r.educatedCount, r.total)"></span></div>
-              <span class="prog-text">{{ r.educatedCount }}/{{ r.total }}</span>
+              <span class="prog-text three">{{ r.educatedCount }}/{{ r.expectedCount }}/{{ r.total }}</span>
             </div>
             <div class="ec-prog-row">
               <span class="ec-prog-label">回示教通過</span>
@@ -168,7 +168,7 @@
               } @else if (r.uneducatedCount > 0) {
                 <button class="badge-uneducated" (click)="openUneducated(r)">{{ r.uneducatedCount }} 天</button>
               } @else {
-                <span class="badge-ok">無</span>
+                <span class="badge-ok" [title]="'應衛教 ' + r.expectedCount + ' 天（排除外圍床）皆已衛教'">已跟上</span>
               }
             </div>
           </div>
