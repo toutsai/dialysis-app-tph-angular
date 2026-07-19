@@ -38,7 +38,63 @@ export interface PatientStatusFlags {
   isFirstDialysis?: boolean;
   isPaused?: boolean;
   hasBloodDraw?: boolean;
+  dialysisOrigin?: DialysisOrigin;
   [key: string]: unknown;
+}
+
+/** 透析來源身分（永久履歷）：first=本院首透、transfer=外院轉入本院初透、repeat=反覆住院 */
+export type DialysisOriginType = 'first' | 'transfer' | 'repeat';
+
+export interface DialysisOrigin {
+  type: DialysisOriginType | null;
+  /** 人生首透日（type=first 才有） */
+  firstDialysisDate?: string | null;
+  /** 本院第一次透析日 */
+  hospitalFirstDate?: string | null;
+  setBy?: string;
+  setAt?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * 依目前旗標同步透析來源履歷（存檔前呼叫）。
+ * 規則（2026-07-19 使用者拍板）：組長明確判定（勾首透/本院初透/反覆住院）→ 履歷跟著最新判定走；
+ * 旗標全關（衛教完成取消凍結、建檔完成、復原等）→ 履歷不動，永久保留最後判定。
+ */
+export function syncDialysisOrigin(patientStatus: any, setBy: string): void {
+  if (!patientStatus) return;
+  const prev: DialysisOrigin = patientStatus.dialysisOrigin || { type: null };
+  let type: DialysisOriginType | null = null;
+  if (patientStatus.isFirstDialysis?.active) type = 'first';
+  else if (patientStatus.hospitalFirstDialysis?.active) type = 'transfer';
+  else if (prev.type === 'repeat') type = 'repeat';
+  if (!type) return; // 無明確判定 → 保留既有履歷
+  const next: DialysisOrigin = {
+    ...prev,
+    type,
+    firstDialysisDate:
+      type === 'first'
+        ? patientStatus.isFirstDialysis?.date || prev.firstDialysisDate || null
+        : prev.firstDialysisDate || null,
+    hospitalFirstDate:
+      type === 'repeat'
+        ? prev.hospitalFirstDate || null
+        : patientStatus.hospitalFirstDialysis?.date ||
+          patientStatus.isFirstDialysis?.date ||
+          prev.hospitalFirstDate ||
+          null,
+  };
+  const changed =
+    prev.type !== next.type ||
+    (prev.firstDialysisDate || null) !== (next.firstDialysisDate || null) ||
+    (prev.hospitalFirstDate || null) !== (next.hospitalFirstDate || null);
+  if (changed) {
+    next.setBy = setBy;
+    next.setAt = new Date().toLocaleString('sv-SE');
+    patientStatus.dialysisOrigin = next;
+  } else if (!patientStatus.dialysisOrigin) {
+    patientStatus.dialysisOrigin = next;
+  }
 }
 
 /** 病人主檔 */

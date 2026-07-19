@@ -131,6 +131,9 @@
                      [title]="p.patientStatus?.isFirstDialysis?.active ? ('首透: ' + (p.patientStatus.isFirstDialysis.date || '無日期')) : '首透（未設定，點擊編輯）'"></i>
                   <i *ngIf="p.patientStatus?.isFirstDialysis?.active" class="fas fa-chalkboard-teacher status-icon-education"
                      (click)="openEducationRecord(p); $event.stopPropagation()" title="初透衛教紀錄"></i>
+                  <i class="fas fa-hospital status-icon-hospital-first" [class.status-off]="!p.patientStatus?.hospitalFirstDialysis?.active"
+                     (click)="openStatusEdit(p, 'hospitalFirstDialysis', $event)"
+                     [title]="p.patientStatus?.hospitalFirstDialysis?.active ? ('本院初透: ' + (p.patientStatus.hospitalFirstDialysis.date || '無日期')) : '本院初透（未設定，點擊編輯）'"></i>
                   <i class="fas fa-pause-circle status-icon-paused" [class.status-off]="!p.patientStatus?.isPaused?.active"
                      (click)="openStatusEdit(p, 'isPaused', $event)"
                      [title]="p.patientStatus?.isPaused?.active ? ('暫停透析: ' + (p.patientStatus.isPaused.date || '無日期')) : '暫停透析（未設定，點擊編輯）'"></i>
@@ -212,6 +215,7 @@
                     <span *ngIf="p.patientStatus.hasBloodDraw.date" class="status-blood-date">{{ formatBloodDrawMonthDay(p.patientStatus.hasBloodDraw.date) }}</span>
                   </span>
                   <i *ngIf="p.patientStatus?.isFirstDialysis?.active" class="fas fa-star status-icon-first" [title]="'首透: ' + (p.patientStatus.isFirstDialysis.date || '無日期')"></i>
+                  <i *ngIf="p.patientStatus?.hospitalFirstDialysis?.active" class="fas fa-hospital status-icon-hospital-first" [title]="'本院初透: ' + (p.patientStatus.hospitalFirstDialysis.date || '無日期')"></i>
                   <i *ngIf="p.patientStatus?.isPaused?.active" class="fas fa-pause-circle status-icon-paused" [title]="'暫停透析: ' + (p.patientStatus.isPaused.date || '無日期')"></i>
                   <i *ngIf="p.patientStatus?.doNotMove?.active" class="fas fa-lock status-icon-do-not-move" [title]="doNotMoveTitle(p)"></i>
                 </div>
@@ -274,6 +278,7 @@
                 <span class="label">狀態</span>
                 <div class="status-icon-container">
                   <i *ngIf="p.patientStatus?.isFirstDialysis?.active" class="fas fa-star status-icon-first" [title]="'首透: ' + (p.patientStatus.isFirstDialysis.date || '無日期')"></i>
+                  <i *ngIf="p.patientStatus?.hospitalFirstDialysis?.active" class="fas fa-hospital status-icon-hospital-first" [title]="'本院初透: ' + (p.patientStatus.hospitalFirstDialysis.date || '無日期')"></i>
                   <i *ngIf="p.patientStatus?.isPaused?.active" class="fas fa-pause-circle status-icon-paused" [title]="'暫停透析: ' + (p.patientStatus.isPaused.date || '無日期')"></i>
                   <span *ngIf="p.patientStatus?.hasBloodDraw?.active" class="status-icon-blood status-blood-tag" [title]="'已抽血: ' + (p.patientStatus.hasBloodDraw.date || '無日期')">
                     <i class="fas fa-syringe"></i>
@@ -324,7 +329,7 @@
                 <div class="info-item"><span class="label">刪除原因</span><span class="value">{{ p.deleteReason || '-' }}</span></div>
               </div>
               <div class="deleted-status-row"
-                   *ngIf="p.patientStatus?.hasBloodDraw?.active || p.patientStatus?.isFirstDialysis?.active || p.patientStatus?.isPaused?.active || p.patientStatus?.doNotMove?.active">
+                   *ngIf="p.patientStatus?.hasBloodDraw?.active || p.patientStatus?.isFirstDialysis?.active || p.patientStatus?.hospitalFirstDialysis?.active || p.patientStatus?.isPaused?.active || p.patientStatus?.doNotMove?.active">
                 <span class="label">狀態</span>
                 <div class="status-icon-container">
                   <span *ngIf="p.patientStatus?.hasBloodDraw?.active" class="status-icon-blood status-blood-tag" [title]="'已抽血: ' + (p.patientStatus.hasBloodDraw.date || '無日期')">
@@ -332,6 +337,7 @@
                     <span *ngIf="p.patientStatus.hasBloodDraw.date" class="status-blood-date">{{ formatBloodDrawMonthDay(p.patientStatus.hasBloodDraw.date) }}</span>
                   </span>
                   <i *ngIf="p.patientStatus?.isFirstDialysis?.active" class="fas fa-star status-icon-first" [title]="'首透: ' + (p.patientStatus.isFirstDialysis.date || '無日期')"></i>
+                  <i *ngIf="p.patientStatus?.hospitalFirstDialysis?.active" class="fas fa-hospital status-icon-hospital-first" [title]="'本院初透: ' + (p.patientStatus.hospitalFirstDialysis.date || '無日期')"></i>
                   <i *ngIf="p.patientStatus?.isPaused?.active" class="fas fa-pause-circle status-icon-paused" [title]="'暫停透析: ' + (p.patientStatus.isPaused.date || '無日期')"></i>
                   <i *ngIf="p.patientStatus?.doNotMove?.active" class="fas fa-lock status-icon-do-not-move" [title]="doNotMoveTitle(p)"></i>
                 </div>
@@ -478,6 +484,18 @@
           <div class="se-detail">
             @if (statusEditPatient().patientStatus.isFirstDialysis?.active) {
               <input type="date" [(ngModel)]="statusEditPatient().patientStatus.isFirstDialysis.date" name="qeFirstDate" (click)="$event.stopPropagation()" />
+            } @else {
+              <span class="se-off">未設定</span>
+            }
+          </div>
+        </div>
+        <div class="se-row" [class.focused]="statusEditFocus() === 'hospitalFirstDialysis'">
+          <button type="button" class="se-chip hospital-first" [class.active]="statusEditPatient().patientStatus.hospitalFirstDialysis?.active" (click)="toggleStatusEdit('hospitalFirstDialysis')" title="第一次在本院透析（含外院轉入），供 KiDit 建檔追蹤">
+            <i class="fas fa-hospital"></i><span>本院初透</span>
+          </button>
+          <div class="se-detail">
+            @if (statusEditPatient().patientStatus.hospitalFirstDialysis?.active) {
+              <input type="date" [(ngModel)]="statusEditPatient().patientStatus.hospitalFirstDialysis.date" name="qeHospitalFirstDate" (click)="$event.stopPropagation()" />
             } @else {
               <span class="se-off">未設定</span>
             }

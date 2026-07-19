@@ -26,6 +26,8 @@ import { formatDateToYYYYMMDD, parseFirestoreTimestamp, getToday } from '@/utils
 import { doNotMoveRangeText } from '@/utils/doNotMove';
 import { escapeHtml } from '@/utils/sanitize';
 import { createDialysisOrderAndUpdatePatient } from '@/services/optimizedApiService';
+import { syncDialysisOrigin } from '@app/core/models/patient.model';
+import { kiditService } from '@/services/kiditService';
 
 // Child component imports
 import { PatientFormModalComponent } from '@app/components/dialogs/patient-form-modal/patient-form-modal.component';
@@ -228,6 +230,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
     ps.isFirstDialysis = ps.isFirstDialysis || { active: false, date: null };
     ps.isPaused = ps.isPaused || { active: false, date: null };
     ps.hasBloodDraw = ps.hasBloodDraw || { active: false, date: null };
+    ps.hospitalFirstDialysis = ps.hospitalFirstDialysis || { active: false, date: null };
     ps.doNotMove = ps.doNotMove || { active: false, reason: '' };
     // 勿動日期區間欄位（向後相容：舊資料無 rangeType → 視為持續）
     if (!ps.doNotMove.rangeType) ps.doNotMove.rangeType = 'permanent';
@@ -254,6 +257,12 @@ export class PatientsComponent implements OnInit, OnDestroy {
     } else {
       if (key === 'isFirstDialysis' && status.active && !status.date && p.firstDialysisDate) {
         status.date = p.firstDialysisDate;
+      }
+      // 首透 ⇒ 本院初透 連動（人生首透在本院，必為本院第一次）
+      if (key === 'isFirstDialysis' && status.active) {
+        const h = p.patientStatus.hospitalFirstDialysis || (p.patientStatus.hospitalFirstDialysis = { active: false, date: null });
+        h.active = true;
+        if (!h.date) h.date = status.date || null;
       }
       if (!status.active) status.date = null;
     }
@@ -742,6 +751,8 @@ export class PatientsComponent implements OnInit, OnDestroy {
 
     const user = this.authService.currentUser();
     const creatorInfo = { uid: user!.uid, name: user!.name };
+    // 透析來源履歷：依目前旗標同步（表單存檔與快速編輯皆走此統一入口）
+    syncDialysisOrigin(patientData.patientStatus, user?.name || '');
     const firstDialysisPlan = patientData.firstDialysisPlan ? JSON.parse(JSON.stringify(patientData.firstDialysisPlan)) : null;
 
     // Edit existing
@@ -1291,10 +1302,31 @@ export class PatientsComponent implements OnInit, OnDestroy {
         `復原病人：${patient.name} 至 ${targetStatusText}`,
         'patient'
       );
+
+      // 病人履歷提示：曾判定的透析來源身分 + KiDit 建檔狀態（本次回來屬反覆住院，勿重複標記）
+      let originNote = '';
+      const origin = patient.patientStatus?.dialysisOrigin;
+      const originLabels: Record<string, string> = { first: '本院首透', transfer: '外院轉入本院初透', repeat: '反覆住院' };
+      if (origin?.type && originLabels[origin.type]) {
+        const originDate = origin.type === 'first' ? origin.firstDialysisDate : origin.hospitalFirstDate;
+        originNote = `\n\n病人履歷：曾為「${originLabels[origin.type]}」${originDate ? '（' + originDate + '）' : ''}，本次回來屬反覆住院，勿重複標記首透/本院初透。`;
+        if (origin.type === 'first' || origin.type === 'transfer') {
+          try {
+            const pending = await kiditService.fetchPendingRegistrations();
+            originNote += (pending || []).some((r: any) => r.patientId === patientId)
+              ? '\nKiDit 基本資料「尚未」建檔完成，請至 KiDit 申報工作站補建檔。'
+              : '\nKiDit 基本資料已建檔完成。';
+          } catch {
+            // 查詢建檔狀態失敗不影響復原流程
+          }
+        }
+      }
+
       this.showAlert(
         '復原成功',
         `${patient.name} 已復原並移至「${targetStatusText}」清單。如需排班，請至總床位表設定。` +
-          (clearedBloodDraw ? '\n\n（原「已抽血」紀錄已超過 3 個月，已自動清除，請記得重新抽透析品質血。）' : '')
+          (clearedBloodDraw ? '\n\n（原「已抽血」紀錄已超過 3 個月，已自動清除，請記得重新抽透析品質血。）' : '') +
+          originNote
       );
     } catch (err) {
       this.showAlert('操作失敗', '復原病人時發生錯誤！');

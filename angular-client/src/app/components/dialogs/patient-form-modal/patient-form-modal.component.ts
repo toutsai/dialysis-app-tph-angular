@@ -159,8 +159,42 @@ export class PatientFormModalComponent implements OnInit {
       if (key === 'isFirstDialysis' && status.active && !status.date && this.form.firstDialysisDate) {
         status.date = this.form.firstDialysisDate;
       }
+      // 首透 ⇒ 本院初透 連動（人生首透在本院，必為本院第一次）
+      if (key === 'isFirstDialysis' && status.active) {
+        this.ensurePatientStatus();
+        const h = this.form.patientStatus.hospitalFirstDialysis;
+        h.active = true;
+        if (!h.date) h.date = status.date || null;
+      }
+      // 勾任一初透標記即非「反覆住院」
+      if ((key === 'isFirstDialysis' || key === 'hospitalFirstDialysis') && status.active) {
+        this.clearRepeatAdmissionMark();
+      }
       if (!status.active) status.date = null;
     }
+  }
+
+  /** 透析來源=反覆住院（外院+本院都透析過的舊病人）；存檔時由 syncDialysisOrigin 補 setBy/setAt */
+  isRepeatAdmission(): boolean {
+    return this.form.patientStatus?.dialysisOrigin?.type === 'repeat';
+  }
+
+  toggleRepeatAdmission(): void {
+    this.ensurePatientStatus();
+    const ps = this.form.patientStatus;
+    if (this.isRepeatAdmission()) {
+      // 取消判定 → 回到未判定（清除履歷 type，保留日期欄位）
+      ps.dialysisOrigin = { ...(ps.dialysisOrigin || {}), type: null };
+    } else {
+      ps.isFirstDialysis = { active: false, date: null };
+      ps.hospitalFirstDialysis = { active: false, date: null };
+      ps.dialysisOrigin = { ...(ps.dialysisOrigin || {}), type: 'repeat' };
+    }
+  }
+
+  private clearRepeatAdmissionMark(): void {
+    const origin = this.form.patientStatus?.dialysisOrigin;
+    if (origin?.type === 'repeat') origin.type = null;
   }
 
   handleFirstDialysisDateChange(date: string | null): void {

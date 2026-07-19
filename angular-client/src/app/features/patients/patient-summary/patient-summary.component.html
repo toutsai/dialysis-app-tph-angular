@@ -18,6 +18,31 @@
       >
         <span class="pi-name">{{ p.name }}</span>
         <span class="pi-mrn">{{ p.medicalRecordNumber }}</span>
+        <span class="pi-origin">{{ originLabel(p) }}</span>
+        <span *ngIf="isDeleted(p)" class="pi-deleted">已刪除</span>
+      </button>
+    </div>
+
+    <!-- 透析來源篩選：一鍵撈出某身分的全部病人（含已刪除） -->
+    <div class="origin-filter">
+      <span class="of-label">透析來源</span>
+      <button type="button" [class.active]="originFilter() === 'off'" (click)="originFilter.set('off')">關閉</button>
+      <button type="button" [class.active]="originFilter() === 'first'" (click)="originFilter.set('first')">本院首透</button>
+      <button type="button" [class.active]="originFilter() === 'transfer'" (click)="originFilter.set('transfer')">外院轉入</button>
+      <button type="button" [class.active]="originFilter() === 'repeat'" (click)="originFilter.set('repeat')">反覆住院</button>
+      <button type="button" [class.active]="originFilter() === 'unset'" (click)="originFilter.set('unset')">未判定</button>
+    </div>
+    <div *ngIf="originFilter() !== 'off'" class="picker-results origin-results">
+      <div class="of-count">共 {{ originFilteredPatients().length }} 位</div>
+      <button
+        *ngFor="let p of originFilteredPatients()"
+        class="picker-item"
+        (click)="selectPatient(p)"
+      >
+        <span class="pi-name">{{ p.name }}</span>
+        <span class="pi-mrn">{{ p.medicalRecordNumber }}</span>
+        <span class="pi-origin">{{ originLabel(p) }}</span>
+        <span *ngIf="isDeleted(p)" class="pi-deleted">已刪除</span>
       </button>
     </div>
   </div>
@@ -37,6 +62,13 @@
     <!-- 基本醫療資訊 -->
     <div class="section">
       <div class="grid-2">
+        <div class="field">
+          <span class="label">透析來源</span>
+          <span class="value">
+            <span class="origin-badge" [attr.data-type]="originType(p)">{{ originLabel(p) }}</span>
+            <span *ngIf="isDeleted(p)" class="pi-deleted">已刪除</span>
+          </span>
+        </div>
         <div class="field"><span class="label">初透日期</span><span class="value">{{ firstDialysisDate() || '—' }}</span></div>
         <div class="field">
           <span class="label">血管通路</span>

@@ -44,12 +44,12 @@ export class PatientSummaryComponent {
   readonly searchTerm = signal('');
   readonly selectedId = signal<string | null>(null);
 
+  // 病人履歷：含已刪除（出院）病人，讓再次入院前可先查身分
   readonly filteredPatients = computed<Patient[]>(() => {
     const term = this.searchTerm().trim().toLowerCase();
     if (!term) return [];
     return this.patientStore
       .allPatients()
-      .filter((p) => p.status !== 'deleted')
       .filter(
         (p) =>
           (p.name && p.name.toLowerCase().includes(term)) ||
@@ -57,6 +57,52 @@ export class PatientSummaryComponent {
       )
       .slice(0, 20);
   });
+
+  // --- 透析來源身分（病人履歷 patientStatus.dialysisOrigin，永久保留） ---
+  readonly ORIGIN_LABELS: Record<string, string> = {
+    first: '本院首透',
+    transfer: '外院轉入本院初透',
+    repeat: '反覆住院',
+  };
+  readonly originFilter = signal<'off' | 'first' | 'transfer' | 'repeat' | 'unset'>('off');
+
+  /** 履歷 type；未回填的舊資料依現行旗標推導 */
+  originType(p: Patient): 'first' | 'transfer' | 'repeat' | null {
+    const ps: any = p['patientStatus'] || {};
+    const t = ps.dialysisOrigin?.type;
+    if (t === 'first' || t === 'transfer' || t === 'repeat') return t;
+    if (ps.isFirstDialysis?.active) return 'first';
+    if (ps.hospitalFirstDialysis?.active) return 'transfer';
+    return null;
+  }
+
+  originLabel(p: Patient): string {
+    const t = this.originType(p);
+    if (!t) return '未判定';
+    const o: any = (p['patientStatus'] as any)?.dialysisOrigin || {};
+    const ps: any = p['patientStatus'] || {};
+    const date =
+      t === 'first'
+        ? o.firstDialysisDate || ps.isFirstDialysis?.date
+        : t === 'transfer'
+          ? o.hospitalFirstDate || ps.hospitalFirstDialysis?.date
+          : null;
+    return this.ORIGIN_LABELS[t] + (date ? `（${date}）` : '');
+  }
+
+  /** 篩選清單：一鍵撈出某身分的全部病人（含已刪除） */
+  readonly originFilteredPatients = computed<Patient[]>(() => {
+    const f = this.originFilter();
+    if (f === 'off') return [];
+    return this.patientStore
+      .allPatients()
+      .filter((p) => this.originType(p) === (f === 'unset' ? null : f))
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+  });
+
+  isDeleted(p: Patient): boolean {
+    return !!p['isDeleted'] || p.status === 'deleted';
+  }
 
   // --- Selected patient detail ---
   readonly patient = signal<Patient | null>(null);

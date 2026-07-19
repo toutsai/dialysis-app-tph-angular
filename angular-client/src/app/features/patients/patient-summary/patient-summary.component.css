@@ -239,3 +239,85 @@
   background: #e3f2e8;
   color: #2a7a45;
 }
+
+/* 透析來源身分（病人履歷） */
+.picker-item {
+  gap: 8px;
+  align-items: center;
+}
+.pi-origin {
+  margin-left: auto;
+  font-size: 12px;
+  color: #0d9488;
+  white-space: nowrap;
+}
+.pi-deleted {
+  font-size: 11px;
+  font-weight: 700;
+  color: #c62828;
+  background: #fdecec;
+  border-radius: 4px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+.origin-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.origin-filter .of-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0d9488;
+}
+.origin-filter button {
+  padding: 5px 12px;
+  border: 1px solid #ccd5db;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+.origin-filter button:hover {
+  background: #f0fdfa;
+}
+.origin-filter button.active {
+  background: #0d9488;
+  border-color: #0d9488;
+  color: #fff;
+  font-weight: 700;
+}
+.origin-results {
+  position: static;
+  margin-top: 8px;
+  box-shadow: none;
+}
+.of-count {
+  padding: 6px 12px;
+  font-size: 12px;
+  color: #888;
+  border-bottom: 1px solid #f0f0f0;
+}
+.origin-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  background: #eef1f4;
+  color: #607d8b;
+}
+.origin-badge[data-type='first'] {
+  background: #fff1e6;
+  color: #d9480f;
+}
+.origin-badge[data-type='transfer'] {
+  background: #e6fcf5;
+  color: #0d9488;
+}
+.origin-badge[data-type='repeat'] {
+  background: #edf2ff;
+  color: #3b5bdb;
+}

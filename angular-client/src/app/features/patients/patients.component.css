@@ -289,7 +289,7 @@
   flex: 0 0 80px;
 }
 .col-status {
-  flex: 0 0 160px;
+  flex: 0 0 210px;
 }
 .col-hospital {
   flex: 0 0 160px;
@@ -343,6 +343,9 @@
 .status-icon-first {
   color: #f97316;
 }
+.status-icon-hospital-first {
+  color: #0d9488;
+}
 .status-icon-paused {
   color: #6b7280;
 }
@@ -382,6 +385,7 @@
 }
 /* 可編輯：四個狀態圖示常駐，未設定套灰底，點擊開快速編輯面板 */
 .status-editable .status-icon-first,
+.status-editable .status-icon-hospital-first,
 .status-editable .status-icon-paused,
 .status-editable .status-icon-blood,
 .status-editable .status-icon-do-not-move {
@@ -389,6 +393,7 @@
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
 .status-editable .status-icon-first:hover,
+.status-editable .status-icon-hospital-first:hover,
 .status-editable .status-icon-paused:hover,
 .status-editable .status-icon-blood:hover,
 .status-editable .status-icon-do-not-move:hover,
@@ -396,6 +401,7 @@
   transform: scale(1.15);
 }
 .status-icon-first.status-off,
+.status-icon-hospital-first.status-off,
 .status-icon-paused.status-off,
 .status-icon-blood.status-off,
 .status-icon-do-not-move.status-off {
@@ -404,6 +410,7 @@
 }
 /* 住院列(淡紅底)：藍灰在紅底上顯髒，改更淺灰讓啟用圖示對比更清楚 */
 .status-ipd .status-icon-first.status-off,
+.status-ipd .status-icon-hospital-first.status-off,
 .status-ipd .status-icon-paused.status-off,
 .status-ipd .status-icon-blood.status-off,
 .status-ipd .status-icon-do-not-move.status-off {
@@ -643,6 +650,9 @@
 }
 .se-chip.first.active {
   background: #f97316;
+}
+.se-chip.hospital-first.active {
+  background: #0d9488;
 }
 .se-chip.paused.active {
   background: #6b7280;
@@ -911,7 +921,7 @@
 }
 @media (max-width: 1200px) {
   .desktop-only .flex-table-wrapper {
-    min-width: 1200px;
+    min-width: 1250px;
   }
   .desktop-only.table-wrapper {
     overflow-x: auto;
