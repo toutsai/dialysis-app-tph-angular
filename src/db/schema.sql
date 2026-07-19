@@ -99,12 +99,22 @@ CREATE TABLE IF NOT EXISTS schedules (
     date TEXT UNIQUE NOT NULL,
     schedule TEXT DEFAULT '{}',  -- JSON: {bedNum-shift: {patientId, patientName, ...}}
     sync_method TEXT,
+    version INTEGER NOT NULL DEFAULT 0,  -- 樂觀鎖版本號（存檔衝突偵測）；由 trigger 隨 schedule 欄位更新自動遞增
     last_modified_by TEXT DEFAULT '{}',
     created_at TEXT DEFAULT (datetime('now', 'localtime')),
     updated_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_schedules_date ON schedules(date);
+
+-- 樂觀鎖版本自動遞增：只要 UPDATE 語句的 SET 子句包含 schedule 欄位就會觸發（SQLite「UPDATE OF」語意，
+-- 不比較新舊值是否相同），系統重建路徑（scheduleSync/exceptionHandler/exceptionReconcile 等）因此
+-- 完全免改程式碼即自動遞增版本。SQLite recursive_triggers 預設關閉，trigger 內的 UPDATE 不會遞迴自我觸發。
+CREATE TRIGGER IF NOT EXISTS trg_schedules_version_bump
+AFTER UPDATE OF schedule ON schedules
+BEGIN
+    UPDATE schedules SET version = version + 1 WHERE id = NEW.id;
+END;
 
 -- 歸檔排程表 (用於周排班檢視歷史紀錄)
 CREATE TABLE IF NOT EXISTS archived_schedules (
@@ -236,11 +246,19 @@ CREATE TABLE IF NOT EXISTS nurse_assignments (
     id TEXT PRIMARY KEY,  -- 使用日期作為 ID
     date TEXT UNIQUE NOT NULL,
     teams TEXT DEFAULT '{}',  -- JSON: {patientId-shift: nurseId}
+    version INTEGER NOT NULL DEFAULT 0,  -- 樂觀鎖版本號（存檔衝突偵測）；由 trigger 隨 teams 欄位更新自動遞增
     created_at TEXT DEFAULT (datetime('now', 'localtime')),
     updated_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_nurse_assignments_date ON nurse_assignments(date);
+
+-- 樂觀鎖版本自動遞增：同 trg_schedules_version_bump 設計，系統重建/還原路徑免改程式碼即自動遞增版本
+CREATE TRIGGER IF NOT EXISTS trg_nurse_assignments_version_bump
+AFTER UPDATE OF teams ON nurse_assignments
+BEGIN
+    UPDATE nurse_assignments SET version = version + 1 WHERE id = NEW.id;
+END;
 
 -- 護理分組歷史快照 (每小時 + 每次儲存前；用於異常快速復原)
 CREATE TABLE IF NOT EXISTS nurse_assignment_revisions (

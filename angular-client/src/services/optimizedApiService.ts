@@ -90,10 +90,11 @@ export async function saveSchedule(scheduleData: any): Promise<any> {
   clearCacheByPattern('schedules');
   return result;
 }
-export async function updateSchedule(scheduleId: string, updateData: any): Promise<void> {
+export async function updateSchedule(scheduleId: string, updateData: any): Promise<any> {
   const api = ApiManager('schedules');
-  await api.update(scheduleId, updateData);
+  const result = await api.update(scheduleId, updateData);
   clearCacheByPattern('schedules');
+  return result;
 }
 
 // Patient functions

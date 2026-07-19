@@ -482,6 +482,46 @@ export function runMigrations() {
       )
     }
 
+    // ========================================
+    // 排程/護理分組樂觀鎖版本欄位（2026-07-19）
+    // 兩人同編排程/護理分組會整包互蓋(last-write-wins)，加 version 欄位供存檔端點做版本檢查。
+    // Trigger 設計意圖：只要 UPDATE 語句的 SET 子句包含 schedule/teams 欄位就會觸發（SQLite
+    // 「UPDATE OF」語意，不比較新舊值），系統重建路徑（scheduleSync/exceptionHandler/
+    // exceptionReconcile 等）因此完全免改程式碼即自動遞增版本。SQLite recursive_triggers
+    // 預設關閉，trigger 內的 UPDATE 不會遞迴自我觸發。
+    // ========================================
+    const schedulesTableExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='schedules'")
+      .get()
+    if (schedulesTableExists) {
+      console.log('📋 檢查 schedules 表格 (樂觀鎖版本)...')
+      if (addColumnIfNotExists(db, 'schedules', 'version', 'INTEGER NOT NULL DEFAULT 0'))
+        migrationsApplied++
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS trg_schedules_version_bump
+        AFTER UPDATE OF schedule ON schedules
+        BEGIN
+          UPDATE schedules SET version = version + 1 WHERE id = NEW.id;
+        END
+      `)
+    }
+
+    const nurseAssignmentsTableExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='nurse_assignments'")
+      .get()
+    if (nurseAssignmentsTableExists) {
+      console.log('📋 檢查 nurse_assignments 表格 (樂觀鎖版本)...')
+      if (addColumnIfNotExists(db, 'nurse_assignments', 'version', 'INTEGER NOT NULL DEFAULT 0'))
+        migrationsApplied++
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS trg_nurse_assignments_version_bump
+        AFTER UPDATE OF teams ON nurse_assignments
+        BEGIN
+          UPDATE nurse_assignments SET version = version + 1 WHERE id = NEW.id;
+        END
+      `)
+    }
+
     if (migrationsApplied > 0) {
       console.log(`✅ 已完成 ${migrationsApplied} 項遷移`)
     } else {

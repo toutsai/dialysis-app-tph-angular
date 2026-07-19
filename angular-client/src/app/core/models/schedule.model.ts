@@ -17,6 +17,8 @@ export interface Schedule extends BaseEntity {
   schedule?: Record<string, ScheduleSlot>;
   syncMethod?: string;
   lastModifiedBy?: UserRef;
+  /** 樂觀鎖版本號：PUT 帶 expectedVersion 比對，不符回 409 VERSION_CONFLICT */
+  version?: number;
 }
 
 /** 歸檔排程表 */

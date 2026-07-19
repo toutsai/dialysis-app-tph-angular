@@ -633,6 +633,19 @@
     (cancel)="handleCancel()"
   ></app-confirm-dialog>
 
+  <!-- 樂觀鎖版本衝突對話框（存檔收到 409 VERSION_CONFLICT 時開啟） -->
+  <app-confirm-dialog
+    [isVisible]="isVersionConflictDialogVisible"
+    title="排程已被更新"
+    [message]="versionConflictMessage"
+    confirmText="重新載入最新資料"
+    cancelText="仍要覆蓋"
+    confirmClass="btn-info"
+    cancelClass="btn-warning"
+    (confirm)="handleVersionConflictReload()"
+    (cancel)="handleVersionConflictOverwrite()"
+  ></app-confirm-dialog>
+
   <app-preparation-popover
     [isVisible]="isPrepPopoverVisible"
     [patients]="prepPopoverData.patients"

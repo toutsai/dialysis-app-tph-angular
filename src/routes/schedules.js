@@ -15,6 +15,15 @@ import { snapshotNurseAssignmentForDate } from '../services/nurseAssignmentRevis
 
 const router = Router()
 
+// 樂觀鎖版本衝突：用於在 db.transaction() 內部拋出以觸發交易回滾，交易外攔截後轉成 409 回應
+class VersionConflictError extends Error {
+  constructor(payload) {
+    super('VERSION_CONFLICT')
+    this.name = 'VersionConflictError'
+    this.payload = payload
+  }
+}
+
 const STATUS_MAP = {
   opd: '門診',
   ipd: '住院',
@@ -246,6 +255,7 @@ router.get('/', authenticate, (req, res) => {
       schedule: JSON.parse(s.schedule || '{}'),
       syncMethod: s.sync_method,
       lastModifiedBy: JSON.parse(s.last_modified_by || '{}'),
+      version: s.version,
       createdAt: s.created_at,
       updatedAt: s.updated_at
     })))
@@ -458,6 +468,7 @@ router.get('/range', authenticate, (req, res) => {
       schedule: JSON.parse(s.schedule || '{}'),
       syncMethod: s.sync_method,
       lastModifiedBy: JSON.parse(s.last_modified_by || '{}'),
+      version: s.version,
       createdAt: s.created_at,
       updatedAt: s.updated_at
     })))
@@ -547,6 +558,7 @@ router.get('/:date', authenticate, (req, res) => {
       schedule: JSON.parse(schedule.schedule || '{}'),
       syncMethod: schedule.sync_method,
       lastModifiedBy: JSON.parse(schedule.last_modified_by || '{}'),
+      version: schedule.version,
       createdAt: schedule.created_at,
       updatedAt: schedule.updated_at
     })
@@ -563,27 +575,51 @@ router.get('/:date', authenticate, (req, res) => {
 /**
  * PUT /api/schedules/:date
  * 更新特定日期的排程
+ * Body 可選 expectedVersion（number）：帶入時做樂觀鎖版本檢查，版本不符回 409 VERSION_CONFLICT。
+ * 不帶則維持現行無條件覆寫（相容舊前端）。
  */
 router.put('/:date', ...isEditor, async (req, res) => {
   try {
     const { date } = req.params
-    const { schedule } = req.body
+    const { schedule, expectedVersion } = req.body
 
     const db = getDatabase()
 
-    const existing = db.prepare(`SELECT id FROM schedules WHERE date = ?`).get(date)
+    const existing = db.prepare(`SELECT id, version FROM schedules WHERE date = ?`).get(date)
 
     const lastModifiedBy = JSON.stringify({ uid: req.user.id, name: req.user.name })
+    const hasExpectedVersion = !!existing && typeof expectedVersion === 'number'
 
     if (existing) {
-      db.prepare(`
-        UPDATE schedules
-        SET schedule = ?,
-            last_modified_by = ?,
-            updated_at = datetime('now', 'localtime')
-        WHERE date = ?
-      `).run(JSON.stringify(schedule), lastModifiedBy, date)
+      const result = hasExpectedVersion
+        ? db.prepare(`
+            UPDATE schedules
+            SET schedule = ?,
+                last_modified_by = ?,
+                updated_at = datetime('now', 'localtime')
+            WHERE date = ? AND version = ?
+          `).run(JSON.stringify(schedule), lastModifiedBy, date, expectedVersion)
+        : db.prepare(`
+            UPDATE schedules
+            SET schedule = ?,
+                last_modified_by = ?,
+                updated_at = datetime('now', 'localtime')
+            WHERE date = ?
+          `).run(JSON.stringify(schedule), lastModifiedBy, date)
+
+      if (hasExpectedVersion && result.changes === 0) {
+        const current = db.prepare(`SELECT version, last_modified_by, updated_at FROM schedules WHERE date = ?`).get(date)
+        return res.status(409).json({
+          error: true,
+          code: 'VERSION_CONFLICT',
+          message: '排程已被更新',
+          currentVersion: current?.version,
+          lastModifiedBy: current ? JSON.parse(current.last_modified_by || '{}') : {},
+          updatedAt: current?.updated_at,
+        })
+      }
     } else {
+      // INSERT 分支忽略 expectedVersion（新建列無版本可比對）
       db.prepare(`
         INSERT INTO schedules (id, date, schedule, last_modified_by)
         VALUES (?, ?, ?, ?)
@@ -601,6 +637,7 @@ router.put('/:date', ...isEditor, async (req, res) => {
       date: updated.date,
       schedule: JSON.parse(updated.schedule || '{}'),
       lastModifiedBy: JSON.parse(updated.last_modified_by || '{}'),
+      version: updated.version,
       updatedAt: updated.updated_at
     })
 
@@ -1557,6 +1594,7 @@ router.get('/nurse-assignments/:date', authenticate, (req, res) => {
       teams: data.teams || data,  // 兼容舊格式
       names: data.names || {},
       takeoffEnabled: data.takeoffEnabled || false,
+      version: assignment.version,
       createdAt: assignment.created_at,
       updatedAt: assignment.updated_at
     })
@@ -1575,16 +1613,18 @@ router.get('/nurse-assignments/:date', authenticate, (req, res) => {
  * 原子性儲存：同時寫入當日排程 (schedules) 與護理分組 (nurse_assignments)。
  * 避免兩次獨立 API call 中間網路斷線導致 UI 與 DB 不一致。
  *
- * Body: { schedule?, names?, teams?, takeoffEnabled? }
+ * Body: { schedule?, names?, teams?, takeoffEnabled?, expectedScheduleVersion?, expectedTeamsVersion? }
  *   - schedule 存在 → 寫 schedules 表
  *   - teams 存在 → 寫 nurse_assignments 表
  *   - 兩者都沒提供 → 400
+ *   - expectedScheduleVersion/expectedTeamsVersion 可選：帶入時做樂觀鎖版本檢查，
+ *     任一版本不符則整個交易回滾，回 409 VERSION_CONFLICT（不帶則維持現行無條件覆寫）
  * Response: { schedule: {...} | null, teams: {...} | null }
  */
 router.put('/:date/with-teams', ...isEditor, async (req, res) => {
   try {
     const { date } = req.params
-    const { schedule, teams, names, takeoffEnabled } = req.body
+    const { schedule, teams, names, takeoffEnabled, expectedScheduleVersion, expectedTeamsVersion } = req.body
 
     const hasSchedule = schedule !== undefined && schedule !== null
     const hasTeams = teams !== undefined && teams !== null
@@ -1598,64 +1638,122 @@ router.put('/:date/with-teams', ...isEditor, async (req, res) => {
 
     const db = getDatabase()
     const lastModifiedBy = JSON.stringify({ uid: req.user.id, name: req.user.name })
+    const hasExpectedScheduleVersion = typeof expectedScheduleVersion === 'number'
+    const hasExpectedTeamsVersion = typeof expectedTeamsVersion === 'number'
 
-    // 用 better-sqlite3 的 transaction 確保原子性
-    const runAtomic = db.transaction(() => {
-      let scheduleResult = null
-      let teamsResult = null
+    let scheduleResult = null
+    let teamsResult = null
 
-      if (hasSchedule) {
-        const existing = db.prepare('SELECT id FROM schedules WHERE date = ?').get(date)
-        if (existing) {
-          db.prepare(`
-            UPDATE schedules
-            SET schedule = ?,
-                last_modified_by = ?,
+    try {
+      // 用 better-sqlite3 的 transaction 確保原子性；版本衝突時 throw 讓交易回滾
+      const runAtomic = db.transaction(() => {
+        if (hasSchedule) {
+          const existing = db.prepare('SELECT id, version FROM schedules WHERE date = ?').get(date)
+          if (existing) {
+            const result = hasExpectedScheduleVersion
+              ? db.prepare(`
+                  UPDATE schedules
+                  SET schedule = ?,
+                      last_modified_by = ?,
+                      updated_at = datetime('now', 'localtime')
+                  WHERE date = ? AND version = ?
+                `).run(JSON.stringify(schedule), lastModifiedBy, date, expectedScheduleVersion)
+              : db.prepare(`
+                  UPDATE schedules
+                  SET schedule = ?,
+                      last_modified_by = ?,
+                      updated_at = datetime('now', 'localtime')
+                  WHERE date = ?
+                `).run(JSON.stringify(schedule), lastModifiedBy, date)
+
+            if (hasExpectedScheduleVersion && result.changes === 0) {
+              const currentSchedule = db.prepare('SELECT version, last_modified_by, updated_at FROM schedules WHERE date = ?').get(date)
+              const currentTeams = db.prepare('SELECT version FROM nurse_assignments WHERE date = ?').get(date)
+              throw new VersionConflictError({
+                scheduleCurrentVersion: currentSchedule?.version,
+                teamsCurrentVersion: currentTeams?.version,
+                lastModifiedBy: currentSchedule ? JSON.parse(currentSchedule.last_modified_by || '{}') : {},
+                updatedAt: currentSchedule?.updated_at,
+              })
+            }
+          } else {
+            // INSERT 分支忽略 expectedScheduleVersion（新建列無版本可比對）
+            db.prepare(`
+              INSERT INTO schedules (id, date, schedule, last_modified_by)
+              VALUES (?, ?, ?, ?)
+            `).run(date, date, JSON.stringify(schedule), lastModifiedBy)
+          }
+          const row = db.prepare('SELECT * FROM schedules WHERE date = ?').get(date)
+          scheduleResult = {
+            id: row.id,
+            date: row.date,
+            schedule: JSON.parse(row.schedule || '{}'),
+            lastModifiedBy: JSON.parse(row.last_modified_by || '{}'),
+            version: row.version,
+            updatedAt: row.updated_at,
+          }
+        }
+
+        if (hasTeams) {
+          // 覆寫前先快照現況（供異常復原），內容未變則自動跳過
+          snapshotNurseAssignmentForDate(db, date, {
+            type: 'pre_save',
+            createdBy: { uid: req.user.id, name: req.user.name },
+          })
+
+          const teamsPayload = {
+            teams: teams || {},
+            names: names || {},
+            takeoffEnabled: !!takeoffEnabled,
+          }
+
+          const existingTeams = db.prepare('SELECT id, version FROM nurse_assignments WHERE date = ?').get(date)
+          if (existingTeams && hasExpectedTeamsVersion) {
+            const result = db.prepare(`
+              UPDATE nurse_assignments
+              SET teams = ?,
+                  updated_at = datetime('now', 'localtime')
+              WHERE date = ? AND version = ?
+            `).run(JSON.stringify(teamsPayload), date, expectedTeamsVersion)
+
+            if (result.changes === 0) {
+              const currentTeams = db.prepare('SELECT version FROM nurse_assignments WHERE date = ?').get(date)
+              const currentSchedule = db.prepare('SELECT version, last_modified_by, updated_at FROM schedules WHERE date = ?').get(date)
+              throw new VersionConflictError({
+                scheduleCurrentVersion: currentSchedule?.version,
+                teamsCurrentVersion: currentTeams?.version,
+                lastModifiedBy: currentSchedule ? JSON.parse(currentSchedule.last_modified_by || '{}') : {},
+                updatedAt: currentSchedule?.updated_at,
+              })
+            }
+          } else {
+            // INSERT 分支忽略 expectedTeamsVersion（新建列無版本可比對）
+            db.prepare(`
+              INSERT INTO nurse_assignments (id, date, teams, updated_at)
+              VALUES (?, ?, ?, datetime('now', 'localtime'))
+              ON CONFLICT(date) DO UPDATE SET
+                teams = excluded.teams,
                 updated_at = datetime('now', 'localtime')
-            WHERE date = ?
-          `).run(JSON.stringify(schedule), lastModifiedBy, date)
-        } else {
-          db.prepare(`
-            INSERT INTO schedules (id, date, schedule, last_modified_by)
-            VALUES (?, ?, ?, ?)
-          `).run(date, date, JSON.stringify(schedule), lastModifiedBy)
-        }
-        const row = db.prepare('SELECT * FROM schedules WHERE date = ?').get(date)
-        scheduleResult = {
-          id: row.id,
-          date: row.date,
-          schedule: JSON.parse(row.schedule || '{}'),
-          lastModifiedBy: JSON.parse(row.last_modified_by || '{}'),
-          updatedAt: row.updated_at,
-        }
-      }
+            `).run(date, date, JSON.stringify(teamsPayload))
+          }
 
-      if (hasTeams) {
-        // 覆寫前先快照現況（供異常復原），內容未變則自動跳過
-        snapshotNurseAssignmentForDate(db, date, {
-          type: 'pre_save',
-          createdBy: { uid: req.user.id, name: req.user.name },
+          const teamsRow = db.prepare('SELECT * FROM nurse_assignments WHERE date = ?').get(date)
+          teamsResult = { date, ...teamsPayload, version: teamsRow?.version }
+        }
+      })
+
+      runAtomic()
+    } catch (txError) {
+      if (txError instanceof VersionConflictError) {
+        return res.status(409).json({
+          error: true,
+          code: 'VERSION_CONFLICT',
+          message: '排程或護理分組已被更新',
+          ...txError.payload,
         })
-
-        const teamsPayload = {
-          teams: teams || {},
-          names: names || {},
-          takeoffEnabled: !!takeoffEnabled,
-        }
-        db.prepare(`
-          INSERT INTO nurse_assignments (id, date, teams, updated_at)
-          VALUES (?, ?, ?, datetime('now', 'localtime'))
-          ON CONFLICT(date) DO UPDATE SET
-            teams = excluded.teams,
-            updated_at = datetime('now', 'localtime')
-        `).run(date, date, JSON.stringify(teamsPayload))
-        teamsResult = { date, ...teamsPayload }
       }
-
-      return { scheduleResult, teamsResult }
-    })
-
-    const { scheduleResult, teamsResult } = runAtomic()
+      throw txError
+    }
 
     // 稽核記錄寫在交易外（失敗不應回滾主要資料）
     if (scheduleResult) {
@@ -1678,11 +1776,13 @@ router.put('/:date/with-teams', ...isEditor, async (req, res) => {
 /**
  * PUT /api/schedules/nurse-assignments/:date
  * 更新護理人員分配
+ * Body 可選 expectedVersion（number）：帶入時做樂觀鎖版本檢查，版本不符回 409 VERSION_CONFLICT。
+ * ⚠️ snapshotNurseAssignmentForDate 覆蓋前快照（異常救援網）保留不動。
  */
 router.put('/nurse-assignments/:date', ...isEditor, async (req, res) => {
   try {
     const { date } = req.params
-    const { teams, names, takeoffEnabled } = req.body
+    const { teams, names, takeoffEnabled, expectedVersion } = req.body
 
     // 儲存完整的資料結構
     const dataToSave = {
@@ -1699,19 +1799,48 @@ router.put('/nurse-assignments/:date', ...isEditor, async (req, res) => {
       createdBy: { uid: req.user.id, name: req.user.name },
     })
 
-    db.prepare(`
-      INSERT INTO nurse_assignments (id, date, teams, updated_at)
-      VALUES (?, ?, ?, datetime('now', 'localtime'))
-      ON CONFLICT(date) DO UPDATE SET
-        teams = excluded.teams,
-        updated_at = datetime('now', 'localtime')
-    `).run(date, date, JSON.stringify(dataToSave))
+    const existing = db.prepare('SELECT id, version FROM nurse_assignments WHERE date = ?').get(date)
+    const hasExpectedVersion = !!existing && typeof expectedVersion === 'number'
 
+    if (existing) {
+      const result = hasExpectedVersion
+        ? db.prepare(`
+            UPDATE nurse_assignments
+            SET teams = ?,
+                updated_at = datetime('now', 'localtime')
+            WHERE date = ? AND version = ?
+          `).run(JSON.stringify(dataToSave), date, expectedVersion)
+        : db.prepare(`
+            UPDATE nurse_assignments
+            SET teams = ?,
+                updated_at = datetime('now', 'localtime')
+            WHERE date = ?
+          `).run(JSON.stringify(dataToSave), date)
+
+      if (hasExpectedVersion && result.changes === 0) {
+        const current = db.prepare('SELECT version FROM nurse_assignments WHERE date = ?').get(date)
+        return res.status(409).json({
+          error: true,
+          code: 'VERSION_CONFLICT',
+          message: '護理分組已被更新',
+          currentVersion: current?.version,
+        })
+      }
+    } else {
+      // INSERT 分支忽略 expectedVersion（新建列無版本可比對）
+      db.prepare(`
+        INSERT INTO nurse_assignments (id, date, teams, updated_at)
+        VALUES (?, ?, ?, datetime('now', 'localtime'))
+      `).run(date, date, JSON.stringify(dataToSave))
+    }
+
+    const updated = db.prepare('SELECT version FROM nurse_assignments WHERE date = ?').get(date)
 
     res.json({
       success: true,
       date,
-      ...dataToSave
+      ...dataToSave,
+      version: updated?.version
     })
 
   } catch (error) {

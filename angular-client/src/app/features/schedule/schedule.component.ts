@@ -79,6 +79,11 @@ import {
   updatePatient as optimizedUpdatePatient,
   createDialysisOrderAndUpdatePatient,
 } from '@/services/optimizedApiService';
+import {
+  extractVersionConflict,
+  formatVersionConflictMessage,
+  type VersionConflictInfo,
+} from '@/utils/versionConflict';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -99,6 +104,8 @@ interface ScheduleRecord {
   date: string;
   schedule: Record<string, ScheduleSlotData>;
   names: Record<string, string>;
+  /** 樂觀鎖版本號，來自 GET 回應；存檔時原樣送回 expectedVersion */
+  version?: number;
 }
 
 interface TeamsRecord {
@@ -107,6 +114,8 @@ interface TeamsRecord {
   teams: Record<string, Record<string, string | null>>;
   names?: Record<string, string>;
   takeoffEnabled?: boolean;
+  /** 樂觀鎖版本號，來自 GET 回應；存檔時原樣送回 expectedVersion */
+  version?: number;
 }
 
 interface ScheduleCellView {
@@ -286,6 +295,9 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   readonly isPatientSelectDialogVisible = signal(false);
   readonly isConfirmDialogVisible = signal(false);
   readonly confirmDialogMessage = signal('');
+  // 樂觀鎖 409 版本衝突對話框
+  readonly isVersionConflictDialogVisible = signal(false);
+  readonly versionConflictMessage = signal('');
   readonly isSimplifiedViewVisible = signal(false);
   readonly isMemoDialogVisible = signal(false);
   readonly isConditionRecordDialogVisible = signal(false);
@@ -1050,6 +1062,14 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       this.showAlert('操作失敗', '操作被鎖定：權限不足或日期已過。');
       return;
     }
+    await this.attemptSaveDataToCloud(false);
+  }
+
+  /**
+   * @param forceOverwrite false＝正常存檔，帶 expectedVersion；
+   *                        true＝409 對話框「仍要覆蓋」，同一 payload 但不帶 expectedVersion 重送。
+   */
+  private async attemptSaveDataToCloud(forceOverwrite: boolean): Promise<void> {
     this.statusIndicator.set('儲存中...');
     try {
       const scheduleDirty = this.hasUnsavedChanges();
@@ -1071,34 +1091,48 @@ export class ScheduleComponent implements OnInit, OnDestroy {
           names: teamsRec.names || {},
           teams: teamsRec.teams,
           takeoffEnabled: teamsRec.takeoffEnabled,
+          ...(forceOverwrite
+            ? {}
+            : {
+                expectedScheduleVersion: this.currentRecord.version,
+                expectedTeamsVersion: teamsRec.version,
+              }),
         });
         if (result.schedule?.id) this.currentRecord.id = result.schedule.id;
+        if (result.schedule) this.currentRecord.version = result.schedule.version;
         if (result.teams) {
-          this.currentTeamsRecord.update((r) => ({ ...r, id: r.id || date }));
+          const teamsVersion = result.teams.version;
+          this.currentTeamsRecord.update((r) => ({ ...r, id: r.id || date, version: teamsVersion }));
         }
       } else if (scheduleDirty) {
-        const dataToSave = {
+        const dataToSave: Record<string, unknown> = {
           date: this.currentRecord.date,
           schedule: this.currentRecord.schedule || {},
           names: this.currentRecord.names || {},
         };
+        if (!forceOverwrite) dataToSave['expectedVersion'] = this.currentRecord.version;
         if (this.currentRecord.id) {
-          await optimizedUpdateSchedule(this.currentRecord.id, dataToSave);
-        } else if (Object.keys(dataToSave.schedule).length > 0) {
-          const saved = (await optimizedSaveSchedule(dataToSave)) as { id: string };
+          const updated = (await optimizedUpdateSchedule(this.currentRecord.id, dataToSave)) as { version?: number } | undefined;
+          if (updated && updated.version !== undefined) this.currentRecord.version = updated.version;
+        } else if (Object.keys((dataToSave['schedule'] as Record<string, unknown>)).length > 0) {
+          const saved = (await optimizedSaveSchedule(dataToSave)) as { id: string; version?: number };
           this.currentRecord.id = saved.id;
+          this.currentRecord.version = saved.version;
         }
       } else if (teamsDirty) {
-        const teamsToSave = {
+        const teamsToSave: Record<string, unknown> = {
           date: teamsRec.date,
           teams: teamsRec.teams,
           names: teamsRec.names || {},
         };
+        if (!forceOverwrite) teamsToSave['expectedVersion'] = teamsRec.version;
         if (teamsRec.id) {
-          await updateTeams(teamsRec.id, teamsToSave);
+          const updated = (await updateTeams(teamsRec.id, teamsToSave)) as { version?: number } | undefined;
+          const newVersion = updated?.version;
+          this.currentTeamsRecord.update((r) => ({ ...r, version: newVersion !== undefined ? newVersion : r.version }));
         } else {
-          const saved = (await saveTeams(teamsToSave)) as { id: string };
-          this.currentTeamsRecord.update((r) => ({ ...r, id: saved.id }));
+          const saved = (await saveTeams(teamsToSave as { date: string; teams?: any; names?: any; expectedVersion?: number })) as { id: string; version?: number };
+          this.currentTeamsRecord.update((r) => ({ ...r, id: saved.id, version: saved.version }));
         }
       }
 
@@ -1107,11 +1141,30 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       this.statusIndicator.set('儲存成功！');
       this.showAlert('操作成功', '排程已成功儲存！');
     } catch (error: unknown) {
+      const conflict = extractVersionConflict(error);
+      if (conflict) {
+        this.statusIndicator.set('儲存衝突，待處理');
+        this.versionConflictMessage.set(formatVersionConflictMessage(conflict));
+        this.isVersionConflictDialogVisible.set(true);
+        return;
+      }
       console.error('儲存失敗:', error);
       this.statusIndicator.set('儲存失敗');
       const msg = error instanceof Error ? error.message : '未知錯誤';
       this.showAlert('操作失敗', `儲存失敗: ${msg}`);
     }
+  }
+
+  /** 409 對話框：「重新載入最新資料」— 重跑當日載入流程，內部已會清空 dirty 狀態，不殘留本地未存變更 */
+  async handleVersionConflictReload(): Promise<void> {
+    this.isVersionConflictDialogVisible.set(false);
+    await this.loadDataForDay(this.currentDate());
+  }
+
+  /** 409 對話框：「仍要覆蓋」— 同一 payload 不帶 expectedVersion 重送一次 */
+  async handleVersionConflictOverwrite(): Promise<void> {
+    this.isVersionConflictDialogVisible.set(false);
+    await this.attemptSaveDataToCloud(true);
   }
 
   runScheduleCheck(): void {
@@ -2030,7 +2083,8 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       this.currentRecord.date = dateStr;
       this.currentRecord.schedule = ((scheduleRecord as Record<string, unknown>)?.['schedule'] as Record<string, ScheduleSlotData>) || {};
       this.currentRecord.names = ((scheduleRecord as Record<string, unknown>)?.['names'] as Record<string, string>) || {};
-      this.currentTeamsRecord.set(teamsData || { id: null, date: dateStr, teams: {} });
+      this.currentRecord.version = (scheduleRecord as Record<string, unknown>)?.['version'] as number | undefined;
+      this.currentTeamsRecord.set((teamsData as TeamsRecord) || { id: null, date: dateStr, teams: {} });
       this.scheduleRevision.update((revision) => revision + 1);
       this.statusIndicator.set(((scheduleRecord as Record<string, unknown>)?.['id']) ? '資料已載入' : '本日無排程資料');
     } catch (error: unknown) {

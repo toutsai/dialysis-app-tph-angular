@@ -8,6 +8,8 @@ export interface NurseAssignment extends BaseEntity {
   date: string;
   /** JSON map: {patientId-shift: nurseId} */
   teams?: Record<string, string>;
+  /** 樂觀鎖版本號：PUT 帶 expectedVersion 比對，不符回 409 VERSION_CONFLICT */
+  version?: number;
 }
 
 /** 護理工作職責 */

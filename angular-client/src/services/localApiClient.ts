@@ -47,6 +47,32 @@ async function notifyIfUnauthorized(res: Response): Promise<void> {
 }
 
 /**
+ * 攜帶 HTTP 狀態碼與解析後 body 的錯誤。
+ * fetch() 本身不像 Angular HttpClient 會自動保留錯誤回應的 body，
+ * 這裡補上，讓呼叫端能判讀如 409 VERSION_CONFLICT 的 { code, currentVersion, ... } 結構。
+ */
+export class ApiRequestError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly body: any;
+  constructor(status: number, body: any, message?: string) {
+    super(message || `HTTP ${status}`);
+    this.name = 'ApiRequestError';
+    this.status = status;
+    this.code = body?.code;
+    this.body = body;
+  }
+}
+
+async function parseErrorBody(res: Response): Promise<any> {
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 通用 REST API 客戶端
  */
 export const localApi = {
@@ -81,7 +107,11 @@ export const localApi = {
       headers: getAuthHeaders(),
       body: JSON.stringify(body),
     });
-    if (!res.ok) { await notifyIfUnauthorized(res); throw new Error(`HTTP ${res.status}: ${res.statusText}`); }
+    if (!res.ok) {
+      await notifyIfUnauthorized(res);
+      const errBody = await parseErrorBody(res);
+      throw new ApiRequestError(res.status, errBody, errBody?.message || `HTTP ${res.status}: ${res.statusText}`);
+    }
     return res.json();
   },
 
@@ -91,7 +121,11 @@ export const localApi = {
       headers: getAuthHeaders(),
       body: JSON.stringify(body),
     });
-    if (!res.ok) { await notifyIfUnauthorized(res); throw new Error(`HTTP ${res.status}: ${res.statusText}`); }
+    if (!res.ok) {
+      await notifyIfUnauthorized(res);
+      const errBody = await parseErrorBody(res);
+      throw new ApiRequestError(res.status, errBody, errBody?.message || `HTTP ${res.status}: ${res.statusText}`);
+    }
     return res.json();
   },
 

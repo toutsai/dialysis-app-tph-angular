@@ -14,13 +14,20 @@ export async function fetchTeamsByDate(dateStr: string): Promise<any> {
   }
 }
 
-export async function saveTeams(data: { date: string; teams?: any; names?: any }): Promise<any> {
+export async function saveTeams(data: {
+  date: string;
+  teams?: any;
+  names?: any;
+  /** 樂觀鎖：不帶＝舊行為（無條件覆寫）；帶了但與後端當前版本不符會收到 409 */
+  expectedVersion?: number;
+}): Promise<any> {
   try {
-    const saveData = {
+    const saveData: Record<string, unknown> = {
       date: data.date,
       teams: data.teams || {},
       names: data.names || {},
     };
+    if (data.expectedVersion !== undefined) saveData['expectedVersion'] = data.expectedVersion;
     return await localApi.put(`${ROUTE}/${data.date}`, saveData);
   } catch (error) {
     console.error('Failed to save nurse teams:', error);
@@ -28,10 +35,10 @@ export async function saveTeams(data: { date: string; teams?: any; names?: any }
   }
 }
 
-export async function updateTeams(docId: string, data: any): Promise<{ success: boolean }> {
+export async function updateTeams(docId: string, data: any): Promise<any> {
   try {
-    await localApi.patch(`${ROUTE}/${docId}`, data);
-    return { success: true };
+    // 回傳後端原始回應（含成功後的新 version），呼叫端需要回填版本以供下次存檔比對
+    return await localApi.patch(`${ROUTE}/${docId}`, data);
   } catch (error) {
     console.error('Failed to update nurse teams:', error);
     throw error;
@@ -127,6 +134,9 @@ export interface SaveScheduleWithTeamsPayload {
   names?: Record<string, string>;
   teams?: Record<string, unknown>;
   takeoffEnabled?: boolean;
+  /** 樂觀鎖：不帶＝舊行為（無條件覆寫）；帶了但與後端當前版本不符會收到 409 */
+  expectedScheduleVersion?: number;
+  expectedTeamsVersion?: number;
 }
 
 export interface SaveScheduleWithTeamsResult {
@@ -136,12 +146,14 @@ export interface SaveScheduleWithTeamsResult {
     schedule: Record<string, unknown>;
     lastModifiedBy?: Record<string, unknown>;
     updatedAt?: string;
+    version?: number;
   } | null;
   teams: {
     date: string;
     teams: Record<string, unknown>;
     names: Record<string, string>;
     takeoffEnabled: boolean;
+    version?: number;
   } | null;
 }
 

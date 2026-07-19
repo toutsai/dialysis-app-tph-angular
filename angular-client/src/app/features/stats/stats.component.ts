@@ -28,6 +28,10 @@ import {
   restoreNurseAssignmentRevision,
 } from '@/services/nurseAssignmentsService';
 import { createDialysisOrderAndUpdatePatient } from '@/services/optimizedApiService';
+import {
+  extractVersionConflict,
+  formatVersionConflictMessage,
+} from '@/utils/versionConflict';
 import * as XLSX from 'xlsx';
 
 // Dialog components
@@ -187,6 +191,10 @@ export class StatsComponent implements OnInit, OnDestroy {
 
   isConfirmDialogVisible = false;
   confirmDialogMessage = '';
+
+  // 樂觀鎖 409 版本衝突對話框
+  isVersionConflictDialogVisible = false;
+  versionConflictMessage = '';
   onConfirmAction: (() => void) | null = null;
 
   isPrepPopoverVisible = false;
@@ -1027,6 +1035,14 @@ export class StatsComponent implements OnInit, OnDestroy {
 
   async saveChangesToCloud(): Promise<void> {
     if (this.isPageLocked || !this.hasUnsavedChanges) return;
+    await this.attemptSaveChangesToCloud(false);
+  }
+
+  /**
+   * @param forceOverwrite false＝正常存檔，帶 expectedVersion；
+   *                        true＝409 對話框「仍要覆蓋」，同一 payload 但不帶 expectedVersion 重送。
+   */
+  private async attemptSaveChangesToCloud(forceOverwrite: boolean): Promise<void> {
     this.statusIndicator = '儲存中...';
     try {
       const scheduleDirty = this.hasUnsavedScheduleChanges;
@@ -1040,31 +1056,45 @@ export class StatsComponent implements OnInit, OnDestroy {
           schedule: scheduleToSave,
           teams: this.currentTeamsRecord.teams || {},
           names: this.currentTeamsRecord.names || {},
+          ...(forceOverwrite
+            ? {}
+            : {
+                expectedScheduleVersion: this.currentRecord.version,
+                expectedTeamsVersion: this.currentTeamsRecord.version,
+              }),
         });
         if (result.schedule?.id) this.currentRecord.id = result.schedule.id;
-        if (result.teams && !this.currentTeamsRecord.id) {
-          this.currentTeamsRecord.id = this.currentRecord.date;
+        if (result.schedule) this.currentRecord.version = result.schedule.version;
+        if (result.teams) {
+          if (!this.currentTeamsRecord.id) this.currentTeamsRecord.id = this.currentRecord.date;
+          this.currentTeamsRecord.version = result.teams.version;
         }
       } else if (scheduleDirty) {
         const scheduleToSave = this.buildCleanScheduleForSave();
-        const scheduleData = { date: this.currentRecord.date, schedule: scheduleToSave };
+        const scheduleData: Record<string, unknown> = { date: this.currentRecord.date, schedule: scheduleToSave };
+        if (!forceOverwrite) scheduleData['expectedVersion'] = this.currentRecord.version;
         if (this.currentRecord.id) {
-          await this.schedulesApi.update(this.currentRecord.id, scheduleData);
-        } else if (Object.keys(scheduleData.schedule).length > 0) {
+          const updated: any = await this.schedulesApi.update(this.currentRecord.id, scheduleData);
+          if (updated?.version !== undefined) this.currentRecord.version = updated.version;
+        } else if (Object.keys(scheduleToSave).length > 0) {
           const saved: any = await this.schedulesApi.save(scheduleData);
           this.currentRecord.id = saved.id;
+          this.currentRecord.version = saved.version;
         }
       } else if (teamsDirty) {
-        const teamsData = {
+        const teamsData: Record<string, unknown> = {
           date: this.currentTeamsRecord.date,
           teams: this.currentTeamsRecord.teams || {},
           names: this.currentTeamsRecord.names || {},
         };
+        if (!forceOverwrite) teamsData['expectedVersion'] = this.currentTeamsRecord.version;
         if (this.currentTeamsRecord.id) {
-          await updateTeams(this.currentTeamsRecord.id, teamsData);
+          const updated: any = await updateTeams(this.currentTeamsRecord.id, teamsData);
+          if (updated?.version !== undefined) this.currentTeamsRecord.version = updated.version;
         } else {
-          const saved: any = await saveTeams(teamsData);
+          const saved: any = await saveTeams(teamsData as { date: string; teams?: any; names?: any; expectedVersion?: number });
           this.currentTeamsRecord.id = saved.id;
+          this.currentTeamsRecord.version = saved.version;
         }
       }
 
@@ -1076,10 +1106,29 @@ export class StatsComponent implements OnInit, OnDestroy {
       this.showAlert('操作成功', '變更儲存成功！');
       await this.loadData(this.currentDate);
     } catch (error: any) {
+      const conflict = extractVersionConflict(error);
+      if (conflict) {
+        this.statusIndicator = '儲存衝突，待處理';
+        this.versionConflictMessage = formatVersionConflictMessage(conflict);
+        this.isVersionConflictDialogVisible = true;
+        return;
+      }
       console.error('儲存變更失敗:', error);
       this.statusIndicator = '儲存失敗';
       this.showAlert('儲存失敗', `儲存失敗: ${error.message}`);
     }
+  }
+
+  /** 409 對話框:「重新載入最新資料」— 重跑當日載入流程，內部已會清空 dirty 狀態,不殘留本地未存變更 */
+  async handleVersionConflictReload(): Promise<void> {
+    this.isVersionConflictDialogVisible = false;
+    await this.loadData(this.currentDate);
+  }
+
+  /** 409 對話框:「仍要覆蓋」— 同一 payload 不帶 expectedVersion 重送一次 */
+  async handleVersionConflictOverwrite(): Promise<void> {
+    this.isVersionConflictDialogVisible = false;
+    await this.attemptSaveChangesToCloud(true);
   }
 
   /** 儲存前清掉畫面用的臨時欄位（nurseTeam 等會由 nurse_assignments 表承載） */
