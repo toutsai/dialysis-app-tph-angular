@@ -244,6 +244,7 @@
         <p class="ct-hint">
           <i class="fas fa-info-circle"></i>
           名單＝我的照護病人（使用者管理・照護清單）＋今日我負責班別的衛教中病人；點擊病人可開啟衛教紀錄檢視/填寫。
+          主護簽核全數完成的病人自動收藏，不再列入（可至「初透衛教進度」頁的「主護確認完成」查閱）。
         </p>
         <div *ngIf="isLoadingEdu()" class="ct-loading"><div class="spinner"></div><p>正在彙整衛教進度...</p></div>
         <div *ngIf="!isLoadingEdu() && eduError()" class="ct-empty">{{ eduError() }}</div>
@@ -254,7 +255,7 @@
           <thead>
             <tr>
               <th>病人</th><th>病歷號</th><th>初透日</th><th>該次負責</th>
-              <th>已衛教</th><th>主護簽章(通過)</th><th>12次完成</th>
+              <th>已衛教</th><th>主護簽章(通過)</th><th>狀態</th>
             </tr>
           </thead>
           <tbody>
@@ -266,8 +267,10 @@
               <td>{{ r.paperEducation ? '紙本衛教' : (r.educatedCount + ' / ' + r.total) }}</td>
               <td>{{ r.paperEducation ? (r.paperCompleted ? '紙本完成' : '進行中') : (r.passedCount + ' / ' + r.total) }}</td>
               <td>
-                <span class="ct-badge" [class.done]="r.completed" [class.undone]="!r.completed">
-                  {{ r.completed ? '已完成' : '未完成' }}
+                <span class="ct-badge"
+                      [class.pending]="!r.paperEducation && r.educatedCount >= r.total"
+                      [class.undone]="r.paperEducation || r.educatedCount < r.total">
+                  {{ r.paperEducation ? '紙本進行中' : (r.educatedCount >= r.total ? '待主護確認' : '衛教中') }}
                 </span>
               </td>
             </tr>

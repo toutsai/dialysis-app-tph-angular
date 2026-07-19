@@ -319,6 +319,8 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
         for (const p of this.getShiftPatients(sc)) todayIds.add(p.patientId);
       }
       const filtered = rows
+        // 主護簽核全數完成（12次通過或紙本完成）即「收藏」，不再列入待辦名單
+        .filter((r) => !r.completed)
         .filter((r) => myCareIds.has(r.patientId) || todayIds.has(r.patientId))
         .map((r) => ({ ...r, todayMine: todayIds.has(r.patientId) }))
         .sort(

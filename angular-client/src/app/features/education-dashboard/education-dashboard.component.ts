@@ -65,8 +65,15 @@ export class EducationDashboardComponent implements OnInit {
   readonly loading = signal(true);
   readonly errorMsg = signal('');
   readonly search = signal('');
-  /** 完成狀態篩選：all = 全部、incomplete = 未完成、completed = 已完成（預設只看未完成） */
-  readonly completionFilter = signal<'all' | 'incomplete' | 'completed'>('incomplete');
+  /** 完成狀態篩選：incomplete=未完成、edu_done=已完成(12次衛教做完,待主護確認)、confirmed=主護確認完成；預設未完成 */
+  readonly completionFilter = signal<'incomplete' | 'edu_done' | 'confirmed'>('incomplete');
+
+  /** 列的完成階段：主護簽章全數通過(或紙本完成)=confirmed；12次衛教已做完=edu_done；其餘=incomplete */
+  completionStage(r: EducationListItem): 'incomplete' | 'edu_done' | 'confirmed' {
+    if (r.completed) return 'confirmed';
+    if (!r.paperEducation && r.total > 0 && r.educatedCount >= r.total) return 'edu_done';
+    return 'incomplete';
+  }
 
   readonly dialogPatient = signal<EducationListItem | null>(null);
 
@@ -110,8 +117,7 @@ export class EducationDashboardComponent implements OnInit {
     const term = this.search().trim().toLowerCase();
     const cf = this.completionFilter();
     const list = this.rows().filter((r) => {
-      if (cf === 'incomplete' && r.completed) return false;
-      if (cf === 'completed' && !r.completed) return false;
+      if (this.completionStage(r) !== cf) return false;
       if (!term) return true;
       return (
         (r.patientName || '').toLowerCase().includes(term) ||
