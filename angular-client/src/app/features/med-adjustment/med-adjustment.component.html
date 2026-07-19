@@ -35,6 +35,9 @@
         <span class="month-range">{{ months()[0] }} ~ {{ months()[5] }}</span>
         <button class="btn" (click)="shiftMonths(-1)" [disabled]="monthOffset() === 0">›</button>
       </div>
+      <button class="btn btn-export" (click)="exportAdjustments()" [disabled]="isLoading() || isExporting()">
+        {{ isExporting() ? '匯出中…' : '匯出當月修正 Excel' }}
+      </button>
       @if (isLoading()) { <span class="loading-hint">載入中…</span> }
     </div>
   </header>

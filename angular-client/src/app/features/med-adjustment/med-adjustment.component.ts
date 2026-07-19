@@ -11,6 +11,7 @@ import {
 } from '@services/api-manager.service';
 import { PatientStoreService } from '@services/patient-store.service';
 import { LAB_ITEM_DISPLAY_NAMES } from '@/constants/labAlertConstants';
+import { exportMedAdjustmentExcel } from '@/services/medAdjustmentExportService';
 
 interface DrugDef {
   label: string;
@@ -18,9 +19,12 @@ interface DrugDef {
   unit: string;
 }
 
+const SHIFT_LABELS: Record<string, string> = { early: '早班', noon: '午班', late: '晚班' };
+
 interface PatientEntry {
   patientId: string;
   patientName: string;
+  medicalRecordNumber: string;
   bedNum: string | number;
   freq: string;
   shiftIndex: number;
@@ -135,6 +139,51 @@ export class MedAdjustmentComponent implements OnInit {
     this.draftsApi = this.apiManager.create<FirestoreRecord>('medication_drafts');
   }
 
+  readonly isExporting = signal(false);
+
+  /** 匯出整班當月修正 Excel：列=床號/病歷號/姓名，欄=醫囑+貧血+鈣磷全部項目（取各病人本月最新已存草稿） */
+  async exportAdjustments(): Promise<void> {
+    const patients = this.patientList();
+    if (!patients.length) { alert('此群組沒有病人，無資料可匯出。'); return; }
+    if (this.isExporting()) return;
+    this.isExporting.set(true);
+    try {
+      const drafts = (await this.draftsApi.fetchAll()) as any[];
+      const latestByPatient = new Map<string, any>();
+      for (const d of (drafts || [])
+        .filter((d: any) => d.kind === 'med_adjustment' && d.month === this.currentMonth)
+        .sort((a: any, b: any) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))) {
+        if (!latestByPatient.has(d.patientId)) latestByPatient.set(d.patientId, d);
+      }
+      const itemDefs = [
+        ...this.ORDER_ROWS.map((r) => ({ label: r.label, key: r.key })),
+        ...[...this.ANEMIA_DRUGS, ...this.CAPHO_DRUGS].map((d) => ({ label: d.label, key: d.label })),
+      ];
+      const rows = patients.map((p) => {
+        const notes: Record<string, string> = latestByPatient.get(p.patientId)?.notes || {};
+        const row: Record<string, string> = {
+          床號: String(p.bedNum ?? ''),
+          病歷號: p.medicalRecordNumber || '',
+          姓名: p.patientName || '',
+        };
+        for (const item of itemDefs) row[item.label] = String(notes[item.key] || '').trim();
+        return row;
+      });
+      const freqLabel = this.groupFreq === 'other' ? '其他頻率' : this.groupFreq;
+      const shiftLabel = SHIFT_LABELS[this.groupShift] || this.groupShift;
+      exportMedAdjustmentExcel(
+        rows,
+        itemDefs.map((i) => i.label),
+        `醫師藥物調整_${this.currentMonth}_${freqLabel}${shiftLabel}.xlsx`,
+      );
+    } catch (error) {
+      console.error('匯出當月修正失敗:', error);
+      alert('匯出失敗，請稍後再試。');
+    } finally {
+      this.isExporting.set(false);
+    }
+  }
+
   markDirty(): void {
     this.isDirty.set(true);
     this.savedHint.set('');
@@ -191,6 +240,7 @@ export class MedAdjustmentComponent implements OnInit {
       .map((p: any) => ({
         patientId: p.id,
         patientName: p.name,
+        medicalRecordNumber: p.medicalRecordNumber || '',
         bedNum: rules[p.id]?.bedNum,
         freq: rules[p.id]?.freq,
         shiftIndex: rules[p.id]?.shiftIndex,
