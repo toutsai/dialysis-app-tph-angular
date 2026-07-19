@@ -21,7 +21,8 @@ import { AuthService } from '@app/core/services/auth.service';
 import { ApiConfigService } from '@app/core/services/api-config.service';
 import { ApiManagerService, type FirestoreRecord } from '@app/core/services/api-manager.service';
 import { ApiService } from '@app/core/services/api.service';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, Subscription } from 'rxjs';
+import { SseEventsService } from '@app/core/services/sse-events.service';
 import { PatientStoreService } from '@app/core/services/patient-store.service';
 import { NotificationService } from '@app/core/services/notification.service';
 import { AlertDialogComponent } from '@app/components/dialogs/alert-dialog/alert-dialog.component';
@@ -53,6 +54,7 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
   private readonly patientStore = inject(PatientStoreService);
   private readonly notificationService = inject(NotificationService);
+  private readonly sseEvents = inject(SseEventsService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 
@@ -87,8 +89,7 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
   pendingFormData = signal<any>(null);
   existingExceptionsToMerge = signal<any[]>([]);
 
-  private pollingTimer: any = null;
-  private eventSource: EventSource | null = null;
+  private sseSubscriptions: Subscription[] = [];
   private calendarApi: CalendarApi | null = null;
   @ViewChild('fullCalendar') fullCalendarRef?: FullCalendarComponent;
 
@@ -247,14 +248,8 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    if (this.pollingTimer) {
-      clearInterval(this.pollingTimer);
-      this.pollingTimer = null;
-    }
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
-    }
+    this.sseSubscriptions.forEach((sub) => sub.unsubscribe());
+    this.sseSubscriptions = [];
   }
 
   // --- Calendar Navigation ---
@@ -897,14 +892,8 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
   }
 
   private async initializePageData(): Promise<void> {
-    if (this.pollingTimer) {
-      clearInterval(this.pollingTimer);
-      this.pollingTimer = null;
-    }
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
-    }
+    this.sseSubscriptions.forEach((sub) => sub.unsubscribe());
+    this.sseSubscriptions = [];
     this.isLoading.set(true);
     try {
       await this.patientStore.fetchPatientsIfNeeded();
@@ -921,7 +910,8 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
       };
       await fetchExceptions();
 
-      // 優先使用 SSE 即時推播；SSE 失敗時回退到 30 秒輪詢
+      // 即時推播交給全域 SseEventsService；連線狀態（含重連）由該 service 統一管理，
+      // 此頁不再自行降級輪詢——斷線重連後靠 connectionRestored$ 補一次 refetch。
       this.startExceptionEventStream(fetchExceptions);
     } catch (error) {
       console.error('載入資料失敗:', error);
@@ -930,36 +920,14 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
   }
 
   private startExceptionEventStream(refetch: () => Promise<void>): void {
-    const token = this.firebase.getToken();
-    const startPolling = () => {
-      if (this.pollingTimer) return;
-      this.pollingTimer = setInterval(refetch, 30000);
-    };
-
-    if (!token || typeof EventSource === 'undefined') {
-      startPolling();
-      return;
-    }
-
-    try {
-      const url = `/api/events/exceptions?token=${encodeURIComponent(token)}`;
-      const es = new EventSource(url);
-      this.eventSource = es;
-
-      es.addEventListener('exception', () => {
+    this.sseSubscriptions.push(
+      this.sseEvents.exception$.subscribe(() => {
         refetch().catch((err) => console.warn('[SSE] refetch failed:', err));
-      });
-
-      es.onerror = () => {
-        console.warn('[SSE] connection error, falling back to polling');
-        es.close();
-        this.eventSource = null;
-        startPolling();
-      };
-    } catch (err) {
-      console.warn('[SSE] init failed:', err);
-      startPolling();
-    }
+      }),
+      this.sseEvents.connectionRestored$.subscribe(() => {
+        refetch().catch((err) => console.warn('[SSE] restored refetch failed:', err));
+      }),
+    );
   }
 
   closeActionDialog(): void {

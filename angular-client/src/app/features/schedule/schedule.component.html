@@ -70,6 +70,14 @@
       </div>
     </div>
 
+    @if (scheduleSavedBanner(); as bannerMsg) {
+      <div class="sse-update-banner">
+        <span>{{ bannerMsg }}</span>
+        <button class="btn btn-sm btn-warning" (click)="dismissScheduleSavedBanner(true)">重新載入</button>
+        <button class="btn btn-sm btn-secondary" (click)="dismissScheduleSavedBanner(false)">關閉</button>
+      </div>
+    }
+
     <!-- Row 2: Quick access buttons + Staff display + Stats toolbar -->
     <div class="controls-panel">
       <div class="controls-left">

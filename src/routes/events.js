@@ -2,7 +2,7 @@
 // EventSource 不支援自訂 headers，因此採 ?token=<JWT> query param 驗證
 import express from 'express'
 import { verifyToken, isTokenBlacklisted } from '../middleware/auth.js'
-import { subscribeExceptions } from '../services/eventBus.js'
+import { subscribeEvents } from '../services/eventBus.js'
 
 const router = express.Router()
 
@@ -31,9 +31,9 @@ router.get('/exceptions', (req, res) => {
   // 初始 hello，讓前端確認連線成功
   res.write(`event: hello\ndata: ${JSON.stringify({ userId: payload.id })}\n\n`)
 
-  const unsubscribe = subscribeExceptions((msg) => {
+  const unsubscribe = subscribeEvents((topic, msg) => {
     try {
-      res.write(`event: exception\ndata: ${JSON.stringify(msg)}\n\n`)
+      res.write(`event: ${topic}\ndata: ${JSON.stringify(msg)}\n\n`)
     } catch (err) {
       console.warn('[SSE] write failed, closing:', err.message)
       cleanup()

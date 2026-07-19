@@ -1039,3 +1039,21 @@ td.conflict-cell {
 .conflict-dialog-box {
   max-width: 420px;
 }
+
+/* ===== SSE 存檔推播：他人已更新排程的非阻斷橫幅 ===== */
+.sse-update-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 0.5rem;
+  padding: 8px 12px;
+  background-color: #fff8e1;
+  border: 1px solid #ffca28;
+  border-radius: 6px;
+  color: #7a5b00;
+  font-size: 0.9rem;
+}
+.sse-update-banner .btn-sm {
+  padding: 4px 10px;
+  font-size: 0.85em;
+}

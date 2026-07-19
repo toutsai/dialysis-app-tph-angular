@@ -14,10 +14,11 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, Subscription } from 'rxjs';
 import * as XLSX from 'xlsx';
 
 import { AuthService } from '@app/core/services/auth.service';
+import { SseEventsService, type ScheduleSavedPayload } from '@app/core/services/sse-events.service';
 import { ApiService } from '@app/core/services/api.service';
 import { ApiConfigService } from '@app/core/services/api-config.service';
 import { PatientStoreService } from '@app/core/services/patient-store.service';
@@ -244,6 +245,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   // Services
   readonly auth = inject(AuthService);
   private readonly firebaseService = inject(ApiConfigService);
+  private readonly sseEvents = inject(SseEventsService);
   private readonly patientStore = inject(PatientStoreService);
   private readonly taskStore = inject(TaskStoreService);
   private readonly archiveStore = inject(ArchiveStoreService);
@@ -561,8 +563,10 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   });
 
   private previousDateStr = '';
-  private exceptionEventSource: EventSource | null = null;
   private exceptionRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private sseSubscriptions: Subscription[] = [];
+  /** 他人存檔推播且本頁有未存變更時顯示的非阻斷橫幅（有值即顯示） */
+  readonly scheduleSavedBanner = signal<string | null>(null);
 
   constructor() {
     this.usersApi = this.apiManagerService.create<FirestoreRecord>('users');
@@ -611,41 +615,54 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   private startExceptionEventStream(): void {
-    const token = this.firebaseService.getToken();
-    if (!token || typeof EventSource === 'undefined') return;
-
     this.stopExceptionEventStream();
-    try {
-      const es = new EventSource(`/api/events/exceptions?token=${encodeURIComponent(token)}`);
-      this.exceptionEventSource = es;
-
-      es.addEventListener('exception', (event: MessageEvent) => {
-        let payload: any = null;
-        try {
-          payload = JSON.parse(event.data);
-        } catch {
-          payload = null;
-        }
-        this.handleExceptionScheduleRefresh(payload);
-      });
-
-      es.onerror = () => {
-        console.warn('[Schedule] exception SSE disconnected; EventSource will retry automatically');
-      };
-    } catch (error) {
-      console.warn('[Schedule] exception SSE init failed:', error);
-    }
+    this.sseSubscriptions.push(
+      this.sseEvents.exception$.subscribe((payload) => this.handleExceptionScheduleRefresh(payload)),
+      this.sseEvents.scheduleSaved$.subscribe((payload) => this.handleScheduleSavedEvent(payload)),
+      this.sseEvents.connectionRestored$.subscribe(() => this.handleSseConnectionRestored()),
+    );
   }
 
   private stopExceptionEventStream(): void {
-    if (this.exceptionEventSource) {
-      this.exceptionEventSource.close();
-      this.exceptionEventSource = null;
-    }
+    this.sseSubscriptions.forEach((sub) => sub.unsubscribe());
+    this.sseSubscriptions = [];
     if (this.exceptionRefreshTimer) {
       clearTimeout(this.exceptionRefreshTimer);
       this.exceptionRefreshTimer = null;
     }
+  }
+
+  /** 他人存檔（同日、非自己）推播：無未存變更→自動重載；有未存變更→非阻斷橫幅提示 */
+  private handleScheduleSavedEvent(payload: ScheduleSavedPayload | null): void {
+    if (!payload || payload.date !== this.currentDateDisplay()) return;
+    const myUid = this.auth.currentUser()?.uid;
+    if (payload.savedBy?.uid != null && payload.savedBy.uid === myUid) return; // 自己存的忽略
+
+    if (this.hasUnsavedChanges() || this.hasUnsavedTeamChanges()) {
+      const name = payload.savedBy?.name || '其他使用者';
+      this.scheduleSavedBanner.set(`${name} 剛更新了排程，儲存前建議先重新載入`);
+      return;
+    }
+    this.reloadCurrentDay();
+  }
+
+  /** SSE 斷線後恢復連線：僅在無未存變更時防呆重新整理一次 */
+  private handleSseConnectionRestored(): void {
+    if (this.hasUnsavedChanges() || this.hasUnsavedTeamChanges()) return;
+    this.reloadCurrentDay();
+  }
+
+  private reloadCurrentDay(): void {
+    const date = new Date(this.currentDate());
+    Promise.all([this.loadDataForDay(date), this.loadDailyStaffInfo(date)]).catch((error) =>
+      console.warn('[Schedule] SSE-triggered refresh failed:', error),
+    );
+  }
+
+  /** 橫幅「重新載入」鈕：捨棄未存變更，直接重載當日資料 */
+  dismissScheduleSavedBanner(reload: boolean): void {
+    this.scheduleSavedBanner.set(null);
+    if (reload) this.reloadCurrentDay();
   }
 
   private handleExceptionScheduleRefresh(payload: any): void {

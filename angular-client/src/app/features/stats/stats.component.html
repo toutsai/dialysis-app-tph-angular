@@ -46,6 +46,12 @@
       </div>
     </div>
 
+    <div class="sse-update-banner" *ngIf="scheduleSavedBanner">
+      <span>{{ scheduleSavedBanner }}</span>
+      <button class="btn btn-sm btn-warning" (click)="dismissScheduleSavedBanner(true)">重新載入</button>
+      <button class="btn btn-sm btn-secondary" (click)="dismissScheduleSavedBanner(false)">關閉</button>
+    </div>
+
     <!-- Info row wrapper -->
     <div class="info-row-wrapper desktop-only">
       <div class="info-panel info-panel-left">

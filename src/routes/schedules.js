@@ -9,7 +9,7 @@ import { isSingleDayMove, reconcileSingleDayMove, resolveSourceConflict, retarge
 import { syncEventsToKiditLogbook } from '../services/kiditSync.js'
 import { getTaipeiTodayString, formatDateToYYYYMMDD, formatDateToTaipeiString, getTaipeiDayIndex } from '../utils/dateUtils.js'
 import { SHIFTS, FREQ_MAP_TO_DAY_INDEX, getScheduleKey } from '../utils/scheduleUtils.js'
-import { emitExceptionChange } from '../services/eventBus.js'
+import { emitExceptionChange, emitScheduleSaved } from '../services/eventBus.js'
 import { removeAutoMovementFromDailyLog } from '../services/dailyLogMovementSync.js'
 import { snapshotNurseAssignmentForDate } from '../services/nurseAssignmentRevisions.js'
 
@@ -651,6 +651,19 @@ router.put('/:date', ...isEditor, async (req, res) => {
     await logAudit('SCHEDULE_UPDATE', req.user.id, req.user.name, 'schedules', date, {
       slotCount: Object.keys(schedule).length
     })
+
+    try {
+      emitScheduleSaved({
+        kind: 'schedule',
+        date,
+        savedBy: req.user ? { uid: req.user.id, name: req.user.name } : null,
+        scheduleVersion: updated.version,
+        teamsVersion: null,
+        ts: Date.now(),
+      })
+    } catch (emitErr) {
+      console.warn('[eventBus] emitScheduleSaved failed:', emitErr.message)
+    }
 
     res.json({
       id: updated.id,
@@ -1783,6 +1796,19 @@ router.put('/:date/with-teams', ...isEditor, async (req, res) => {
       })
     }
 
+    try {
+      emitScheduleSaved({
+        kind: 'both',
+        date,
+        savedBy: req.user ? { uid: req.user.id, name: req.user.name } : null,
+        scheduleVersion: scheduleResult?.version ?? null,
+        teamsVersion: teamsResult?.version ?? null,
+        ts: Date.now(),
+      })
+    } catch (emitErr) {
+      console.warn('[eventBus] emitScheduleSaved failed:', emitErr.message)
+    }
+
     res.json({ schedule: scheduleResult, teams: teamsResult })
   } catch (error) {
     console.error('原子性儲存排程與分組錯誤:', error)
@@ -1855,6 +1881,19 @@ router.put('/nurse-assignments/:date', ...isEditor, async (req, res) => {
     }
 
     const updated = db.prepare('SELECT version FROM nurse_assignments WHERE date = ?').get(date)
+
+    try {
+      emitScheduleSaved({
+        kind: 'teams',
+        date,
+        savedBy: req.user ? { uid: req.user.id, name: req.user.name } : null,
+        scheduleVersion: null,
+        teamsVersion: updated?.version ?? null,
+        ts: Date.now(),
+      })
+    } catch (emitErr) {
+      console.warn('[eventBus] emitScheduleSaved failed:', emitErr.message)
+    }
 
     res.json({
       success: true,

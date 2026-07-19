@@ -21,8 +21,10 @@ import {
   NavigationEnd,
 } from '@angular/router';
 import { filter, map } from 'rxjs/operators';
+import { Subscription } from 'rxjs';
 import { environment } from '@env/environment';
 import { AuthService } from '@services/auth.service';
+import { SseEventsService } from '@services/sse-events.service';
 import {
   NotificationService,
   type AppNotification,
@@ -100,6 +102,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   private readonly patientStoreService = inject(PatientStoreService);
   private readonly firebaseService = inject(ApiConfigService);
   private readonly apiManagerService = inject(ApiManagerService);
+  private readonly sseEvents = inject(SseEventsService);
   private readonly destroyRef = inject(DestroyRef);
 
   // -------------------------------------------------------------------------
@@ -113,6 +116,8 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   // -------------------------------------------------------------------------
   readonly conflictCount = signal(0);
   private conflictPollTimer: ReturnType<typeof setInterval> | null = null;
+  private conflictSseSubscriptions: Subscription[] = [];
+  private conflictBadgeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   // -------------------------------------------------------------------------
   // Session Timeout 警告（閒置自動登出，B級資安合規）
@@ -362,7 +367,9 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     }
   }
 
-  private readonly CONFLICT_POLL_INTERVAL = 20_000; // 20 seconds
+  // 事件驅動（SSE exception$）為主；此輪詢降為 fallback，故從 20s 放寬到 120s。
+  private readonly CONFLICT_POLL_INTERVAL = 120_000; // 120 seconds (fallback only)
+  private readonly CONFLICT_BADGE_DEBOUNCE_MS = 500;
 
   /** Start polling for conflict count. Replaces Firebase onSnapshot. */
   private startConflictListener(): void {
@@ -370,6 +377,19 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     if (this.conflictPollTimer) return;
     this.fetchConflictCount();
     this.conflictPollTimer = setInterval(() => this.fetchConflictCount(), this.CONFLICT_POLL_INTERVAL);
+    // 事件驅動：調班/例外異動即觸發（輕度 debounce 防連發）；SSE 斷線恢復後也補刷一次。
+    this.conflictSseSubscriptions.push(
+      this.sseEvents.exception$.subscribe(() => this.debouncedFetchConflictCount()),
+      this.sseEvents.connectionRestored$.subscribe(() => this.debouncedFetchConflictCount()),
+    );
+  }
+
+  private debouncedFetchConflictCount(): void {
+    if (this.conflictBadgeDebounceTimer) clearTimeout(this.conflictBadgeDebounceTimer);
+    this.conflictBadgeDebounceTimer = setTimeout(() => {
+      this.conflictBadgeDebounceTimer = null;
+      this.fetchConflictCount();
+    }, this.CONFLICT_BADGE_DEBOUNCE_MS);
   }
 
   /**
@@ -439,12 +459,18 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     return match ? match[0] : null;
   }
 
-  /** Stop the conflict polling timer. */
+  /** Stop the conflict polling timer + SSE subscriptions. */
   private stopConflictListener(): void {
     if (this.conflictPollTimer) {
       clearInterval(this.conflictPollTimer);
       this.conflictPollTimer = null;
       this.conflictCount.set(0);
+    }
+    this.conflictSseSubscriptions.forEach((sub) => sub.unsubscribe());
+    this.conflictSseSubscriptions = [];
+    if (this.conflictBadgeDebounceTimer) {
+      clearTimeout(this.conflictBadgeDebounceTimer);
+      this.conflictBadgeDebounceTimer = null;
     }
   }
 
