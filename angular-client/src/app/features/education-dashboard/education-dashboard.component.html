@@ -28,10 +28,14 @@
   <div class="toolbar">
     <input type="text" class="search" [ngModel]="search()" (ngModelChange)="search.set($event)"
            placeholder="搜尋姓名 / 病歷號…" />
-    <label class="chk">
-      <input type="checkbox" [ngModel]="incompleteOnly()" (ngModelChange)="incompleteOnly.set($event)" />
-      只看未完成
-    </label>
+    <div class="seg-filter" role="group" aria-label="完成狀態篩選">
+      <button type="button" [class.active]="completionFilter() === 'all'"
+              (click)="completionFilter.set('all')">全部</button>
+      <button type="button" [class.active]="completionFilter() === 'incomplete'"
+              (click)="completionFilter.set('incomplete')">未完成</button>
+      <button type="button" [class.active]="completionFilter() === 'completed'"
+              (click)="completionFilter.set('completed')">已完成</button>
+    </div>
     <button class="btn-uneducated" (click)="openUneducated()" [disabled]="loading()"
             title="彙整所有病人的未衛教日期與當天照顧護理師（應衛教日已排除外圍床排程）">
       <i class="fas fa-user-clock"></i> 未衛教整合

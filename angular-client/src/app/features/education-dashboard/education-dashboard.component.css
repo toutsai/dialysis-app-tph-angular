@@ -70,13 +70,30 @@
   font-size: 0.9rem;
   outline: none;
 }
-.toolbar .chk {
+.seg-filter {
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.9rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.seg-filter button {
+  padding: 7px 14px;
+  border: none;
+  background: #fff;
   color: #475569;
+  font-size: 0.9rem;
   cursor: pointer;
+}
+.seg-filter button + button {
+  border-left: 1px solid #cbd5e1;
+}
+.seg-filter button:hover:not(.active) {
+  background: #f1f5f9;
+}
+.seg-filter button.active {
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
 }
 .btn-uneducated {
   margin-left: auto;
@@ -611,9 +628,9 @@
   .btn-uneducated {
     padding: 10px 16px;
   }
-  .toolbar .chk {
+  .seg-filter button {
     font-size: 1rem;
-    padding: 4px 0;
+    padding: 10px 16px;
   }
 }
 

@@ -65,7 +65,8 @@ export class EducationDashboardComponent implements OnInit {
   readonly loading = signal(true);
   readonly errorMsg = signal('');
   readonly search = signal('');
-  readonly incompleteOnly = signal(false);
+  /** 完成狀態篩選：all = 全部、incomplete = 未完成、completed = 已完成（預設只看未完成） */
+  readonly completionFilter = signal<'all' | 'incomplete' | 'completed'>('incomplete');
 
   readonly dialogPatient = signal<EducationListItem | null>(null);
 
@@ -107,9 +108,10 @@ export class EducationDashboardComponent implements OnInit {
 
   readonly filteredRows = computed(() => {
     const term = this.search().trim().toLowerCase();
-    const inc = this.incompleteOnly();
+    const cf = this.completionFilter();
     const list = this.rows().filter((r) => {
-      if (inc && r.completed) return false;
+      if (cf === 'incomplete' && r.completed) return false;
+      if (cf === 'completed' && !r.completed) return false;
       if (!term) return true;
       return (
         (r.patientName || '').toLowerCase().includes(term) ||
