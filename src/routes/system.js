@@ -345,10 +345,12 @@ router.get('/notifications', authenticate, (req, res) => {
   try {
     const db = getDatabase()
 
+    // INDEXED BY：MULTI-INDEX OR 對 recipient_id 索引會導致 ORDER BY 走 TEMP B-TREE，
+    // 強制走 created_at 索引改以掃描順序取代排序（效能批次 2A，語意不變，已用 EXPLAIN QUERY PLAN 驗證結果集一致）
     const notifications = db
       .prepare(
         `
-      SELECT * FROM notifications
+      SELECT * FROM notifications INDEXED BY idx_notifications_created_at
       WHERE recipient_id = ? OR recipient_id IS NULL
       ORDER BY created_at DESC
       LIMIT 100

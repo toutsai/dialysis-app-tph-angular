@@ -465,6 +465,23 @@ export function runMigrations() {
       if (addColumnIfNotExists(db, 'injection_orders', 'prescriber', 'TEXT')) migrationsApplied++
     }
 
+    // ========================================
+    // 效能批次 2A：notifications/tasks 索引
+    // ========================================
+    const notificationsExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='notifications'")
+      .get()
+    if (notificationsExists) {
+      console.log('📋 檢查 notifications 索引...')
+      db.exec('CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at)')
+    }
+    if (tasksExists) {
+      console.log('📋 檢查 tasks 部分索引...')
+      db.exec(
+        "CREATE INDEX IF NOT EXISTS idx_tasks_active ON tasks(created_at) WHERE status != 'deleted'",
+      )
+    }
+
     if (migrationsApplied > 0) {
       console.log(`✅ 已完成 ${migrationsApplied} 項遷移`)
     } else {

@@ -842,6 +842,60 @@ async function applyScheduledPatientUpdates() {
 }
 
 // ========================================
+// 定時任務：清理過期 notifications / tasks
+// 每日凌晨 02:30 執行（效能批次 2A）
+// notifications：created_at 早於 90 天整批刪除
+// tasks：deleted/expired 依「轉為終態時間」(updated_at) 早於 90 天刪除；
+//        completed 依「完成時間」(completed_at，缺值時退回 updated_at/created_at) 早於 180 天刪除
+//        （比照收件匣顯示規則 completed 保留 90 天，180 天為加倍保守）；pending 永不刪除
+// ========================================
+
+async function cleanupOldNotificationsAndTasks() {
+  console.log('[Scheduler] 🧹 執行 notifications/tasks 資料清理...')
+  const db = getDatabase()
+
+  try {
+    const runCleanup = db.transaction(() => {
+      const notifResult = db
+        .prepare(
+          `DELETE FROM notifications WHERE created_at < datetime('now', 'localtime', '-90 days')`,
+        )
+        .run()
+
+      const deletedTasksResult = db
+        .prepare(
+          `DELETE FROM tasks WHERE status = 'deleted' AND updated_at < datetime('now', 'localtime', '-90 days')`,
+        )
+        .run()
+
+      const expiredTasksResult = db
+        .prepare(
+          `DELETE FROM tasks WHERE status = 'expired' AND updated_at < datetime('now', 'localtime', '-90 days')`,
+        )
+        .run()
+
+      const completedTasksResult = db
+        .prepare(
+          `DELETE FROM tasks WHERE status = 'completed' AND COALESCE(completed_at, updated_at, created_at) < datetime('now', 'localtime', '-180 days')`,
+        )
+        .run()
+
+      return {
+        notifications: notifResult.changes,
+        deletedTasks: deletedTasksResult.changes,
+        expiredTasks: expiredTasksResult.changes,
+        completedTasks: completedTasksResult.changes,
+      }
+    })
+
+    const result = runCleanup()
+    console.log(`[Scheduler] ✅ 清理完成：notifications ${result.notifications} 筆、tasks(deleted) ${result.deletedTasks} 筆、tasks(expired) ${result.expiredTasks} 筆、tasks(completed) ${result.completedTasks} 筆`)
+  } catch (error) {
+    console.error('[Scheduler] ❌ notifications/tasks 清理失敗:', error)
+  }
+}
+
+// ========================================
 // 啟動所有定時任務
 // ========================================
 
@@ -867,6 +921,12 @@ export function startScheduler() {
     timezone: 'Asia/Taipei',
   })
   console.log('📅 [Scheduler] 過期任務檢查 - 02:00 (Asia/Taipei)')
+
+  // 每日凌晨 02:30 - 清理過期 notifications / tasks
+  cron.schedule('30 2 * * *', cleanupOldNotificationsAndTasks, {
+    timezone: 'Asia/Taipei',
+  })
+  console.log('📅 [Scheduler] notifications/tasks 清理 - 02:30 (Asia/Taipei)')
 
   // 每日凌晨 03:00 - 初始化未來排程
   cron.schedule('0 3 * * *', scheduledInitializeFutureSchedules, {
@@ -903,6 +963,7 @@ export {
   archiveDailySchedule,
   applyScheduledPatientUpdates,
   cleanupExpiredTokensAndSessions,
+  cleanupOldNotificationsAndTasks,
 }
 
 export default {
@@ -913,4 +974,5 @@ export default {
   archiveDailySchedule,
   applyScheduledPatientUpdates,
   cleanupExpiredTokensAndSessions,
+  cleanupOldNotificationsAndTasks,
 }

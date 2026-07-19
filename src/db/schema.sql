@@ -412,6 +412,8 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_category ON tasks(category);
 CREATE INDEX IF NOT EXISTS idx_tasks_patient ON tasks(patient_id);
+-- 部分索引：涵蓋列表查詢的 status != 'deleted' + ORDER BY created_at DESC（效能批次 2A）
+CREATE INDEX IF NOT EXISTS idx_tasks_active ON tasks(created_at) WHERE status != 'deleted';
 
 CREATE TABLE IF NOT EXISTS notifications (
     id TEXT PRIMARY KEY,
@@ -425,6 +427,8 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 
 CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON notifications(recipient_id);
+-- 效能批次 2A：支援 ORDER BY created_at DESC 列表查詢
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
 
 -- ========================================
 -- 檢驗報告
