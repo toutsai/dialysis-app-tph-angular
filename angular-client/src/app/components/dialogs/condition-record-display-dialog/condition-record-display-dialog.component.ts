@@ -56,7 +56,15 @@ export class ConditionRecordDisplayDialogComponent implements OnChanges {
 
     this.isLoading = true;
     try {
-      const allRecords = await this.conditionRecordsApi.fetchAll();
+      // 2B 效能批次：已知 patientId（及可選單一日期），改帶查詢參數讓後端 condition_records
+      // 直接篩選（src/routes/orders.js:1063-1091），不再整表下載。startDate=endDate=targetDate
+      // 等價於原本 r.recordDate === this.targetDate 的單日精確比對。
+      const allRecords = await this.conditionRecordsApi.fetchWhere({
+        patientId: this.patientId,
+        ...(this.targetDate
+          ? { startDate: this.targetDate, endDate: this.targetDate }
+          : {}),
+      });
       this.records = (allRecords as any[]).filter((r: any) => {
         if (r.patientId !== this.patientId) return false;
         if (this.targetDate) return r.recordDate === this.targetDate;

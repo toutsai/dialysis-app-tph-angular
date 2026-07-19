@@ -352,10 +352,12 @@ export class OrdersComponent implements OnInit {
 
     const year = this.individualSearchYear();
 
-    const allYearlyOrders = await this.ordersApi.fetchAll();
-    const patientOrders = allYearlyOrders.filter(
-      (o: any) => o.patientId === foundPatient.id,
-    );
+    // 2B 效能批次：已知 foundPatient.id，改帶 ?patientId= 讓後端 injection_orders 查詢
+    // 直接篩選（src/routes/orders.js:477-497，含 patientId-aware cache key），不再整表下載
+    // 再前端 filter。年份篩選仍在下方 monthlyOrdersMap 迴圈以 change_date 逐月比對，語意不變。
+    const patientOrders = await this.ordersApi.fetchWhere({
+      patientId: foundPatient.id,
+    });
     this.collectExtraMeds(patientOrders);
 
     const monthlyOrdersMap = new Map<string, IndividualSearchResult>();

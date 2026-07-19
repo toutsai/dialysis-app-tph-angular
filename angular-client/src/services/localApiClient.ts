@@ -155,6 +155,26 @@ const ApiManager = <T extends { id?: string;[key: string]: unknown }>(resourceTy
     }
   };
 
+  // 比照 core/services/api-manager.service.ts 的 fetchWhere$ 寫法：清掉 undefined/null/''
+  // 再組 query string，供 2B 效能批次的參數化呼叫點使用（取代整表 fetchAll + 前端 filter）。
+  const fetchWhere = async (
+    params: Record<string, string | number | undefined>,
+  ): Promise<T[]> => {
+    const cleaned: Record<string, string> = {};
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== null && v !== '') cleaned[k] = String(v);
+    }
+    const qs = new URLSearchParams(cleaned).toString();
+    const url = qs ? `${route}?${qs}` : route;
+    try {
+      const data = await localApi.get(url);
+      return Array.isArray(data) ? data : (data?.data || data?.items || []);
+    } catch (error) {
+      console.error(`[ApiManager] Error fetching ${resourceType} with params:`, error);
+      throw error;
+    }
+  };
+
   const fetchById = async (id: string): Promise<T | null> => {
     if (!id || typeof id !== 'string') {
       console.warn(`[ApiManager] fetchById called with invalid ID in ${resourceType}. Returning null.`);
@@ -212,6 +232,7 @@ const ApiManager = <T extends { id?: string;[key: string]: unknown }>(resourceTy
 
   return {
     fetchAll,
+    fetchWhere,
     save,
     update,
     delete: deleteDocument,

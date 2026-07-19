@@ -104,7 +104,14 @@ export class DailyRecordsSummaryDialogComponent implements OnChanges {
     }
     try {
       const patientIdSet = new Set(patientIdList);
-      const allRecords = await this.conditionRecordsApi.fetchAll();
+      // 2B 效能批次：已知明確單日日期，改帶 startDate=endDate=date 讓後端 condition_records
+      // 直接篩選單日（src/routes/orders.js:1063-1091，record_date 區間比對，date=date 即單日精確
+      // 等價於前端 r.recordDate === date），不再整表(全時間全病人)下載。多病人清單後端不支援
+      // IN 查詢，patientIdSet 篩選保留在前端不變。
+      const allRecords = await this.conditionRecordsApi.fetchWhere({
+        startDate: date,
+        endDate: date,
+      });
       const filtered = (allRecords as any[]).filter(
         (r: any) => r.recordDate === date && patientIdSet.has(r.patientId)
       );

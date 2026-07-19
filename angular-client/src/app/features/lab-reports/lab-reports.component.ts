@@ -757,9 +757,17 @@ export class LabReportsComponent implements OnInit, OnDestroy {
     const year = this.individualSearchYear();
     const startDateStr = `${year}-01-01`;
     const endDateStr = `${year + 1}-01-01`;
-    
-    // Use REST API instead of direct Firestore query
-    const allReports = await this.labReportsApi.fetchAll();
+    // 後端 startDate/endDate 為閉區間比對（report_date <= endDate），原本前端是 `< 次年1/1`
+    // 開區間；日期皆為 YYYY-MM-DD 純日期字串，故用 `${year}-12-31` 當閉區間上限與原邏輯等價。
+    const inclusiveEndDateStr = `${year}-12-31`;
+
+    // 2B 效能批次：已知 foundPatient.id + 年度範圍，改帶查詢參數讓後端 lab_reports 直接篩選
+    // （src/routes/orders.js:821-847），不再整表(全病人全年份)下載再前端 filter。
+    const allReports = await this.labReportsApi.fetchWhere({
+      patientId: (foundPatient as any).id,
+      startDate: startDateStr,
+      endDate: inclusiveEndDateStr,
+    });
     const reportsRaw = allReports
       .filter((r: any) => {
         if (r.patientId !== (foundPatient as any).id) return false;

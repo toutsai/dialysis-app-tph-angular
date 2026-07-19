@@ -138,11 +138,19 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   // -------------------------------------------------------------------------
   // Memo system (Vue provide/inject equivalent)
   // -------------------------------------------------------------------------
-  readonly activeMemos = signal<MemoItem[]>([]);
+  // 2B 效能批次：memo 資料改由 TaskStoreService 既有 15s 輪詢(category=message)供應，
+  // 不再單獨打 tasksApi.fetchAll() 整表。TaskStore 的 since 參數後端會 `OR status='pending'`
+  // 恆保留所有待處理留言（src/routes/system.js:66-75），故此 computed 對 pending 留言的
+  // 篩選結果與舊版 fetchActiveMemos()（fetchAll 後前端濾 category+pending）完全等價。
+  readonly activeMemos = computed<MemoItem[]>(() =>
+    this.taskStoreService
+      .feedMessages()
+      .filter((m) => m.status === 'pending')
+      .map((m) => ({ ...m }) as MemoItem),
+  );
   readonly isMemoDialogVisible = signal(false);
   readonly patientNameForDialog = signal('');
   readonly memosForDialog = signal<MemoItem[]>([]);
-  private memoPollTimer: ReturnType<typeof setInterval> | null = null;
   private patientRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
   /** Set of patient IDs that have pending memos. */
@@ -204,15 +212,14 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
       const user = this.authService.currentUser();
       untracked(() => {
         if (user) {
-          this.startSharedDataListeners();
           this.notificationService.startListening();
           this.startConflictListener();
           this.fetchTodayAssignedPatients();
           this.taskStoreService.startRealtimeUpdates(user.uid);
           this.startPatientRefreshTimer();
         } else {
-          this.activeMemos.set([]);
-          this.stopSharedDataListeners();
+          // activeMemos 為 computed，會隨 taskStoreService.stopRealtimeUpdates() 清空的
+          // feedMessages() 自動歸零，不需再手動 set([])。
           sessionStorage.removeItem('hasCheckedSchedules');
           this.notificationService.stopListening();
           this.stopConflictListener();
@@ -333,37 +340,6 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     ).length;
   }
 
-  private readonly MEMO_POLL_INTERVAL = 15_000; // 15 seconds
-
-  /** Start polling for memo data. Replaces Firebase onSnapshot. */
-  private startSharedDataListeners(): void {
-    if (this.memoPollTimer) return;
-    this.fetchActiveMemos();
-    this.memoPollTimer = setInterval(() => this.fetchActiveMemos(), this.MEMO_POLL_INTERVAL);
-  }
-
-  /** Fetch active memos via REST API. */
-  private async fetchActiveMemos(): Promise<void> {
-    try {
-      const tasksApi = this.apiManagerService.create<FirestoreRecord>('tasks');
-      const allTasks = await tasksApi.fetchAll();
-      const pendingMemos = allTasks
-        .filter((t: any) => t.category === 'message' && t.status === 'pending')
-        .map((t: any) => ({ id: t.id, ...t }) as MemoItem);
-      this.activeMemos.set(pendingMemos);
-    } catch (error) {
-      console.error('[MainLayout] Failed to fetch active memos:', error);
-    }
-  }
-
-  /** Stop the memo polling timer. */
-  private stopSharedDataListeners(): void {
-    if (this.memoPollTimer) {
-      clearInterval(this.memoPollTimer);
-      this.memoPollTimer = null;
-    }
-  }
-
   private readonly PATIENT_REFRESH_INTERVAL = 5 * 60_000; // 5 minutes
 
   /**
@@ -396,13 +372,24 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     this.conflictPollTimer = setInterval(() => this.fetchConflictCount(), this.CONFLICT_POLL_INTERVAL);
   }
 
-  /** Fetch conflict count via REST API. */
+  /**
+   * Fetch conflict count via REST API.
+   *
+   * 2B 效能批次：只帶 status=conflict_requires_resolution 給後端(exact 欄位比對,語意不變)，
+   * 不帶 startDate/endDate ——後端的日期篩選只比對 schedule_exceptions 的 date/start_date/
+   * end_date 三個頂層欄位(src/routes/schedules.js:1060-1068)，但 shouldShowConflictBadge 是
+   * 比對 from/to/patient1/patient2 內嵌 JSON 的多個日期欄位取最大值，兩者語意不等價；
+   * 若加上後端日期參數可能誤刪仍應顯示的衝突徽章，故日期篩選保留在前端不變，僅靠 status
+   * 縮小資料量（大多數 exceptions 非 conflict_requires_resolution 狀態）。
+   */
   private async fetchConflictCount(): Promise<void> {
     try {
       const exceptionsApi = this.apiManagerService.create<FirestoreRecord>('exception_requests');
-      const allExceptions = await exceptionsApi.fetchAll();
+      const conflictStatusRecords = await exceptionsApi.fetchWhere({
+        status: 'conflict_requires_resolution',
+      });
       const today = getToday();
-      const conflicts = allExceptions.filter((e: any) =>
+      const conflicts = conflictStatusRecords.filter((e: any) =>
         this.shouldShowConflictBadge(e, today),
       );
       this.conflictCount.set(conflicts.length);
@@ -535,7 +522,6 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   /** Cleanup all listeners on component destroy. */
   private cleanup(): void {
     this.notificationService.stopListening();
-    this.stopSharedDataListeners();
     this.stopConflictListener();
     this.taskStoreService.stopRealtimeUpdates();
     this.stopPatientRefreshTimer();

@@ -49,10 +49,14 @@ export class ConditionRecordPanelComponent implements OnChanges {
     }
     this.isLoading.set(true);
     try {
-      const allRecords = await this.conditionRecordsApi.fetchAll();
-      const filtered = (allRecords as any[]).filter(
-        (r: any) => r.patientId === this.patientId
-      ).sort((a: any, b: any) => {
+      // 2B 效能批次：已知 patientId，改帶 ?patientId= 讓後端 condition_records 直接篩選
+      // （src/routes/orders.js:1063-1091），不再整表(全院所有病人)下載再前端 filter。
+      // ⚠️保守不加 limit：後端排序為 record_date DESC, created_at DESC，與這裡的純 createdAt
+      // 排序不保證同序，加 limit 可能截到不同的前 20 筆；故仍在前端排序+slice(0,20)。
+      const allRecords = await this.conditionRecordsApi.fetchWhere({
+        patientId: this.patientId,
+      });
+      const filtered = (allRecords as any[]).sort((a: any, b: any) => {
         const aDate = typeof a.createdAt === 'string' ? a.createdAt : '';
         const bDate = typeof b.createdAt === 'string' ? b.createdAt : '';
         return bDate.localeCompare(aDate);

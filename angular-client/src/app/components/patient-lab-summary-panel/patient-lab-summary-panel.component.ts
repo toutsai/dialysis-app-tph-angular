@@ -172,11 +172,14 @@ export class PatientLabSummaryPanelComponent implements OnChanges {
       oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
       const oneYearAgoStr = oneYearAgo.toISOString().split('T')[0];
 
-      const allReports = await this.labReportsApi.fetchAll();
-      const filtered = (allReports as any[]).filter((r: any) =>
-        r.patientId === this.patient.id &&
-        (typeof r.reportDate === 'string' ? r.reportDate >= oneYearAgoStr : true)
-      ).sort((a: any, b: any) => {
+      // 2B 效能批次：已知 patientId + 日期下限，改帶查詢參數讓後端 lab_reports 直接篩選
+      // （src/routes/orders.js:821-847，patientId+startDate 皆比對且 cache key 含參數），
+      // 不再整表下載再前端 filter。語意與舊版 reportDate >= oneYearAgoStr 等價。
+      const allReports = await this.labReportsApi.fetchWhere({
+        patientId: this.patient.id,
+        startDate: oneYearAgoStr,
+      });
+      const filtered = (allReports as any[]).sort((a: any, b: any) => {
         const dateA = typeof a.reportDate === 'string' ? a.reportDate : '';
         const dateB = typeof b.reportDate === 'string' ? b.reportDate : '';
         return dateB.localeCompare(dateA);
