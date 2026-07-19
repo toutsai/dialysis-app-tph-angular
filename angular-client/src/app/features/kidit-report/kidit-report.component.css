@@ -362,10 +362,18 @@
   .page-header {
     flex-direction: column;
     align-items: stretch;
-    gap: 0.9rem;
+    gap: 0.6rem;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.6rem;
   }
   .page-title { font-size: 1.3rem; }
   .header-left, .header-right, .month-navigator { justify-content: center; }
-  .calendar-grid { grid-template-columns: repeat(1, 1fr); }
+  /* 四顆動作鈕改 2×2 緊湊排列，避免直向堆一長串 */
+  .header-right { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+  .action-btn { justify-content: center; font-size: 0.78rem; padding: 0.45rem 0.4rem; }
+  .calendar-grid { grid-template-columns: repeat(1, 1fr); gap: 0.45rem; }
   .weekdays-header { display: none; }
+  /* 單欄清單模式：月初補位空格不顯示（否則每格仍占 7rem 高，頂部大量留白） */
+  .day-cell.empty { display: none; }
+  .day-cell { min-height: 3.4rem; }
 }
