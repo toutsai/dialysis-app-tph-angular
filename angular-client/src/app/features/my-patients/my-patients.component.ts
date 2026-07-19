@@ -29,12 +29,15 @@ import { formatDateToYYYYMMDD, getTaipeiWeekdayIndex } from '@/utils/dateUtils';
 import { resolveDailyRotationValue } from '@/utils/scheduleUtils';
 import { handleTaskCreated } from '@/utils/taskHandlers';
 import { createDialysisOrderAndUpdatePatient } from '@/services/optimizedApiService';
+import { localApi } from '@/services/localApiClient';
+import { kiditService } from '@/services/kiditService';
 
 // Component Imports
 import { TaskCreateDialogComponent } from '@app/components/dialogs/task-create-dialog/task-create-dialog.component';
 import { ConfirmDialogComponent } from '@app/components/dialogs/confirm-dialog/confirm-dialog.component';
 import { DialysisOrderModalComponent } from '@app/components/dialogs/dialysis-order-modal/dialysis-order-modal.component';
 import { MarqueeBannerComponent } from '@app/components/marquee-banner/marquee-banner.component';
+import { EducationRecordDialogComponent } from '@app/components/dialogs/education-record-dialog/education-record-dialog.component';
 
 interface MedicationMaster {
   code: string;
@@ -87,6 +90,7 @@ interface SelectableUser {
     ConfirmDialogComponent,
     DialysisOrderModalComponent,
     MarqueeBannerComponent,
+    EducationRecordDialogComponent,
   ],
   templateUrl: './my-patients.component.html',
   styleUrl: './my-patients.component.css',
@@ -262,35 +266,138 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
     return this.patientListByShift()[shiftCode] || [];
   }
 
-  getDashboardQuickLinks(): { key: string; label: string; patient: MyPatientItem; shiftCode: string }[] {
-    const links: { key: string; label: string; patient: MyPatientItem; shiftCode: string }[] = [];
-    const seen = new Set<string>();
+  // --- 照護工作按鈕（初透衛教紀錄 / 本院初透建檔） ---
 
-    for (const shiftCode of this.getShiftKeys()) {
-      for (const patient of this.getShiftPatients(shiftCode)) {
-        const key = `${shiftCode}-${patient.id}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        links.push({
-          key,
-          label: `${this.getShiftShortTitle(shiftCode)} ${patient.bedNum}床 ${patient.name}`,
-          patient,
-          shiftCode,
-        });
-      }
-    }
+  readonly showEduModal = signal(false);
+  readonly isLoadingEdu = signal(false);
+  readonly eduRows = signal<any[]>([]);
+  readonly eduError = signal('');
+  readonly eduDialogPatient = signal<any | null>(null);
 
-    return links;
+  readonly showFirstDiaModal = signal(false);
+  readonly isLoadingFirstDia = signal(false);
+  readonly firstDiaRows = signal<any[]>([]);
+  readonly firstDiaError = signal('');
+
+  canEditEducation(): boolean {
+    return !this.authService.isViewer();
   }
 
-  getShiftShortTitle(shiftCode: string): string {
-    const map: Record<string, string> = {
-      early: '早',
-      noonOn: '午上',
-      noonOff: '午收',
-      late: '晚',
-    };
-    return map[shiftCode] || shiftCode;
+  /** 目前檢視對象（支援切換使用者）的 uid 與姓名，比對方式同 fetchMyPatientData */
+  private async resolveTargetUser(): Promise<{ userId: string | null; userName: string }> {
+    const userId = this.selectedUserId();
+    const cu = this.currentUser();
+    let userName = userId === cu?.uid || userId === cu?.id ? cu?.name : undefined;
+    if (!userName && userId) {
+      await this.userDirectory.ensureUsersLoaded();
+      const u = this.userDirectory.allUsers().find((x: any) => x.uid === userId || x.id === userId);
+      userName = u?.name;
+    }
+    return { userId, userName: String(userName || '').trim() };
+  }
+
+  /** 照護病人初透衛教紀錄：我的照護清單病人 + 今日我負責班別的衛教中病人 */
+  async openEduModal(): Promise<void> {
+    this.showEduModal.set(true);
+    this.isLoadingEdu.set(true);
+    this.eduError.set('');
+    this.eduRows.set([]);
+    try {
+      const [target, list, care] = await Promise.all([
+        this.resolveTargetUser(),
+        localApi.get('/patients/education-list'),
+        localApi.get('/nursing/patient-care'),
+      ]);
+      const rows: any[] = Array.isArray(list) ? list : [];
+      const assignments: any[] = (care as any)?.assignments || [];
+      const myCare = assignments.find(
+        (a) => a.nurseId === target.userId || String(a.nurseName || '').trim() === target.userName,
+      );
+      const myCareIds = new Set<string>(myCare?.patientIds || []);
+      const todayIds = new Set<string>();
+      for (const sc of this.getShiftKeys()) {
+        for (const p of this.getShiftPatients(sc)) todayIds.add(p.patientId);
+      }
+      const filtered = rows
+        .filter((r) => myCareIds.has(r.patientId) || todayIds.has(r.patientId))
+        .map((r) => ({ ...r, todayMine: todayIds.has(r.patientId) }))
+        .sort(
+          (a, b) =>
+            (b.todayMine ? 1 : 0) - (a.todayMine ? 1 : 0) ||
+            String(a.patientName).localeCompare(b.patientName),
+        );
+      this.eduRows.set(filtered);
+    } catch (error) {
+      console.error('載入照護衛教清單失敗:', error);
+      this.eduError.set('載入衛教清單失敗，請稍後再試。');
+    } finally {
+      this.isLoadingEdu.set(false);
+    }
+  }
+
+  closeEduModal(): void {
+    this.showEduModal.set(false);
+  }
+
+  openEduRecord(row: any): void {
+    this.eduDialogPatient.set(row);
+  }
+
+  async closeEduRecord(): Promise<void> {
+    this.eduDialogPatient.set(null);
+    if (this.showEduModal()) await this.openEduModal();
+  }
+
+  /** 本院初透基本資料建立：僅列組長已標記「本院初透」且 KiDit 未建檔完成者（負責人=標記日照顧護理師） */
+  async openFirstDiaModal(): Promise<void> {
+    this.showFirstDiaModal.set(true);
+    this.isLoadingFirstDia.set(true);
+    this.firstDiaError.set('');
+    this.firstDiaRows.set([]);
+    try {
+      const [target, pending] = await Promise.all([
+        this.resolveTargetUser(),
+        kiditService.fetchPendingRegistrations(),
+      ]);
+      const rows = ((pending as any[]) || [])
+        .filter((r) => r.hospitalFirstDialysisDate)
+        .map((r) => ({ ...r, mine: String(r.firstNurse?.nurse || '').trim() === target.userName }))
+        .sort(
+          (a, b) =>
+            (b.mine ? 1 : 0) - (a.mine ? 1 : 0) ||
+            String(b.hospitalFirstDialysisDate || '').localeCompare(
+              String(a.hospitalFirstDialysisDate || ''),
+            ),
+        );
+      this.firstDiaRows.set(rows);
+    } catch (error) {
+      console.error('載入本院初透待建檔清單失敗:', error);
+      this.firstDiaError.set('載入待建檔清單失敗，請稍後再試。');
+    } finally {
+      this.isLoadingFirstDia.set(false);
+    }
+  }
+
+  closeFirstDiaModal(): void {
+    this.showFirstDiaModal.set(false);
+  }
+
+  goToKiditStation(): void {
+    this.showFirstDiaModal.set(false);
+    this.router.navigate(['/kidit-report']);
+  }
+
+  firstDiaMissingLabel(row: any): string {
+    const missing: string[] = [];
+    if (!row.hasProfile) missing.push('病患資料');
+    if (!row.hasHistory) missing.push('病史原發病');
+    return missing.length ? missing.join('、') : '資料分散於不同事件';
+  }
+
+  firstNurseLabel(row: any): string {
+    const n = row.firstNurse;
+    if (!n) return '—';
+    return n.team && n.nurse ? `${n.team} ${n.nurse}` : n.nurse || n.team || '—';
   }
 
   getShiftSupplySummary(shiftCode: string): { supplies: string; medications: string } {

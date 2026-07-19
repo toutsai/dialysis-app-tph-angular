@@ -26,23 +26,17 @@
     </div>
   </div>
 
-  <div *ngIf="!isLoading() && hasAnyPatients()" class="dashboard-quickbar">
-    <div class="dashboard-quickbar-label">
-      <i class="fas fa-desktop"></i>
-      <span>智慧儀表板</span>
-    </div>
-    <div class="dashboard-quickbar-actions">
-      <a
-        *ngFor="let link of getDashboardQuickLinks()"
-        class="dashboard-quickbar-chip"
-        [href]="bedDashboardUrl(link.patient, link.shiftCode)"
-        target="_blank"
-        rel="noopener"
-        [title]="'開啟 ' + link.label + ' 智慧儀表板'"
-      >
-        {{ link.label }}
-      </a>
-    </div>
+  <!-- 照護工作按鈕列 -->
+  <div *ngIf="!isLoading()" class="care-tools-bar">
+    <button class="care-tool-btn edu" (click)="openEduModal()">
+      <i class="fas fa-chalkboard-teacher"></i> 照護病人初透衛教紀錄
+    </button>
+    <button class="care-tool-btn kidit" disabled title="規劃中，之後開放">
+      <i class="fas fa-file-medical"></i> 照護病人 KiDit 申報欄位填寫（規劃中）
+    </button>
+    <button class="care-tool-btn firstdia" (click)="openFirstDiaModal()">
+      <i class="fas fa-user-plus"></i> 負責本院初透基本資料建立
+    </button>
   </div>
 
   <div *ngIf="isLoading()" class="loading-state">
@@ -235,4 +229,113 @@
     (save)="handleOrderSave($event)"
     (close)="closeOrderModal()"
   ></app-dialysis-order-modal>
+
+  <!-- 照護病人初透衛教紀錄彈窗 -->
+  <div class="ct-modal-overlay" *ngIf="showEduModal()" (click)="closeEduModal()">
+    <div class="ct-modal" (click)="$event.stopPropagation()">
+      <div class="ct-modal-header">
+        <h3>
+          <i class="fas fa-chalkboard-teacher"></i> 照護病人初透衛教紀錄
+          <span class="ct-count" *ngIf="!isLoadingEdu()">（{{ eduRows().length }} 位）</span>
+        </h3>
+        <button class="ct-close-btn" (click)="closeEduModal()" title="關閉"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="ct-modal-body">
+        <p class="ct-hint">
+          <i class="fas fa-info-circle"></i>
+          名單＝我的照護病人（使用者管理・照護清單）＋今日我負責班別的衛教中病人；點擊病人可開啟衛教紀錄檢視/填寫。
+        </p>
+        <div *ngIf="isLoadingEdu()" class="ct-loading"><div class="spinner"></div><p>正在彙整衛教進度...</p></div>
+        <div *ngIf="!isLoadingEdu() && eduError()" class="ct-empty">{{ eduError() }}</div>
+        <div *ngIf="!isLoadingEdu() && !eduError() && eduRows().length === 0" class="ct-empty">
+          目前沒有照護中或今日負責的衛教病人。
+        </div>
+        <table *ngIf="!isLoadingEdu() && eduRows().length > 0" class="ct-table">
+          <thead>
+            <tr>
+              <th>病人</th><th>病歷號</th><th>初透日</th><th>該次負責</th>
+              <th>已衛教</th><th>主護簽章(通過)</th><th>12次完成</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let r of eduRows()" class="ct-row" (click)="openEduRecord(r)">
+              <td>{{ r.patientName }}</td>
+              <td>{{ r.medicalRecordNumber || '—' }}</td>
+              <td>{{ r.firstDialysisDate || '—' }}</td>
+              <td><span *ngIf="r.todayMine" class="ct-badge today">今日負責</span></td>
+              <td>{{ r.paperEducation ? '紙本衛教' : (r.educatedCount + ' / ' + r.total) }}</td>
+              <td>{{ r.paperEducation ? (r.paperCompleted ? '紙本完成' : '進行中') : (r.passedCount + ' / ' + r.total) }}</td>
+              <td>
+                <span class="ct-badge" [class.done]="r.completed" [class.undone]="!r.completed">
+                  {{ r.completed ? '已完成' : '未完成' }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 負責本院初透基本資料建立彈窗 -->
+  <div class="ct-modal-overlay" *ngIf="showFirstDiaModal()" (click)="closeFirstDiaModal()">
+    <div class="ct-modal" (click)="$event.stopPropagation()">
+      <div class="ct-modal-header">
+        <h3>
+          <i class="fas fa-user-plus"></i> 本院初透基本資料建立
+          <span class="ct-count" *ngIf="!isLoadingFirstDia()">（{{ firstDiaRows().length }} 位）</span>
+        </h3>
+        <div class="ct-modal-actions">
+          <button class="care-tool-btn firstdia sm" (click)="goToKiditStation()">
+            <i class="fas fa-arrow-right"></i> 前往 KiDit 申報工作站補建檔
+          </button>
+          <button class="ct-close-btn" (click)="closeFirstDiaModal()" title="關閉"><i class="fas fa-times"></i></button>
+        </div>
+      </div>
+      <div class="ct-modal-body">
+        <p class="ct-hint">
+          <i class="fas fa-info-circle"></i>
+          名單＝組長已標記「本院初透」且 KiDit 病患資料/病史尚未建檔完成的病人（未標記或資料庫還原者不需建檔）。
+          負責人＝本院初透當天的照顧護理師；標「待完成」者為您負責。
+        </p>
+        <div *ngIf="isLoadingFirstDia()" class="ct-loading"><div class="spinner"></div><p>正在彙整待建檔名單...</p></div>
+        <div *ngIf="!isLoadingFirstDia() && firstDiaError()" class="ct-empty">{{ firstDiaError() }}</div>
+        <div *ngIf="!isLoadingFirstDia() && !firstDiaError() && firstDiaRows().length === 0" class="ct-empty">
+          目前沒有待建檔的本院初透病人。
+        </div>
+        <table *ngIf="!isLoadingFirstDia() && firstDiaRows().length > 0" class="ct-table">
+          <thead>
+            <tr>
+              <th>病人</th><th>病歷號</th><th>本院初透日</th><th>透析模式</th>
+              <th>負責護理師</th><th>缺項</th><th>最近事件日</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let r of firstDiaRows()" [class.ct-row-mine]="r.mine">
+              <td>{{ r.name }}</td>
+              <td>{{ r.medicalRecordNumber || '—' }}</td>
+              <td>{{ r.hospitalFirstDialysisDate || '—' }}</td>
+              <td>{{ r.dialysisMode || '—' }}</td>
+              <td>{{ firstNurseLabel(r) }}</td>
+              <td class="ct-missing">{{ firstDiaMissingLabel(r) }}</td>
+              <td>{{ r.lastEventDate || '尚無事件' }}</td>
+              <td><span *ngIf="r.mine" class="ct-badge undone">待完成</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 初透衛教紀錄視窗 -->
+  <app-education-record-dialog
+    *ngIf="eduDialogPatient() as p"
+    [patientId]="p.patientId"
+    [patientName]="p.patientName"
+    [medicalRecordNumber]="p.medicalRecordNumber"
+    [admissionDate]="p.admissionDate"
+    [firstDialysisDate]="p.firstDialysisDate"
+    [canEdit]="canEditEducation()"
+    (close)="closeEduRecord()"
+  ></app-education-record-dialog>
 </div>
