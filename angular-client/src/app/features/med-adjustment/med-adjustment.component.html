@@ -59,6 +59,7 @@
             <tr>
               <th class="sticky-col">項目</th>
               @for (m of months(); track m) { <th>{{ m }}</th> }
+              @if (hasSavedNotes) { <th class="saved-col-head">{{ currentMonthLabel }}</th> }
               <th class="adjust-col-head">當月修正</th>
             </tr>
           </thead>
@@ -70,6 +71,10 @@
                   @for (m of months(); track m) {
                     <td [class.cell-changed]="orderCell(row.key, m).changed">{{ orderCell(row.key, m).text }}</td>
                   }
+                  @if (hasSavedNotes) {
+                    @let sv = savedAdjust(row.key, orderCell(row.key, prevMonth).text);
+                    <td class="saved-col" [class.saved-diff]="sv.diff">{{ sv.text }}</td>
+                  }
                   <td class="adjust-cell">
                     <input class="adjust-input" [(ngModel)]="adjustNotes[row.key]" (ngModelChange)="markDirty()" placeholder="" />
                   </td>
@@ -80,6 +85,10 @@
                 <tr>
                   <td class="sticky-col row-label">{{ drug.label }}</td>
                   @for (m of months(); track m) { <td>{{ drugCell(drug, m) }}</td> }
+                  @if (hasSavedNotes) {
+                    @let sv = savedAdjust(drug.label, drugCell(drug, prevMonth));
+                    <td class="saved-col" [class.saved-diff]="sv.diff">{{ sv.text }}</td>
+                  }
                   <td class="adjust-cell">
                     <input class="adjust-input" [(ngModel)]="adjustNotes[drug.label]" (ngModelChange)="markDirty()" placeholder="" />
                   </td>

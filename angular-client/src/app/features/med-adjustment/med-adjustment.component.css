@@ -51,6 +51,9 @@ thead .sticky-col { z-index: 3; }
 .btn-save:hover:not(:disabled) { background: #1864ab; }
 .saved-hint { color: #2b8a3e; font-size: 0.85em; }
 .adjust-col-head { background: #e7f5ff !important; min-width: 180px; }
+.saved-col-head { background: #fff4e6 !important; color: #d9480f; }
+.saved-col { background: #fffaf5; }
+.saved-col.saved-diff { color: #c92a2a; font-weight: 700; }
 .adjust-cell { background: #f8fbff; padding: 2px 4px; }
 .adjust-input { width: 100%; min-width: 170px; border: 1px solid #c5dbf0; border-radius: 3px; padding: 4px 6px; font-size: 1em; }
 .adjust-input:focus { outline: none; border-color: #1971c2; }

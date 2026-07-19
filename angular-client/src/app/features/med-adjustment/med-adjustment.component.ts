@@ -118,6 +118,14 @@ export class MedAdjustmentComponent implements OnInit {
   readonly isSaving = signal(false);
   readonly savedHint = signal('');
   readonly currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+  readonly currentMonthLabel = `${Number(this.currentMonth.slice(5))}月修正`;
+  readonly prevMonth = (() => {
+    const d = new Date();
+    const p = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+    return `${p.getFullYear()}-${String(p.getMonth() + 1).padStart(2, '0')}`;
+  })();
+  /** 當月已儲存的修正（僅存檔後顯示「N月修正」欄；預帶未存不算） */
+  savedNotes: Record<string, string> = {};
 
   constructor() {
     this.baseSchedulesApi = this.apiManager.create<FirestoreRecord>('base_schedules');
@@ -144,6 +152,7 @@ export class MedAdjustmentComponent implements OnInit {
         notes: { ...this.adjustNotes },
       } as any);
       this.isDirty.set(false);
+      this.savedNotes = { ...this.adjustNotes };
       this.savedHint.set('已儲存');
     } catch (error) {
       console.error('儲存藥物修正失敗:', error);
@@ -216,6 +225,7 @@ export class MedAdjustmentComponent implements OnInit {
     this.medRows = [];
     this.labByMonth = new Map();
     this.adjustNotes = {};
+    this.savedNotes = {};
     this.isDirty.set(false);
     this.savedHint.set('');
     if (!patient) { this.dataRevision.update((v) => v + 1); return; }
@@ -232,6 +242,7 @@ export class MedAdjustmentComponent implements OnInit {
         .filter((d: any) => d.kind === 'med_adjustment' && d.month === this.currentMonth)
         .sort((a: any, b: any) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0];
       this.adjustNotes = { ...(adjustDoc?.notes || {}) };
+      this.savedNotes = { ...(adjustDoc?.notes || {}) };
       // 醫囑歷史：依生效日(退 createdAt)由舊到新
       this.historyRows = ((history as any[]) || [])
         .map((h: any) => ({
@@ -258,6 +269,19 @@ export class MedAdjustmentComponent implements OnInit {
       this.isLoading.set(false);
       this.dataRevision.update((v) => v + 1);
     }
+  }
+
+  /** 當月修正存過檔才顯示「N月修正」欄 */
+  get hasSavedNotes(): boolean {
+    return Object.values(this.savedNotes).some((v) => String(v || '').trim() !== '');
+  }
+
+  /** 「N月修正」欄：已存修正值，與上個月生效值不同時標紅 */
+  savedAdjust(key: string, prevValue: string): { text: string; diff: boolean } {
+    const text = String(this.savedNotes[key] || '').trim();
+    if (!text) return { text: '', diff: false };
+    const prev = prevValue === '-' ? '' : prevValue.trim();
+    return { text, diff: text !== prev };
   }
 
   /** 當月修正欄預帶目前生效值（醫囑/藥物劑量），已存草稿的欄位不覆蓋；預帶不算未儲存變更 */
