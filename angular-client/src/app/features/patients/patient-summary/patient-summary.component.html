@@ -56,6 +56,9 @@
       <div class="ch-name">{{ p.name }}</div>
       <div class="ch-mrn">病歷號 {{ p.medicalRecordNumber }}</div>
       <div class="ch-spacer"></div>
+      <button class="btn-history-inline" (click)="showHistoryModal.set(true)" title="動向歷史">
+        <i class="fas fa-history"></i> 動向歷史
+      </button>
       <span *ngIf="loading()" class="loading-tag">載入中…</span>
     </div>
 
@@ -159,4 +162,12 @@
       <ng-template #noHist><div class="sub">無歷史醫囑紀錄</div></ng-template>
     </div>
   </div>
+
+  <!-- 動向歷史彈窗 -->
+  <app-patient-history-modal
+    *ngIf="showHistoryModal() && patient() as hp"
+    [patientId]="hp.id"
+    [patientName]="hp.name"
+    (close)="showHistoryModal.set(false)"
+  ></app-patient-history-modal>
 </div>

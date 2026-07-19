@@ -1,12 +1,13 @@
 // src/app/features/patients/patient-summary/patient-summary.component.ts
 // 病歷查詢頁籤：選一位病人，彙整顯示初透日期、感染標記(HBV/HCV)、通路、
 // 目前/歷史透析醫囑，以及近一年本院實際透析日期(次數+清單)。
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '@services/api.service';
 import { PatientStoreService, type Patient } from '@services/patient-store.service';
+import { PatientHistoryModalComponent } from '@app/components/dialogs/patient-history-modal/patient-history-modal.component';
 
 interface DialysisDate {
   date: string;
@@ -28,13 +29,28 @@ interface OrderHistoryEntry {
 @Component({
   selector: 'app-patient-summary',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, PatientHistoryModalComponent],
   templateUrl: './patient-summary.component.html',
   styleUrl: './patient-summary.component.css',
 })
-export class PatientSummaryComponent {
+export class PatientSummaryComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly patientStore = inject(PatientStoreService);
+
+  /** 從病人清單「病人履歷」鈕點入時預選的病人 */
+  @Input() initialPatientId: string | null = null;
+  @Output() seedConsumed = new EventEmitter<void>();
+
+  /** 動向歷史彈窗（原清單「動向歷史」鈕移入履歷內） */
+  readonly showHistoryModal = signal(false);
+
+  ngOnInit(): void {
+    if (this.initialPatientId) {
+      const p = this.patientStore.allPatients().find((x) => x.id === this.initialPatientId);
+      if (p) void this.selectPatient(p);
+      this.seedConsumed.emit();
+    }
+  }
 
   // 須注意/感染類標記(對應病人表單 DISEASES 清單)
   private readonly INFECTION_TAGS = ['HBV', 'HCV', 'HIV', 'RPR', 'BC肝?', 'C肝治癒', 'COVID', '隔離'];

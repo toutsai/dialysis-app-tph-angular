@@ -240,6 +240,22 @@
   color: #2a7a45;
 }
 
+.btn-history-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid #ccd5db;
+  border-radius: 6px;
+  background: #fff;
+  color: #607d8b;
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn-history-inline:hover {
+  background: #f5f7f8;
+}
+
 /* 透析來源身分（病人履歷） */
 .picker-item {
   gap: 8px;

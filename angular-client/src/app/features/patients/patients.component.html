@@ -169,8 +169,8 @@
                     <i class="fas fa-ambulance"></i> 轉急診
                   </button>
                   <div class="action-divider"></div>
-                  <button class="btn-icon btn-history" (click)="openHistoryModal(p.id)" title="動向歷史">
-                    <i class="fas fa-history"></i>
+                  <button class="btn-icon btn-history" (click)="openPatientProfile(p.id)" title="病人履歷">
+                    <i class="fas fa-address-card"></i>
                   </button>
                 </div>
               </div>
@@ -224,8 +224,8 @@
               <td class="col-shrink">{{ formatDate(p.deletedAt) }}</td>
               <td class="col-actions action-buttons" style="justify-content: center">
                 <button class="btn btn-restore" (click)="restorePatient(p.id)" [disabled]="isPageLocked()">復原</button>
-                <button class="btn-icon btn-history" (click)="openHistoryModal(p.id)" title="動向歷史">
-                  <i class="fas fa-history"></i>
+                <button class="btn-icon btn-history" (click)="openPatientProfile(p.id)" title="病人履歷">
+                  <i class="fas fa-address-card"></i>
                 </button>
               </td>
             </tr>
@@ -236,7 +236,10 @@
 
     <!-- 病歷查詢頁籤 (桌機+行動共用) -->
     <div *ngIf="activeTab() === 'query'" class="tab-content active">
-      <app-patient-summary></app-patient-summary>
+      <app-patient-summary
+        [initialPatientId]="profileSeedPatientId()"
+        (seedConsumed)="profileSeedPatientId.set(null)"
+      ></app-patient-summary>
     </div>
 
     <!-- Mobile card view -->
@@ -249,8 +252,8 @@
               <span class="freq-tag-card" [ngClass]="FREQ_COLOR_MAP[p.freq || '未設定']">{{ p.freq || '未設定' }}</span>
             </div>
             <div class="card-actions-header">
-              <button class="btn-icon btn-history" (click)="openHistoryModal(p.id)" title="動向歷史">
-                <i class="fas fa-history"></i>
+              <button class="btn-icon btn-history" (click)="openPatientProfile(p.id)" title="病人履歷">
+                <i class="fas fa-address-card"></i>
               </button><button *ngIf="isFirstDialysisPatient(p)" class="btn-icon btn-education" (click)="openEducationRecord(p)" title="初透衛教紀錄">
                 <i class="fas fa-chalkboard-teacher"></i>
               </button><button class="btn-icon btn-delete" (click)="deletePatient(p.id)" [disabled]="isDeleteLocked()" title="刪除">
@@ -317,8 +320,8 @@
                 <span class="freq-tag-card">{{ formatDate(p.deletedAt) || '未記錄日期' }}</span>
               </div>
               <div class="card-actions-header">
-                <button class="btn-icon btn-history" (click)="openHistoryModal(p.id)" title="歷程">
-                  <i class="fas fa-history"></i>
+                <button class="btn-icon btn-history" (click)="openPatientProfile(p.id)" title="病人履歷">
+                  <i class="fas fa-address-card"></i>
                 </button>
               </div>
             </div>

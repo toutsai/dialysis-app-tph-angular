@@ -1399,6 +1399,14 @@ export class PatientsComponent implements OnInit, OnDestroy {
     }
   }
 
+  // --- 病人履歷（病歷查詢分頁 + 預選病人） ---
+  readonly profileSeedPatientId = signal<string | null>(null);
+
+  openPatientProfile(patientId: string): void {
+    this.profileSeedPatientId.set(patientId);
+    this.activeTab.set('query');
+  }
+
   // --- History ---
   openHistoryModal(patientId: string): void {
     const allPatients = this.patientStore.allPatients();
