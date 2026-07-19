@@ -726,6 +726,15 @@ export class ReportingComponent implements AfterViewInit {
     this.monthlyTableRows.set([...sortedRows, dailyTotalsRow]);
   }
 
+  // 年度報表列順序（使用者指定）：HD門診/住院/急診 → SLED → PE(PP) → DFPP → Lipid；清單外的模式排最後
+  private readonly YEARLY_MODE_ORDER = ['HD', 'SLED', 'PE', 'PP', 'DFPP', 'Lipid'];
+  private readonly YEARLY_STATUS_ORDER = ['門診', '住院', '急診', '未知'];
+
+  private orderRank(order: string[], value: string): number {
+    const i = order.indexOf(value);
+    return i === -1 ? order.length : i;
+  }
+
   private processYearlyReport(allSchedules: any[], patientMap: Map<string, any>): void {
     const monthlyBreakdown: Record<string, number[]> = {};
     for (const dailyRecord of allSchedules) {
@@ -765,7 +774,10 @@ export class ReportingComponent implements AfterViewInit {
       monthlyCounts: Array(12).fill(0), yearlyTotal: 0,
     };
     const sortedRows = Object.values(reportMatrix).sort(
-      (a: any, b: any) => a.mode.localeCompare(b.mode) || a.status.localeCompare(b.status)
+      (a: any, b: any) =>
+        this.orderRank(this.YEARLY_MODE_ORDER, a.mode) - this.orderRank(this.YEARLY_MODE_ORDER, b.mode) ||
+        this.orderRank(this.YEARLY_STATUS_ORDER, a.status) - this.orderRank(this.YEARLY_STATUS_ORDER, b.status) ||
+        a.mode.localeCompare(b.mode) || a.status.localeCompare(b.status)
     );
     sortedRows.forEach((row: any) => {
       row.monthlyCounts.forEach((count: number, index: number) => {
