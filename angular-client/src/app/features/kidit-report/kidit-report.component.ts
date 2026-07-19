@@ -1,6 +1,7 @@
 import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { ApiConfigService } from '@services/api-config.service';
 import { PatientStoreService } from '@services/patient-store.service';
 import { kiditService } from '@/services/kiditService';
@@ -26,6 +27,7 @@ interface DayData {
 })
 export class KiditReportComponent implements OnInit {
   private readonly patientStore = inject(PatientStoreService);
+  private readonly route = inject(ActivatedRoute);
 
   readonly currentYear = signal(new Date().getFullYear());
   readonly currentMonth = signal(new Date().getMonth() + 1);
@@ -59,6 +61,21 @@ export class KiditReportComponent implements OnInit {
   readonly emptySlots = computed(() => Array(this.firstDayOffset()));
 
   ngOnInit(): void {
+    // 從「我的今日病人・本院初透建檔」點入：?openPatient=<id>&eventDate=<YYYY-MM-DD>
+    // 切到事件日所在月份並自動開啟該病人的建檔視窗
+    const qp = this.route.snapshot.queryParamMap;
+    const openPatient = qp.get('openPatient');
+    const eventDate = qp.get('eventDate');
+    if (openPatient && eventDate) {
+      const [y, m] = eventDate.split('-').map(Number);
+      if (y && m >= 1 && m <= 12) {
+        this.currentYear.set(y);
+        this.currentMonth.set(m);
+      }
+      this.fetchData();
+      this.openPendingRegTarget({ patientId: openPatient, lastEventDate: eventDate });
+      return;
+    }
     this.fetchData();
   }
 

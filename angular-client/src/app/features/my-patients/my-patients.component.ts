@@ -387,6 +387,18 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
     this.router.navigate(['/kidit-report']);
   }
 
+  /** 點列跳到 KiDit 申報工作站並自動開啟該病人最近事件日的建檔視窗 */
+  openFirstDiaTarget(row: any): void {
+    if (!row.lastEventDate) {
+      alert('該病人尚無 KiDit 事件（工作日誌尚未有病人動態），請先於工作日誌新增動態後再建檔。');
+      return;
+    }
+    this.showFirstDiaModal.set(false);
+    this.router.navigate(['/kidit-report'], {
+      queryParams: { openPatient: row.patientId, eventDate: row.lastEventDate },
+    });
+  }
+
   firstDiaMissingLabel(row: any): string {
     const missing: string[] = [];
     if (!row.hasProfile) missing.push('病患資料');

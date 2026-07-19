@@ -311,7 +311,8 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let r of firstDiaRows()" [class.ct-row-mine]="r.mine">
+            <tr *ngFor="let r of firstDiaRows()" class="ct-row" [class.ct-row-mine]="r.mine"
+                (click)="openFirstDiaTarget(r)" title="點擊開啟 KiDit 建檔視窗">
               <td>{{ r.name }}</td>
               <td>{{ r.medicalRecordNumber || '—' }}</td>
               <td>{{ r.hospitalFirstDialysisDate || '—' }}</td>
