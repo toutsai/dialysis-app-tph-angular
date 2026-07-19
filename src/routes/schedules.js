@@ -494,9 +494,29 @@ router.get('/:date', authenticate, (req, res) => {
 
     let schedule = db.prepare(`SELECT * FROM schedules WHERE date = ?`).get(date)
     let scheduleData = schedule ? JSON.parse(schedule.schedule || '{}') : {}
+    const todayStr = getTaipeiTodayString()
 
-    // 如果排程不存在或為空，從總表自動生成
-    if (!schedule || Object.keys(scheduleData).length === 0) {
+    // 過去日期是歷史事實：查無資料時改查歸檔表，絕不從「現在的總表」生成寫回
+    // （歸檔 cron 會把昨天以前的排程搬到 archived_schedules 並從 schedules 刪除，
+    //   舊邏輯在此情況會用今日總表憑空編造該日排程＝偽造歷史，且與歸檔列並存干擾報表）
+    if (date < todayStr) {
+      if (!schedule || Object.keys(scheduleData).length === 0) {
+        const archived = db.prepare(`SELECT * FROM archived_schedules WHERE date = ?`).get(date)
+        if (archived) {
+          return res.json({
+            id: archived.id,
+            date: archived.date,
+            schedule: JSON.parse(archived.schedule || '{}'),
+            syncMethod: 'archived',
+            lastModifiedBy: JSON.parse(archived.last_modified_by || '{}'),
+            version: null,
+            createdAt: archived.created_at,
+            updatedAt: archived.updated_at
+          })
+        }
+      }
+      // 有「非空」列照常回；空列視同查無（優先信歸檔，空殼多為殘留）；兩表皆無則落到下方的空回應
+    } else if (!schedule || Object.keys(scheduleData).length === 0) {
       console.log(`[Schedules] 排程 ${date} 不存在或為空，從總表自動生成...`)
 
       // 取得總表

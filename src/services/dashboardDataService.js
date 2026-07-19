@@ -180,6 +180,11 @@ function getScheduleForDate(db, date) {
     return { row, schedule, source: 'schedules' }
   }
 
+  // 過去日期查無資料就是無資料：不從今日總表編造（偽造歷史）、不寫回
+  if (date < getTaipeiTodayString()) {
+    return { row, schedule: {}, source: 'empty' }
+  }
+
   const masterDoc = db.prepare("SELECT schedule FROM base_schedules WHERE id = 'MASTER_SCHEDULE'").get()
   if (!masterDoc) return { row, schedule: {}, source: 'empty' }
 
