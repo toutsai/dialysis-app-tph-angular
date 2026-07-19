@@ -85,6 +85,7 @@ export class MedAdjustmentComponent implements OnInit {
     { key: 'df', label: 'DF 透析液流速' },
     { key: 'time', label: '透析時間' },
     { key: 'ak', label: 'AK 人工腎臟' },
+    { key: 'dialysateCa', label: '透析液鈣離子 (Ca)' },
   ];
   // 下半每月報告的項目與順序：比照檢驗報告管理頁 prioritizedLabItems（值取當月最後一次報告）
   readonly LAB_ROWS = [
@@ -278,6 +279,7 @@ export class MedAdjustmentComponent implements OnInit {
         text = m ? `${h}時${m}分` : `${h}時`;
       } else if (latest.dialysisTimeText) text = String(latest.dialysisTimeText);
     } else if (rowKey === 'ak') text = String(latest.ak ?? latest.artificialKidney ?? '-');
+    else if (rowKey === 'dialysateCa') text = String(latest.dialysateCa ?? latest.dialysate ?? '-');
     return { text: text || '-', changed };
   }
 
