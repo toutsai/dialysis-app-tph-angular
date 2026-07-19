@@ -1,9 +1,9 @@
 // 資料庫備份工具
 import { copyFileSync, mkdirSync, existsSync, statSync, readdirSync, unlinkSync } from 'fs'
-import { fileURLToPath } from 'url'
+import { fileURLToPath, pathToFileURL } from 'url'
 import { dirname, join } from 'path'
 import { v4 as uuidv4 } from 'uuid'
-import { getDatabase } from '../db/init.js'
+import { getDatabase, initDatabase } from '../db/init.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -28,19 +28,21 @@ export async function createBackup(type = 'auto') {
     mkdirSync(BACKUP_DIR, { recursive: true })
   }
 
-  // 產生備份檔名
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  // 產生備份檔名（本地時間，與 DB 時間戳慣例一致）
+  const timestamp = new Date().toLocaleString('sv-SE').replace(/[:]/g, '-').replace(' ', 'T')
   const backupFileName = `dialysis_${type}_${timestamp}.db`
   const backupPath = join(BACKUP_DIR, backupFileName)
 
-  // 複製資料庫檔案
-  copyFileSync(DB_PATH, backupPath)
+  // 用 SQLite 線上備份 API 產生一致性快照（含 WAL 未併回主檔的資料）。
+  // ⚠️ 勿改回 copyFileSync：對運行中的 DB 做檔案複製會漏掉 WAL 資料、且可能拿到不一致快照
+  //（舊版即此問題，2026-07-20 修復）。
+  const db = getDatabase()
+  await db.backup(backupPath)
 
   // 取得檔案大小
   const stats = statSync(backupPath)
 
   // 記錄備份歷史
-  const db = getDatabase()
   db.prepare(`
     INSERT INTO backup_history (id, backup_file, backup_type, file_size, created_at)
     VALUES (?, ?, ?, ?, datetime('now', 'localtime'))
@@ -92,6 +94,8 @@ async function cleanupOldBackups(type) {
 /**
  * 還原備份
  * @param {string} backupFileName - 備份檔案名稱
+ * ⚠️ 已知限制（2026-07-20 註記）：在 server 運行中直接覆蓋 DB 檔會與既有連線/WAL 衝突，
+ * 正確流程是停 server → 覆蓋 → 刪除舊 -wal/-shm → 重啟。此函式僅供停機維護時使用。
  */
 export async function restoreBackup(backupFileName) {
   const backupPath = join(BACKUP_DIR, backupFileName)
@@ -148,9 +152,12 @@ export function scheduleAutoBackup() {
 }
 
 // 如果直接執行此檔案，執行手動備份
-if (import.meta.url === `file://${process.argv[1]}`) {
+//（用 pathToFileURL 比對：舊版字串比對在 Windows 反斜線路徑下永遠不成立，npm run backup 曾因此靜默無作用）
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  initDatabase()
   createBackup('manual').then(() => {
     console.log('手動備份完成')
+    process.exit(0)
   }).catch(err => {
     console.error('備份失敗:', err)
     process.exit(1)
