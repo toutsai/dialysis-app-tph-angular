@@ -1698,18 +1698,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     });
   }
 
-  async autoAssignNurseTeamsExperimental(): Promise<void> {
-    if (this.isPageLocked()) {
-      this.showAlert('操作失敗', '頁面已鎖定，無法執行新版自動分組。');
-      return;
-    }
-    await this.autoAssignConfig.fetchConfig();
-    this.showConfirm('確認操作', '此操作將會以新版邏輯覆蓋現有的護理師分組，您確定要繼續嗎？', () => {
-      this.executeAutoAssignment(true);
-    });
-  }
-
-
   handleConfirm(): void {
     if (typeof this.onConfirmAction === 'function') this.onConfirmAction();
     this.isConfirmDialogVisible.set(false);
