@@ -1,5 +1,6 @@
 import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { nameWithModeFreq } from '@/utils/patientDisplay';
 import { FormsModule } from '@angular/forms';
 import * as XLSX from 'xlsx';
 import { AuthService } from '@app/core/services/auth.service';
@@ -640,8 +641,8 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
       for (const dayIndex of freqDays) {
         const daySlotKey = `${slotKey}-${dayIndex}`;
         if (occupiedSlots.has(daySlotKey)) {
-          const existingPatientName = (pMap.get(occupiedSlots.get(daySlotKey)!) as any)?.name || '未知病人';
-          const newPatientName = (pMap.get(patientId) as any)?.name || '未知病人';
+          const existingPatientName = nameWithModeFreq(pMap.get(occupiedSlots.get(daySlotKey)!));
+          const newPatientName = nameWithModeFreq(pMap.get(patientId));
           validationResult.duplicates.push(
             `床位衝突: ${newPatientName} 與 ${existingPatientName} 在 ${this.WEEKDAYS[dayIndex]} 的同一個床位/班別中有時間重疊。`
           );
@@ -659,7 +660,7 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
         !p.isDiscontinued
     );
     unassignedCrucialPatients.forEach((p: any) =>
-      validationResult.unassignedCrucial.push(`${p.name} (${p.status === 'ipd' ? '住院' : '急診'})`)
+      validationResult.unassignedCrucial.push(`${nameWithModeFreq(p)} (${p.status === 'ipd' ? '住院' : '急診'})`)
     );
 
     for (const patientId in schedule) {
@@ -668,7 +669,7 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
         const patient = pMap.get(patientId) as any;
         if (patient && patient.freq && patient.freq !== ruleData.freq) {
           validationResult.freqMismatch.push(
-            `${patient.name} - 規則頻率: ${ruleData.freq}, 病人設定頻率: ${patient.freq} (建議同步)`
+            `${nameWithModeFreq(patient)} - 規則頻率: ${ruleData.freq}, 病人設定頻率: ${patient.freq} (建議同步)`
           );
         }
       }

@@ -1,6 +1,7 @@
 // Standalone 版：已移除 Firebase
 import { Component, inject, signal, computed, OnInit, OnDestroy, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { nameWithModeFreq } from '@/utils/patientDisplay';
 import { FormsModule } from '@angular/forms';
 import * as XLSX from 'xlsx';
 import { ApiConfigService } from '@services/api-config.service';
@@ -707,8 +708,9 @@ export class WeeklyComponent implements OnInit, OnDestroy {
             const patient = this.patientMap().get(slotData.patientId) as any;
             if (patient) {
               const shiftNames: Record<number, string> = { 0: '早班', 1: '午班', 2: '晚班' };
-              if (!dayPatients.has(patient.name)) dayPatients.set(patient.name, []);
-              dayPatients.get(patient.name)!.push(`${bedInfo}${shiftNames[shiftIndex] || '未知班次'}`);
+              const patientLabel = nameWithModeFreq(patient);
+              if (!dayPatients.has(patientLabel)) dayPatients.set(patientLabel, []);
+              dayPatients.get(patientLabel)!.push(`${bedInfo}${shiftNames[shiftIndex] || '未知班次'}`);
             }
           }
         }
@@ -723,9 +725,9 @@ export class WeeklyComponent implements OnInit, OnDestroy {
       if (slotData?.patientId) scheduledIds.add(slotData.patientId);
     }
     this.allPatients().filter((p: any) => !scheduledIds.has(p.id) && (p.status === 'ipd' || p.status === 'er') && !p.isDeleted && !p.isDiscontinued)
-      .forEach((p: any) => validationResult.unassignedCrucial.push(`${p.name} (${p.status === 'ipd' ? '住院' : '急診'})`));
+      .forEach((p: any) => validationResult.unassignedCrucial.push(`${nameWithModeFreq(p)} (${p.status === 'ipd' ? '住院' : '急診'})`));
     this.allPatients().filter((p: any) => !scheduledIds.has(p.id) && !p.isDeleted && !p.isDiscontinued)
-      .forEach((p: any) => validationResult.unassignedAll.push(`${p.name} (${p.status === 'opd' ? '門診' : p.status === 'ipd' ? '住院' : p.status === 'er' ? '急診' : '未知'})`));
+      .forEach((p: any) => validationResult.unassignedAll.push(`${nameWithModeFreq(p)} (${p.status === 'opd' ? '門診' : p.status === 'ipd' ? '住院' : p.status === 'er' ? '急診' : '未知'})`));
     const patientSchedules = new Map<string, Set<number>>();
     for (const slotId in this.weekScheduleMap()) {
       const slotData = this.weekScheduleMap()[slotId];
@@ -744,7 +746,7 @@ export class WeeklyComponent implements OnInit, OnDestroy {
       if (scheduledDays.size !== expectedDays.size || ![...scheduledDays].every(d => expectedDays.has(d))) {
         const actualDaysText = [...scheduledDays].sort().map(d => this.WEEKDAYS[d].replace('星期', '')).join('');
         const expectedDaysText = [...expectedDays].sort().map(d => this.WEEKDAYS[d].replace('星期', '')).join('');
-        validationResult.freqMismatch.push(`${patient.name} (頻率: ${patient.freq}) - 實際排程: 週${actualDaysText || '無'}, 應排程: 週${expectedDaysText}`);
+        validationResult.freqMismatch.push(`${nameWithModeFreq(patient)} - 實際排程: 週${actualDaysText || '無'}, 應排程: 週${expectedDaysText}`);
       }
     }
     let issueMessage = '';

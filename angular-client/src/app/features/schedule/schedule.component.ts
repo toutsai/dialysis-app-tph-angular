@@ -84,6 +84,7 @@ import {
   formatVersionConflictMessage,
   type VersionConflictInfo,
 } from '@/utils/versionConflict';
+import { nameWithModeFreq } from '@/utils/patientDisplay';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1187,7 +1188,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
         if (tempScheduled[slot.patientId]) {
           const patient = this.patientMap().get(slot.patientId);
           const name = (patient as Record<string, unknown>)?.['name'] as string;
-          if (name) duplicateNames.add(name);
+          if (name) duplicateNames.add(nameWithModeFreq(patient));
         }
         tempScheduled[slot.patientId] = true;
       }
@@ -1206,7 +1207,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       if (!freq) continue;
       const expectedDays = this.freqToDays[freq];
       if (expectedDays && !expectedDays.includes(today)) {
-        freqMismatch.push(`${patient['name']} (頻率: ${freq})`);
+        freqMismatch.push(nameWithModeFreq(patient));
       }
     }
     if (freqMismatch.length > 0) {
@@ -1224,7 +1225,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       });
     if (unassignedCritical.length > 0) {
       const names = unassignedCritical
-        .map((p: any) => `${p.name} (${statusMap[p.status] || p.status}, ${p.freq})`)
+        .map((p: any) => `${nameWithModeFreq(p)} (${statusMap[p.status] || p.status})`)
         .join('\n- ');
       warnings.push(`【重要病人未排班】(住院/急診):\n- ${names}`);
     }
@@ -1240,7 +1241,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       });
     if (unassignedToday.length > 0) {
       const names = unassignedToday
-        .map((p: any) => `${p.name} (${p.freq})`)
+        .map((p: any) => nameWithModeFreq(p))
         .join('\n- ');
       warnings.push(`【當日應排但未排】(門診):\n- ${names}`);
     }
