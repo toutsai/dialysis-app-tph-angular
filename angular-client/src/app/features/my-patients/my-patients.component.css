@@ -362,6 +362,12 @@
 .btn-memo-icon:hover {
   background-color: #e7f1ff;
 }
+.btn-edu-icon {
+  color: #8e44ad;
+}
+.btn-edu-icon:hover {
+  background-color: #f3e8fb;
+}
 .card-section {
   padding: 0.75rem 1rem;
   border-bottom: 1px solid #f1f3f5;

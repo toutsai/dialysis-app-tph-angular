@@ -190,8 +190,10 @@ export class PatientsComponent implements OnInit, OnDestroy {
   readonly showEducationDialog = signal(false);
   readonly educationPatient = signal<{ id: string; name: string } | null>(null);
 
+  // 初透衛教圖示僅限門診(opd)病人；住院(ipd)/急診(er)雖標「首透」也不顯示
+  // （與「本院初透」KiDit 圖示 hospitalFirstDialysis 無關，勿混用）
   isFirstDialysisPatient(p: any): boolean {
-    return !!p?.patientStatus?.isFirstDialysis?.active;
+    return !!p?.patientStatus?.isFirstDialysis?.active && p?.status === 'opd';
   }
 
   openEducationRecord(p: any): void {

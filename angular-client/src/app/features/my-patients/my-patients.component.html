@@ -105,6 +105,14 @@
               >
                 <i class="fas fa-comment-medical"></i>
               </button>
+              <button
+                *ngIf="patient.isEduTarget"
+                class="btn-icon btn-edu-icon"
+                title="初透衛教紀錄"
+                (click)="openCardEduRecord(patient.patientId)"
+              >
+                <i class="fas fa-chalkboard-teacher"></i>
+              </button>
             </div>
           </div>
 

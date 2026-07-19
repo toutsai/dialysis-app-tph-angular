@@ -129,7 +129,7 @@
                   <i class="fas fa-star status-icon-first" [class.status-off]="!p.patientStatus?.isFirstDialysis?.active"
                      (click)="openStatusEdit(p, 'isFirstDialysis', $event)"
                      [title]="p.patientStatus?.isFirstDialysis?.active ? ('首透: ' + (p.patientStatus.isFirstDialysis.date || '無日期')) : '首透（未設定，點擊編輯）'"></i>
-                  <i *ngIf="p.patientStatus?.isFirstDialysis?.active" class="fas fa-chalkboard-teacher status-icon-education"
+                  <i *ngIf="isFirstDialysisPatient(p)" class="fas fa-chalkboard-teacher status-icon-education"
                      (click)="openEducationRecord(p); $event.stopPropagation()" title="初透衛教紀錄"></i>
                   <i class="fas fa-hospital status-icon-hospital-first" [class.status-off]="!p.patientStatus?.hospitalFirstDialysis?.active"
                      (click)="openStatusEdit(p, 'hospitalFirstDialysis', $event)"

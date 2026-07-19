@@ -72,6 +72,9 @@ interface MyPatientItem {
     targetDate?: string;
     [key: string]: unknown;
   }[];
+  // 是否為「初透衛教對象」（沿用 openEduModal 同一 predicate，非主護簽核完成者），
+  // 於 fetchMyPatientData 建卡時一併算好存欄位，模板不重算。
+  isEduTarget?: boolean;
 }
 
 interface SelectableUser {
@@ -274,6 +277,28 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
   readonly eduError = signal('');
   readonly eduDialogPatient = signal<any | null>(null);
 
+  // 病人卡「初透衛教」圖示：patientId -> education-list row（未完成者），供卡片 icon 顯示/點擊直達用
+  private eduRowsMap = new Map<string, any>();
+  readonly eduTargetPatientIds = signal<Set<string>>(new Set());
+
+  /** 套用 /patients/education-list 回傳列，統一算出「衛教對象」= 未主護簽核完成(!completed)。
+   *  openEduModal 與卡片圖示共用同一份資料，勿各自重算 predicate。 */
+  private applyEducationList(rows: any[]): void {
+    const targets = rows.filter((r) => !r.completed);
+    this.eduRowsMap = new Map(targets.map((r) => [r.patientId, r]));
+    this.eduTargetPatientIds.set(new Set(this.eduRowsMap.keys()));
+  }
+
+  /** 供卡片圖示使用：僅需重新整理衛教對象清單（不開清單彈窗時，如關閉單人視窗後回補）。 */
+  private async loadEduTargets(): Promise<void> {
+    try {
+      const list = await localApi.get('/patients/education-list');
+      this.applyEducationList(Array.isArray(list) ? list : []);
+    } catch (error) {
+      console.error('載入初透衛教對象清單失敗:', error);
+    }
+  }
+
   readonly showFirstDiaModal = signal(false);
   readonly isLoadingFirstDia = signal(false);
   readonly firstDiaRows = signal<any[]>([]);
@@ -309,6 +334,7 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
         localApi.get('/nursing/patient-care'),
       ]);
       const rows: any[] = Array.isArray(list) ? list : [];
+      this.applyEducationList(rows);
       const assignments: any[] = (care as any)?.assignments || [];
       const myCare = assignments.find(
         (a) => a.nurseId === target.userId || String(a.nurseName || '').trim() === target.userName,
@@ -345,9 +371,20 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
     this.eduDialogPatient.set(row);
   }
 
+  /** 病人卡「初透衛教」圖示點擊：直接開啟該病人的衛教紀錄視窗，不需先開清單彈窗選人 */
+  openCardEduRecord(patientId: string): void {
+    const row = this.eduRowsMap.get(patientId);
+    if (row) this.openEduRecord(row);
+  }
+
   async closeEduRecord(): Promise<void> {
     this.eduDialogPatient.set(null);
-    if (this.showEduModal()) await this.openEduModal();
+    if (this.showEduModal()) {
+      await this.openEduModal();
+    } else {
+      // 關窗後可能剛完成主護簽核，重新整理卡片圖示對象清單
+      await this.loadEduTargets();
+    }
   }
 
   /** 本院初透基本資料建立：僅列組長已標記「本院初透」且 KiDit 未建檔完成者（負責人=標記日照顧護理師） */
@@ -466,6 +503,9 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
         this.patientListByShift.set({});
         return;
       }
+
+      // 0. 併行載入初透衛教對象清單（供病人卡圖示用），與其他資料一起等，避免序列化多一輪往返
+      const eduTargetsPromise = this.loadEduTargets();
 
       // 1. Ensure patients are loaded
       await this.patientStore.fetchPatientsIfNeeded();
@@ -653,6 +693,8 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
       // 8. Build final patient items with injection data
       // 當天星期幾 (1=週一 ... 7=週日)，用於從輪替醫囑解析「當次」AK
       const targetDow = getTaipeiWeekdayIndex(targetDate) + 1;
+      await eduTargetsPromise; // 確保衛教對象清單已就緒，供下方 isEduTarget 判定
+      const eduTargetIds = this.eduTargetPatientIds();
       for (const item of pendingItems) {
         const patientMemos = feedMessages
           .filter(
@@ -696,6 +738,7 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
           },
           injections,
           memos: patientMemos,
+          isEduTarget: eduTargetIds.has(item.slotData.patientId),
         };
 
         for (const role of item.roles) {
