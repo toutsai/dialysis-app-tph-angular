@@ -92,6 +92,16 @@ export class MedAdjustmentComponent implements OnInit {
     'LDL', 'UricAcid', 'Albumin', 'ALT', 'Na', 'K', 'P', 'Ca', 'CaXP', 'iPTH',
     'BUN', 'PostBUN', 'Creatinine', 'Kt/V', 'URR',
   ];
+  /** 依上半頁籤強化下半報告的對應檢驗欄位 */
+  private readonly TAB_FOCUS_LABS: Record<string, string[]> = {
+    orders: ['Ca', 'URR', 'Kt/V'],
+    anemia: ['Hb', 'Ferritin', 'TSAT'],
+    capho: ['Ca', 'P', 'CaXP', 'iPTH'],
+  };
+
+  isFocusLab(item: string): boolean {
+    return this.TAB_FOCUS_LABS[this.activeTab]?.includes(item) ?? false;
+  }
 
   // --- 病人資料 ---
   private historyRows: any[] = [];
