@@ -65,6 +65,9 @@ export class MedAdjustmentComponent implements OnInit {
     return list;
   });
 
+  // 下半累積報告的月份列：新→舊（上半月份軸維持舊→新，兩者刻意不同向）
+  readonly reportMonths = computed(() => [...this.months()].reverse());
+
   // --- 頁籤 ---
   activeTab: 'orders' | 'anemia' | 'capho' = 'orders';
 

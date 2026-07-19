@@ -121,7 +121,7 @@
             </tr>
           </thead>
           <tbody>
-            @for (m of months(); track m) {
+            @for (m of reportMonths(); track m) {
               <tr>
                 <td class="sticky-col row-label">{{ m }}</td>
                 @for (item of LAB_ROWS; track item) {
