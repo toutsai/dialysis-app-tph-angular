@@ -26,6 +26,8 @@ export class KiditDetailModalComponent implements OnChanges {
   @Input() events: any[] = [];
   /** 開窗時自動選定的病人（例如從待建檔清單點入），null=不預選 */
   @Input() initialPatientId: string | null = null;
+  /** 開窗時直接切到的分頁（配合 initialPatientId 直達建檔），null=預設當日動態 */
+  @Input() initialTab: TabKey | null = null;
   @Output() closeEvent = new EventEmitter<void>();
 
   activeTab: TabKey = 'movement';
@@ -75,7 +77,10 @@ export class KiditDetailModalComponent implements OnChanges {
   private applyInitialSelection(): void {
     if (!this.initialPatientId || this.selectedPatientId) return;
     const target = this.localEvents.find(e => e.patientId === this.initialPatientId);
-    if (target) this.selectPatient(target);
+    if (target) {
+      this.selectPatient(target);
+      if (this.initialTab) this.activeTab = this.initialTab;
+    }
   }
 
   private syncSelectionRefs(): void {

@@ -53,6 +53,8 @@ export class KiditReportComponent implements OnInit {
   readonly selectedEvents = signal<any[]>([]);
   /** 從待建檔清單點入時要預選的病人；月曆正常開窗為 null */
   readonly modalInitialPatientId = signal<string | null>(null);
+  /** 從待建檔清單點入時直達的分頁（registration=KiDit 建檔）；正常開窗為 null */
+  readonly modalInitialTab = signal<'movement' | 'vascular' | 'registration' | null>(null);
 
   readonly firstDayOffset = computed(() =>
     new Date(this.currentYear(), this.currentMonth() - 1, 1).getDay()
@@ -132,6 +134,7 @@ export class KiditReportComponent implements OnInit {
 
   openModal(day: DayData): void {
     this.modalInitialPatientId.set(null);
+    this.modalInitialTab.set(null);
     this.selectedDate.set(day.dateStr);
     this.selectedEvents.set(day.events);
     this.showModal.set(true);
@@ -317,6 +320,7 @@ export class KiditReportComponent implements OnInit {
     try {
       const log = await kiditService.fetchDayLog(row.lastEventDate);
       this.modalInitialPatientId.set(row.patientId || null);
+      this.modalInitialTab.set('registration');
       this.selectedDate.set(row.lastEventDate);
       this.selectedEvents.set(log?.events || []);
       this.showPendingRegModal.set(false);
