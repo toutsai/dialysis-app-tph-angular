@@ -251,11 +251,28 @@ export class MedAdjustmentComponent implements OnInit {
         Object.assign(bucket, report.data || {});
         this.labByMonth.set(month, bucket);
       }
+      this.prefillAdjustNotes();
     } catch (error) {
       console.error('載入病人資料失敗:', error);
     } finally {
       this.isLoading.set(false);
       this.dataRevision.update((v) => v + 1);
+    }
+  }
+
+  /** 當月修正欄預帶目前生效值（醫囑/藥物劑量），已存草稿的欄位不覆蓋；預帶不算未儲存變更 */
+  private prefillAdjustNotes(): void {
+    for (const row of this.ORDER_ROWS) {
+      if (!this.adjustNotes[row.key]) {
+        const text = this.orderCell(row.key, this.currentMonth).text;
+        if (text !== '-') this.adjustNotes[row.key] = text;
+      }
+    }
+    for (const drug of [...this.ANEMIA_DRUGS, ...this.CAPHO_DRUGS]) {
+      if (!this.adjustNotes[drug.label]) {
+        const text = this.drugCell(drug, this.currentMonth);
+        if (text !== '-') this.adjustNotes[drug.label] = text;
+      }
     }
   }
 
