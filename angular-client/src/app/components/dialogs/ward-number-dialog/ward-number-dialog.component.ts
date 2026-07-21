@@ -13,6 +13,8 @@ export class WardNumberDialogComponent implements OnInit, AfterViewChecked {
   @Input() title = '';
   @Input() message = '';
   @Input() currentValue = '';
+  @Input() placeholder = '例如：5B12';
+  @Input() maxLength = 20;
   @Output() confirm = new EventEmitter<string>();
   @Output() cancel = new EventEmitter<void>();
 

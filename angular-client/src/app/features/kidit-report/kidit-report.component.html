@@ -24,6 +24,9 @@
       <button class="action-btn vascular-btn" (click)="openVascularList()" [disabled]="isLoading()">
         <i class="fas fa-syringe"></i> 當月血管通路事件清單
       </button>
+      <button class="action-btn quarterly-btn" (click)="openQuarterlyModal()" [disabled]="isLoading()">
+        <i class="fas fa-file-csv"></i> 季度造管 CSV
+      </button>
       <button class="action-btn firstdia-btn" (click)="openFirstDialysisList()" [disabled]="isLoading()">
         <i class="fas fa-user-plus"></i> 當月初次透析名單
       </button>
@@ -120,6 +123,7 @@
               <th>日期</th>
               <th>處置</th>
               <th>處置院所</th>
+              <th>來源</th>
             </tr>
           </thead>
           <tbody>
@@ -129,6 +133,9 @@
               <td>{{ r.date || '—' }}</td>
               <td>{{ r.interventions || '—' }}</td>
               <td>{{ r.location || '—' }}</td>
+              <td>
+                <span class="va-source-tag" [class.va-source-nurse]="r.source === '主護填寫'">{{ r.source || '—' }}</span>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -259,6 +266,12 @@
       </div>
     </div>
   </div>
+
+  <!-- 季度造管 CSV 工作檯 -->
+  <app-kidit-vascular-quarterly
+    *ngIf="showQuarterlyModal()"
+    (closeEvent)="closeQuarterlyModal()"
+  ></app-kidit-vascular-quarterly>
 
   <!-- Detail Modal -->
   <app-kidit-detail-modal

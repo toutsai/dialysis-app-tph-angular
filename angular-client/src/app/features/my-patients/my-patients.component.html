@@ -34,6 +34,9 @@
     <button class="care-tool-btn firstdia" (click)="openFirstDiaModal()">
       <i class="fas fa-user-plus"></i> 負責本院初透基本資料建立
     </button>
+    <button class="care-tool-btn va" (click)="openVaModal()">
+      <i class="fas fa-syringe"></i> 血管通路事件填寫
+    </button>
     <button class="care-tool-btn kidit" disabled title="規劃中，之後開放">
       <i class="fas fa-file-medical"></i> 照護病人 KiDit 申報欄位填寫（規劃中）
     </button>
@@ -112,6 +115,19 @@
                 (click)="openCardEduRecord(patient.patientId)"
               >
                 <i class="fas fa-chalkboard-teacher"></i>
+              </button>
+              <!-- 血管通路事件：不分身分都顯示（衛教圖示只屬門診）；有被退回事件時亮紅點 -->
+              <button
+                class="btn-icon btn-va-icon"
+                title="血管通路事件"
+                (click)="openCardVaRecord(patient)"
+              >
+                <i class="fas fa-syringe"></i>
+                <span
+                  *ngIf="vaRejectedIds().has(patient.patientId)"
+                  class="va-reject-dot"
+                  title="有被退回的血管通路事件，請點入修正"
+                ></span>
               </button>
             </div>
           </div>
@@ -339,6 +355,50 @@
     </div>
   </div>
 
+  <!-- 血管通路事件填寫清單彈窗 -->
+  <div class="ct-modal-overlay" *ngIf="showVaModal()" (click)="closeVaModal()">
+    <div class="ct-modal" (click)="$event.stopPropagation()">
+      <div class="ct-modal-header">
+        <h3>
+          <i class="fas fa-syringe"></i> 血管通路事件填寫
+          <span class="ct-count" *ngIf="!isLoadingVa()">（{{ vaRows().length }} 位）</span>
+        </h3>
+        <button class="ct-close-btn" (click)="closeVaModal()" title="關閉"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="ct-modal-body">
+        <p class="ct-hint">
+          <i class="fas fa-info-circle"></i>
+          名單＝我的照護病人（使用者管理・照護清單）＋今日我負責班別的病人；點擊病人可檢視/填寫血管通路事件。
+          儲存後將送組長於工作日誌確認；「已退回」者請點入修正後重新送出。
+        </p>
+        <div *ngIf="isLoadingVa()" class="ct-loading"><div class="spinner"></div><p>正在彙整事件狀態...</p></div>
+        <div *ngIf="!isLoadingVa() && vaError()" class="ct-empty">{{ vaError() }}</div>
+        <div *ngIf="!isLoadingVa() && !vaError() && vaRows().length === 0" class="ct-empty">
+          目前沒有照護中或今日負責的病人。
+        </div>
+        <table *ngIf="!isLoadingVa() && vaRows().length > 0" class="ct-table">
+          <thead>
+            <tr>
+              <th>病人</th><th>病歷號</th><th>該次負責</th><th>事件狀態</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let r of vaRows()" class="ct-row" (click)="openVaRecord(r)">
+              <td>{{ r.patientName }}</td>
+              <td>{{ r.medicalRecordNumber || '—' }}</td>
+              <td><span *ngIf="r.todayMine" class="ct-badge today">今日負責</span></td>
+              <td>
+                <span *ngIf="r.pendingCount > 0" class="ct-badge pending">待確認 {{ r.pendingCount }}</span>
+                <span *ngIf="r.rejectedCount > 0" class="ct-badge undone">已退回 {{ r.rejectedCount }}</span>
+                <span *ngIf="r.pendingCount === 0 && r.rejectedCount === 0" class="ct-none">—</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- 初透衛教紀錄視窗 -->
   <app-education-record-dialog
     *ngIf="eduDialogPatient() as p"
@@ -350,4 +410,12 @@
     [canEdit]="canEditEducation()"
     (close)="closeEduRecord()"
   ></app-education-record-dialog>
+
+  <!-- 血管通路事件視窗（單一病人） -->
+  <app-vascular-access-event-dialog
+    *ngIf="vaDialogPatient() as vp"
+    [patientId]="vp.patientId"
+    [patientName]="vp.patientName"
+    (close)="closeVaRecord()"
+  ></app-vascular-access-event-dialog>
 </div>

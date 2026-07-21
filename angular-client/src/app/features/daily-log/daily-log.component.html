@@ -311,6 +311,51 @@
           <h2>血管通路阻塞</h2>
           <button *ngIf="!isPageLocked" (click)="addRow('vascularAccessLog')" class="add-row-btn-header">新增處置</button>
         </div>
+
+        <!-- 主護填寫事件（vascular_access_events 新表）：確認/退回直接打事件 API，不經日誌整包 PUT。
+             操作鈕只看 editor 權限、刻意不掛 isPageLocked——歷史鎖只鎖下方 JSON 手動區，
+             組長常隔天才確認前一日事件（刻意設計）。 -->
+        <div *ngIf="vascularEvents().length > 0" class="vascular-events-block">
+          <div class="vascular-events-subtitle">主護填寫事件</div>
+          <div class="dynamic-table-container">
+            <table class="dynamic-table vascular-events-table">
+              <thead>
+                <tr>
+                  <th class="col-date">日期</th>
+                  <th class="col-name">姓名</th>
+                  <th class="col-mrn">病歷號</th>
+                  <th class="col-summary-wide">摘要</th>
+                  <th class="col-creator">填寫人</th>
+                  <th class="col-status">狀態</th>
+                  <th class="col-actions" *ngIf="canManageVascularEvents">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let ev of vascularEvents()">
+                  <td class="col-date">{{ ev.eventDate }}</td>
+                  <td class="col-name">{{ ev.patientName }}</td>
+                  <td class="col-mrn">{{ ev.medicalRecordNumber }}</td>
+                  <td class="col-summary-wide">{{ ev.summary }}</td>
+                  <td class="col-creator">{{ ev.createdBy?.name || '-' }}</td>
+                  <td class="col-status">
+                    <span class="event-status-badge" [ngClass]="'status-' + ev.status">
+                      {{ vascularEventStatusLabels[ev.status] }}<ng-container *ngIf="ev.status === 'confirmed' && ev.confirmedBy?.name"> · {{ ev.confirmedBy?.name }}</ng-container>
+                    </span>
+                    <span *ngIf="ev.status === 'rejected' && ev.rejectReason" class="event-reject-reason">{{ ev.rejectReason }}</span>
+                  </td>
+                  <td class="col-actions" *ngIf="canManageVascularEvents">
+                    <div *ngIf="ev.status === 'pending'" class="action-buttons-group">
+                      <button (click)="confirmVascularEvent(ev)" class="save-btn" [disabled]="vascularEventActionId() !== null">確認</button>
+                      <button (click)="openVascularRejectDialog(ev, false)" class="delete-btn" [disabled]="vascularEventActionId() !== null">退回</button>
+                    </div>
+                    <button *ngIf="ev.status === 'confirmed'" (click)="openVascularRejectDialog(ev, true)" class="delete-btn mini" [disabled]="vascularEventActionId() !== null">撤銷</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <div *ngIf="dailyLog.vascularAccessLog.length > 0" class="dynamic-table-container">
           <table class="dynamic-table">
             <thead>
@@ -486,6 +531,29 @@
       <!-- 行動版：血管通路阻塞 -->
       <div class="mobile-section-card">
         <h2 class="mobile-section-title">血管通路阻塞</h2>
+        <!-- 主護填寫事件（同桌面版：只看 editor 權限、刻意不掛 isPageLocked） -->
+        <div *ngIf="vascularEvents().length > 0" class="log-entry-list vascular-events-mobile">
+          <div *ngFor="let ev of vascularEvents()" class="log-entry-card">
+            <div class="entry-header">
+              <strong>{{ ev.patientName }}</strong> ({{ ev.medicalRecordNumber }})
+              <span class="event-status-badge" [ngClass]="'status-' + ev.status">{{ vascularEventStatusLabels[ev.status] }}</span>
+            </div>
+            <div class="entry-body">
+              <div><strong>日期:</strong> {{ ev.eventDate }}</div>
+              <div><strong>摘要:</strong> {{ ev.summary }}</div>
+              <div><strong>填寫人:</strong> {{ ev.createdBy?.name || '-' }}</div>
+              <div *ngIf="ev.status === 'confirmed' && ev.confirmedBy?.name"><strong>確認人:</strong> {{ ev.confirmedBy?.name }}</div>
+              <div *ngIf="ev.status === 'rejected' && ev.rejectReason"><strong>退回原因:</strong> {{ ev.rejectReason }}</div>
+              <div *ngIf="canManageVascularEvents" class="entry-actions">
+                <ng-container *ngIf="ev.status === 'pending'">
+                  <button (click)="confirmVascularEvent(ev)" class="save-btn" [disabled]="vascularEventActionId() !== null">確認</button>
+                  <button (click)="openVascularRejectDialog(ev, false)" class="delete-btn" [disabled]="vascularEventActionId() !== null">退回</button>
+                </ng-container>
+                <button *ngIf="ev.status === 'confirmed'" (click)="openVascularRejectDialog(ev, true)" class="delete-btn" [disabled]="vascularEventActionId() !== null">撤銷</button>
+              </div>
+            </div>
+          </div>
+        </div>
         <div *ngIf="dailyLog.vascularAccessLog.length > 0" class="log-entry-list">
           <div *ngFor="let item of dailyLog.vascularAccessLog" class="log-entry-card">
             <div class="entry-header">
@@ -497,7 +565,7 @@
             </div>
           </div>
         </div>
-        <p *ngIf="dailyLog.vascularAccessLog.length === 0" class="no-data-text">本日無血管通路處置記錄</p>
+        <p *ngIf="dailyLog.vascularAccessLog.length === 0 && vascularEvents().length === 0" class="no-data-text">本日無血管通路處置記錄</p>
       </div>
 
       <!-- 其他事項 -->
@@ -544,6 +612,17 @@
     [currentValue]="wardDialogCurrentValue"
     (confirm)="handleWardNumberConfirm($event)"
     (cancel)="handleWardNumberCancel()">
+  </app-ward-number-dialog>
+
+  <!-- 血管通路事件退回/撤銷原因輸入（沿用共用輸入小彈窗） -->
+  <app-ward-number-dialog
+    *ngIf="isVascularRejectDialogVisible"
+    [title]="vascularRejectIsRevoke ? '撤銷已確認事件' : '退回血管通路事件'"
+    [message]="'請輸入' + (vascularRejectIsRevoke ? '撤銷' : '退回') + '原因（會顯示給主護）'"
+    [placeholder]="'例如：日期填錯，請修正後重送'"
+    [maxLength]="100"
+    (confirm)="handleVascularRejectConfirm($event)"
+    (cancel)="handleVascularRejectCancel()">
   </app-ward-number-dialog>
 
   <app-confirm-dialog

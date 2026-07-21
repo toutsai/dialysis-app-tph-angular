@@ -2,7 +2,14 @@
 import { Component, inject, signal, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { firstValueFrom } from 'rxjs';
 import { AuthService } from '@app/core/services/auth.service';
+import { ApiService } from '@app/core/services/api.service';
+import {
+  describeVascularEvent,
+  VASCULAR_EVENT_STATUS_LABELS,
+  type VascularAccessEvent,
+} from '@app/core/constants/vascular-access-codes';
 import { ApiConfigService } from '@services/api-config.service';
 import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@app/core/services/api-manager.service';
 import { PatientStoreService } from '@services/patient-store.service';
@@ -38,6 +45,7 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   private readonly firebase = inject(ApiConfigService);
   private readonly apiManagerService = inject(ApiManagerService);
   readonly patientStore = inject(PatientStoreService);
+  private readonly api = inject(ApiService);
 
   // API Managers
   private readonly dailyLogsApi: ApiManager<FirestoreRecord>;
@@ -53,6 +61,13 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   currentSchedule: any = {};
   dailyLog: any;
   readonly vascularAccessLocationOptions = ['本院', '新泰', '新仁', '宏仁', '新光', '振興', '其他'];
+
+  // 主護填寫的血管通路事件（vascular_access_events 新表；與 JSON 手動列並存的合併視圖）。
+  // summary 於載入時預先算好，避免模板每個變更偵測週期重跑 describeVascularEvent。
+  readonly vascularEvents = signal<(VascularAccessEvent & { summary: string })[]>([]);
+  /** 正在打確認/退回 API 的事件 id（防止連點與並發操作） */
+  readonly vascularEventActionId = signal<string | null>(null);
+  readonly vascularEventStatusLabels = VASCULAR_EVENT_STATUS_LABELS;
 
   // ===================================================================
   // UI State
@@ -73,6 +88,9 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   isAlertDialogVisible = false;
   isHandoverDialogVisible = false;
   isMarqueeDialogVisible = false;
+  isVascularRejectDialogVisible = false;
+  vascularRejectTarget: VascularAccessEvent | null = null;
+  vascularRejectIsRevoke = false;
 
   // Dialog Data
   handoverNotes = '';
@@ -114,6 +132,15 @@ export class DailyLogComponent implements OnInit, OnDestroy {
 
   get isPageLocked(): boolean {
     return !this.authService.canEditSchedules() || (this.isHistoricalLog && !this.canEditHistoricalLog);
+  }
+
+  /**
+   * 血管通路事件列（確認/退回/撤銷）操作權限：只看 editor，刻意不掛 isPageLocked。
+   * 歷史日誌鎖定只鎖 JSON 手動區塊；組長常隔天才確認前一日的主護事件，
+   * 事件的確認/退回直接打事件 API、不經工作日誌整包 PUT，不受歷史鎖影響。
+   */
+  get canManageVascularEvents(): boolean {
+    return this.authService.isEditor();
   }
 
   get isHistoricalLog(): boolean {
@@ -301,6 +328,9 @@ export class DailyLogComponent implements OnInit, OnDestroy {
     this.currentSchedule = {};
     this.handoverNotes = '';
     this.newMovementId = null;
+
+    // 主護血管通路事件每次切換日期都重抓（狀態可能在他處變更，刻意不進 dailyLogCache）
+    void this.loadVascularEvents(dateStr);
 
     try {
       const patientFetchPromise = this.patientStore.fetchPatientsIfNeeded();
@@ -971,6 +1001,103 @@ export class DailyLogComponent implements OnInit, OnDestroy {
     const idx = item.interventions.indexOf(value);
     if (idx === -1) { item.interventions.push(value); } else { item.interventions.splice(idx, 1); }
     this.markDirty();
+  }
+
+  // ===================================================================
+  // 主護血管通路事件（vascular_access_events 新表）
+  // 確認/退回直接打事件 API，完全不經工作日誌整包 PUT（避免互蓋）。
+  // ===================================================================
+  private async loadVascularEvents(dateStr: string): Promise<void> {
+    try {
+      const resp = await firstValueFrom(
+        this.api.get<{ success: boolean; events: VascularAccessEvent[] }>(
+          '/vascular-access/events',
+          { startDate: dateStr, endDate: dateStr },
+        ),
+      );
+      if (this.selectedDate() !== dateStr) return; // 已切換日期，不覆蓋
+      const events = (resp?.events || []).map((ev) => ({
+        ...ev,
+        summary: `${describeVascularEvent(ev)}${ev.location ? `（${ev.location}）` : ''}`,
+      }));
+      this.vascularEvents.set(events);
+    } catch (error) {
+      console.error('載入血管通路事件失敗:', error);
+      if (this.selectedDate() === dateStr) this.vascularEvents.set([]);
+    }
+  }
+
+  confirmVascularEvent(ev: VascularAccessEvent & { summary: string }): void {
+    if (!this.canManageVascularEvents || this.vascularEventActionId()) return;
+    this.showConfirm(
+      '確認血管通路事件',
+      `確定要確認「${ev.patientName}」的事件嗎？\n\n${ev.summary}`,
+      () => { void this.performConfirmVascularEvent(ev); },
+    );
+  }
+
+  private async performConfirmVascularEvent(ev: VascularAccessEvent): Promise<void> {
+    this.vascularEventActionId.set(ev.id);
+    try {
+      const resp = await firstValueFrom(
+        this.api.put<{ success: boolean; event: VascularAccessEvent; masterUpdated: boolean }>(
+          `/vascular-access/events/${ev.id}/confirm`,
+          {},
+        ),
+      );
+      await this.loadVascularEvents(this.selectedDate());
+      this.showAlert(
+        '操作成功',
+        resp?.masterUpdated ? '事件已確認，並已同步更新病人主檔通路資料。' : '事件已確認。',
+      );
+    } catch (error) {
+      console.error('確認血管通路事件失敗:', error);
+      this.showAlert('操作失敗', '確認血管通路事件時發生錯誤。');
+    } finally {
+      this.vascularEventActionId.set(null);
+    }
+  }
+
+  /** 退回（pending）或撤銷已確認（confirmed）：兩者都走 reject API，先開小彈窗填原因 */
+  openVascularRejectDialog(ev: VascularAccessEvent, isRevoke: boolean): void {
+    if (!this.canManageVascularEvents || this.vascularEventActionId()) return;
+    this.vascularRejectTarget = ev;
+    this.vascularRejectIsRevoke = isRevoke;
+    this.isVascularRejectDialogVisible = true;
+  }
+
+  async handleVascularRejectConfirm(reason: string): Promise<void> {
+    const ev = this.vascularRejectTarget;
+    const isRevoke = this.vascularRejectIsRevoke;
+    this.handleVascularRejectCancel();
+    if (!ev) return;
+    if (!reason) {
+      this.showAlert('提示', `請填寫${isRevoke ? '撤銷' : '退回'}原因。`);
+      return;
+    }
+    this.vascularEventActionId.set(ev.id);
+    try {
+      const resp = await firstValueFrom(
+        this.api.put<{ success: boolean; event: VascularAccessEvent; masterCheckHint: string | null }>(
+          `/vascular-access/events/${ev.id}/reject`,
+          { rejectReason: reason },
+        ),
+      );
+      await this.loadVascularEvents(this.selectedDate());
+      let msg = isRevoke ? '已撤銷確認並退回事件。' : '事件已退回。';
+      if (resp?.masterCheckHint) msg += `\n\n${resp.masterCheckHint}`;
+      this.showAlert('操作成功', msg);
+    } catch (error) {
+      console.error('退回血管通路事件失敗:', error);
+      this.showAlert('操作失敗', `${isRevoke ? '撤銷' : '退回'}血管通路事件時發生錯誤。`);
+    } finally {
+      this.vascularEventActionId.set(null);
+    }
+  }
+
+  handleVascularRejectCancel(): void {
+    this.isVascularRejectDialogVisible = false;
+    this.vascularRejectTarget = null;
   }
 
   // ===================================================================

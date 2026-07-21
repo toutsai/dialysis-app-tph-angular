@@ -10,6 +10,8 @@ import { exportVascularAccessExcel, VascularAccessRow } from '@/services/vascula
 import { exportFirstDialysisExcel, FirstDialysisRow } from '@/services/firstDialysisExportService';
 import { localApi } from '@/services/localApiClient';
 import { KiditDetailModalComponent } from '@app/components/kidit/kidit-detail-modal.component';
+import { KiditVascularQuarterlyComponent } from './kidit-vascular-quarterly.component';
+import { describeVascularEvent, VascularAccessEvent } from '@app/core/constants/vascular-access-codes';
 
 interface DayData {
   dateStr: string;
@@ -21,7 +23,7 @@ interface DayData {
 @Component({
   selector: 'app-kidit-report',
   standalone: true,
-  imports: [CommonModule, FormsModule, KiditDetailModalComponent],
+  imports: [CommonModule, FormsModule, KiditDetailModalComponent, KiditVascularQuarterlyComponent],
   templateUrl: './kidit-report.component.html',
   styleUrl: './kidit-report.component.css',
 })
@@ -41,6 +43,8 @@ export class KiditReportComponent implements OnInit {
   readonly showFirstDialysisModal = signal(false);
   readonly isLoadingFirstDialysis = signal(false);
   readonly firstDialysisRows = signal<FirstDialysisRow[]>([]);
+  // 季度造管 CSV 工作檯彈窗
+  readonly showQuarterlyModal = signal(false);
   // KiDit 待建檔清單彈窗（本院初透/首透且基本資料未完整）
   readonly showPendingRegModal = signal(false);
   readonly isLoadingPendingReg = signal(false);
@@ -164,7 +168,9 @@ export class KiditReportComponent implements OnInit {
   }
 
   /**
-   * 開啟「當月血管通路事件清單」彈窗：點擊時即時彙整當月每日工作日誌的 vascularAccessLog。
+   * 開啟「當月血管通路事件清單」彈窗：點擊時即時彙整
+   * ① 當月每日工作日誌的 vascularAccessLog（來源=工作日誌）
+   * ② 新表 vascular_access_events 的 confirmed 事件（來源=主護填寫）
    * 每次點開才查詢（月量不大），不在每日工作日誌新增時同步，避免維護同步副本。
    */
   async openVascularList(): Promise<void> {
@@ -173,14 +179,17 @@ export class KiditReportComponent implements OnInit {
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
     const next = new Date(year, month, 1);
     const endDate = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
     this.showVascularModal.set(true);
     this.isLoadingVascular.set(true);
     this.vascularRows.set([]);
     try {
-      const logs = await localApi.get(
-        `/nursing/daily-logs?startDate=${startDate}&endDate=${endDate}`,
-      );
+      const [logs, evRes] = await Promise.all([
+        localApi.get(`/nursing/daily-logs?startDate=${startDate}&endDate=${endDate}`),
+        localApi.get(`/vascular-access/events?startDate=${startDate}&endDate=${monthEnd}&status=confirmed`),
+      ]);
       const logList: any[] = Array.isArray(logs) ? logs : (logs?.data || []);
 
       const rows: VascularAccessRow[] = [];
@@ -196,7 +205,21 @@ export class KiditReportComponent implements OnInit {
               ? ev.interventions.join('、')
               : (ev.interventions || ''),
             location: ev.location || '',
+            source: '工作日誌',
           });
+        });
+      });
+
+      // 新表 confirmed 事件（主護填寫→組長確認）
+      const events: VascularAccessEvent[] = evRes?.events || [];
+      events.forEach((ev) => {
+        rows.push({
+          name: ev.patientName || '',
+          medicalRecordNumber: ev.medicalRecordNumber || '',
+          date: (ev.eventDate || '').slice(0, 10),
+          interventions: describeVascularEvent(ev),
+          location: ev.location || '',
+          source: '主護填寫',
         });
       });
 
@@ -212,6 +235,14 @@ export class KiditReportComponent implements OnInit {
 
   closeVascularModal(): void {
     this.showVascularModal.set(false);
+  }
+
+  openQuarterlyModal(): void {
+    this.showQuarterlyModal.set(true);
+  }
+
+  closeQuarterlyModal(): void {
+    this.showQuarterlyModal.set(false);
   }
 
   /** 匯出彈窗內已彙整的清單 */

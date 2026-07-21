@@ -10,6 +10,54 @@ import { normalizeDialysisMode } from '../utils/dialysisMode.js'
 // KiDit 日誌本以入院/出院/轉床等異動申報為主；「更改模式」「勿動」只記在工作日誌。
 const KIDIT_EXCLUDED_MOVEMENT_TYPES = new Set(['更改模式', '勿動'])
 
+// 血管通路事件代碼 → 顯示文字（與前端 vascular-access-codes.ts 對齊）
+const VAE_FAILURE_LABELS = {
+  1: '感染', 2: '阻塞', 3: '血液流量過小', 4: '血液流量過小',
+  5: '長期導管移位', 6: '竊流症候群', 9: '其他',
+}
+const VAE_REPAIR_LABELS = { 1: 'PTA', 2: '外科手術', 3: 'PTA+外科手術', 9: '其他' }
+const VAE_TYPE_LABELS = { AVF: '自體廔管', AVG: '人工廔管', PERM: '長期導管', TEMP: '短期導管' }
+const VAE_FISTULA_SITE_LABELS = { 1: '前臂', 2: '上臂', 3: '大腿', 4: '小腿', 9: '其他' }
+const VAE_CATHETER_SITE_LABELS = { 1: '內頸靜脈', 2: '鎖骨下靜脈', 3: '股靜脈', 9: '其他' }
+
+function describeVaeEvent(row) {
+  const failure = VAE_FAILURE_LABELS[row.failure_reason] || ''
+  if (row.event_type === 'reconstruction') {
+    const side = row.new_access_side === 'R' ? '右' : row.new_access_side === 'L' ? '左' : ''
+    const typeLabel = VAE_TYPE_LABELS[row.new_access_type] || row.new_access_type || ''
+    const siteLabels =
+      row.new_access_type === 'AVF' || row.new_access_type === 'AVG'
+        ? VAE_FISTULA_SITE_LABELS
+        : VAE_CATHETER_SITE_LABELS
+    const site = siteLabels[row.new_access_site] ? `(${siteLabels[row.new_access_site]})` : ''
+    return `血管重建-${side}${typeLabel}${site}${failure ? `,前次原因:${failure}` : ''}`
+  }
+  const repair = VAE_REPAIR_LABELS[row.repair_method] || ''
+  const repairOther = row.repair_method === '9' && row.repair_method_other ? `(${row.repair_method_other})` : ''
+  return `介入治療${failure ? `-${failure}` : ''}${repair ? `→${repair}${repairOther}` : ''}`
+}
+
+// 查該日已確認 (confirmed) 的血管通路事件，轉成 kidit_logbook 的 ACCESS 事件形狀。
+// id 前綴 vae_ 穩定不變（rebuild 時 merge 才能保留使用者已勾的 isRegistered），
+// 與工作日誌 JSON 產生的 access_<date>_<id> 不衝突。
+function buildConfirmedVaeEvents(db, dateStr) {
+  const rows = db
+    .prepare(
+      `SELECT * FROM vascular_access_events WHERE event_date = ? AND status = 'confirmed' ORDER BY created_at`,
+    )
+    .all(dateStr)
+
+  return rows.map(row => ({
+    id: `vae_${row.id}`,
+    type: 'ACCESS',
+    timestamp: row.confirmed_at || row.created_at || `${dateStr}T12:00:00`,
+    patientName: row.patient_name,
+    patientId: row.patient_id,
+    medicalRecordNumber: row.medical_record_number || '',
+    details: `通路處置: ${describeVaeEvent(row)} (${row.location || '未知院所'})`,
+  }))
+}
+
 // 建立「病人 id → 正規化透析模式」對照表（含已刪除病人：結案事件仍需顯示模式）
 function buildPatientModeMap(db, patientIds) {
   const map = new Map()
@@ -41,19 +89,14 @@ export async function syncEventsToKiditLogbook(dateStr, dailyLogData) {
   const db = getDatabase()
 
   try {
-    // 1. 處理刪除事件
+    // 0. 已確認的血管通路事件（vascular_access_events 表，主護填寫→組長確認）。
+    //    不論日誌存在/刪除/無事件，這批都要保留——rebuild 的三條寫入路徑都納入。
+    const vaeEvents = buildConfirmedVaeEvents(db, dateStr)
+
+    // 1. 處理刪除事件（僅保留已確認的血管通路事件，不再無條件清空）
     if (!dailyLogData) {
-      console.log(`[KIDIT Sync] 日期 ${dateStr} 的日誌已刪除，清空 kidit_logbook 事件...`)
-
-      db.prepare(`
-        INSERT INTO kidit_logbook (id, date, events, updated_at)
-        VALUES (?, ?, '[]', datetime('now', 'localtime'))
-        ON CONFLICT(id) DO UPDATE SET
-          events = '[]',
-          updated_at = datetime('now', 'localtime')
-      `).run(dateStr, dateStr)
-
-      return { success: true, message: '已清空事件' }
+      console.log(`[KIDIT Sync] 日期 ${dateStr} 的日誌已刪除，重建 kidit_logbook 事件（保留 ${vaeEvents.length} 筆已確認通路事件）...`)
+      dailyLogData = { patientMovements: [], vascularAccessLog: [] }
     }
 
     // 2. 從 Daily Log 提取事件
@@ -116,7 +159,10 @@ export async function syncEventsToKiditLogbook(dateStr, dailyLogData) {
       }
     })
 
-    console.log(`[KIDIT Sync] 從 daily_log 提取了 ${dailyLogEvents.length} 個事件`)
+    // 2-2b. 併入已確認的血管通路事件（一樣吃 2-3 的透析模式快照補值）
+    dailyLogEvents.push(...vaeEvents)
+
+    console.log(`[KIDIT Sync] 從 daily_log 提取了 ${dailyLogEvents.length} 個事件（含 ${vaeEvents.length} 筆已確認通路事件）`)
 
     // 2-3. 補上病人當前透析模式（同步當下的快照；重新同步時會更新）。
     // 查無模式時不設欄位，讓合併時保留既有值，避免病人資料被清空後抹掉歷史正確模式。
@@ -199,6 +245,24 @@ export async function syncEventsToKiditLogbook(dateStr, dailyLogData) {
     console.error(`[KIDIT Sync] ❌ 同步失敗:`, error)
     throw error
   }
+}
+
+/**
+ * 以 DB 現況重新同步某日的 kidit_logbook。
+ * 供血管通路事件 confirm/reject/編輯/刪除後呼叫（那些操作不經工作日誌整包 PUT）。
+ * 無日誌 row 時傳空結構而非 null——避免誤走「日誌刪除」訊息路徑。
+ */
+export async function resyncKiditForDate(dateStr) {
+  const db = getDatabase()
+  const row = db.prepare('SELECT * FROM daily_logs WHERE date = ?').get(dateStr)
+  const dailyLogData = row
+    ? {
+        patientMovements: row.patient_movements,
+        vascularAccessLog: row.vascular_access_log,
+        createdAt: row.created_at,
+      }
+    : { patientMovements: [], vascularAccessLog: [] }
+  return syncEventsToKiditLogbook(dateStr, dailyLogData)
 }
 
 /**
@@ -332,6 +396,7 @@ export function listKiditLogbooks({ startDate, endDate }) {
 
 export default {
   syncEventsToKiditLogbook,
+  resyncKiditForDate,
   getKiditLogbook,
   updateKiditEvent,
   updateKiditEvents,

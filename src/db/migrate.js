@@ -522,6 +522,67 @@ export function runMigrations() {
       `)
     }
 
+    // ========================================
+    // 血管通路事件（2026-07-21）：主護填寫→組長確認→KiDit造管申報
+    // 唯一權威來源；工作日誌/KiDit 清單皆為視圖，kiditSync rebuild 會納入 confirmed 事件
+    // ========================================
+    const vascularEventsExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='vascular_access_events'")
+      .get()
+    if (!vascularEventsExists) {
+      console.log('📋 建立 vascular_access_events 表格...')
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS vascular_access_events (
+          id TEXT PRIMARY KEY,
+          patient_id TEXT NOT NULL,
+          patient_name TEXT NOT NULL,
+          medical_record_number TEXT,
+          event_date TEXT NOT NULL,
+          event_type TEXT NOT NULL,
+          failure_reason TEXT,
+          repair_method TEXT,
+          repair_method_other TEXT,
+          new_access_type TEXT,
+          new_access_side TEXT,
+          new_access_site TEXT,
+          location TEXT,
+          notes TEXT,
+          status TEXT NOT NULL DEFAULT 'pending',
+          update_patient_master INTEGER DEFAULT 1,
+          reject_reason TEXT,
+          created_by TEXT DEFAULT '{}',
+          confirmed_by TEXT DEFAULT '{}',
+          confirmed_at TEXT,
+          created_at TEXT DEFAULT (datetime('now', 'localtime')),
+          updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+      `)
+      migrationsApplied++
+    }
+    db.exec('CREATE INDEX IF NOT EXISTS idx_vae_date ON vascular_access_events(event_date)')
+    db.exec('CREATE INDEX IF NOT EXISTS idx_vae_patient ON vascular_access_events(patient_id)')
+    db.exec('CREATE INDEX IF NOT EXISTS idx_vae_status ON vascular_access_events(status)')
+
+    const vascularQuarterExportsExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='vascular_quarter_exports'")
+      .get()
+    if (!vascularQuarterExportsExists) {
+      console.log('📋 建立 vascular_quarter_exports 表格...')
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS vascular_quarter_exports (
+          id TEXT PRIMARY KEY,
+          quarter TEXT NOT NULL,
+          patient_id TEXT NOT NULL,
+          overrides TEXT DEFAULT '{}',
+          updated_by TEXT DEFAULT '{}',
+          created_at TEXT DEFAULT (datetime('now', 'localtime')),
+          updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+      `)
+      migrationsApplied++
+    }
+    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_vqe_quarter_patient ON vascular_quarter_exports(quarter, patient_id)')
+
     if (migrationsApplied > 0) {
       console.log(`✅ 已完成 ${migrationsApplied} 項遷移`)
     } else {

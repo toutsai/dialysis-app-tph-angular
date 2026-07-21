@@ -101,6 +101,8 @@
 .export-btn:hover:not(:disabled) { background: #e8f5e9; }
 .vascular-btn { border-color: #1976d2; color: #1976d2; }
 .vascular-btn:hover:not(:disabled) { background: #e9f2fc; }
+.quarterly-btn { border-color: #00695c; color: #00695c; }
+.quarterly-btn:hover:not(:disabled) { background: #e0f2f1; }
 .firstdia-btn { border-color: #7b1fa2; color: #7b1fa2; }
 .firstdia-btn:hover:not(:disabled) { background: #f4e9f7; }
 .pendingreg-btn { border-color: #e65100; color: #e65100; }
@@ -348,6 +350,19 @@
   color: #b71c1c;
 }
 .va-table tbody tr.va-row-deleted:hover { background: #fbe6e6; }
+/* 當月血管通路事件清單：來源欄標籤 */
+.va-source-tag {
+  display: inline-block;
+  padding: 0.05rem 0.4rem;
+  font-size: 0.7rem;
+  border-radius: 4px;
+  background: #eceff1;
+  color: #546e7a;
+}
+.va-source-tag.va-source-nurse {
+  background: #e3f2fd;
+  color: #1565c0;
+}
 .va-deleted-tag {
   display: inline-block;
   margin-left: 0.35rem;

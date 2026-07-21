@@ -1,0 +1,248 @@
+.va-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  padding: 20px;
+}
+.va-modal {
+  background: #fff;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 860px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+.va-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #e9ecef;
+  flex-shrink: 0;
+}
+.va-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #2c3e50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.va-sub { color: #6c757d; font-weight: 500; }
+.va-close {
+  border: none;
+  background: #ecf0f1;
+  color: #555;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+}
+.va-close:hover { background: #dfe6e9; }
+
+.va-body {
+  padding: 14px 20px;
+  overflow: auto;
+  min-height: 0;
+}
+.va-loading { text-align: center; color: #6c757d; padding: 24px 0; }
+.va-empty { text-align: center; color: #90a4ae; padding: 18px 0; font-size: 14px; }
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #007bff;
+  border-radius: 50%;
+  animation: va-spin 1s linear infinite;
+  margin: 0 auto;
+}
+@keyframes va-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.va-section { margin-bottom: 14px; }
+.va-section-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  color: #2c3e50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ===== 事件歷史表格 ===== */
+.va-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.va-table th, .va-table td {
+  border-bottom: 1px solid #eceff1;
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+.va-table thead th {
+  background: #f8f9fa;
+  color: #455a64;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.va-table .col-date { width: 96px; white-space: nowrap; }
+.va-table .col-type { width: 72px; white-space: nowrap; }
+.va-table .col-loc { width: 56px; white-space: nowrap; }
+.va-table .col-status { width: 68px; white-space: nowrap; }
+.va-table .col-actions { width: 118px; white-space: nowrap; text-align: right; }
+.va-row-editing td { background: #fff8e6; }
+.va-reject-reason { color: #c62828; font-size: 12.5px; margin-top: 2px; }
+
+/* 狀態徽章：待確認=黃 / 已確認=綠 / 已退回=紅 */
+.va-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.va-badge.pending { background: #fff4e6; color: #d9480f; }
+.va-badge.confirmed { background: #ebfbee; color: #2b8a3e; }
+.va-badge.rejected { background: #fff5f5; color: #c92a2a; }
+
+.va-mini-btn {
+  border: 1px solid #cfd8dc;
+  background: #fff;
+  color: #546e7a;
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.va-mini-btn:hover { background: #f5f7f8; }
+.va-mini-btn.edit { border-color: #90caf9; color: #1971c2; }
+.va-mini-btn.edit:hover { background: #e7f5ff; }
+.va-mini-btn.delete { border-color: #ef9a9a; color: #c62828; margin-left: 4px; }
+.va-mini-btn.delete:hover { background: #fdecea; }
+
+/* ===== 新增/編輯表單 ===== */
+.va-form-section {
+  border-top: 1px solid #e9ecef;
+  padding-top: 12px;
+  margin-bottom: 0;
+}
+.va-field { margin-bottom: 10px; min-width: 0; }
+.va-field-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.va-field-row .va-field { flex: 1; min-width: 200px; }
+.va-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #455a64;
+  margin-bottom: 4px;
+}
+.va-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  font-size: 14px;
+  background: #fff;
+}
+.va-input:focus { border-color: #2980b9; outline: none; }
+.va-input-half { max-width: 340px; }
+.va-textarea { resize: vertical; }
+.va-radio-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  min-height: 32px;
+}
+.va-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+}
+.va-radio input { cursor: pointer; }
+.va-chk {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #1d6fa5;
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 10px;
+}
+.va-chk input { cursor: pointer; }
+.va-note {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  color: #b45309;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.va-error {
+  margin-bottom: 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: #fff5f5;
+  color: #c92a2a;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.va-actions { display: flex; justify-content: flex-end; }
+.va-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.va-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.va-btn-primary { background: #2980b9; color: #fff; }
+.va-btn-primary:hover:not(:disabled) { background: #2471a3; }
+
+.va-footer {
+  padding: 8px 20px 12px;
+  border-top: 1px solid #eceff1;
+  font-size: 12.5px;
+  color: #78909c;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (max-width: 700px) {
+  .va-overlay { padding: 0; }
+  .va-modal {
+    max-width: none;
+    max-height: none;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    border-radius: 0;
+  }
+}

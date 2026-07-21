@@ -1,0 +1,185 @@
+<div class="va-overlay" (click)="onClose()">
+  <div class="va-modal" (click)="$event.stopPropagation()">
+    <div class="va-header">
+      <h3>
+        <i class="fas fa-syringe"></i>
+        血管通路事件
+        <span class="va-sub" *ngIf="patientName">— {{ patientName }}</span>
+      </h3>
+      <button class="va-close" (click)="onClose()" title="關閉"><i class="fas fa-times"></i></button>
+    </div>
+
+    <div class="va-body">
+      <!-- 上半：該病人事件歷史 -->
+      <div class="va-section">
+        <h4 class="va-section-title"><i class="fas fa-history"></i> 事件歷史</h4>
+        <div *ngIf="isLoading()" class="va-loading"><div class="spinner"></div><p>載入中...</p></div>
+        <div *ngIf="!isLoading() && events().length === 0" class="va-empty">尚無血管通路事件紀錄。</div>
+        <table *ngIf="!isLoading() && events().length > 0" class="va-table">
+          <thead>
+            <tr>
+              <th class="col-date">日期</th>
+              <th class="col-type">類型</th>
+              <th>內容</th>
+              <th class="col-loc">院所</th>
+              <th class="col-status">狀態</th>
+              <th class="col-actions"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let ev of events()" [class.va-row-editing]="editingId() === ev.id">
+              <td class="col-date">{{ ev.eventDate }}</td>
+              <td class="col-type">{{ typeLabels[ev.eventType] }}</td>
+              <td>
+                {{ describe(ev) }}
+                <div class="va-reject-reason" *ngIf="ev.status === 'rejected' && ev.rejectReason">
+                  退回原因：{{ ev.rejectReason }}
+                </div>
+              </td>
+              <td class="col-loc">{{ ev.location || '—' }}</td>
+              <td class="col-status">
+                <span class="va-badge" [ngClass]="ev.status">{{ statusLabels[ev.status] }}</span>
+              </td>
+              <td class="col-actions">
+                <ng-container *ngIf="canModify(ev)">
+                  <button type="button" class="va-mini-btn edit" (click)="startEdit(ev)" title="編輯（帶回下方表單）">
+                    <i class="fas fa-pencil-alt"></i> 編輯
+                  </button>
+                  <button type="button" class="va-mini-btn delete" (click)="deleteEvent(ev)" title="刪除">
+                    <i class="fas fa-trash"></i> 刪除
+                  </button>
+                </ng-container>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 下半：新增/編輯表單 -->
+      <div class="va-section va-form-section">
+        <h4 class="va-section-title">
+          <i class="fas" [ngClass]="editingId() ? 'fa-pencil-alt' : 'fa-plus-circle'"></i>
+          {{ editingId() ? '編輯事件' : '新增事件' }}
+          <button *ngIf="editingId()" type="button" class="va-mini-btn" (click)="cancelEdit()">
+            取消編輯（回新增模式）
+          </button>
+        </h4>
+
+        <!-- 事件類型 -->
+        <div class="va-field">
+          <span class="va-label">事件類型</span>
+          <div class="va-radio-group">
+            <label class="va-radio" *ngFor="let t of typeLabels | keyvalue">
+              <input type="radio" name="eventType" [value]="t.key"
+                     [(ngModel)]="form.eventType" (ngModelChange)="onEventTypeChange()" />
+              {{ t.value }}
+            </label>
+          </div>
+        </div>
+
+        <div class="va-field-row">
+          <div class="va-field">
+            <span class="va-label">事件日期</span>
+            <input type="date" class="va-input" [(ngModel)]="form.eventDate" />
+          </div>
+          <div class="va-field">
+            <span class="va-label">處置院所</span>
+            <select class="va-input" [(ngModel)]="form.location">
+              <option value="">（請選擇）</option>
+              <option *ngFor="let loc of locations" [value]="loc">{{ loc }}</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 介入治療專屬欄位 -->
+        <ng-container *ngIf="form.eventType === 'intervention'">
+          <div class="va-field-row">
+            <div class="va-field">
+              <span class="va-label">失敗原因</span>
+              <select class="va-input" [(ngModel)]="form.failureReason">
+                <option value="">（請選擇）</option>
+                <option *ngFor="let r of failureReasons" [value]="r.code">{{ r.code }}. {{ r.label }}</option>
+              </select>
+            </div>
+            <div class="va-field">
+              <span class="va-label">處置方式</span>
+              <select class="va-input" [(ngModel)]="form.repairMethod">
+                <option value="">（請選擇）</option>
+                <option *ngFor="let m of repairMethods" [value]="m.code">{{ m.code }}. {{ m.label }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="va-field" *ngIf="form.repairMethod === '9'">
+            <span class="va-label">其他方式說明（必填）</span>
+            <input type="text" class="va-input" [(ngModel)]="form.repairMethodOther"
+                   placeholder="請說明其他處置方式" />
+          </div>
+        </ng-container>
+
+        <!-- 血管重建專屬欄位 -->
+        <ng-container *ngIf="form.eventType === 'reconstruction'">
+          <div class="va-field">
+            <span class="va-label">前次血管通路失敗原因</span>
+            <select class="va-input va-input-half" [(ngModel)]="form.failureReason">
+              <option value="">（請選擇；首次建立可留空）</option>
+              <option *ngFor="let r of failureReasons" [value]="r.code">{{ r.code }}. {{ r.label }}</option>
+            </select>
+          </div>
+          <div class="va-field">
+            <span class="va-label">新通路型態</span>
+            <div class="va-radio-group">
+              <label class="va-radio" *ngFor="let t of accessTypes">
+                <input type="radio" name="newAccessType" [value]="t.code"
+                       [(ngModel)]="form.newAccessType" (ngModelChange)="onAccessTypeChange()" />
+                {{ t.label }}
+              </label>
+            </div>
+            <p class="va-note" *ngIf="form.newAccessType === 'TEMP'">
+              <i class="fas fa-info-circle"></i> 短期導管不列入造管CSV重建欄位，僅記錄與KiDit清單顯示
+            </p>
+          </div>
+          <div class="va-field-row">
+            <div class="va-field">
+              <span class="va-label">左右</span>
+              <div class="va-radio-group">
+                <label class="va-radio" *ngFor="let s of accessSides">
+                  <input type="radio" name="newAccessSide" [value]="s.code" [(ngModel)]="form.newAccessSide" />
+                  {{ s.label }}
+                </label>
+              </div>
+            </div>
+            <div class="va-field">
+              <span class="va-label">位置</span>
+              <select class="va-input" [(ngModel)]="form.newAccessSite">
+                <option value="">（請選擇）</option>
+                <option *ngFor="let s of siteOptions()" [value]="s.code">{{ s.code }}. {{ s.label }}</option>
+              </select>
+            </div>
+          </div>
+          <label class="va-chk" title="組長確認後，將此新通路同步寫入病人基本資料的血管通路欄位">
+            <input type="checkbox" [(ngModel)]="form.updatePatientMaster" />
+            確認後同步更新病人基本資料的血管通路
+          </label>
+        </ng-container>
+
+        <div class="va-field">
+          <span class="va-label">備註</span>
+          <textarea class="va-input va-textarea" rows="2" [(ngModel)]="form.notes"
+                    placeholder="補充說明（選填）"></textarea>
+        </div>
+
+        <div class="va-error" *ngIf="errorMsg()">{{ errorMsg() }}</div>
+
+        <div class="va-actions">
+          <button type="button" class="va-btn va-btn-primary" (click)="save()" [disabled]="isSaving()">
+            <i class="fas fa-save"></i> {{ isSaving() ? '儲存中...' : editingId() ? '儲存修改' : '新增事件' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="va-footer">
+      <i class="fas fa-info-circle"></i> 儲存後將送組長於工作日誌確認，確認後才列入 KiDit 申報
+    </div>
+  </div>
+</div>

@@ -801,6 +801,53 @@ CREATE TABLE IF NOT EXISTS aki_care_records (
 CREATE INDEX IF NOT EXISTS idx_aki_care_mrn ON aki_care_records(mrn);
 
 -- ========================================
+-- 血管通路事件（主護填寫 → 組長確認 → KiDit 造管申報）
+-- 唯一權威來源；工作日誌與 KiDit 清單皆為視圖，勿寫回 daily_logs 的 vascular_access_log JSON
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS vascular_access_events (
+    id TEXT PRIMARY KEY,
+    patient_id TEXT NOT NULL,
+    patient_name TEXT NOT NULL,              -- 快照（病人可能軟刪除）
+    medical_record_number TEXT,              -- 快照
+    event_date TEXT NOT NULL,                -- YYYY-MM-DD
+    event_type TEXT NOT NULL,                -- intervention(介入治療) | reconstruction(血管重建)
+    failure_reason TEXT,                     -- 造管CSV代碼：1感染 2阻塞 3血液流量過小 5長期導管移位 6竊流症候群 9其他（介入=失敗原因；重建=前次失敗原因）
+    repair_method TEXT,                      -- 介入專用：1=PTA 2=外科手術 3=PTA+手術 9=其他
+    repair_method_other TEXT,                -- repair_method=9 時的文字說明
+    new_access_type TEXT,                    -- 重建專用：AVF | AVG | PERM | TEMP
+    new_access_side TEXT,                    -- L | R
+    new_access_site TEXT,                    -- 廔管:1前臂 2上臂 3大腿 4小腿 9其他；導管:1內頸 2鎖骨下 3股 9其他
+    location TEXT,                           -- 處置院所
+    notes TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',  -- pending | confirmed | rejected
+    update_patient_master INTEGER DEFAULT 1, -- 重建確認時是否連動病人主檔 vasc_access
+    reject_reason TEXT,
+    created_by TEXT DEFAULT '{}',            -- JSON {uid, name}（主護）
+    confirmed_by TEXT DEFAULT '{}',          -- JSON（組長）
+    confirmed_at TEXT,
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_vae_date ON vascular_access_events(event_date);
+CREATE INDEX IF NOT EXISTS idx_vae_patient ON vascular_access_events(patient_id);
+CREATE INDEX IF NOT EXISTS idx_vae_status ON vascular_access_events(status);
+
+-- 季度造管CSV匯出的人工欄與覆寫（快照/事件欄每次載入即時重算，只存 overrides 避免資料過期）
+CREATE TABLE IF NOT EXISTS vascular_quarter_exports (
+    id TEXT PRIMARY KEY,                     -- `${quarter}_${patient_id}`
+    quarter TEXT NOT NULL,                   -- 例 2026Q3
+    patient_id TEXT NOT NULL,
+    overrides TEXT DEFAULT '{}',             -- JSON：血流量/accessFlow/遠紅外線/並存通路/快照修正/excluded
+    updated_by TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_vqe_quarter_patient ON vascular_quarter_exports(quarter, patient_id);
+
+-- ========================================
 -- 初始化預設資料
 -- ========================================
 

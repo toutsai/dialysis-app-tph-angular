@@ -15,6 +15,7 @@ import memosRoutes from './routes/memos.js'
 import ordersRoutes from './routes/orders.js'
 import medicationsRoutes from './routes/medications.js'
 import nursingRoutes from './routes/nursing.js'
+import vascularAccessRoutes from './routes/vascularAccess.js'
 import systemRoutes from './routes/system.js'
 import eventsRoutes from './routes/events.js'
 import dashboardRoutes from './routes/dashboard.js'
@@ -110,6 +111,7 @@ app.use('/api/memos', memosRoutes)
 app.use('/api/orders', ordersRoutes)
 app.use('/api/medications', medicationsRoutes)
 app.use('/api/nursing', nursingRoutes)
+app.use('/api/vascular-access', vascularAccessRoutes)
 app.use('/api/system', systemRoutes)
 app.use('/api/events', eventsRoutes)
 app.use('/api/dashboard', dashboardRoutes)

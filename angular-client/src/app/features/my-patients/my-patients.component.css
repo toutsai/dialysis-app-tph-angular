@@ -85,6 +85,8 @@
 .care-tool-btn.kidit { border-color: #868e96; color: #868e96; }
 .care-tool-btn.firstdia { border-color: #e8590c; color: #e8590c; }
 .care-tool-btn.firstdia:hover:not(:disabled) { background: #fff4e6; }
+.care-tool-btn.va { border-color: #0c8599; color: #0c8599; }
+.care-tool-btn.va:hover:not(:disabled) { background: #e3fafc; }
 .care-tool-btn.sm { padding: 0.4rem 0.75rem; font-size: 0.85rem; }
 
 /* 照護工作彈窗 */
@@ -176,6 +178,8 @@
 .ct-badge.pending { background: #fff4e6; color: #d9480f; }
 .ct-badge.done { background: #ebfbee; color: #2b8a3e; }
 .ct-badge.undone { background: #fff5f5; color: #c92a2a; }
+.ct-badge + .ct-badge { margin-left: 0.3rem; }
+.ct-none { color: #b0bec5; }
 .loading-state {
   text-align: center;
   padding: 3rem;
@@ -367,6 +371,24 @@
 }
 .btn-edu-icon:hover {
   background-color: #f3e8fb;
+}
+.btn-va-icon {
+  color: #0c8599;
+  position: relative; /* 紅點定位用 */
+}
+.btn-va-icon:hover {
+  background-color: #e3fafc;
+}
+/* 有「已退回」血管通路事件待修正的紅點提醒 */
+.va-reject-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e03131;
+  border: 1px solid #fff;
 }
 .card-section {
   padding: 0.75rem 1rem;

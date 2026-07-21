@@ -474,3 +474,25 @@ h1 { font-size: 2rem; margin: 0; color: #343a40; }
 .btn-marquee-settings:hover:not(:disabled) { background-color: #d97706; }
 .btn-marquee-settings:disabled { background-color: #e9ecef; color: #6c757d; cursor: not-allowed; }
 .btn-marquee-settings i { margin-right: 0.5rem; }
+
+/* ===== 主護填寫血管通路事件（vascular_access_events 合併視圖） ===== */
+.vascular-events-block { margin-bottom: 1rem; }
+.vascular-events-subtitle { font-size: 0.9rem; font-weight: 600; color: #495057; margin: 0 0 0.5rem; }
+.vascular-events-table .col-summary-wide { white-space: normal; }
+.vascular-events-table td.col-summary-wide { overflow-wrap: anywhere; }
+.vascular-events-table .col-creator { width: 100px; }
+.vascular-events-table .col-status { width: 180px; white-space: normal; }
+.event-status-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 0.78rem; font-weight: 600; white-space: nowrap;
+}
+.event-status-badge.status-pending { background-color: #fff3cd; color: #856404; border: 1px solid #ffe08a; }
+.event-status-badge.status-confirmed { background-color: #d4edda; color: #155724; border: 1px solid #b7e0c0; }
+.event-status-badge.status-rejected { background-color: #f8d7da; color: #721c24; border: 1px solid #f1b5bb; }
+.event-reject-reason {
+  display: block; font-size: 0.78rem; color: #c0392b; margin-top: 2px;
+  white-space: normal; overflow-wrap: anywhere;
+}
+.vascular-events-table .save-btn:disabled, .vascular-events-table .delete-btn:disabled,
+.entry-actions .save-btn:disabled, .entry-actions .delete-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.entry-actions { display: flex; gap: 0.5rem; margin-top: 0.25rem; }

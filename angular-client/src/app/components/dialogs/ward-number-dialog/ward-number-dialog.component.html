@@ -10,10 +10,10 @@
         [(ngModel)]="localValue"
         type="text"
         class="ward-input"
-        placeholder="例如：5B12"
+        [placeholder]="placeholder"
         (keyup.enter)="onConfirm()"
         (keyup.escape)="onCancel()"
-        maxlength="20"
+        [attr.maxlength]="maxLength"
       />
     </main>
     <footer class="dialog-footer">

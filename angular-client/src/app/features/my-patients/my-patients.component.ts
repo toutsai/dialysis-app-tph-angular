@@ -12,6 +12,8 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
+import { ApiService } from '@app/core/services/api.service';
 import { ApiConfigService } from '@services/api-config.service';
 import { AuthService, type AppUser } from '@services/auth.service';
 import { PatientStoreService } from '@services/patient-store.service';
@@ -38,6 +40,8 @@ import { ConfirmDialogComponent } from '@app/components/dialogs/confirm-dialog/c
 import { DialysisOrderModalComponent } from '@app/components/dialogs/dialysis-order-modal/dialysis-order-modal.component';
 import { MarqueeBannerComponent } from '@app/components/marquee-banner/marquee-banner.component';
 import { EducationRecordDialogComponent } from '@app/components/dialogs/education-record-dialog/education-record-dialog.component';
+import { VascularAccessEventDialogComponent } from '@app/components/dialogs/vascular-access-event-dialog/vascular-access-event-dialog.component';
+import type { VascularAccessEvent } from '@app/core/constants/vascular-access-codes';
 
 interface MedicationMaster {
   code: string;
@@ -94,6 +98,7 @@ interface SelectableUser {
     DialysisOrderModalComponent,
     MarqueeBannerComponent,
     EducationRecordDialogComponent,
+    VascularAccessEventDialogComponent,
   ],
   templateUrl: './my-patients.component.html',
   styleUrl: './my-patients.component.css',
@@ -109,6 +114,7 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
   private readonly archiveStore = inject(ArchiveStoreService);
   private readonly medicationStore = inject(MedicationStoreService);
   private readonly router = inject(Router);
+  private readonly api = inject(ApiService);
 
   // --- State ---
   readonly selectedUserId = signal<string | null>(null);
@@ -451,6 +457,121 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
     return n.team && n.nurse ? `${n.team} ${n.nurse}` : n.nurse || n.team || '—';
   }
 
+  // --- 血管通路事件（主護填寫入口；組長確認在工作日誌頁） ---
+
+  readonly showVaModal = signal(false);
+  readonly isLoadingVa = signal(false);
+  readonly vaRows = signal<any[]>([]);
+  readonly vaError = signal('');
+  readonly vaDialogPatient = signal<{ patientId: string; patientName: string } | null>(null);
+  /** 有「已退回」事件待修正的病人 id，供病人卡圖示紅點提醒 */
+  readonly vaRejectedIds = signal<Set<string>>(new Set());
+
+  private async fetchVaEvents(status: 'pending' | 'rejected'): Promise<VascularAccessEvent[]> {
+    const resp = await firstValueFrom(
+      this.api.get<{ success: boolean; events: VascularAccessEvent[] }>('/vascular-access/events', {
+        status,
+      }),
+    );
+    return resp?.events || [];
+  }
+
+  /** 載入頁面時抓一次已退回事件，供病人卡圖示紅點比對（關閉單人視窗後也會回補） */
+  private async loadVaRejected(): Promise<void> {
+    try {
+      const events = await this.fetchVaEvents('rejected');
+      this.vaRejectedIds.set(new Set(events.map((e) => e.patientId)));
+    } catch (error) {
+      console.error('載入血管通路退回事件失敗:', error);
+    }
+  }
+
+  /** 血管通路事件填寫清單：我的照護清單病人 + 今日我負責班別的病人（病人範圍同 openEduModal） */
+  async openVaModal(): Promise<void> {
+    this.showVaModal.set(true);
+    this.isLoadingVa.set(true);
+    this.vaError.set('');
+    this.vaRows.set([]);
+    try {
+      await this.patientStore.fetchPatientsIfNeeded();
+      const [target, care, pendingEvents, rejectedEvents] = await Promise.all([
+        this.resolveTargetUser(),
+        localApi.get('/nursing/patient-care'),
+        this.fetchVaEvents('pending'),
+        this.fetchVaEvents('rejected'),
+      ]);
+      // 順手更新卡片紅點（同一份 rejected 資料）
+      this.vaRejectedIds.set(new Set(rejectedEvents.map((e) => e.patientId)));
+      const assignments: any[] = (care as any)?.assignments || [];
+      const myCare = assignments.find(
+        (a) => a.nurseId === target.userId || String(a.nurseName || '').trim() === target.userName,
+      );
+      const myCareIds = new Set<string>(myCare?.patientIds || []);
+      const todayIds = new Set<string>();
+      for (const sc of this.getShiftKeys()) {
+        for (const p of this.getShiftPatients(sc)) todayIds.add(p.patientId);
+      }
+      const countBy = (events: VascularAccessEvent[]) => {
+        const m = new Map<string, number>();
+        for (const e of events) m.set(e.patientId, (m.get(e.patientId) || 0) + 1);
+        return m;
+      };
+      const pendingCounts = countBy(pendingEvents);
+      const rejectedCounts = countBy(rejectedEvents);
+      const patientMap = this.patientStore.patientMap();
+      const rows = [...new Set<string>([...myCareIds, ...todayIds])]
+        .map((pid) => {
+          const p = patientMap.get(pid);
+          if (!p) return null; // 照護清單殘留的已不存在病人不列
+          return {
+            patientId: pid,
+            patientName: p.name || '未知',
+            medicalRecordNumber: p.medicalRecordNumber || '',
+            todayMine: todayIds.has(pid),
+            pendingCount: pendingCounts.get(pid) || 0,
+            rejectedCount: rejectedCounts.get(pid) || 0,
+          };
+        })
+        .filter((r): r is NonNullable<typeof r> => !!r)
+        .sort(
+          // 有退回待修正的優先，其次今日負責，再依姓名
+          (a, b) =>
+            (b.rejectedCount > 0 ? 1 : 0) - (a.rejectedCount > 0 ? 1 : 0) ||
+            (b.todayMine ? 1 : 0) - (a.todayMine ? 1 : 0) ||
+            a.patientName.localeCompare(b.patientName),
+        );
+      this.vaRows.set(rows);
+    } catch (error) {
+      console.error('載入血管通路事件清單失敗:', error);
+      this.vaError.set('載入清單失敗，請稍後再試。');
+    } finally {
+      this.isLoadingVa.set(false);
+    }
+  }
+
+  closeVaModal(): void {
+    this.showVaModal.set(false);
+  }
+
+  openVaRecord(row: { patientId: string; patientName: string }): void {
+    this.vaDialogPatient.set({ patientId: row.patientId, patientName: row.patientName });
+  }
+
+  /** 病人卡「血管通路事件」圖示：直接開該病人的事件視窗（不分身分，門診/住院/急診皆可填） */
+  openCardVaRecord(patient: MyPatientItem): void {
+    this.vaDialogPatient.set({ patientId: patient.patientId, patientName: patient.name });
+  }
+
+  async closeVaRecord(): Promise<void> {
+    this.vaDialogPatient.set(null);
+    if (this.showVaModal()) {
+      await this.openVaModal(); // 重新彙整徽章數（也會一併更新卡片紅點）
+    } else {
+      // 關窗後可能剛修正了被退回的事件，回補卡片紅點
+      await this.loadVaRejected();
+    }
+  }
+
   getShiftSupplySummary(shiftCode: string): { supplies: string; medications: string } {
     const patients = this.getShiftPatients(shiftCode);
     if (patients.length === 0) return { supplies: '', medications: '' };
@@ -506,6 +627,8 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
 
       // 0. 併行載入初透衛教對象清單（供病人卡圖示用），與其他資料一起等，避免序列化多一輪往返
       const eduTargetsPromise = this.loadEduTargets();
+      // 血管通路「已退回」事件（病人卡圖示紅點用）：不擋卡片渲染，載到即補上紅點
+      void this.loadVaRejected();
 
       // 1. Ensure patients are loaded
       await this.patientStore.fetchPatientsIfNeeded();
