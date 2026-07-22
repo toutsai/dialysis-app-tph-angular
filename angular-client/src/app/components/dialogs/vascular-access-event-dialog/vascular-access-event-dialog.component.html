@@ -123,6 +123,11 @@
             </select>
           </div>
         </div>
+        <div class="va-field" *ngIf="form.location === '其他'">
+          <span class="va-label">院所名稱</span>
+          <input type="text" class="va-input" [(ngModel)]="form.locationOther"
+                 placeholder="請輸入院所名稱（未填則記為「其他」）" />
+        </div>
 
         <!-- 介入治療專屬欄位 -->
         <ng-container *ngIf="form.eventType === 'intervention'">

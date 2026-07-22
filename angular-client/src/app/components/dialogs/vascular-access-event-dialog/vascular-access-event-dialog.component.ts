@@ -25,6 +25,8 @@ interface VascularEventForm {
   eventType: VascularEventType;
   eventDate: string;
   location: string;
+  /** 院所=「其他」時的名稱輸入；儲存時直接以名稱入庫（location 存實際院所名） */
+  locationOther: string;
   failureReason: string;
   repairMethod: string;
   repairMethodOther: string;
@@ -96,6 +98,7 @@ export class VascularAccessEventDialogComponent implements OnInit {
       eventType: 'intervention',
       eventDate: this.defaultDate || getToday(),
       location: '本院',
+      locationOther: '',
       failureReason: '',
       repairMethod: '',
       repairMethodOther: '',
@@ -202,10 +205,14 @@ export class VascularAccessEventDialogComponent implements OnInit {
   startEdit(ev: VascularAccessEvent): void {
     this.editingId.set(ev.id);
     this.errorMsg.set('');
+    // 院所存的是實際名稱：不在固定選單內（例如「其他」自由輸入的院所）→ 切「其他」並帶入文字欄
+    const location = ev.location || '';
+    const isCustomLocation = !!location && !VASCULAR_LOCATIONS.includes(location);
     this.form = {
       eventType: ev.eventType,
       eventDate: ev.eventDate || getToday(),
-      location: ev.location || '',
+      location: isCustomLocation ? '其他' : location,
+      locationOther: isCustomLocation ? location : '',
       failureReason: ev.failureReason || '',
       repairMethod: ev.repairMethod || '',
       repairMethodOther: ev.repairMethodOther || '',
@@ -279,7 +286,8 @@ export class VascularAccessEventDialogComponent implements OnInit {
       newAccessType: !isIntervention ? f.newAccessType || null : null,
       newAccessSide: !isIntervention ? f.newAccessSide || null : null,
       newAccessSite: !isIntervention ? f.newAccessSite || null : null,
-      location: f.location || null,
+      // 「其他」有輸入名稱時直接存名稱（清單/KiDit 顯示實際院所；未填則記「其他」）
+      location: (f.location === '其他' && f.locationOther.trim()) ? f.locationOther.trim() : f.location || null,
       notes: f.notes.trim() || null,
       updatePatientMaster: !isIntervention && f.updatePatientMaster,
       // 組長補登：儲存即為已確認（後端限 editor）
