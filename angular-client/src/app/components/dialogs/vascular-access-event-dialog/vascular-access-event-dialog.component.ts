@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '@app/core/services/api.service';
+import { PatientStoreService } from '@app/core/services/patient-store.service';
 import { getToday } from '@/utils/dateUtils';
 import {
   type VascularAccessEvent,
@@ -43,10 +44,19 @@ interface VascularEventForm {
 })
 export class VascularAccessEventDialogComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly patientStore = inject(PatientStoreService);
 
   @Input() patientId = '';
   @Input() patientName = '';
+  /** 病人待選模式（組長於工作日誌補登用）：以姓名/病歷號搜尋後確認 */
+  @Input() patientPicker = false;
+  /** 表單預設日期（工作日誌帶入當下選的日期；空=今天） */
+  @Input() defaultDate = '';
+  /** 直接確認模式（editor 專用）：儲存即 confirmed（填寫人=確認人），不走待確認 */
+  @Input() directConfirm = false;
   @Output() close = new EventEmitter<void>();
+  /** 每次成功儲存/刪除後發出（工作日誌用來即時刷新合併視圖） */
+  @Output() saved = new EventEmitter<void>();
 
   // 代碼表（模板用）
   readonly failureReasons = VASCULAR_FAILURE_REASONS;
@@ -67,14 +77,24 @@ export class VascularAccessEventDialogComponent implements OnInit {
 
   form: VascularEventForm = this.emptyForm();
 
+  // 病人搜尋（picker 模式）
+  patientSearchTerm = '';
+  readonly patientSearchResults = signal<{ id: string; name: string; medicalRecordNumber: string; statusLabel: string }[]>([]);
+  private readonly patientStatusLabels: Record<string, string> = { opd: '門診', ipd: '住院', er: '急診' };
+
   ngOnInit(): void {
+    // emptyForm 在欄位初始化時 defaultDate 尚未綁定，這裡重建一次以帶入預設日期
+    this.form = this.emptyForm();
+    if (this.patientPicker) {
+      void this.patientStore.fetchPatientsIfNeeded();
+    }
     void this.loadEvents();
   }
 
   private emptyForm(): VascularEventForm {
     return {
       eventType: 'intervention',
-      eventDate: getToday(),
+      eventDate: this.defaultDate || getToday(),
       location: '本院',
       failureReason: '',
       repairMethod: '',
@@ -134,9 +154,48 @@ export class VascularAccessEventDialogComponent implements OnInit {
     }
   }
 
-  /** pending/rejected 可編輯/刪除；confirmed 唯讀（組長已於工作日誌確認） */
+  /** 病人搜尋：姓名或病歷號部分符合（picker 模式；範圍=病人清單含門診/住院/急診，不含已刪除） */
+  onPatientSearch(): void {
+    const term = this.patientSearchTerm.trim();
+    if (!term) {
+      this.patientSearchResults.set([]);
+      return;
+    }
+    const matches = this.patientStore
+      .allPatients()
+      .filter((p) => (p.name || '').includes(term) || (p.medicalRecordNumber || '').includes(term))
+      .slice(0, 20)
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        medicalRecordNumber: p.medicalRecordNumber || '',
+        statusLabel: this.patientStatusLabels[(p as any).status] || '',
+      }));
+    this.patientSearchResults.set(matches);
+  }
+
+  selectPatient(p: { id: string; name: string }): void {
+    this.patientId = p.id;
+    this.patientName = p.name;
+    this.patientSearchTerm = '';
+    this.patientSearchResults.set([]);
+    this.errorMsg.set('');
+    this.cancelEdit();
+    void this.loadEvents();
+  }
+
+  changePatient(): void {
+    this.patientId = '';
+    this.patientName = '';
+    this.events.set([]);
+    this.cancelEdit();
+  }
+
+  /** pending/rejected 可編輯/刪除；confirmed 唯讀（組長已於工作日誌確認）。
+   *  directConfirm（組長）模式下 confirmed 也可改（editor 權限，後端會重新同步 KiDit）。 */
   canModify(ev: VascularAccessEvent): boolean {
-    return ev.status === 'pending' || ev.status === 'rejected';
+    if (ev.status === 'pending' || ev.status === 'rejected') return true;
+    return this.directConfirm && ev.status === 'confirmed';
   }
 
   /** 帶回下方表單改為編輯模式（rejected 事件編輯儲存後，後端自動改回 pending 重審） */
@@ -172,6 +231,7 @@ export class VascularAccessEventDialogComponent implements OnInit {
       await firstValueFrom(this.api.delete<{ success: boolean }>(`/vascular-access/events/${ev.id}`));
       if (this.editingId() === ev.id) this.cancelEdit();
       await this.loadEvents();
+      this.saved.emit();
     } catch (error: any) {
       console.error('刪除血管通路事件失敗:', error);
       this.errorMsg.set(`刪除失敗：${error?.error?.message || error?.message || error}`);
@@ -196,6 +256,10 @@ export class VascularAccessEventDialogComponent implements OnInit {
 
   async save(): Promise<void> {
     if (this.isSaving()) return;
+    if (!this.patientId) {
+      this.errorMsg.set('請先搜尋並選擇病人。');
+      return;
+    }
     const err = this.validate();
     if (err) {
       this.errorMsg.set(err);
@@ -218,6 +282,8 @@ export class VascularAccessEventDialogComponent implements OnInit {
       location: f.location || null,
       notes: f.notes.trim() || null,
       updatePatientMaster: !isIntervention && f.updatePatientMaster,
+      // 組長補登：儲存即為已確認（後端限 editor）
+      confirmed: this.directConfirm && !this.editingId() ? true : undefined,
     };
     try {
       const id = this.editingId();
@@ -228,6 +294,7 @@ export class VascularAccessEventDialogComponent implements OnInit {
       }
       this.cancelEdit(); // 清空表單並回新增模式
       await this.loadEvents();
+      this.saved.emit();
     } catch (error: any) {
       console.error('儲存血管通路事件失敗:', error);
       this.errorMsg.set(`儲存失敗：${error?.error?.message || error?.message || error}`);

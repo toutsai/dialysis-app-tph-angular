@@ -5,13 +5,46 @@
         <i class="fas fa-syringe"></i>
         血管通路事件
         <span class="va-sub" *ngIf="patientName">— {{ patientName }}</span>
+        <button *ngIf="patientPicker && patientId" type="button" class="va-mini-btn" (click)="changePatient()">
+          <i class="fas fa-exchange-alt"></i> 更換病人
+        </button>
       </h3>
       <button class="va-close" (click)="onClose()" title="關閉"><i class="fas fa-times"></i></button>
     </div>
 
     <div class="va-body">
+      <!-- 病人搜尋（組長補登模式：以姓名/病歷號確認病人身分後才能填寫） -->
+      <div class="va-section" *ngIf="patientPicker && !patientId">
+        <h4 class="va-section-title"><i class="fas fa-user-plus"></i> 選擇病人</h4>
+        <div class="va-field">
+          <span class="va-label">輸入病人姓名或病歷號搜尋</span>
+          <input type="text" class="va-input" [(ngModel)]="patientSearchTerm"
+                 (ngModelChange)="onPatientSearch()" placeholder="例如：王小明 或 50123456" autofocus />
+        </div>
+        <div *ngIf="patientSearchTerm.trim() && patientSearchResults().length === 0" class="va-empty">
+          查無符合的病人。
+        </div>
+        <table *ngIf="patientSearchResults().length > 0" class="va-table">
+          <thead>
+            <tr><th>姓名</th><th>病歷號</th><th class="col-status">身分</th><th class="col-actions"></th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let p of patientSearchResults()">
+              <td>{{ p.name }}</td>
+              <td>{{ p.medicalRecordNumber || '—' }}</td>
+              <td class="col-status">{{ p.statusLabel }}</td>
+              <td class="col-actions">
+                <button type="button" class="va-mini-btn edit" (click)="selectPatient(p)">
+                  <i class="fas fa-check"></i> 選擇
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <!-- 上半：該病人事件歷史 -->
-      <div class="va-section">
+      <div class="va-section" *ngIf="!patientPicker || patientId">
         <h4 class="va-section-title"><i class="fas fa-history"></i> 事件歷史</h4>
         <div *ngIf="isLoading()" class="va-loading"><div class="spinner"></div><p>載入中...</p></div>
         <div *ngIf="!isLoading() && events().length === 0" class="va-empty">尚無血管通路事件紀錄。</div>
@@ -56,7 +89,7 @@
       </div>
 
       <!-- 下半：新增/編輯表單 -->
-      <div class="va-section va-form-section">
+      <div class="va-section va-form-section" *ngIf="!patientPicker || patientId">
         <h4 class="va-section-title">
           <i class="fas" [ngClass]="editingId() ? 'fa-pencil-alt' : 'fa-plus-circle'"></i>
           {{ editingId() ? '編輯事件' : '新增事件' }}
@@ -156,9 +189,9 @@
               </select>
             </div>
           </div>
-          <label class="va-chk" title="組長確認後，將此新通路同步寫入病人基本資料的血管通路欄位">
+          <label class="va-chk" title="確認後，將此新通路同步寫入病人基本資料的血管通路欄位">
             <input type="checkbox" [(ngModel)]="form.updatePatientMaster" />
-            確認後同步更新病人基本資料的血管通路
+            {{ directConfirm ? '儲存後同步更新病人基本資料的血管通路' : '確認後同步更新病人基本資料的血管通路' }}
           </label>
         </ng-container>
 
@@ -179,7 +212,10 @@
     </div>
 
     <div class="va-footer">
-      <i class="fas fa-info-circle"></i> 儲存後將送組長於工作日誌確認，確認後才列入 KiDit 申報
+      <i class="fas fa-info-circle"></i>
+      {{ directConfirm
+        ? '組長補登：儲存即為已確認並列入 KiDit 申報（填寫人＝確認人）'
+        : '儲存後將送組長於工作日誌確認，確認後才列入 KiDit 申報' }}
     </div>
   </div>
 </div>

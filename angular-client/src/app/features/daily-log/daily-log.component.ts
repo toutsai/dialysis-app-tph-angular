@@ -21,6 +21,7 @@ import { ConfirmDialogComponent } from '@app/components/dialogs/confirm-dialog/c
 import { AlertDialogComponent } from '@app/components/dialogs/alert-dialog/alert-dialog.component';
 import { HandoverNotesDialogComponent } from '@app/components/dialogs/handover-notes-dialog/handover-notes-dialog.component';
 import { MarqueeEditDialogComponent } from '@app/components/dialogs/marquee-edit-dialog/marquee-edit-dialog.component';
+import { VascularAccessEventDialogComponent } from '@app/components/dialogs/vascular-access-event-dialog/vascular-access-event-dialog.component';
 
 @Component({
   selector: 'app-daily-log',
@@ -33,6 +34,7 @@ import { MarqueeEditDialogComponent } from '@app/components/dialogs/marquee-edit
     AlertDialogComponent,
     HandoverNotesDialogComponent,
     MarqueeEditDialogComponent,
+    VascularAccessEventDialogComponent,
   ],
   templateUrl: './daily-log.component.html',
   styleUrl: './daily-log.component.css',
@@ -91,6 +93,8 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   isVascularRejectDialogVisible = false;
   vascularRejectTarget: VascularAccessEvent | null = null;
   vascularRejectIsRevoke = false;
+  /** 組長補登血管通路事件彈窗（與主護同一元件；病人待選+直接確認模式） */
+  isVascularAddDialogVisible = false;
 
   // Dialog Data
   handoverNotes = '';
@@ -1025,6 +1029,22 @@ export class DailyLogComponent implements OnInit, OnDestroy {
       console.error('載入血管通路事件失敗:', error);
       if (this.selectedDate() === dateStr) this.vascularEvents.set([]);
     }
+  }
+
+  /** 組長補登：開啟與主護相同的事件彈窗（病人待選、儲存即已確認、日期預設當前日誌日） */
+  openVascularAddDialog(): void {
+    if (!this.canManageVascularEvents) return;
+    this.isVascularAddDialogVisible = true;
+  }
+
+  closeVascularAddDialog(): void {
+    this.isVascularAddDialogVisible = false;
+    void this.loadVascularEvents(this.selectedDate());
+  }
+
+  onVascularAddDialogSaved(): void {
+    // 彈窗內每次儲存/刪除即刷新合併視圖（不等關窗）
+    void this.loadVascularEvents(this.selectedDate());
   }
 
   confirmVascularEvent(ev: VascularAccessEvent & { summary: string }): void {

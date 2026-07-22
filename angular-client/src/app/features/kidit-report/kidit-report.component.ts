@@ -170,7 +170,7 @@ export class KiditReportComponent implements OnInit {
   /**
    * 開啟「當月血管通路事件清單」彈窗：點擊時即時彙整
    * ① 當月每日工作日誌的 vascularAccessLog（來源=工作日誌）
-   * ② 新表 vascular_access_events 的 confirmed 事件（來源=主護填寫）
+   * ② 新表 vascular_access_events 的 confirmed 事件（來源=事件填寫：主護填寫經確認或組長補登）
    * 每次點開才查詢（月量不大），不在每日工作日誌新增時同步，避免維護同步副本。
    */
   async openVascularList(): Promise<void> {
@@ -210,7 +210,7 @@ export class KiditReportComponent implements OnInit {
         });
       });
 
-      // 新表 confirmed 事件（主護填寫→組長確認）
+      // 新表 confirmed 事件（主護填寫→組長確認，或組長於工作日誌直接補登）
       const events: VascularAccessEvent[] = evRes?.events || [];
       events.forEach((ev) => {
         rows.push({
@@ -219,7 +219,7 @@ export class KiditReportComponent implements OnInit {
           date: (ev.eventDate || '').slice(0, 10),
           interventions: describeVascularEvent(ev),
           location: ev.location || '',
-          source: '主護填寫',
+          source: '事件填寫',
         });
       });
 

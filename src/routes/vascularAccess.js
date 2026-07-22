@@ -128,6 +128,34 @@ async function resyncKidit(dateStr) {
   }
 }
 
+// 重建事件確認時連動病人主檔（transaction 內呼叫）。
+// TEMP 短期導管不寫主檔（非長期通路型態）。回傳 {before, after} 或 null。
+function applyReconstructionMasterUpdate(db, row) {
+  if (
+    !(
+      row.event_type === 'reconstruction' &&
+      row.update_patient_master &&
+      row.new_access_type &&
+      row.new_access_type !== 'TEMP'
+    )
+  ) {
+    return null
+  }
+  const patient = db
+    .prepare('SELECT id, vasc_access, access_creation_date FROM patients WHERE id = ?')
+    .get(row.patient_id)
+  if (!patient) return null
+  const nextAccess = buildMasterVascAccess(row)
+  const masterUpdate = {
+    before: { vascAccess: patient.vasc_access, accessCreationDate: patient.access_creation_date },
+    after: { vascAccess: nextAccess, accessCreationDate: row.event_date },
+  }
+  db.prepare(
+    `UPDATE patients SET vasc_access = ?, access_creation_date = ?, updated_at = datetime('now', 'localtime') WHERE id = ?`,
+  ).run(nextAccess, row.event_date, patient.id)
+  return masterUpdate
+}
+
 // ========================================
 // 事件 CRUD
 // ========================================
@@ -174,11 +202,17 @@ router.get('/events', authenticate, (req, res) => {
   }
 })
 
-// 主護建立事件（status 固定 pending）
-router.post('/events', ...isContributor, (req, res) => {
+// 建立事件。主護建立=pending 待組長確認；組長（editor）可帶 confirmed:true
+// 直接建立為已確認（工作日誌補登用，填寫人=確認人，儲存即進 KiDit 並連動主檔）。
+router.post('/events', ...isContributor, async (req, res) => {
   try {
     const db = getDatabase()
     const { patientId } = req.body
+    const directConfirm = req.body.confirmed === true
+
+    if (directConfirm && !hasPermission(req.user?.role, 'editor')) {
+      return res.status(403).json({ error: true, message: '直接確認需要組長(editor)以上權限' })
+    }
 
     const patient = db
       .prepare('SELECT id, name, medical_record_number FROM patients WHERE id = ?')
@@ -194,34 +228,62 @@ router.post('/events', ...isContributor, (req, res) => {
 
     const id = uuidv4()
     const cols = extractEventColumns(req.body)
-    db.prepare(
-      `INSERT INTO vascular_access_events (
-         id, patient_id, patient_name, medical_record_number,
-         event_date, event_type, failure_reason, repair_method, repair_method_other,
-         new_access_type, new_access_side, new_access_site,
-         location, notes, status, update_patient_master, created_by
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
-    ).run(
-      id,
-      patient.id,
-      patient.name,
-      patient.medical_record_number || '',
-      cols.event_date,
-      cols.event_type,
-      cols.failure_reason,
-      cols.repair_method,
-      cols.repair_method_other,
-      cols.new_access_type,
-      cols.new_access_side,
-      cols.new_access_site,
-      cols.location,
-      cols.notes,
-      cols.update_patient_master,
-      JSON.stringify({ uid: req.user.id, name: req.user.name }),
-    )
+    const userJson = JSON.stringify({ uid: req.user.id, name: req.user.name })
+    const status = directConfirm ? 'confirmed' : 'pending'
+
+    let masterUpdate = null
+    const insertTx = db.transaction(() => {
+      db.prepare(
+        `INSERT INTO vascular_access_events (
+           id, patient_id, patient_name, medical_record_number,
+           event_date, event_type, failure_reason, repair_method, repair_method_other,
+           new_access_type, new_access_side, new_access_site,
+           location, notes, status, update_patient_master, created_by, confirmed_by,
+           confirmed_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+           CASE WHEN ? = 'confirmed' THEN datetime('now', 'localtime') END)`,
+      ).run(
+        id,
+        patient.id,
+        patient.name,
+        patient.medical_record_number || '',
+        cols.event_date,
+        cols.event_type,
+        cols.failure_reason,
+        cols.repair_method,
+        cols.repair_method_other,
+        cols.new_access_type,
+        cols.new_access_side,
+        cols.new_access_site,
+        cols.location,
+        cols.notes,
+        status,
+        cols.update_patient_master,
+        userJson,
+        directConfirm ? userJson : '{}',
+        status,
+      )
+      if (directConfirm) {
+        const row = db.prepare('SELECT * FROM vascular_access_events WHERE id = ?').get(id)
+        masterUpdate = applyReconstructionMasterUpdate(db, row)
+      }
+    })
+    insertTx()
+
+    if (directConfirm) {
+      await logAudit('CONFIRM_VASCULAR_EVENT', req.user.id, req.user.name, 'vascular_access_events', id, {
+        patientId: patient.id,
+        patientName: patient.name,
+        eventDate: cols.event_date,
+        eventType: cols.event_type,
+        directCreate: true,
+        masterUpdate,
+      })
+      await resyncKidit(cols.event_date)
+    }
 
     const row = db.prepare('SELECT * FROM vascular_access_events WHERE id = ?').get(id)
-    res.json({ success: true, event: formatEvent(row) })
+    res.json({ success: true, event: formatEvent(row), masterUpdated: !!masterUpdate })
   } catch (error) {
     console.error('建立血管通路事件錯誤:', error)
     res.status(500).json({ error: true, message: '建立血管通路事件失敗' })
@@ -309,27 +371,7 @@ router.put('/events/:id/confirm', ...isEditor, async (req, res) => {
          WHERE id = ?`,
       ).run(JSON.stringify({ uid: req.user.id, name: req.user.name }), row.id)
 
-      // 重建事件連動病人主檔（TEMP 短期導管不寫主檔：非長期通路型態）
-      if (
-        row.event_type === 'reconstruction' &&
-        row.update_patient_master &&
-        row.new_access_type &&
-        row.new_access_type !== 'TEMP'
-      ) {
-        const patient = db
-          .prepare('SELECT id, vasc_access, access_creation_date FROM patients WHERE id = ?')
-          .get(row.patient_id)
-        if (patient) {
-          const nextAccess = buildMasterVascAccess(row)
-          masterUpdate = {
-            before: { vascAccess: patient.vasc_access, accessCreationDate: patient.access_creation_date },
-            after: { vascAccess: nextAccess, accessCreationDate: row.event_date },
-          }
-          db.prepare(
-            `UPDATE patients SET vasc_access = ?, access_creation_date = ?, updated_at = datetime('now', 'localtime') WHERE id = ?`,
-          ).run(nextAccess, row.event_date, patient.id)
-        }
-      }
+      masterUpdate = applyReconstructionMasterUpdate(db, row)
     })
     confirmTx()
 

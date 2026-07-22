@@ -309,14 +309,16 @@
       <section class="log-section">
         <div class="section-header">
           <h2>血管通路阻塞</h2>
-          <button *ngIf="!isPageLocked" (click)="addRow('vascularAccessLog')" class="add-row-btn-header">新增處置</button>
+          <!-- 新增一律走事件彈窗（與主護同一表單，存新表帶CSV代碼；組長儲存即已確認）。
+               不掛 isPageLocked：補登昨日事件是常態，事件表不受歷史日誌鎖影響。舊 JSON 列僅保留檢視/編輯。 -->
+          <button *ngIf="canManageVascularEvents" (click)="openVascularAddDialog()" class="add-row-btn-header">新增處置</button>
         </div>
 
         <!-- 主護填寫事件（vascular_access_events 新表）：確認/退回直接打事件 API，不經日誌整包 PUT。
              操作鈕只看 editor 權限、刻意不掛 isPageLocked——歷史鎖只鎖下方 JSON 手動區，
              組長常隔天才確認前一日事件（刻意設計）。 -->
         <div *ngIf="vascularEvents().length > 0" class="vascular-events-block">
-          <div class="vascular-events-subtitle">主護填寫事件</div>
+          <div class="vascular-events-subtitle">血管通路事件（主護填寫／組長補登）</div>
           <div class="dynamic-table-container">
             <table class="dynamic-table vascular-events-table">
               <thead>
@@ -530,7 +532,10 @@
 
       <!-- 行動版：血管通路阻塞 -->
       <div class="mobile-section-card">
-        <h2 class="mobile-section-title">血管通路阻塞</h2>
+        <h2 class="mobile-section-title">
+          血管通路阻塞
+          <button *ngIf="canManageVascularEvents" (click)="openVascularAddDialog()" class="add-row-btn-header">新增處置</button>
+        </h2>
         <!-- 主護填寫事件（同桌面版：只看 editor 權限、刻意不掛 isPageLocked） -->
         <div *ngIf="vascularEvents().length > 0" class="log-entry-list vascular-events-mobile">
           <div *ngFor="let ev of vascularEvents()" class="log-entry-card">
@@ -624,6 +629,16 @@
     (confirm)="handleVascularRejectConfirm($event)"
     (cancel)="handleVascularRejectCancel()">
   </app-ward-number-dialog>
+
+  <!-- 組長補登血管通路事件（與主護同一元件：病人待選、日期預設當前日誌日、儲存即已確認） -->
+  <app-vascular-access-event-dialog
+    *ngIf="isVascularAddDialogVisible"
+    [patientPicker]="true"
+    [directConfirm]="true"
+    [defaultDate]="selectedDate()"
+    (saved)="onVascularAddDialogSaved()"
+    (close)="closeVascularAddDialog()">
+  </app-vascular-access-event-dialog>
 
   <app-confirm-dialog
     [isVisible]="isConfirmDialogVisible"
