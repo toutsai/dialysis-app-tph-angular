@@ -426,10 +426,10 @@ router.post('/notifications', authenticate, async (req, res) => {
     `,
     ).run(
       id,
-      type || 'info',
-      title || '',
-      message || '',
-      recipientId || null,
+      typeof type === 'string' && type ? type : 'info',
+      typeof title === 'string' ? title : '',
+      typeof message === 'string' ? message : '',
+      typeof recipientId === 'string' && recipientId ? recipientId : null,
       JSON.stringify(enrichedData),
     )
 

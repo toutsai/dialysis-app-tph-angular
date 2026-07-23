@@ -301,7 +301,7 @@ export class TaskCreateDialogComponent implements OnChanges, OnInit {
           notifMessage = `新交辦: 給 ${assigneeLabel} - ${dataToSave.content.substring(0, 20)}...`;
           notifType = 'task';
         }
-        this.notificationService.createGlobalNotification(notifMessage, notifType, { documentId: savedDoc.id } as any);
+        this.notificationService.createGlobalNotification(notifMessage, notifType);
         this.submit.emit({ ...dataToSave, id: savedDoc.id });
         this.handleClose();
       } catch (error) {
