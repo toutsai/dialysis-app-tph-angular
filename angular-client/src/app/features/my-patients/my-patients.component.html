@@ -35,7 +35,7 @@
       <i class="fas fa-user-plus"></i> 基本資料表
     </button>
     <button class="care-tool-btn va" (click)="openVaModal()">
-      <i class="fas fa-syringe"></i> 血管通路事件
+      <i class="fas fa-band-aid"></i> 血管通路事件
     </button>
     <button class="care-tool-btn kidit" disabled title="規劃中，之後開放">
       <i class="fas fa-file-medical"></i> 照護病人 KiDit 申報欄位填寫（規劃中）
@@ -122,7 +122,7 @@
                 title="血管通路事件"
                 (click)="openCardVaRecord(patient)"
               >
-                <i class="fas fa-syringe"></i>
+                <i class="fas fa-band-aid"></i>
                 <span
                   *ngIf="vaRejectedIds().has(patient.patientId)"
                   class="va-reject-dot"
@@ -368,7 +368,7 @@
     <div class="ct-modal" (click)="$event.stopPropagation()">
       <div class="ct-modal-header">
         <h3>
-          <i class="fas fa-syringe"></i> 血管通路事件填寫
+          <i class="fas fa-band-aid"></i> 血管通路事件填寫
           <span class="ct-count" *ngIf="!isLoadingVa()">（{{ vaRows().length }} 位）</span>
         </h3>
         <button class="ct-close-btn" (click)="closeVaModal()" title="關閉"><i class="fas fa-times"></i></button>
