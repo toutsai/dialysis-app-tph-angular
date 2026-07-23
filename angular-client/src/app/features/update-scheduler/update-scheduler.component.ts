@@ -97,7 +97,7 @@ export class UpdateSchedulerComponent implements OnInit, OnDestroy {
         prefix: '[?]',
       };
       const typeText = this.TYPE_MAP[update.changeType] || '未知變更';
-      const title = `${statusInfo.prefix} ${update.patientName} - ${typeText}`;
+      const title = `${statusInfo.prefix} ${typeText} ${update.patientName} ${this.buildEventContent(update)}`.trim();
       return {
         id: update.id,
         title: title,
@@ -182,6 +182,46 @@ export class UpdateSchedulerComponent implements OnInit, OnDestroy {
   }
 
   // --- Format ---
+  private readonly STATUS_LABELS: Record<string, string> = { opd: '門診', ipd: '住院', er: '急診' };
+
+  /** 行事曆單行內容：「舊值→新值」。舊值取病人現況——僅 pending 顯示（此時現況＝變更前值）；
+   *  已執行的紀錄現況已是新值，補舊值會顯示成「住院→住院」誤導，故只顯示「→新值」。 */
+  private buildEventContent(update: any): string {
+    const payload = update?.payload || update?.changeData || {};
+    const patient: any =
+      update.status === 'pending'
+        ? this.allPatients().find((p: any) => p.id === update.patientId)
+        : null;
+    switch (update.changeType) {
+      case 'UPDATE_STATUS': {
+        const from = patient ? this.STATUS_LABELS[patient.status] || patient.status || '' : '';
+        const to = this.STATUS_LABELS[payload.status] || (payload.status || '?').toUpperCase();
+        const ward = payload.wardNumber ? `(${payload.wardNumber})` : '';
+        return `${from}→${to}${ward}`;
+      }
+      case 'UPDATE_MODE': {
+        const from = (patient?.mode as string) || '';
+        return `${from}→${payload.mode || '?'}`;
+      }
+      case 'UPDATE_FREQ':
+        return `→${payload.freq || '?'}`;
+      case 'UPDATE_BASE_SCHEDULE_RULE': {
+        const shiftMap: Record<number, string> = { 0: '早', 1: '午', 2: '晚' };
+        const bed = String(payload.bedNum).startsWith('p')
+          ? `外圍${String(payload.bedNum).slice(-1)}`
+          : `${payload.bedNum}床`;
+        return `→${shiftMap[payload.shiftIndex] ?? '?'}班${bed} ${payload.freq || ''}`.trim();
+      }
+      case 'RESTORE_PATIENT': {
+        const to = this.STATUS_LABELS[payload.status] || (payload.status || '?').toUpperCase();
+        return `→${to}${payload.wardNumber ? `(${payload.wardNumber})` : ''}`;
+      }
+      case 'DELETE_PATIENT':
+      default:
+        return '';
+    }
+  }
+
   formatPayload(update: any): string {
     const changeType = update?.changeType;
     // 後端清單 API 回傳欄位是 changeData（DB 存 change_data）；payload 僅前端送出時使用
