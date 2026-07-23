@@ -123,13 +123,13 @@
 }
 .ct-modal-header h3 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.25rem;
   color: #263238;
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
-.ct-count { font-size: 0.82rem; color: #78909c; font-weight: 400; }
+.ct-count { font-size: 0.95rem; color: #78909c; font-weight: 400; }
 .ct-modal-actions { display: flex; align-items: center; gap: 0.5rem; }
 .ct-close-btn {
   border: 1px solid #eceff1;
@@ -147,11 +147,11 @@
   overflow: auto;
   min-height: 0;
 }
-.ct-hint { margin: 0 0 0.6rem; font-size: 0.78rem; color: #78909c; }
+.ct-hint { margin: 0 0 0.6rem; font-size: 0.92rem; color: #78909c; }
 .ct-loading, .ct-empty { text-align: center; color: #90a4ae; padding: 2.5rem 0; }
-.ct-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.ct-table { width: 100%; border-collapse: collapse; font-size: 1rem; }
 .ct-table th, .ct-table td {
-  padding: 0.45rem 0.6rem;
+  padding: 0.5rem 0.65rem;
   border-bottom: 1px solid #eceff1;
   text-align: left;
   white-space: nowrap;
@@ -171,7 +171,7 @@
   display: inline-block;
   padding: 0.1rem 0.5rem;
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: 0.88rem;
   font-weight: 700;
 }
 .ct-badge.today { background: #e7f5ff; color: #1971c2; }

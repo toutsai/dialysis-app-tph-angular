@@ -29,13 +29,13 @@
   <!-- 照護工作按鈕列 -->
   <div *ngIf="!isLoading()" class="care-tools-bar">
     <button class="care-tool-btn edu" (click)="openEduModal()">
-      <i class="fas fa-chalkboard-teacher"></i> 照護病人初透衛教紀錄
+      <i class="fas fa-chalkboard-teacher"></i> 初透衛教
     </button>
     <button class="care-tool-btn firstdia" (click)="openFirstDiaModal()">
-      <i class="fas fa-user-plus"></i> 負責本院初透基本資料建立
+      <i class="fas fa-user-plus"></i> 基本資料表
     </button>
     <button class="care-tool-btn va" (click)="openVaModal()">
-      <i class="fas fa-syringe"></i> 血管通路事件填寫
+      <i class="fas fa-syringe"></i> 血管通路事件
     </button>
     <button class="care-tool-btn kidit" disabled title="規劃中，之後開放">
       <i class="fas fa-file-medical"></i> 照護病人 KiDit 申報欄位填寫（規劃中）
