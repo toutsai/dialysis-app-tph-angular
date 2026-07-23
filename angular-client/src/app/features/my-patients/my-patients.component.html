@@ -310,9 +310,17 @@
       <div class="ct-modal-header">
         <h3>
           <i class="fas fa-user-plus"></i> 本院初透基本資料建立
-          <span class="ct-count" *ngIf="!isLoadingFirstDia()">（{{ firstDiaRows().length }} 位）</span>
+          <span class="ct-count" *ngIf="!isLoadingFirstDia()">（{{ firstDiaVisibleRows().length }} 位）</span>
         </h3>
         <div class="ct-modal-actions">
+          <label class="ct-filter-toggle">
+            <input
+              type="checkbox"
+              [ngModel]="firstDiaOnlyMine()"
+              (ngModelChange)="firstDiaOnlyMine.set($event)"
+            />
+            只顯示我需要填寫的
+          </label>
           <button class="care-tool-btn firstdia sm" (click)="goToKiditStation()">
             <i class="fas fa-arrow-right"></i> 前往 KiDit 申報工作站補建檔
           </button>
@@ -327,10 +335,10 @@
         </p>
         <div *ngIf="isLoadingFirstDia()" class="ct-loading"><div class="spinner"></div><p>正在彙整待建檔名單...</p></div>
         <div *ngIf="!isLoadingFirstDia() && firstDiaError()" class="ct-empty">{{ firstDiaError() }}</div>
-        <div *ngIf="!isLoadingFirstDia() && !firstDiaError() && firstDiaRows().length === 0" class="ct-empty">
-          目前沒有待建檔的本院初透病人。
+        <div *ngIf="!isLoadingFirstDia() && !firstDiaError() && firstDiaVisibleRows().length === 0" class="ct-empty">
+          {{ firstDiaOnlyMine() ? '目前沒有您需要建檔的本院初透病人。' : '目前沒有待建檔的本院初透病人。' }}
         </div>
-        <table *ngIf="!isLoadingFirstDia() && firstDiaRows().length > 0" class="ct-table">
+        <table *ngIf="!isLoadingFirstDia() && firstDiaVisibleRows().length > 0" class="ct-table">
           <thead>
             <tr>
               <th>病人</th><th>病歷號</th><th>本院初透日</th><th>透析模式</th>
@@ -338,7 +346,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let r of firstDiaRows()" class="ct-row" [class.ct-row-mine]="r.mine"
+            <tr *ngFor="let r of firstDiaVisibleRows()" class="ct-row" [class.ct-row-mine]="r.mine"
                 (click)="openFirstDiaTarget(r)" title="點擊開啟 KiDit 建檔視窗">
               <td>{{ r.name }}</td>
               <td>{{ r.medicalRecordNumber || '—' }}</td>

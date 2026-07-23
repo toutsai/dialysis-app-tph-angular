@@ -99,6 +99,27 @@
           <input type="number" [(ngModel)]="formData.initialCr" step="0.1" />
         </div>
 
+        <div class="form-group">
+          <label>19 腎臟超音波檢查異常</label>
+          <select [(ngModel)]="formData.renalUltrasoundAbnormal">
+            @for (opt of opts.yesNo; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+        </div>
+        <div class="form-group">
+          <label>20 超音波異常說明</label>
+          <input type="text" [(ngModel)]="formData.renalUltrasoundDesc" maxlength="20" />
+        </div>
+        <div class="form-group">
+          <label>超音波異常其他說明</label>
+          <input type="text" [(ngModel)]="formData.renalUltrasoundOtherDesc" maxlength="20" />
+        </div>
+        <div class="form-group">
+          <label>21 腎臟超音波檢驗日期</label>
+          <input type="date" [(ngModel)]="formData.renalUltrasoundDate" />
+        </div>
+
         <div class="form-group full-width">
           <label>22 其他系統性疾病 (複選)</label>
           <div class="checkbox-grid">
@@ -140,7 +161,16 @@
           <label>27 Hb</label><input type="number" [(ngModel)]="formData.initialHb" />
         </div>
         <div class="form-group">
+          <label>28 BUN</label><input type="number" [(ngModel)]="formData.initialLabBUN" step="0.1" />
+        </div>
+        <div class="form-group">
+          <label>29 Creatinine</label><input type="number" [(ngModel)]="formData.initialLabCr" step="0.1" />
+        </div>
+        <div class="form-group">
           <label>30 K</label><input type="number" [(ngModel)]="formData.initialK" />
+        </div>
+        <div class="form-group">
+          <label>31 CCr</label><input type="number" [(ngModel)]="formData.initialCCr" step="0.1" />
         </div>
         <div class="form-group">
           <label>32 Albumin</label><input type="number" [(ngModel)]="formData.initialAlb" />
@@ -197,6 +227,10 @@
             }
           </div>
         </div>
+        <div class="form-group full-width">
+          <label>37 其他症狀 (其他，請說明)</label>
+          <input type="text" [(ngModel)]="formData.symptomsOtherDescription" maxlength="50" />
+        </div>
 
         <div class="form-group full-width">
           <label>38 緊急透析原因 (複選)</label>
@@ -210,9 +244,41 @@
           </div>
         </div>
 
+        <div class="form-group full-width">
+          <label>39 緊急透析原因 (其他，請說明)</label>
+          <input type="text" [(ngModel)]="formData.emergencyReasonsOtherDescription" maxlength="50" />
+        </div>
+
         <div class="form-group">
           <label>40 緊急檢驗日期</label>
           <input type="date" [(ngModel)]="formData.emergencyLabDate" />
+        </div>
+        <div class="form-group">
+          <label>41 Hct</label><input type="number" [(ngModel)]="formData.emergencyHct" />
+        </div>
+        <div class="form-group">
+          <label>42 Hb</label><input type="number" [(ngModel)]="formData.emergencyHb" />
+        </div>
+        <div class="form-group">
+          <label>43 BUN</label><input type="number" [(ngModel)]="formData.emergencyBUN" step="0.1" />
+        </div>
+        <div class="form-group">
+          <label>44 Creatinine</label><input type="number" [(ngModel)]="formData.emergencyCr" step="0.1" />
+        </div>
+        <div class="form-group">
+          <label>45 CCr</label><input type="number" [(ngModel)]="formData.emergencyCCr" step="0.1" />
+        </div>
+        <div class="form-group">
+          <label>46 Na</label><input type="number" [(ngModel)]="formData.emergencyNa" />
+        </div>
+        <div class="form-group">
+          <label>47 K</label><input type="number" [(ngModel)]="formData.emergencyK" />
+        </div>
+        <div class="form-group">
+          <label>48 HCO3</label><input type="number" [(ngModel)]="formData.emergencyHCO3" />
+        </div>
+        <div class="form-group">
+          <label>49 Albumin</label><input type="number" [(ngModel)]="formData.emergencyAlb" />
         </div>
         <div class="form-group">
           <label>50 初次重大傷病</label>

@@ -131,6 +131,17 @@
 }
 .ct-count { font-size: 0.95rem; color: #78909c; font-weight: 400; }
 .ct-modal-actions { display: flex; align-items: center; gap: 0.5rem; }
+.ct-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.92rem;
+  color: #455a64;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+.ct-filter-toggle input { cursor: pointer; }
 .ct-close-btn {
   border: 1px solid #eceff1;
   background: #f5f7f8;

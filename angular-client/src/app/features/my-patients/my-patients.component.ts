@@ -309,6 +309,11 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
   readonly isLoadingFirstDia = signal(false);
   readonly firstDiaRows = signal<any[]>([]);
   readonly firstDiaError = signal('');
+  /** 基本資料表清單：預設只列自己（本院初透當日照顧護理師）需要建檔的病人，可切換看全部 */
+  readonly firstDiaOnlyMine = signal(true);
+  readonly firstDiaVisibleRows = computed(() =>
+    this.firstDiaOnlyMine() ? this.firstDiaRows().filter((r) => r.mine) : this.firstDiaRows(),
+  );
 
   canEditEducation(): boolean {
     return !this.authService.isViewer();

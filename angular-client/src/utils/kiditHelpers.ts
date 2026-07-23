@@ -208,7 +208,7 @@ export const KIDIT_HISTORY_OPTIONS: Record<string, KiditOption[] | KiditIndexedO
     { value: '2', label: '2 重度慢性腎衰竭且...(詳見說明)' },
     { value: '3', label: '3 其他' },
   ] as KiditOption[],
-  // 22 其他系統性疾病 (複選) - 對應 10 個位元
+  // 22 其他系統性疾病 (複選) - 官方 12 項，匯出欄寬 15 位元
   systemicDiseases: [
     { index: 0, label: '糖尿病' },
     { index: 1, label: '高血壓' },
@@ -220,6 +220,8 @@ export const KIDIT_HISTORY_OPTIONS: Record<string, KiditOption[] | KiditIndexedO
     { index: 7, label: '結核' },
     { index: 8, label: 'Gout (痛風)' },
     { index: 9, label: '高血脂' },
+    { index: 10, label: 'GERD (胃食道逆流)' },
+    { index: 11, label: '其他（請說明）' },
   ] as KiditIndexedOption[],
   // 36 其他症狀 (複選) - 對應 10 個位元
   otherSymptoms: [
