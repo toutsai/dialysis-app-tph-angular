@@ -391,8 +391,13 @@ export class TaskStoreService implements OnDestroy {
   private shouldShowMessageOnDate(msg: FeedMessage, dateStr: string): boolean {
     const excludedStatuses = new Set(['completed', 'resolved', 'cancelled']);
     if (msg.status && excludedStatuses.has(msg.status)) return false; // 已讀/已解決 → 不顯示
-    // 調班申請自動產生的交班留言：沒人會手動點完成，只顯示到關聯日當天，過期即退場
-    if (msg.type === '調班' && msg.targetDate && dateStr > msg.targetDate) return false;
+    // 調班申請自動產生的交班留言：沒人會手動點完成，從申請日顯示到關聯日當天，過期即退場
+    // （一般留言的「關聯日當天起」規則對它不適用，否則未來日期的調班在申請當下看不到）
+    if (msg.type === '調班' && msg.targetDate) {
+      const createdDate = typeof msg.createdAt === 'string' ? msg.createdAt.slice(0, 10) : '';
+      if (createdDate && dateStr < createdDate) return false; // 檢視歷史日期頁不回溯顯示
+      return dateStr <= msg.targetDate;
+    }
     // 有關聯日：關聯日「當天起」顯示（dateStr >= targetDate），過期未讀仍持續顯示；
     // 無關聯日：持續顯示。
     if (msg.targetDate) return dateStr >= msg.targetDate;
