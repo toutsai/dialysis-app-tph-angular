@@ -12,6 +12,7 @@ import { TaskStoreService } from '@services/task-store.service';
 import { MedicationStoreService } from '@services/medication-store.service';
 import { ArchiveStoreService } from '@services/archive-store.service';
 import { NotificationService } from '@services/notification.service';
+import { buildExceptionMessageTasks } from '@app/core/utils/exception-messages';
 import { DateStateService } from '@app/core/services/date-state.service';
 import { UserDirectoryService } from '@services/user-directory.service';
 import { SseEventsService, type ScheduleSavedPayload } from '@app/core/services/sse-events.service';
@@ -1860,6 +1861,15 @@ export class StatsComponent implements OnInit, OnDestroy {
       };
       const msg = actionMsgMap[resp?.action] || `成功新增調班申請: ${formData.patientName}`;
       this.notificationService.createGlobalNotification(msg, 'success' as any);
+      // 建立調班交班留言（組版與調班管理頁共用）；拖回原位＝調班取消，無需交接
+      if (resp?.action !== 'cancelled') {
+        const user = this.auth.currentUser();
+        if (user) {
+          const tasksApi = this.apiManager.create<FirestoreRecord>('tasks');
+          const messageTasks = buildExceptionMessageTasks(formData, user, false);
+          await Promise.all(messageTasks.map((t) => tasksApi.save(t)));
+        }
+      }
     } catch (error: any) {
       console.error('提交調班申請失敗:', error);
       this.showAlert('提交失敗', `無法儲存調班申請: ${error.message}`);

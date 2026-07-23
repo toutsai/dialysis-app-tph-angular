@@ -25,6 +25,7 @@ import { firstValueFrom, Subscription } from 'rxjs';
 import { SseEventsService } from '@app/core/services/sse-events.service';
 import { PatientStoreService } from '@app/core/services/patient-store.service';
 import { NotificationService } from '@app/core/services/notification.service';
+import { buildExceptionMessageTasks, getExceptionMessageDate } from '@app/core/utils/exception-messages';
 import { AlertDialogComponent } from '@app/components/dialogs/alert-dialog/alert-dialog.component';
 import { ConfirmDialogComponent } from '@app/components/dialogs/confirm-dialog/confirm-dialog.component';
 import { ExceptionCreateDialogComponent } from '@app/components/dialogs/exception-create-dialog/exception-create-dialog.component';
@@ -739,84 +740,20 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
       }
       this.notificationService.createGlobalNotification(message, 'success');
 
-      // Create message tasks
-      let messageContent = '';
-      const reasonText = `\n原因: ${formData.reason}`;
-      switch (formData.type) {
-        case 'MOVE':
-          messageContent =
-            `【${isUpdating ? '更新-臨時調班' : '臨時調班'}】\n原排班: ${formData.from.sourceDate} (${this.formatBedAndShift(formData.from)})\n新排班: ${formData.to.goalDate} (${this.formatBedAndShift(formData.to)})` +
-            reasonText;
-          break;
-        case 'SUSPEND':
-          messageContent =
-            `【區間暫停】\n從 ${formData.startDate} 至 ${formData.endDate}` + reasonText;
-          break;
-        case 'ADD_SESSION': {
-          const modeText = formData.mode && formData.mode !== 'HD' ? ` [${formData.mode}]` : '';
-          messageContent =
-            `【臨時加洗${modeText}】\n日期: ${formData.to.goalDate} (${this.formatBedAndShift(formData.to)})` +
-            reasonText;
-          break;
-        }
-        case 'SWAP':
-          messageContent =
-            `【同日互調】\n日期: ${formData.date}\n${formData.patient1.patientName} (${this.formatBedAndShift(formData.patient1)}) <=> ${formData.patient2.patientName} (${this.formatBedAndShift(formData.patient2)})` +
-            reasonText;
-          break;
-      }
-
+      // 建立調班交班留言（組版與護理分組共用：core/utils/exception-messages）
       const user = this.currentUser();
-      if (messageContent && user) {
-        const createMessageTask = (patientInfo: any) => ({
-          category: 'message',
-          type: '調班',
-          content: messageContent,
-          patientId: patientInfo.id,
-          patientName: patientInfo.name,
-          targetDate: this.getExceptionMessageDate(formData),
-          status: 'pending',
-          creator: {
-            uid: user.uid,
-            name: user.name,
-            title: user.title,
-          },
-          createdAt: new Date().toISOString(),
-          expireAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-          assignee: null,
-        });
-        if (formData.type === 'SWAP') {
-          const task1 = createMessageTask({
-            id: formData.patient1.patientId,
-            name: formData.patient1.patientName,
-          });
-          const task2 = createMessageTask({
-            id: formData.patient2.patientId,
-            name: formData.patient2.patientName,
-          });
-          await Promise.all([this.tasksApi.save(task1), this.tasksApi.save(task2)]);
-        } else {
-          const task = createMessageTask({
-            id: formData.patientId,
-            name: formData.patientName,
-          });
-          await this.tasksApi.save(task);
-        }
+      if (user) {
+        const messageTasks = buildExceptionMessageTasks(formData, user, isUpdating);
+        await Promise.all(messageTasks.map((t) => this.tasksApi.save(t)));
       }
     } catch (error: any) {
       console.error('提交調班申請失敗:', error);
     }
   }
 
-  /** 調班留言的關聯日：MOVE/ADD_SESSION 的日期在 to.goalDate；SUSPEND 顯示到暫停區間結束 */
-  private getExceptionMessageDate(ex: any): string {
-    if (ex.type === 'SUSPEND') return ex.endDate || ex.startDate || '';
-    return ex.date || ex.startDate || ex.to?.goalDate || '';
-  }
-
   private async deleteOldExceptionMessages(existingEx: any): Promise<void> {
     try {
-      const targetDate = this.getExceptionMessageDate(existingEx);
+      const targetDate = getExceptionMessageDate(existingEx);
       if (!targetDate) return;
 
       const typeKeywords: Record<string, string> = {
