@@ -163,7 +163,7 @@ function applyReconstructionMasterUpdate(db, row) {
 // 查詢事件（工作日誌合併視圖 / KiDit 清單 / 季度匯出共用）
 router.get('/events', authenticate, (req, res) => {
   try {
-    const { startDate, endDate, patientId, status } = req.query
+    const { startDate, endDate, createdDate, patientId, status } = req.query
     const db = getDatabase()
 
     const wheres = []
@@ -175,6 +175,13 @@ router.get('/events', authenticate, (req, res) => {
     if (endDate) {
       wheres.push('e.event_date <= ?')
       params.push(endDate)
+    }
+    // 建立日查詢（工作日誌用）：主護常事後補記數天前的通血管，事件掛在「填寫當天」的
+    // 日誌給組長確認；季度造管等申報仍用 event_date（startDate/endDate）。
+    // created_at 為本地時間字串 YYYY-MM-DD HH:MM:SS，取前 10 碼比對。
+    if (createdDate) {
+      wheres.push('substr(e.created_at, 1, 10) = ?')
+      params.push(createdDate)
     }
     if (patientId) {
       wheres.push('e.patient_id = ?')

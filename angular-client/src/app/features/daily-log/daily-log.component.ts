@@ -1013,10 +1013,12 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   // ===================================================================
   private async loadVascularEvents(dateStr: string): Promise<void> {
     try {
+      // 以「建立日」載入（非事件日）：通血管常是事後補記前幾天的事，
+      // 事件掛在填寫當天的日誌讓組長看得到；事件日期顯示於列上、申報仍用事件日。
       const resp = await firstValueFrom(
         this.api.get<{ success: boolean; events: VascularAccessEvent[] }>(
           '/vascular-access/events',
-          { startDate: dateStr, endDate: dateStr },
+          { createdDate: dateStr },
         ),
       );
       if (this.selectedDate() !== dateStr) return; // 已切換日期，不覆蓋

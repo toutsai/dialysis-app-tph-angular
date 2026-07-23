@@ -318,12 +318,12 @@
              操作鈕只看 editor 權限、刻意不掛 isPageLocked——歷史鎖只鎖下方 JSON 手動區，
              組長常隔天才確認前一日事件（刻意設計）。 -->
         <div *ngIf="vascularEvents().length > 0" class="vascular-events-block">
-          <div class="vascular-events-subtitle">血管通路事件（主護填寫／組長補登）</div>
+          <div class="vascular-events-subtitle">血管通路事件（主護填寫／組長補登；列出當日填寫的事件，事件日期為實際處置日）</div>
           <div class="dynamic-table-container">
             <table class="dynamic-table vascular-events-table">
               <thead>
                 <tr>
-                  <th class="col-date">日期</th>
+                  <th class="col-date">事件日期</th>
                   <th class="col-name">姓名</th>
                   <th class="col-mrn">病歷號</th>
                   <th class="col-summary-wide">摘要</th>
