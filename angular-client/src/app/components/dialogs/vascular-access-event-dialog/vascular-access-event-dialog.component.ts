@@ -56,6 +56,8 @@ export class VascularAccessEventDialogComponent implements OnInit {
   @Input() defaultDate = '';
   /** 直接確認模式（editor 專用）：儲存即 confirmed（填寫人=確認人），不走待確認 */
   @Input() directConfirm = false;
+  /** 開窗即直接進入指定事件的編輯模式（工作日誌「修改」鈕直達用），僅套用一次 */
+  @Input() initialEditEventId = '';
   @Output() close = new EventEmitter<void>();
   /** 每次成功儲存/刪除後發出（工作日誌用來即時刷新合併視圖） */
   @Output() saved = new EventEmitter<void>();
@@ -123,6 +125,11 @@ export class VascularAccessEventDialogComponent implements OnInit {
       // 新的在前（依事件日期）
       const list = (resp?.events || []).slice().sort((a, b) => String(b.eventDate).localeCompare(String(a.eventDate)));
       this.events.set(list);
+      if (this.initialEditEventId) {
+        const target = list.find((e) => e.id === this.initialEditEventId);
+        this.initialEditEventId = ''; // 僅首次載入套用，之後的重載不再自動進編輯
+        if (target && this.canModify(target)) this.startEdit(target);
+      }
     } catch (error) {
       console.error('載入血管通路事件失敗:', error);
       this.errorMsg.set('載入事件歷史失敗，請稍後再試。');

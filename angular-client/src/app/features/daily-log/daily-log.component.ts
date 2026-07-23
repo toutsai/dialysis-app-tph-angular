@@ -1033,14 +1033,33 @@ export class DailyLogComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** 「修改」直達目標（組長補登的已確認事件）；null＝一般補登模式（病人待選） */
+  vascularEditTarget: { patientId: string; patientName: string; eventId: string } | null = null;
+
   /** 組長補登：開啟與主護相同的事件彈窗（病人待選、儲存即已確認、日期預設當前日誌日） */
   openVascularAddDialog(): void {
     if (!this.canManageVascularEvents) return;
+    this.vascularEditTarget = null;
+    this.isVascularAddDialogVisible = true;
+  }
+
+  /** 事件是否為組長補登（建立即確認：填寫人＝確認人）。這類提供直接「修改」，
+   *  主護填寫的仍走撤銷→退回主護修正流程（勿混用，避免改了主護不知情）。 */
+  isLeaderCreatedVascularEvent(ev: VascularAccessEvent): boolean {
+    const creatorUid = ev.createdBy?.uid;
+    return !!creatorUid && creatorUid === ev.confirmedBy?.uid;
+  }
+
+  /** 組長修改自己補登的已確認事件：開同一彈窗（帶定病人）並直接進入該筆編輯 */
+  editVascularEvent(ev: VascularAccessEvent): void {
+    if (!this.canManageVascularEvents) return;
+    this.vascularEditTarget = { patientId: ev.patientId, patientName: ev.patientName, eventId: ev.id };
     this.isVascularAddDialogVisible = true;
   }
 
   closeVascularAddDialog(): void {
     this.isVascularAddDialogVisible = false;
+    this.vascularEditTarget = null;
     void this.loadVascularEvents(this.selectedDate());
   }
 
