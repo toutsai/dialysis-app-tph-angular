@@ -141,25 +141,21 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
       const title = `${style.prefix} ${this.buildEventTitle(ex, patientName)}`;
       const description = this.buildEventDescription(ex);
       if (ex.type === 'MOVE' && ex.from && ex.to) {
-        const fromEvent = {
-          id: `${ex.id}-from`,
-          title: `[原班] ${patientName} ${this.formatBedAndShift(ex.from)}`,
-          start: ex.from.sourceDate,
-          allDay: true,
-          backgroundColor: '#adb5bd',
-          borderColor: '#adb5bd',
-          extendedProps: { ...ex, formattedDetails: description },
-        };
-        const toEvent = {
-          id: ex.id,
-          title: `${style.prefix} [新班] ${patientName} ${this.formatBedAndShift(ex.to)}`,
-          start: ex.to.goalDate,
+        // 一筆調班合併成一條「原班→新班」；跨天時兩天各放同一條（同內容），
+        // 取代舊的 [原班]/[新班] 兩條事件（換床多時行事曆爆量、也看不出對應關係）
+        const moveEvent = (id: string, start: string) => ({
+          id,
+          title: `${style.prefix} 調班 ${patientName} ${this.formatShiftBed(ex.from)}→${this.formatShiftBed(ex.to)}`,
+          start,
           allDay: true,
           backgroundColor: finalColor,
           borderColor: finalColor,
           extendedProps: { ...ex, formattedDetails: description },
-        };
-        return [fromEvent, toEvent];
+        });
+        if (ex.from.sourceDate === ex.to.goalDate) {
+          return [moveEvent(ex.id, ex.to.goalDate)];
+        }
+        return [moveEvent(`${ex.id}-from`, ex.from.sourceDate), moveEvent(ex.id, ex.to.goalDate)];
       }
       let exclusiveEndDate: string | null = null;
       if (ex.endDate && ex.endDate !== ex.startDate) {
@@ -333,12 +329,33 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
       case 'SUSPEND':
         return `${patientName} 暫停`;
       case 'RANGE_MOVE':
+        if (ex.from && ex.to) {
+          return `區間調班 ${patientName} ${this.formatShiftBed(ex.from)}→${this.formatShiftBed(ex.to)}`;
+        }
         return `${patientName} 區間調至 ${this.formatBedAndShift(ex.to)}`;
       case 'SWAP':
+        if (ex.patient1 && ex.patient2) {
+          const p1 = ex.patient1.patientName || ex.patient1.name || '?';
+          const p2 = ex.patient2.patientName || ex.patient2.name || '?';
+          return `互調 ${p1}(${this.formatShiftBed(ex.patient1)})↔${p2}(${this.formatShiftBed(ex.patient2)})`;
+        }
         return `${patientName} 互調`;
       default:
         return `${patientName} - ${this.typeMap[ex.type] || '未知'}`;
     }
+  }
+
+  /** 行事曆用精簡格式：「早班35床」「午班外圍3」（無法判定時退回 formatBedAndShift 的 N/A） */
+  private formatShiftBed(targetData: any): string {
+    if (!targetData) return 'N/A';
+    const bedNum = targetData.fromBedNum || targetData.bedNum;
+    const shiftCode = targetData.fromShiftCode || targetData.shiftCode;
+    if (!bedNum || !shiftCode) return 'N/A';
+    const shiftName = this.shiftMap[shiftCode] || shiftCode;
+    const bedDisplay = String(bedNum).startsWith('peripheral-')
+      ? `外圍${String(bedNum).split('-')[1]}`
+      : `${bedNum}床`;
+    return `${shiftName}${bedDisplay}`;
   }
 
   private buildEventDescription(ex: any): string {
