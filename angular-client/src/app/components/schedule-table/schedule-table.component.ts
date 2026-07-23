@@ -115,6 +115,11 @@ export class ScheduleTableComponent implements AfterViewInit, OnDestroy {
     return `${bedNum}号床`;
   }
 
+  /** 外圍床位的病人多顯示當下住院病房號（外圍＝機器推到病房洗，調床要知道人在哪個加護病房） */
+  isPeripheralBed(bedNum: any): boolean {
+    return typeof bedNum === 'string' && bedNum.startsWith('peripheral-');
+  }
+
   getShiftDisplayName(shiftCode: string): string {
     return this.shiftDisplayNames[shiftCode] || shiftCode;
   }

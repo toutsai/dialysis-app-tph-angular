@@ -143,3 +143,11 @@
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
   z-index: 20;
 }
+
+/* 外圍床位：當下住院病房號（調床要看人在哪個加護病房） */
+.peripheral-ward-label {
+  font-size: 0.72rem;
+  color: #7b1fa2;
+  font-weight: 600;
+  line-height: 1.2;
+}
