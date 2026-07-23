@@ -770,11 +770,11 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
       if (messageContent && user) {
         const createMessageTask = (patientInfo: any) => ({
           category: 'message',
-          type: '常規',
+          type: '調班',
           content: messageContent,
           patientId: patientInfo.id,
           patientName: patientInfo.name,
-          targetDate: formData.date || formData.startDate,
+          targetDate: this.getExceptionMessageDate(formData),
           status: 'pending',
           creator: {
             uid: user.uid,
@@ -808,9 +808,15 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** 調班留言的關聯日：MOVE/ADD_SESSION 的日期在 to.goalDate；SUSPEND 顯示到暫停區間結束 */
+  private getExceptionMessageDate(ex: any): string {
+    if (ex.type === 'SUSPEND') return ex.endDate || ex.startDate || '';
+    return ex.date || ex.startDate || ex.to?.goalDate || '';
+  }
+
   private async deleteOldExceptionMessages(existingEx: any): Promise<void> {
     try {
-      const targetDate = existingEx.date || existingEx.startDate;
+      const targetDate = this.getExceptionMessageDate(existingEx);
       if (!targetDate) return;
 
       const typeKeywords: Record<string, string> = {

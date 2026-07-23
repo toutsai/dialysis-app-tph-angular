@@ -21,6 +21,7 @@ export class PatientMessagesIconComponent {
       case '抽血': return '🩸';
       case '衛教': return '📢';
       case 'record': return '🩺';
+      case '調班': return '🔁';
       case 'memo':
       case '常規':
       default: return '📝';
@@ -32,6 +33,7 @@ export class PatientMessagesIconComponent {
       case '抽血': return '有抽血提醒';
       case '衛教': return '有衛教事項';
       case 'record': return '有病情紀錄';
+      case '調班': return '有調班交接';
       case 'memo':
       case '常規':
       default: return '有交班事項';
