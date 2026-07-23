@@ -33,6 +33,9 @@ export class KiditDetailModalComponent implements OnChanges {
   activeTab: TabKey = 'movement';
   subTab: 'current' | 'unused' = 'current';
   localEvents: any[] = [];
+  /** 當日動態列表顯示用：血管通路事件(ACCESS)不顯示（使用者決策：動態只看病人動態；
+   *  事件仍留在 localEvents 作為建檔/造管手填資料的載體，儲存時整包寫回不會弄丟） */
+  visibleEvents: any[] = [];
   selectedPatientId: string | null = null;
   selectedPatientName = '';
   selectedPatientData: any = null;
@@ -88,6 +91,7 @@ export class KiditDetailModalComponent implements OnChanges {
       ? { id: this.selectedPatientId, name: this.selectedPatientName }
       : null;
     this.selectedEvent = this.localEvents.find(e => e.patientId === this.selectedPatientId) || {};
+    this.visibleEvents = this.localEvents.filter(e => e.type !== 'ACCESS');
   }
 
   getEventData(key: string) {
@@ -174,9 +178,10 @@ export class KiditDetailModalComponent implements OnChanges {
     return !!hasProfile && !!hasHistory;
   }
 
-  // Delete flow
-  deleteEvent(index: number): void {
-    const event = this.localEvents[index];
+  // Delete flow（列表已過濾 ACCESS，索引不再與 localEvents 對齊，改以事件 id 反查）
+  deleteEvent(event: any): void {
+    const index = this.localEvents.findIndex(e => e.id === event.id);
+    if (index === -1) return;
     this.pendingDeleteIndex = index;
     this.confirmMessage = `確定要移除 ${event.patientName} 的這筆紀錄嗎？`;
     this.showConfirmDelete = true;

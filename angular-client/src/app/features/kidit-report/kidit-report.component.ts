@@ -17,6 +17,8 @@ interface DayData {
   dateStr: string;
   dayNum: number;
   events: any[];
+  /** 月曆格顯示的事件數：排除血管通路事件(ACCESS)，與詳情彈窗當日動態列表一致 */
+  displayCount: number;
   unregistered: number;
 }
 
@@ -111,11 +113,14 @@ export class KiditReportComponent implements OnInit {
       for (let d = 1; d <= daysInMonth; d++) {
         const dateStr = `${this.currentYear()}-${String(this.currentMonth()).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
         const events = logMap[dateStr] || [];
+        // 計數排除 ACCESS：通路事件不顯示於當日動態，也不該掛在「未登錄」提醒上
+        const countable = events.filter((e: any) => e.type !== 'ACCESS');
         tempDays.push({
           dateStr,
           dayNum: d,
           events,
-          unregistered: events.filter((e: any) => !e.isRegistered).length,
+          displayCount: countable.length,
+          unregistered: countable.filter((e: any) => !e.isRegistered).length,
         });
       }
       this.daysData.set(tempDays);

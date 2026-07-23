@@ -34,7 +34,7 @@
         <div class="action-bar">
           <p class="hint-text">
             <i class="fas fa-info-circle"></i>
-            點擊列表中的病人以編輯詳細資料。若該項目無需申報，可點擊垃圾桶刪除。
+            點擊列表中的病人以編輯詳細資料。若該項目無需申報，可點擊垃圾桶刪除。血管通路事件不在此顯示（由主護填寫／組長確認流程管理）。
           </p>
         </div>
 
@@ -54,7 +54,7 @@
             </thead>
             <tbody>
               <tr
-                *ngFor="let event of localEvents; let i = index; trackBy: trackByEventId"
+                *ngFor="let event of visibleEvents; trackBy: trackByEventId"
                 [class.is-selected]="selectedPatientId === event.patientId"
                 (click)="selectPatient(event)"
               >
@@ -88,7 +88,7 @@
                   <button class="icon-btn goto-btn" (click)="openFormFor(event, 'vascular')" title="開啟血管通路處置">
                     <i class="fas fa-syringe"></i>
                   </button>
-                  <button class="icon-btn delete-btn" (click)="deleteEvent(i)" title="從列表中移除">
+                  <button class="icon-btn delete-btn" (click)="deleteEvent(event)" title="從列表中移除">
                     <i class="fas fa-trash-alt"></i>
                   </button>
                   <div class="status-indicator">
@@ -99,7 +99,7 @@
                   </div>
                 </td>
               </tr>
-              <tr *ngIf="localEvents.length === 0">
+              <tr *ngIf="visibleEvents.length === 0">
                 <td colspan="8" class="empty-row">本日無相關動態紀錄</td>
               </tr>
             </tbody>
