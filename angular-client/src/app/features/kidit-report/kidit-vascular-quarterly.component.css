@@ -82,6 +82,38 @@
 .qv-filter-btn + .qv-filter-btn { border-left: 1px solid #cfd8dc; }
 .qv-filter-btn:hover { background: #f5f7f8; }
 .qv-filter-btn.active { background: #1971c2; border-color: #1971c2; color: #fff; }
+.qv-tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0 1.1rem;
+  border-bottom: 2px solid #eceff1;
+  flex-shrink: 0;
+}
+.qv-tab-btn {
+  border: 0;
+  background: transparent;
+  color: #607d8b;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.qv-tab-btn:hover { color: #37474f; background: #f5f7f8; }
+.qv-tab-btn.active { color: #1971c2; border-bottom-color: #1971c2; }
+.qv-tab-badge {
+  background: #c92a2a;
+  color: #fff;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.05rem 0.45rem;
+  line-height: 1.2;
+}
 .qv-quarter {
   font-weight: 700;
   color: #37474f;

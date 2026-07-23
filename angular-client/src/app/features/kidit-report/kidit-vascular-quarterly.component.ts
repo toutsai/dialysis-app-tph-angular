@@ -64,6 +64,14 @@ const ACCESS_TYPE_TO_GROUP: Record<string, string> = {
   AVF: 'Avf', AVG: 'Avg', PERM: 'Perm', TEMP: 'Temp',
 };
 
+/** 欄位群組頁籤（純顯示層：只控制右側顯示哪些欄，資料/儲存/匯出不受影響） */
+interface FieldTab {
+  key: string;
+  label: string;
+  cols: ColDef[];
+  groups: { label: string; cols: number }[];
+}
+
 @Component({
   selector: 'app-kidit-vascular-quarterly',
   standalone: true,
@@ -99,23 +107,51 @@ export class KiditVascularQuarterlyComponent implements OnInit, OnDestroy {
   // 欄位定義（82 欄，順序與 KIDIT_VASCULAR_FIELD_KEYS 相同）
   // -------------------------------------------------------------------------
   readonly columns: ColDef[] = this.buildColumns();
-  /** 群組表頭列：前 4 欄為病人資訊（排除/姓名/現況/警告） */
-  readonly groupHeaders: { label: string; cols: number }[] = [
-    { label: '病人', cols: 4 },
-    { label: '基本', cols: 3 },
-    { label: '目前通路快照', cols: 12 },
-    { label: '血流量', cols: 2 },
-    { label: '遠紅外線', cols: 3 },
-    { label: '其他熱療', cols: 3 },
-    { label: '並存通路', cols: 13 },
-    { label: '問題', cols: 1 },
-    { label: '介入治療 1', cols: 4 },
-    { label: '介入治療 2', cols: 4 },
-    { label: '介入治療 3', cols: 4 },
-    { label: '血管重建 1', cols: 11 },
-    { label: '血管重建 2', cols: 11 },
-    { label: '血管重建 3', cols: 11 },
-  ];
+  /** 欄位群組頁籤；「血流量／熱療」放第一位＝唯一必須人工填的區塊。姓名等病人 4 欄每頁固定。 */
+  readonly fieldTabs: FieldTab[] = this.buildFieldTabs();
+  readonly activeTabKey = signal<string>('flow');
+  readonly activeFieldTab = computed(
+    () => this.fieldTabs.find((t) => t.key === this.activeTabKey()) || this.fieldTabs[0],
+  );
+  /** 「血流量／熱療」頁籤紅字：未排除且必填 bestPumpFlow 未填的人數（＝匯出會擋的名單） */
+  readonly missingFlowCount = signal(0);
+
+  private buildFieldTabs(): FieldTab[] {
+    // 依 buildColumns 的固定順序切段（該處已有與 KIDIT_VASCULAR_FIELD_KEYS 的對齊防呆）
+    const c = this.columns;
+    const basic = c.slice(0, 3);
+    const cur = c.slice(3, 15);
+    const flow = c.slice(15, 17);
+    const fir = c.slice(17, 20);
+    const heat = c.slice(20, 23);
+    const coexist = c.slice(23, 36);
+    const problem = c.slice(36, 37);
+    const itv = c.slice(37, 49);
+    const rec = c.slice(49, 82);
+    const patient = { label: '病人', cols: 4 };
+    return [
+      {
+        key: 'flow', label: '血流量／熱療', cols: [...flow, ...fir, ...heat],
+        groups: [patient, { label: '血流量', cols: 2 }, { label: '遠紅外線', cols: 3 }, { label: '其他熱療', cols: 3 }],
+      },
+      {
+        key: 'snapshot', label: '通路快照', cols: [...basic, ...cur],
+        groups: [patient, { label: '基本', cols: 3 }, { label: '目前通路快照', cols: 12 }],
+      },
+      {
+        key: 'coexist', label: '並存通路', cols: coexist,
+        groups: [patient, { label: '並存通路', cols: 13 }],
+      },
+      {
+        key: 'itv', label: '介入治療', cols: [...problem, ...itv],
+        groups: [patient, { label: '問題', cols: 1 }, { label: '介入治療 1', cols: 4 }, { label: '介入治療 2', cols: 4 }, { label: '介入治療 3', cols: 4 }],
+      },
+      {
+        key: 'rec', label: '血管重建', cols: rec,
+        groups: [patient, { label: '血管重建 1', cols: 11 }, { label: '血管重建 2', cols: 11 }, { label: '血管重建 3', cols: 11 }],
+      },
+    ];
+  }
 
   private buildColumns(): ColDef[] {
     const accessSub = (prefix: string, fsList: string, csList: string): ColDef[] => [
@@ -273,6 +309,7 @@ export class KiditVascularQuarterlyComponent implements OnInit, OnDestroy {
 
       built.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh-Hant'));
       this.rows.set(built);
+      this.refreshMissingFlowCount();
     } catch (error) {
       console.error('載入季度造管資料失敗:', error);
       alert('載入季度造管資料失敗，請稍後再試。');
@@ -426,11 +463,20 @@ export class KiditVascularQuarterlyComponent implements OnInit, OnDestroy {
       row.overrideValues[key] = value ?? '';
     }
     this.queueSave(row);
+    if (key === 'bestPumpFlow') this.refreshMissingFlowCount();
   }
 
   toggleExcluded(row: QRow): void {
     row.excluded = !row.excluded;
     this.queueSave(row);
+    this.refreshMissingFlowCount();
+  }
+
+  /** rows 內容為就地變更（不重設 signal），計數用明確刷新而非 computed */
+  private refreshMissingFlowCount(): void {
+    this.missingFlowCount.set(
+      this.rows().filter((r) => !r.excluded && !String(r.values['bestPumpFlow'] || '').trim()).length,
+    );
   }
 
   private queueSave(row: QRow): void {
