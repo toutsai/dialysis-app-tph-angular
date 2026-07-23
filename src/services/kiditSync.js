@@ -39,7 +39,7 @@ function describeVaeEvent(row) {
 
 // 查該日已確認 (confirmed) 的血管通路事件，轉成 kidit_logbook 的 ACCESS 事件形狀。
 // id 前綴 vae_ 穩定不變（rebuild 時 merge 才能保留使用者已勾的 isRegistered），
-// 與工作日誌 JSON 產生的 access_<date>_<id> 不衝突。
+// 與舊版工作日誌 JSON 產生的 access_<date>_<id> 不衝突（access_ 已停產，僅相容保留舊資料）。
 function buildConfirmedVaeEvents(db, dateStr) {
   const rows = db
     .prepare(
@@ -129,35 +129,9 @@ export async function syncEventsToKiditLogbook(dateStr, dailyLogData) {
       }
     })
 
-    // 2-2. 處理血管通路事件 (Vascular Access)
-    const vascularAccessLog = typeof dailyLogData.vascularAccessLog === 'string'
-      ? JSON.parse(dailyLogData.vascularAccessLog || '[]')
-      : (dailyLogData.vascularAccessLog || [])
-
-    vascularAccessLog.forEach(item => {
-      if (item.patientId && item.name) {
-        let eventTime = fallbackTimestamp
-        if (item.timestamp) {
-          eventTime = typeof item.timestamp === 'string'
-            ? item.timestamp
-            : new Date(item.timestamp).toISOString()
-        }
-
-        const interventions = Array.isArray(item.interventions)
-          ? item.interventions.join(', ')
-          : (item.interventions || '')
-
-        dailyLogEvents.push({
-          id: `access_${dateStr}_${item.id || Date.now()}`,
-          type: 'ACCESS',
-          timestamp: eventTime,
-          patientName: item.name,
-          patientId: item.patientId,
-          medicalRecordNumber: item.medicalRecordNumber || '',
-          details: `通路處置: ${interventions} (${item.location || '未知院所'})`,
-        })
-      }
-    })
+    // 2-2. 工作日誌手動血管通路列（vascular_access_log JSON）已停產 access_ 事件（2026-07-23）：
+    // 通路事件改走 vascular_access_events 主護填寫→組長確認→vae_ 事件；每日動態只顯示病人動態與已確認通路。
+    // 既有掛了申報手填資料的舊 access_ 事件由步驟 4 的合併邏輯保留，勿在此恢復產生。
 
     // 2-2b. 併入已確認的血管通路事件（一樣吃 2-3 的透析模式快照補值）
     dailyLogEvents.push(...vaeEvents)
@@ -174,18 +148,8 @@ export async function syncEventsToKiditLogbook(dateStr, dailyLogData) {
       })
     }
 
-    // 3. 如果沒有事件，清空並返回
-    if (dailyLogEvents.length === 0) {
-      db.prepare(`
-        INSERT INTO kidit_logbook (id, date, events, updated_at)
-        VALUES (?, ?, '[]', datetime('now', 'localtime'))
-        ON CONFLICT(id) DO UPDATE SET
-          events = '[]',
-          updated_at = datetime('now', 'localtime')
-      `).run(dateStr, dateStr)
-
-      return { success: true, message: '無事件需要同步' }
-    }
+    // 3. 即使今日無新產生事件也要走合併——既有 access_ 事件可能掛著申報手填資料需保留，
+    //    不能像舊版直接把 events 清成 '[]'。
 
     // 4. 取得現有的 kidit_logbook 資料（保留使用者的手動勾選狀態）
     const existingDoc = db.prepare(`
@@ -206,6 +170,14 @@ export async function syncEventsToKiditLogbook(dateStr, dailyLogData) {
         // 以既有事件為底（保留使用者已填的申報表單欄位與勾選狀態），
         // 再以 daily_log 重新產生的受管欄位（type/timestamp/病人資訊/details）覆蓋
         eventsMap.set(existing.id, { ...existing, ...current })
+      } else if (
+        String(existing.id || '').startsWith('access_') &&
+        (existing.kidit_profile || existing.kidit_history || existing.kidit_vascular ||
+          existing.isRegistered || existing.transferOutHospital)
+      ) {
+        // 相容舊資料：access_ 事件已停產，但上面掛了建檔/造管手填資料或勾選者原樣保留，
+        // 避免該日重建時連申報資料一起消失；純顯示用的 access_ 事件則隨重建淘汰
+        eventsMap.set(existing.id, existing)
       }
     })
 
