@@ -56,7 +56,7 @@
                         }
                       </div>
                       @if (isPeripheralBed(bedNum) && details.patient.wardNumber) {
-                        <div class="peripheral-ward-label">病房 {{ details.patient.wardNumber }}</div>
+                        <div class="peripheral-ward-row"><span class="peripheral-ward-badge">{{ details.patient.wardNumber }}</span></div>
                       }
                     </div>
                   } @else if (isSlotInteractive(dayIndex)) {
@@ -100,7 +100,7 @@
                           }
                         </div>
                         @if (isPeripheralBed(bedNum) && details.patient.wardNumber) {
-                          <div class="peripheral-ward-label">病房 {{ details.patient.wardNumber }}</div>
+                          <div class="peripheral-ward-row"><span class="peripheral-ward-badge">{{ details.patient.wardNumber }}</span></div>
                         }
                       </div>
                     } @else if (isSlotInteractive(dayIndex)) {
