@@ -4,8 +4,13 @@
       <h3>
         <i class="fas fa-file-csv"></i>
         季度造管 CSV
-        <span class="qv-count" *ngIf="!isLoading()">（{{ rows().length }} 人）</span>
+        <span class="qv-count" *ngIf="!isLoading()">（{{ visibleRows().length }} 人{{ showAll() ? '' : '，全部 ' + rows().length + ' 人' }}）</span>
       </h3>
+
+      <div class="qv-filter">
+        <button class="qv-filter-btn" [class.active]="!showAll()" (click)="showAll.set(false)">本季有事件</button>
+        <button class="qv-filter-btn" [class.active]="showAll()" (click)="showAll.set(true)">全部</button>
+      </div>
 
       <div class="qv-quarter-nav">
         <button class="qv-nav-btn" (click)="changeQuarter(-1)" title="上一季">
@@ -37,8 +42,9 @@
 
     <p class="qv-hint">
       <i class="fas fa-info-circle"></i>
-      名單＝常規門診病人 ∪ 本季有已確認血管通路事件的病人。所有欄位可直接修改，改過的值與人工欄（★必填）自動儲存；
-      勾「排除」的病人不會列入匯出。匯出前會檢查「最佳 pump blood flow」是否全數填寫。
+      預設僅顯示本季有已確認血管通路事件的病人，點「全部」可檢視完整名單（常規門診 ∪ 本季有事件）。
+      所有欄位可直接修改，改過的值與人工欄（★必填）自動儲存；勾「排除」的病人不會列入匯出。
+      匯出涵蓋「全部」名單中未排除的病人（不受顯示篩選影響），匯出前會檢查「最佳 pump blood flow」是否全數填寫。
     </p>
 
     <div class="qv-body">
@@ -47,11 +53,11 @@
         <p>正在彙整本季造管資料...</p>
       </div>
 
-      <div *ngIf="!isLoading() && rows().length === 0" class="qv-empty">
-        本季無符合條件的病人。
+      <div *ngIf="!isLoading() && visibleRows().length === 0" class="qv-empty">
+        {{ showAll() ? '本季無符合條件的病人。' : '本季尚無已確認的血管通路事件，點「全部」可檢視完整名單。' }}
       </div>
 
-      <div class="qv-table-scroll" *ngIf="!isLoading() && rows().length > 0">
+      <div class="qv-table-scroll" *ngIf="!isLoading() && visibleRows().length > 0">
         <table class="qv-table">
           <thead>
             <tr class="qv-group-row">
@@ -68,7 +74,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let r of rows(); trackBy: trackByPatientId"
+            <tr *ngFor="let r of visibleRows(); trackBy: trackByPatientId"
                 [class.qv-row-excluded]="r.excluded"
                 [class.qv-row-flagged]="r.statusNote">
               <td class="qv-sticky qv-sticky-1 qv-name">{{ r.name || '—' }}</td>

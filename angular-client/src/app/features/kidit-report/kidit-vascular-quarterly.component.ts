@@ -1,4 +1,4 @@
-import { Component, EventEmitter, OnDestroy, OnInit, Output, inject, signal } from '@angular/core';
+import { Component, EventEmitter, OnDestroy, OnInit, Output, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PatientStoreService } from '@services/patient-store.service';
@@ -46,6 +46,8 @@ interface ColDef {
 interface QRow {
   patientId: string;
   name: string;
+  /** 本季有已確認血管通路事件（預設清單只列這些人） */
+  hasEvents: boolean;
   /** 已不符常規門診條件時的現況標示（'' = 正常常規門診） */
   statusNote: string;
   excluded: boolean;
@@ -79,6 +81,11 @@ export class KiditVascularQuarterlyComponent implements OnInit, OnDestroy {
   readonly isLoading = signal(false);
   readonly rows = signal<QRow[]>([]);
   readonly saveState = signal<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  /** 預設只顯示本季有已確認事件的病人；「全部」= 常規門診 ∪ 有事件（匯出不受此篩選影響） */
+  readonly showAll = signal(false);
+  readonly visibleRows = computed(() =>
+    this.showAll() ? this.rows() : this.rows().filter((r) => r.hasEvents),
+  );
 
   private readonly saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -299,6 +306,7 @@ export class KiditVascularQuarterlyComponent implements OnInit, OnDestroy {
     return {
       patientId,
       name,
+      hasEvents: evs.length > 0,
       statusNote,
       excluded: !!overrides?.excluded,
       warnings,

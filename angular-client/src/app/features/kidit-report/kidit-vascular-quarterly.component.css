@@ -64,6 +64,24 @@
   justify-content: center;
 }
 .qv-nav-btn:hover { background: #eceff1; color: #37474f; }
+.qv-filter {
+  display: inline-flex;
+  border: 1px solid #cfd8dc;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.qv-filter-btn {
+  border: 0;
+  background: #fff;
+  color: #607d8b;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.qv-filter-btn + .qv-filter-btn { border-left: 1px solid #cfd8dc; }
+.qv-filter-btn:hover { background: #f5f7f8; }
+.qv-filter-btn.active { background: #1971c2; border-color: #1971c2; color: #fff; }
 .qv-quarter {
   font-weight: 700;
   color: #37474f;
