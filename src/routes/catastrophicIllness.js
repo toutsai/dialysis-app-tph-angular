@@ -68,17 +68,31 @@ router.get('/kidit-profile/:patientId', ...isCatastrophicIllnessRole, (req, res)
     const db = getDatabase()
     const rows = db.prepare('SELECT date, events FROM kidit_logbook ORDER BY date DESC').all()
 
+    // 基本資料(kidit_profile)與病史(kidit_history)可能建在不同日期的事件上，各取最新一筆
+    let profile = null
+    let history = null
+    let foundDate = null
     for (const row of rows) {
       let events = []
       try { events = JSON.parse(row.events || '[]') } catch { continue }
-      const ev = events.find(
-        (e) => e && e.patientId === patientId && e.kidit_profile && Object.keys(e.kidit_profile).length > 0
-      )
-      if (ev) {
-        return res.json({ found: true, date: row.date, profile: ev.kidit_profile })
+      for (const e of events) {
+        if (!e || e.patientId !== patientId) continue
+        if (!profile && e.kidit_profile && Object.keys(e.kidit_profile).length > 0) {
+          profile = e.kidit_profile
+          foundDate = foundDate || row.date
+        }
+        if (!history && e.kidit_history && Object.keys(e.kidit_history).length > 0) {
+          history = e.kidit_history
+          foundDate = foundDate || row.date
+        }
       }
+      if (profile && history) break
     }
-    res.json({ found: false, profile: null })
+
+    if (!profile && !history) {
+      return res.json({ found: false, profile: null, history: null })
+    }
+    res.json({ found: true, date: foundDate, profile, history })
   } catch (error) {
     console.error('查詢 KiDit 建檔資料錯誤:', error)
     res.status(500).json({ error: true, message: '查詢 KiDit 建檔資料失敗' })

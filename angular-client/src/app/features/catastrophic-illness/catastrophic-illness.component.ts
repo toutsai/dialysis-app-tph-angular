@@ -75,6 +75,7 @@ export class CatastrophicIllnessComponent implements OnInit {
   private latestLabs: Record<string, unknown> = {};
   private latestLabDate = '';
   private kiditProfile: Record<string, unknown> | null = null; // 本院初透建檔（KiDit）基本資料
+  private kiditHistory: Record<string, unknown> | null = null; // 本院初透建檔（KiDit）病史（症狀/系統性疾病勾選）
   kiditSource = ''; // 顯示帶入來源提示
 
   constructor(
@@ -142,17 +143,20 @@ export class CatastrophicIllnessComponent implements OnInit {
   private async loadKiditProfile(): Promise<void> {
     const p = this.selectedPatient();
     this.kiditProfile = null;
+    this.kiditHistory = null;
     if (!p) return;
     try {
       const resp = await firstValueFrom(
-        this.api.get<{ found: boolean; profile: Record<string, unknown> | null }>(
+        this.api.get<{ found: boolean; profile: Record<string, unknown> | null; history: Record<string, unknown> | null }>(
           `/catastrophic-illness/kidit-profile/${String(p['id'])}`,
         ),
       );
       this.kiditProfile = resp?.found ? resp.profile : null;
+      this.kiditHistory = resp?.found ? resp.history : null;
     } catch (err) {
       console.error('查詢 KiDit 建檔資料失敗:', err);
       this.kiditProfile = null;
+      this.kiditHistory = null;
     }
   }
 
@@ -279,6 +283,49 @@ export class CatastrophicIllnessComponent implements OnInit {
       // 原發病因：細類優先，其次大類（代碼格式與本表一致）
       overlay('primaryDisease', kp['diagnosisSubcategory'] || kp['diagnosisCategory']);
       this.kiditSource = '已帶入本院初透建檔資料';
+    }
+
+    // KiDit 病史勾選 → 附表伴隨症狀/相關疾病
+    const kh = this.kiditHistory;
+    if (kh) {
+      // 其他症狀（kiditHelpers otherSymptoms index）→ 附表 s1~s10
+      // ⚠️ 順序不同：KiDit 5=噁心嘔吐→附表 s7、KiDit 6=代謝性酸血症→附表 s6
+      const SYMPTOM_INDEX_MAP: Record<number, string> = {
+        0: 's1', 1: 's2', 2: 's3', 3: 's4', 4: 's5', 5: 's7', 6: 's6', 7: 's8', 8: 's9', 9: 's10',
+      };
+      const selSymptoms = Array.isArray(kh['selectedSymptoms']) ? (kh['selectedSymptoms'] as number[]) : [];
+      for (const idx of selSymptoms) {
+        const key = SYMPTOM_INDEX_MAP[idx];
+        if (key && !f.symptoms.includes(key)) f.symptoms.push(key);
+      }
+      if (f.symptoms.includes('s10')) {
+        overlay('symptomsOther', kh['symptomsOtherDescription']);
+      }
+
+      // 其他系統性疾病（kiditHelpers systemicDiseases index）→ 附表 c1~c9
+      // 0糖尿病~7結核 一一對應 c1~c8；8痛風/9高血脂/10GERD 附表無專項 → 併入 c9 其他
+      const DISEASE_INDEX_MAP: Record<number, string> = {
+        0: 'c1', 1: 'c2', 2: 'c3', 3: 'c4', 4: 'c5', 5: 'c6', 6: 'c7', 7: 'c8', 11: 'c9',
+      };
+      const EXTRA_DISEASE_LABELS: Record<number, string> = { 8: '痛風', 9: '高血脂', 10: '胃食道逆流' };
+      const selDiseases = Array.isArray(kh['selectedSystemicDiseases']) ? (kh['selectedSystemicDiseases'] as number[]) : [];
+      const extraLabels: string[] = [];
+      for (const idx of selDiseases) {
+        const key = DISEASE_INDEX_MAP[idx];
+        if (key && !f.comorbidities.includes(key)) f.comorbidities.push(key);
+        if (EXTRA_DISEASE_LABELS[idx]) extraLabels.push(EXTRA_DISEASE_LABELS[idx]);
+      }
+      if (extraLabels.length > 0 && !f.comorbidities.includes('c9')) f.comorbidities.push('c9');
+      if (f.comorbidities.includes('c9')) {
+        const otherDesc = String(kh['otherSystemicDescription'] || '').trim();
+        f.comorbidityOther = [...extraLabels, otherDesc].filter(Boolean).join('、');
+      }
+
+      if (selSymptoms.length > 0 || selDiseases.length > 0) {
+        this.kiditSource = this.kiditSource
+          ? this.kiditSource + '（含症狀/疾病勾選）'
+          : '已帶入本院初透建檔的症狀/疾病勾選';
+      }
     }
 
     if (this.activeTab === 'renewal') {
