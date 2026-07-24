@@ -669,6 +669,65 @@ function rebuildSingleDaySchedule(dateStr, masterRules, patientsMap) {
   return finalSchedule
 }
 
+// ── 今天「已開始」班次凍結 ──────────────────────────────────────────────
+// 班別開始時間（台北時間，分）。取偏早的保守界線（實際上機前就凍結）：
+// 寧可讓今天已開始的班次改由現場組長於排程頁手動調整，也不可讓整天重算
+// 改寫已發生的事實。noon/late 對齊 dashboardDataService 的當前班別切換點
+// （12:00/17:00）再提前一小時當緩衝，early 取 06:00。
+const SHIFT_START_MINUTES = { early: 6 * 60, noon: 11 * 60, late: 16 * 60 }
+
+function getTaipeiNowMinutes() {
+  const hm = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(new Date())
+  const [h, m] = hm.split(':').map(Number)
+  return h * 60 + m
+}
+
+/** 回傳 dateStr 當天「已開始」的班別；dateStr 非今天一律回空陣列 */
+export function getStartedShiftsForToday(dateStr) {
+  if (dateStr !== getTaipeiTodayString()) return []
+  const now = getTaipeiNowMinutes()
+  return SHIFTS.filter(
+    (shift) => SHIFT_START_MINUTES[shift] !== undefined && now >= SHIFT_START_MINUTES[shift],
+  )
+}
+
+/**
+ * 對重算結果套用「已開始班次凍結」：dateStr 為今天時，已開始班次的格位
+ * 一律沿用資料庫現存排程，只讓未開始的班次吃重算結果。
+ * rebuildSingleDaySchedule 拿「當下總表」整天重算，總表若在洗程開始後被修正，
+ * 直接寫回會改寫已發生的班次（2026-07-23 陳慕正外圍早班遭抹除案）。
+ */
+export function preserveStartedShiftsToday(dateStr, rebuiltSchedule) {
+  const startedShifts = getStartedShiftsForToday(dateStr)
+  if (startedShifts.length === 0) return rebuiltSchedule
+
+  const db = getDatabase()
+  const row = db.prepare(`SELECT schedule FROM schedules WHERE date = ?`).get(dateStr)
+  if (!row) return rebuiltSchedule
+
+  let savedSchedule
+  try {
+    savedSchedule = JSON.parse(row.schedule || '{}')
+  } catch {
+    return rebuiltSchedule
+  }
+
+  const startedSet = new Set(startedShifts)
+  const shiftPattern = new RegExp(`-(${SHIFTS.join('|')})$`)
+  const shiftOfKey = (key) => shiftPattern.exec(key)?.[1] ?? null
+
+  const merged = {}
+  for (const [key, slot] of Object.entries(rebuiltSchedule)) {
+    if (!startedSet.has(shiftOfKey(key))) merged[key] = slot
+  }
+  for (const [key, slot] of Object.entries(savedSchedule)) {
+    if (startedSet.has(shiftOfKey(key))) merged[key] = slot
+  }
+  return merged
+}
+
 /**
  * 整合調班申請到受影響的日期
  * @param {object} masterRules - 總表規則

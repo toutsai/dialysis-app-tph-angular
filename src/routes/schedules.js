@@ -3,7 +3,7 @@ import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isEditor, logAudit } from '../middleware/auth.js'
-import { syncMasterScheduleToFuture, initializeFutureSchedules, mergeExceptionsIntoSchedules, generateDailyScheduleFromRules, rebuildSingleDaySchedule } from '../services/scheduleSync.js'
+import { syncMasterScheduleToFuture, initializeFutureSchedules, mergeExceptionsIntoSchedules, generateDailyScheduleFromRules, rebuildSingleDaySchedule, preserveStartedShiftsToday } from '../services/scheduleSync.js'
 import { processScheduleException } from '../services/exceptionHandler.js'
 import { isSingleDayMove, reconcileSingleDayMove, resolveSourceConflict, retargetConflict } from '../services/exceptionReconcile.js'
 import { syncEventsToKiditLogbook } from '../services/kiditSync.js'
@@ -198,7 +198,11 @@ function cleanupFutureFirstDialysisAddSessions(db, patientId, masterRules, patie
   }
 
   for (const dateStr of targetDates) {
-    const finalSchedule = rebuildSingleDaySchedule(dateStr, masterRules, patientsMap)
+    // 今天已開始的班次凍結不重算（已發生的事實不得被重算改寫）
+    const finalSchedule = preserveStartedShiftsToday(
+      dateStr,
+      rebuildSingleDaySchedule(dateStr, masterRules, patientsMap),
+    )
     db.prepare(`
       INSERT INTO schedules (id, date, schedule, sync_method, last_modified_by, created_at, updated_at)
       VALUES (?, ?, ?, 'first_dialysis_rebuild', ?, datetime('now', 'localtime'), datetime('now', 'localtime'))

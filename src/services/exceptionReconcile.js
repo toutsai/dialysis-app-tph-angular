@@ -5,7 +5,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import { getTaipeiDayIndex, getTaipeiTodayString } from '../utils/dateUtils.js'
 import { SHIFTS, FREQ_MAP_TO_DAY_INDEX, getScheduleKey } from '../utils/scheduleUtils.js'
-import { rebuildSingleDaySchedule } from './scheduleSync.js'
+import { rebuildSingleDaySchedule, preserveStartedShiftsToday, getStartedShiftsForToday } from './scheduleSync.js'
 import { removeAutoMovementFromDailyLog } from './dailyLogMovementSync.js'
 
 // 視為「已生效或待生效」的調班狀態（整併/鏡像偵測時需納入考量）
@@ -272,7 +272,11 @@ export function reconcileSingleDayMove(db, data, masterRules, patientsMap, creat
     const result = reconcileMoveLedger(db, data, masterRules, createdBy)
 
     // 帳本已整併 → 從乾淨常規基準重算當日（含所有生效調班），確保排程正確
-    const finalSchedule = rebuildSingleDaySchedule(dateStr, masterRules, patientsMap)
+    // 今天已開始的班次凍結不重算（已發生的事實不得被重算改寫）
+    const finalSchedule = preserveStartedShiftsToday(
+      dateStr,
+      rebuildSingleDaySchedule(dateStr, masterRules, patientsMap),
+    )
 
     const existing = db.prepare(`SELECT id FROM schedules WHERE date = ?`).get(dateStr)
     if (existing) {
@@ -316,8 +320,15 @@ export function resolveSourceConflict(db, exceptionId, choice, masterRules, pati
     if (choice === 'keep_base') {
       // 維持新總表床位 → 取消調班，回歸常規
       if (row.type === 'ADD_SESSION') {
-        // 比照 EXCEPTION_DELETE：連動移除工作日誌的「臨時加洗」自動動態
-        removeAutoMovementFromDailyLog(db, dateStr, `auto_add_session_${exceptionId}`)
+        // 比照 EXCEPTION_DELETE：連動移除工作日誌的「臨時加洗」自動動態。
+        // 僅限場次尚未發生（未來日、或今天還沒開始的班次）——已發生的加洗是
+        // 既成事實，工作日誌/KiDit 不得回頭抹除（2026-07-23 陳慕正案）。
+        const sessionAlreadyRan =
+          dateStr < getTaipeiTodayString() ||
+          getStartedShiftsForToday(dateStr).includes(ex.to?.shiftCode)
+        if (!sessionAlreadyRan) {
+          removeAutoMovementFromDailyLog(db, dateStr, `auto_add_session_${exceptionId}`)
+        }
       }
       cancelException(db, exceptionId)
     } else {
@@ -338,7 +349,11 @@ export function resolveSourceConflict(db, exceptionId, choice, masterRules, pati
     // 只會把當日其他調班重播一輪、誤掛新衝突旗（比照 EXCEPTION_DELETE 的過去日防護）。
     if (dateStr < getTaipeiTodayString()) return null
 
-    const finalSchedule = rebuildSingleDaySchedule(dateStr, masterRules, patientsMap)
+    // 今天已開始的班次凍結不重算（已發生的事實不得被重算改寫）
+    const finalSchedule = preserveStartedShiftsToday(
+      dateStr,
+      rebuildSingleDaySchedule(dateStr, masterRules, patientsMap),
+    )
     const existing = db.prepare(`SELECT id FROM schedules WHERE date = ?`).get(dateStr)
     if (existing) {
       db.prepare(`
@@ -378,6 +393,10 @@ export function retargetConflict(db, exceptionId, to, masterRules, patientsMap, 
   if (dateStr < getTaipeiTodayString()) {
     return { ok: false, message: '該調班日期已過，無法重新選床' }
   }
+  // 重新選床承諾「即時套用」，但今天已開始的班次已凍結不重算，套用不會生效——直接擋下
+  if (getStartedShiftsForToday(dateStr).includes(to.shiftCode)) {
+    return { ok: false, message: '該班次今天已開始，無法重新選床；當日實際床位請於排程頁手動調整。' }
+  }
 
   const newToData = { ...ex.to, goalDate: dateStr, bedNum: to.bedNum, shiftCode: to.shiftCode }
 
@@ -389,7 +408,11 @@ export function retargetConflict(db, exceptionId, to, masterRules, patientsMap, 
       WHERE id = ?
     `).run(JSON.stringify(newToData), exceptionId)
 
-    const finalSchedule = rebuildSingleDaySchedule(dateStr, masterRules, patientsMap)
+    // 今天已開始的班次凍結不重算（已發生的事實不得被重算改寫）
+    const finalSchedule = preserveStartedShiftsToday(
+      dateStr,
+      rebuildSingleDaySchedule(dateStr, masterRules, patientsMap),
+    )
 
     // 防禦：picker 只給空床，但併發下新床可能剛被佔走——重算後此筆仍衝突就回滾
     const after = db

@@ -7,7 +7,7 @@ import { formatDateToYYYYMMDD, getTaipeiTodayString } from '../utils/dateUtils.j
 import { validate } from '../middleware/validate.js'
 import { syncEventsToKiditLogbook } from '../services/kiditSync.js'
 import { emitExceptionChange } from '../services/eventBus.js'
-import { rebuildSingleDaySchedule } from '../services/scheduleSync.js'
+import { rebuildSingleDaySchedule, preserveStartedShiftsToday } from '../services/scheduleSync.js'
 import { removeAutoMovementFromDailyLog } from '../services/dailyLogMovementSync.js'
 import { normalizeDialysisOrdersMode } from '../utils/dialysisMode.js'
 import { recordPatientHistory, createPatientSnapshot } from '../services/patientHistory.js'
@@ -154,7 +154,11 @@ function rebuildSchedulesForDates(db, dates, modifiedBy) {
   )
 
   for (const dateStr of dates) {
-    const finalSchedule = rebuildSingleDaySchedule(dateStr, activeMasterRules, patientsMap)
+    // 今天已開始的班次凍結不重算（已發生的事實不得被重算改寫）
+    const finalSchedule = preserveStartedShiftsToday(
+      dateStr,
+      rebuildSingleDaySchedule(dateStr, activeMasterRules, patientsMap),
+    )
     db.prepare(`
       INSERT INTO schedules (id, date, schedule, sync_method, last_modified_by, created_at, updated_at)
       VALUES (?, ?, ?, 'patient_exception_cleanup', ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
