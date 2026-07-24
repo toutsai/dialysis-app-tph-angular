@@ -20,6 +20,7 @@ import systemRoutes from './routes/system.js'
 import eventsRoutes from './routes/events.js'
 import dashboardRoutes from './routes/dashboard.js'
 import akiRoutes from './routes/aki.js'
+import catastrophicIllnessRoutes from './routes/catastrophicIllness.js'
 
 // 資料庫初始化
 import { initDatabase, getDatabase, ensureDefaultAdmin, closeDatabase } from './db/init.js'
@@ -116,6 +117,7 @@ app.use('/api/system', systemRoutes)
 app.use('/api/events', eventsRoutes)
 app.use('/api/dashboard', dashboardRoutes)
 app.use('/api/aki', akiRoutes)
+app.use('/api/catastrophic-illness', catastrophicIllnessRoutes)
 
 // ========================================
 // Angular 前端路由別名（Firebase 遷移相容）

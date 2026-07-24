@@ -131,6 +131,12 @@ export const PAGE_ACCESS = {
     roles: DOCTOR_ROLES,
     roleLabel: '管理員、貢獻者',
   },
+  catastrophicIllness: {
+    path: '/catastrophic-illness',
+    title: '重大傷病申請',
+    roles: DOCTOR_ROLES,
+    roleLabel: '管理員、貢獻者',
+  },
   inventory: {
     path: '/inventory',
     title: '庫存管理',

@@ -1,0 +1,277 @@
+<div class="ci-page">
+  <div class="page-header">
+    <h2>重大傷病申請</h2>
+    <span class="page-hint">全民健康保險慢性腎衰竭需定期透析治療患者重大傷病證明申請附表</span>
+  </div>
+
+  <!-- 病人選擇 -->
+  <div class="patient-picker">
+    <label>病人：</label>
+    <div class="picker-box">
+      <input
+        type="text"
+        [(ngModel)]="searchText"
+        (focus)="onSearchFocus()"
+        (input)="onSearchFocus()"
+        (blur)="onSearchBlur()"
+        placeholder="輸入姓名 / 病歷號 / 身分證搜尋"
+        class="picker-input"
+      />
+      @if (showDropdown) {
+        <div class="picker-dropdown">
+          @for (p of filteredPatients; track p.id) {
+            <div class="picker-item" (mousedown)="selectPatient(p)">
+              <span class="picker-name">{{ p.name }}</span>
+              <span class="picker-mrn">{{ p.medicalRecordNumber }}</span>
+              <span class="picker-status">{{ p.status === 'opd' ? '門診' : p.status === 'ipd' ? '住院' : p.status === 'er' ? '急診' : '' }}</span>
+            </div>
+          } @empty {
+            <div class="picker-empty">查無符合病人</div>
+          }
+        </div>
+      }
+    </div>
+    @if (loading) {
+      <span class="loading-hint">載入中…</span>
+    }
+  </div>
+
+  @if (selectedPatient(); as patient) {
+    <!-- 頁籤 -->
+    <div class="tabs">
+      <button class="tab" [class.active]="activeTab === 'initial'" (click)="setTab('initial')">初次申請</button>
+      <button class="tab" [class.active]="activeTab === 'renewal'" (click)="setTab('renewal')">再次申請</button>
+    </div>
+
+    <!-- 該病人此類別的申請紀錄 -->
+    <div class="record-bar">
+      <span class="record-label">{{ activeTab === 'initial' ? '初次' : '再次' }}申請紀錄：</span>
+      @for (app of tabApplications; track app.id) {
+        <button class="record-chip" [class.open]="currentId === app.id" (click)="openApplication(app)">
+          {{ (app.updatedAt || app.createdAt || '').slice(0, 10) }}
+          <span class="record-by">{{ app.updatedBy?.name || app.createdBy?.name }}</span>
+          <span class="record-del" (click)="deleteApplication(app, $event)" title="刪除">✕</span>
+        </button>
+      } @empty {
+        <span class="record-empty">尚無紀錄</span>
+      }
+      <button class="btn-new" (click)="newApplication()">＋ 新增{{ activeTab === 'initial' ? '初次' : '再次' }}申請（自動帶入）</button>
+    </div>
+
+    @if (formLoaded) {
+      <div class="form-card">
+        <!-- ============ 共同表頭 ============ -->
+        <fieldset class="section">
+          <legend>基本資料</legend>
+          <div class="grid">
+            <label>姓名<input type="text" [(ngModel)]="form.name" /></label>
+            <label>性別
+              <span class="radio-row">
+                <label class="inline"><input type="radio" name="gender" value="男" [(ngModel)]="form.gender" />男</label>
+                <label class="inline"><input type="radio" name="gender" value="女" [(ngModel)]="form.gender" />女</label>
+              </span>
+            </label>
+            <label>身分證字號<input type="text" [(ngModel)]="form.idNumber" /></label>
+            <label>出生日期<input type="date" [(ngModel)]="form.birthDate" /></label>
+            <label>初次透析治療日期<input type="date" [(ngModel)]="form.firstDialysisDate" /></label>
+            <label>電話<input type="text" [(ngModel)]="form.phone" /></label>
+            <label class="span2">居住地址<input type="text" [(ngModel)]="form.address" /></label>
+            <label>透析院所<input type="text" [(ngModel)]="form.facilityName" /></label>
+            <label>院所代號<input type="text" [(ngModel)]="form.facilityCode" /></label>
+          </div>
+          <div class="dialysis-type">
+            <label class="inline"><input type="radio" name="dialysisType" value="hd" [(ngModel)]="form.dialysisType" />血液透析</label>
+            <label class="inline-date">永久性血管通路完成日期<input type="date" [(ngModel)]="form.vascularAccessDate" [disabled]="form.dialysisType !== 'hd'" /></label>
+            <label class="inline"><input type="radio" name="dialysisType" value="pd" [(ngModel)]="form.dialysisType" />腹膜透析</label>
+            <label class="inline-date">導管植入日期<input type="date" [(ngModel)]="form.pdCatheterDate" [disabled]="form.dialysisType !== 'pd'" /></label>
+          </div>
+          <div class="primary-disease">
+            <label>原發病因
+              <input type="text" list="primary-disease-codes" [(ngModel)]="form.primaryDisease" placeholder="輸入或選擇代碼，例：B-03" />
+            </label>
+            <datalist id="primary-disease-codes">
+              @for (c of PRIMARY_DISEASE_CODES; track c.code) {
+                <option [value]="c.code">{{ c.code }} {{ c.label }}</option>
+              }
+            </datalist>
+            @if (primaryDiseaseLabel(form.primaryDisease)) {
+              <span class="disease-label">{{ primaryDiseaseLabel(form.primaryDisease) }}</span>
+            }
+          </div>
+        </fieldset>
+
+        <!-- ============ 初次申請 ============ -->
+        @if (activeTab === 'initial') {
+          <fieldset class="section">
+            <legend>一、定期透析適應症 (Indication)</legend>
+            <label class="inline"><input type="radio" name="indication" value="absolute" [(ngModel)]="form.indication" />（一）絕對適應症</label>
+            <label class="inline"><input type="radio" name="indication" value="relative" [(ngModel)]="form.indication" />（二）相對適應症</label>
+          </fieldset>
+        } @else {
+          <fieldset class="section">
+            <legend>一、上次申請結果</legend>
+            <div class="row-line">
+              <label class="inline-date">此次申請為第<input type="text" class="w-narrow" [(ngModel)]="form.applicationNo" />次申請</label>
+            </div>
+            <label class="check-line"><input type="checkbox" [(ngModel)]="form.lastResultThreeMonth" />無法確定為不可逆性尿毒症，發給有效期限三個月之重大傷病證明</label>
+            <div class="check-line">
+              <label class="inline"><input type="checkbox" [(ngModel)]="form.lastResultRejected" />不符申請條件，不同意。理由：</label>
+              <label class="inline"><input type="checkbox" [(ngModel)]="form.lastRejectIncomplete" [disabled]="!form.lastResultRejected" />資料不全</label>
+              <label class="inline-date">其他<input type="text" [(ngModel)]="form.lastRejectOther" [disabled]="!form.lastResultRejected" /></label>
+            </div>
+            <div class="row-line">
+              初次申請之定期透析適應症：
+              <label class="inline"><input type="radio" name="initialIndication" value="absolute" [(ngModel)]="form.initialIndication" />絕對適應症</label>
+              <label class="inline"><input type="radio" name="initialIndication" value="relative" [(ngModel)]="form.initialIndication" />相對適應症</label>
+            </div>
+          </fieldset>
+        }
+
+        <!-- ============ 檢驗值 ============ -->
+        <fieldset class="section">
+          <legend>{{ activeTab === 'initial' ? '四、生化檢驗值 (Laboratory data)' : '二、目前之透析情況與生化檢驗值' }}</legend>
+          <div class="row-line">
+            <label class="inline-date">檢驗日期<input type="date" [(ngModel)]="form.labDate" /></label>
+            <span class="hint">（新增申請時已自動帶入最近檢驗值，可修改）</span>
+          </div>
+          @if (activeTab === 'renewal') {
+            <div class="row-line">
+              <label class="inline-date">每週血液透析次數<input type="text" class="w-narrow" [(ngModel)]="form.weeklyHdCount" />次</label>
+              <label class="inline-date">每次透析時間<input type="text" class="w-narrow" [(ngModel)]="form.hoursPerSession" />小時</label>
+              <label class="inline-date">每日腹膜換液<input type="text" class="w-narrow" [(ngModel)]="form.pdExchangesPerDay" />次</label>
+            </div>
+          }
+          <div class="lab-grid">
+            <label>Albumin (g/dl)<input type="text" [(ngModel)]="form.albumin" /></label>
+            <label>Hct (%)<input type="text" [(ngModel)]="form.hct" /></label>
+            <label>Hb (gm%)<input type="text" [(ngModel)]="form.hb" /></label>
+            <label>K (mEq/L)<input type="text" [(ngModel)]="form.k" /></label>
+            <label>BUN (mg/dl)<input type="text" [(ngModel)]="form.bun" /></label>
+            <label>Cr (mg/dl)<input type="text" [(ngModel)]="form.cr" /></label>
+            @if (activeTab === 'initial') {
+              <label>eGFR (ml/min/1.73m²)<input type="text" [(ngModel)]="form.egfr" /></label>
+            }
+            <label>每日尿量 (ml)<input type="text" [(ngModel)]="form.dailyUrine" /></label>
+            @if (activeTab === 'renewal') {
+              <label>最長不透析日24hr CCr (ml/min)<input type="text" [(ngModel)]="form.longestCcr" /></label>
+            }
+          </div>
+        </fieldset>
+
+        @if (activeTab === 'renewal') {
+          <fieldset class="section">
+            <legend>三、相關檢查資料與說明（是否嘗試停止透析）</legend>
+            <div class="row-line">
+              <label class="inline"><input type="radio" name="triedStop" value="yes" [(ngModel)]="form.triedStop" />有</label>
+              <label class="inline"><input type="radio" name="triedStop" value="no" [(ngModel)]="form.triedStop" />無</label>
+              嘗試停止透析治療
+              <label class="inline-date">日期<input type="date" [(ngModel)]="form.triedStopDate" /></label>
+            </div>
+            <div class="row-line">
+              <label class="inline-date">最長停止透析日數<input type="text" class="w-narrow" [(ngModel)]="form.longestStopDays" />日</label>
+              <label class="inline-date">當時BUN<input type="text" class="w-narrow" [(ngModel)]="form.stopBun" />mg/dl</label>
+              <label class="inline-date">Cr<input type="text" class="w-narrow" [(ngModel)]="form.stopCr" />mg/dl</label>
+            </div>
+            <div class="row-line">必須再開始透析或持續定期透析之理由：</div>
+            <div class="check-grid">
+              @for (o of RESTART_REASON_OPTIONS; track o.key) {
+                <label class="inline">
+                  <input type="checkbox" [checked]="form.restartReasons.includes(o.key)" (change)="onCheckChange(form.restartReasons, o.key, $event)" />{{ o.label }}
+                </label>
+              }
+            </div>
+          </fieldset>
+        }
+
+        <!-- ============ 伴隨症狀 ============ -->
+        <fieldset class="section">
+          <legend>{{ activeTab === 'initial' ? '二、伴隨症狀 (Symptoms and Signs)' : '四、目前之伴隨症狀' }}（請務必勾選）</legend>
+          <div class="check-grid">
+            @for (o of SYMPTOM_OPTIONS; track o.key) {
+              <label class="inline">
+                <input type="checkbox" [checked]="form.symptoms.includes(o.key)" (change)="onCheckChange(form.symptoms, o.key, $event)" />{{ o.label }}
+              </label>
+            }
+          </div>
+          @if (form.symptoms.includes('s10')) {
+            <label class="other-line">其他說明<input type="text" [(ngModel)]="form.symptomsOther" /></label>
+          }
+        </fieldset>
+
+        <!-- ============ 相關疾病 ============ -->
+        <fieldset class="section">
+          <legend>{{ activeTab === 'initial' ? '三、相關疾病 (Comorbidity)' : '五、目前之相關疾病' }}（請務必勾選）</legend>
+          <div class="check-grid">
+            @for (o of COMORBIDITY_OPTIONS; track o.key) {
+              <label class="inline">
+                <input type="checkbox" [checked]="form.comorbidities.includes(o.key)" (change)="onCheckChange(form.comorbidities, o.key, $event)" />{{ o.label }}
+              </label>
+            }
+          </div>
+          @if (form.comorbidities.includes('c9')) {
+            <label class="other-line">其他說明<input type="text" [(ngModel)]="form.comorbidityOther" /></label>
+          }
+        </fieldset>
+
+        <!-- ============ 初次：五、其他相關檢查 ============ -->
+        @if (activeTab === 'initial') {
+          <fieldset class="section">
+            <legend>五、其他相關檢查資料與說明（病史、腎臟超音波等）</legend>
+            <div class="row-line">
+              <label class="inline"><input type="checkbox" [(ngModel)]="form.histKnownCkd" />過去病史及檢查已知為慢性腎衰竭</label>
+              <label class="inline-date">日期<input type="date" [(ngModel)]="form.histKnownCkdDate" [disabled]="!form.histKnownCkd" /></label>
+            </div>
+            <div class="row-line">
+              <label class="inline"><input type="checkbox" [(ngModel)]="form.histAbnormal" />異常</label>
+              <label class="inline-date">BUN<input type="text" class="w-narrow" [(ngModel)]="form.histAbnBun" [disabled]="!form.histAbnormal" />mg/dl</label>
+              <label class="inline-date">或 Cr<input type="text" class="w-narrow" [(ngModel)]="form.histAbnCr" [disabled]="!form.histAbnormal" />mg/dl</label>
+              <label class="inline-date">日期<input type="date" [(ngModel)]="form.histAbnDate" [disabled]="!form.histAbnormal" /></label>
+            </div>
+            <div class="row-line">
+              <label class="inline"><input type="checkbox" [(ngModel)]="form.histUltrasound" />腎臟超音波檢查異常（下列原因可複選）</label>
+              <label class="inline-date">日期<input type="date" [(ngModel)]="form.histUltrasoundDate" [disabled]="!form.histUltrasound" /></label>
+            </div>
+            <div class="check-grid us-grid">
+              @for (o of ULTRASOUND_OPTIONS; track o.key) {
+                <label class="inline">
+                  <input type="checkbox" [checked]="form.ultrasoundFindings.includes(o.key)" (change)="onCheckChange(form.ultrasoundFindings, o.key, $event)" [disabled]="!form.histUltrasound" />{{ o.label }}
+                </label>
+              }
+              <label class="inline-date">其他說明<input type="text" [(ngModel)]="form.ultrasoundOther" [disabled]="!form.histUltrasound" /></label>
+            </div>
+          </fieldset>
+        }
+
+        <!-- ============ 六、其他理由 ============ -->
+        <fieldset class="section">
+          <legend>六、未符合上述條件但因其他嚴重或危及生命之臨床狀況必須進入定期透析之理由</legend>
+          <textarea rows="2" [(ngModel)]="form.reason6"></textarea>
+        </fieldset>
+
+        <!-- ============ 負責醫師 ============ -->
+        <fieldset class="section">
+          <legend>負責醫師</legend>
+          <div class="row-line">
+            <label class="inline-date">姓名<input type="text" [(ngModel)]="form.physicianName" /></label>
+            <label class="inline-date">中腎專醫字<input type="text" class="w-narrow" [(ngModel)]="form.physicianLicense" />號</label>
+            <label class="inline-date">日期<input type="date" [(ngModel)]="form.physicianDate" /></label>
+          </div>
+        </fieldset>
+
+        <!-- ============ 動作列 ============ -->
+        <div class="action-bar">
+          <button class="btn-save" (click)="save()" [disabled]="saving">{{ saving ? '儲存中…' : '💾 儲存' }}</button>
+          <button class="btn-print" (click)="exportPrint()">🖨 依官方附表匯出列印</button>
+          <button class="btn-close" (click)="closeForm()">關閉表單</button>
+          @if (statusMessage) {
+            <span class="status-msg">{{ statusMessage }}</span>
+          }
+        </div>
+      </div>
+    } @else if (!loading) {
+      <div class="empty-state">請點「新增申請」建立表單，或從上方紀錄開啟既有申請</div>
+    }
+  } @else {
+    <div class="empty-state">請先搜尋並選擇病人</div>
+  }
+</div>

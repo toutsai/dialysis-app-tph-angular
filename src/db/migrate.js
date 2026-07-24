@@ -583,6 +583,33 @@ export function runMigrations() {
     }
     db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_vqe_quarter_patient ON vascular_quarter_exports(quarter, patient_id)')
 
+    // ========================================
+    // 重大傷病申請（2026-07-24）：慢性腎衰竭定期透析重大傷病證明申請附表（初次/再次）
+    // 限 admin/contributor（醫師與專師）檢視編輯；表單內容存 form_data JSON
+    // ========================================
+    const catastrophicIllnessExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='catastrophic_illness_applications'")
+      .get()
+    if (!catastrophicIllnessExists) {
+      console.log('📋 建立 catastrophic_illness_applications 表格...')
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS catastrophic_illness_applications (
+          id TEXT PRIMARY KEY,
+          patient_id TEXT NOT NULL,
+          patient_name TEXT NOT NULL,
+          application_type TEXT NOT NULL DEFAULT 'initial',
+          form_data TEXT DEFAULT '{}',
+          created_by TEXT DEFAULT '{}',
+          updated_by TEXT DEFAULT '{}',
+          created_at TEXT DEFAULT (datetime('now', 'localtime')),
+          updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+      `)
+      migrationsApplied++
+    }
+    db.exec('CREATE INDEX IF NOT EXISTS idx_cia_patient ON catastrophic_illness_applications(patient_id)')
+    db.exec('CREATE INDEX IF NOT EXISTS idx_cia_type ON catastrophic_illness_applications(application_type)')
+
     if (migrationsApplied > 0) {
       console.log(`✅ 已完成 ${migrationsApplied} 項遷移`)
     } else {

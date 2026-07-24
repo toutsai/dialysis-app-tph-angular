@@ -240,6 +240,15 @@ export const routes: Routes = [
         data: { title: PAGE_ACCESS.medAdjustment.title, roles: PAGE_ACCESS.medAdjustment.roles },
       },
       {
+        path: 'catastrophic-illness',
+        loadComponent: () =>
+          import('./features/catastrophic-illness/catastrophic-illness.component').then(
+            (m) => m.CatastrophicIllnessComponent
+          ),
+        canActivate: [roleGuard],
+        data: { title: PAGE_ACCESS.catastrophicIllness.title, roles: PAGE_ACCESS.catastrophicIllness.roles },
+      },
+      {
         path: 'my-patients',
         loadComponent: () =>
           import('./features/my-patients/my-patients.component').then(

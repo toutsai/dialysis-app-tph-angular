@@ -216,6 +216,17 @@
               </li>
             }
 
+            <!-- [重大傷病申請] Admin, Contributor (Doc) -->
+            @if (canAccessPage('catastrophicIllness')) {
+              <li>
+                <a routerLink="/catastrophic-illness" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
+                  <div class="nav-item-content">
+                    <span class="nav-title">重大傷病申請</span>
+                  </div>
+                </a>
+              </li>
+            }
+
             <!-- 7. [庫存管理] Admin, Viewer -->
             @if (canAccessPage('inventory')) {
               <li>
