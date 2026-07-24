@@ -74,6 +74,8 @@ export class CatastrophicIllnessComponent implements OnInit {
   private labsApi!: ApiManagerCrud<LabReportRecord>;
   private latestLabs: Record<string, unknown> = {};
   private latestLabDate = '';
+  private kiditProfile: Record<string, unknown> | null = null; // 本院初透建檔（KiDit）基本資料
+  kiditSource = ''; // 顯示帶入來源提示
 
   constructor(
     private api: ApiService,
@@ -130,9 +132,27 @@ export class CatastrophicIllnessComponent implements OnInit {
     this.statusMessage = '';
     this.loading = true;
     try {
-      await Promise.all([this.loadApplications(), this.loadLatestLabs()]);
+      await Promise.all([this.loadApplications(), this.loadLatestLabs(), this.loadKiditProfile()]);
     } finally {
       this.loading = false;
+    }
+  }
+
+  /** 查 KiDit 本院初透建檔基本資料（查無則為 null，欄位維持其他來源帶入＋手動填寫） */
+  private async loadKiditProfile(): Promise<void> {
+    const p = this.selectedPatient();
+    this.kiditProfile = null;
+    if (!p) return;
+    try {
+      const resp = await firstValueFrom(
+        this.api.get<{ found: boolean; profile: Record<string, unknown> | null }>(
+          `/catastrophic-illness/kidit-profile/${String(p['id'])}`,
+        ),
+      );
+      this.kiditProfile = resp?.found ? resp.profile : null;
+    } catch (err) {
+      console.error('查詢 KiDit 建檔資料失敗:', err);
+      this.kiditProfile = null;
     }
   }
 
@@ -196,6 +216,7 @@ export class CatastrophicIllnessComponent implements OnInit {
     this.form.restartReasons = Array.isArray(this.form.restartReasons) ? this.form.restartReasons : [];
     this.formLoaded = true;
     this.statusMessage = '';
+    this.kiditSource = '';
   }
 
   /** 新增申請：以病人資料 + 最近檢驗值預填 */
@@ -234,6 +255,48 @@ export class CatastrophicIllnessComponent implements OnInit {
       const dayCount = (freq.match(/[一二三四五六日]/g) || []).length;
       f.weeklyHdCount = dayCount > 0 ? String(dayCount) : '';
       f.applicationNo = '2';
+    }
+
+    // 帶入優先序：病人資料庫（上方已填）< KiDit 本院初透建檔 < 初次申請紀錄（限再次頁籤）
+    this.kiditSource = '';
+    const overlay = (target: keyof CatastrophicFormData, value: unknown): void => {
+      if (value === undefined || value === null) return;
+      const s = String(value).trim();
+      if (s !== '') (f as unknown as Record<string, string>)[target] = s;
+    };
+
+    const kp = this.kiditProfile;
+    if (kp) {
+      overlay('name', kp['name']);
+      overlay('idNumber', kp['idNumber']);
+      overlay('birthDate', this.isoDate(kp['birthDate']));
+      overlay('address', kp['address']);
+      overlay('phone', kp['phone']);
+      overlay('firstDialysisDate', this.isoDate(kp['firstDialysisDate']));
+      // KiDit 性別存 '1'(男)/'2'(女)
+      if (kp['gender'] === '1') f.gender = '男';
+      else if (kp['gender'] === '2') f.gender = '女';
+      // 原發病因：細類優先，其次大類（代碼格式與本表一致）
+      overlay('primaryDisease', kp['diagnosisSubcategory'] || kp['diagnosisCategory']);
+      this.kiditSource = '已帶入本院初透建檔資料';
+    }
+
+    if (this.activeTab === 'renewal') {
+      const latestInitial = this.applications().find((a) => a.applicationType === 'initial');
+      if (latestInitial?.formData) {
+        const src = latestInitial.formData as Record<string, unknown>;
+        const HEADER_FIELDS: (keyof CatastrophicFormData)[] = [
+          'name', 'gender', 'idNumber', 'birthDate', 'firstDialysisDate', 'address', 'phone',
+          'facilityName', 'facilityCode', 'dialysisType', 'vascularAccessDate', 'pdCatheterDate',
+          'primaryDisease',
+        ];
+        for (const key of HEADER_FIELDS) overlay(key, src[key]);
+        // 初次申請勾的適應症 → 再次表「初次申請之定期透析適應症」
+        overlay('initialIndication', src['indication']);
+        this.kiditSource = this.kiditSource
+          ? this.kiditSource + '，基本資料以初次申請紀錄為準'
+          : '已帶入初次申請紀錄的基本資料';
+      }
     }
 
     // 負責醫師預設目前登入者、簽章日期預設今天（本地時區）

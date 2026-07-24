@@ -60,6 +60,9 @@
 
     @if (formLoaded) {
       <div class="form-card">
+        @if (kiditSource) {
+          <div class="source-hint">📋 {{ kiditSource }}（仍可手動修改）</div>
+        }
         <!-- ============ 共同表頭 ============ -->
         <fieldset class="section">
           <legend>基本資料</legend>

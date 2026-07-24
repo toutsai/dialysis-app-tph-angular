@@ -57,6 +57,35 @@ router.get('/', ...isCatastrophicIllnessRole, (req, res) => {
 })
 
 /**
+ * GET /api/catastrophic-illness/kidit-profile/:patientId
+ * 查該病人最新一筆 KiDit 本院初透建檔基本資料（kidit_logbook.events[].kidit_profile）
+ * 供表單自動帶入；查無回 { found: false }
+ * ⚠️ 必須定義在 GET /:id 之前，否則會被 /:id 攔截
+ */
+router.get('/kidit-profile/:patientId', ...isCatastrophicIllnessRole, (req, res) => {
+  try {
+    const { patientId } = req.params
+    const db = getDatabase()
+    const rows = db.prepare('SELECT date, events FROM kidit_logbook ORDER BY date DESC').all()
+
+    for (const row of rows) {
+      let events = []
+      try { events = JSON.parse(row.events || '[]') } catch { continue }
+      const ev = events.find(
+        (e) => e && e.patientId === patientId && e.kidit_profile && Object.keys(e.kidit_profile).length > 0
+      )
+      if (ev) {
+        return res.json({ found: true, date: row.date, profile: ev.kidit_profile })
+      }
+    }
+    res.json({ found: false, profile: null })
+  } catch (error) {
+    console.error('查詢 KiDit 建檔資料錯誤:', error)
+    res.status(500).json({ error: true, message: '查詢 KiDit 建檔資料失敗' })
+  }
+})
+
+/**
  * GET /api/catastrophic-illness/:id
  * 單筆申請
  */

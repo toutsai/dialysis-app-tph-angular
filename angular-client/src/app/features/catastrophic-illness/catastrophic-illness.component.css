@@ -86,4 +86,6 @@ label.inline-date input { padding: 3px 6px; border: 1px solid #ced4da; border-ra
 
 .empty-state { padding: 40px; text-align: center; color: #868e96; border: 1px dashed #ced4da; border-radius: 8px; }
 
+.source-hint { background: #ebfbee; border: 1px solid #b2f2bb; color: #2b8a3e; border-radius: 5px; padding: 5px 12px; margin-bottom: 8px; font-size: 0.9em; }
+
 input:disabled { background: #f1f3f5; color: #adb5bd; }
