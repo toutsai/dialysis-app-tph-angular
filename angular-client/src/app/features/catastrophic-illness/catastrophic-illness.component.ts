@@ -346,6 +346,11 @@ export class CatastrophicIllnessComponent implements OnInit {
       }
     }
 
+    // 查無檢驗報告時明示手動填寫（新初透病人 HIS 檢驗可能尚未匯入）
+    if (!this.latestLabDate) {
+      this.kiditSource = (this.kiditSource ? this.kiditSource + '；' : '') + '此病人系統中尚無檢驗報告，檢驗欄請手動填寫';
+    }
+
     // 負責醫師預設目前登入者、簽章日期預設今天（本地時區）
     const user = this.auth.currentUser();
     f.physicianName = user?.displayName || user?.name || '';
