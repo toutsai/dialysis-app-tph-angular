@@ -425,9 +425,13 @@ function applySingleException(schedule, ex, dateStr) {
             ? formatSlotLabel(...keyToBedShift(newBaseKey))
             : '當日未排'
           const targetLabel = formatSlotLabel(ex.to.bedNum, ex.to.shiftCode)
-          const reason =
-            `因床位總表修正後，${ex.patientName} 已不在原床位（現為常規 ${newBaseLabel}）。` +
-            `請選擇：①維持新常規床位 ${newBaseLabel}　②維持調班後 ${targetLabel}。`
+          // 病人當日已無常規位（住院/急診常見）時，「維持常規」實際上=把病人整天移出排程，
+          // 必須在訊息裡明講後果，避免操作者誤以為只是回到某張床（2026-07-23 陳慕正案）
+          const reason = newBaseKey
+            ? `因床位總表修正後，${ex.patientName} 已不在原床位（現為常規 ${newBaseLabel}）。` +
+              `請選擇：①維持新常規床位 ${newBaseLabel}　②維持調班後 ${targetLabel}。`
+            : `因床位總表修正後，${ex.patientName} 已不在原床位，且當日已無常規排班。` +
+              `請選擇：①維持新常規（＝撤銷調班，${ex.patientName} 當日將完全不在排程上）　②維持調班後 ${targetLabel}。`
           console.log(`[Engine] 例外 ${ex.id} 來源失效：${reason}`)
           return { reason }
         }
@@ -571,6 +575,21 @@ function exceptionAffectsOnlyDay(ex, dateStr) {
   return false
 }
 
+/** 此調班在 dateStr 這天涉及哪些班別（判斷「是否只碰已開始班次」用） */
+function exceptionShiftsOnDate(ex, dateStr) {
+  const shifts = new Set()
+  if (ex.type === 'SWAP') {
+    if (ex.date === dateStr) {
+      if (ex.patient1?.fromShiftCode) shifts.add(ex.patient1.fromShiftCode)
+      if (ex.patient2?.fromShiftCode) shifts.add(ex.patient2.fromShiftCode)
+    }
+  } else {
+    if (ex.from?.sourceDate === dateStr && ex.from?.shiftCode) shifts.add(ex.from.shiftCode)
+    if (ex.to?.goalDate === dateStr && ex.to?.shiftCode) shifts.add(ex.to.shiftCode)
+  }
+  return [...shifts]
+}
+
 /**
  * 重建單一天的排程（含調班整合）
  * @param {string} dateStr - 目標日期
@@ -636,10 +655,34 @@ function rebuildSingleDaySchedule(dateStr, masterRules, patientsMap) {
           updated_at = datetime('now', 'localtime')
       WHERE id = ?
     `)
+    const expireStmt = db.prepare(`
+      UPDATE schedule_exceptions
+      SET status = 'expired',
+          error_message = ?,
+          updated_at = datetime('now', 'localtime')
+      WHERE id = ?
+    `)
+
+    // 只影響「今天已開始班次」的衝突不再要求人工解決：那些班次已凍結（排程以現場為準），
+    // 解決了也不會改變任何事，衝突徽章只會誤導組長回頭處理已發生的事（2026-07-23 案），
+    // 直接比照過期衝突標 expired。跨日調班不適用（其他日期可能仍需處理）。
+    const startedSet = new Set(getStartedShiftsForToday(dateStr))
 
     conflictingExceptions.forEach(({ ex, reason }) => {
-      console.log(`[Engine] 將調班 ${ex.id} 標記為衝突：${reason}`)
-      conflictStmt.run(reason || '系統重建排程時發現衝突，請重新安排。', ex.id)
+      const shifts = exceptionShiftsOnDate(ex, dateStr)
+      const onlyStartedShifts =
+        startedSet.size > 0 &&
+        exceptionAffectsOnlyDay(ex, dateStr) &&
+        shifts.length > 0 &&
+        shifts.every((s) => startedSet.has(s))
+
+      if (onlyStartedShifts) {
+        console.log(`[Engine] 調班 ${ex.id} 衝突僅涉已開始班次，標記為 expired：${reason}`)
+        expireStmt.run(`${reason || '系統重建排程時發現衝突。'}（該班次已開始，衝突自動失效，排程以現場實際狀況為準）`, ex.id)
+      } else {
+        console.log(`[Engine] 將調班 ${ex.id} 標記為衝突：${reason}`)
+        conflictStmt.run(reason || '系統重建排程時發現衝突，請重新安排。', ex.id)
+      }
     })
   }
 
