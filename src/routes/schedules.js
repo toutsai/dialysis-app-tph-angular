@@ -3,7 +3,7 @@ import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isEditor, logAudit } from '../middleware/auth.js'
-import { syncMasterScheduleToFuture, initializeFutureSchedules, mergeExceptionsIntoSchedules, generateDailyScheduleFromRules, rebuildSingleDaySchedule, preserveStartedShiftsToday } from '../services/scheduleSync.js'
+import { syncMasterScheduleToFuture, initializeFutureSchedules, mergeExceptionsIntoSchedules, generateDailyScheduleFromRules, rebuildSingleDaySchedule, isTodayScheduleFrozen } from '../services/scheduleSync.js'
 import { processScheduleException } from '../services/exceptionHandler.js'
 import { isSingleDayMove, reconcileSingleDayMove, resolveSourceConflict, retargetConflict } from '../services/exceptionReconcile.js'
 import { syncEventsToKiditLogbook } from '../services/kiditSync.js'
@@ -198,11 +198,12 @@ function cleanupFutureFirstDialysisAddSessions(db, patientId, masterRules, patie
   }
 
   for (const dateStr of targetDates) {
-    // 今天已開始的班次凍結不重算（已發生的事實不得被重算改寫）
-    const finalSchedule = preserveStartedShiftsToday(
-      dateStr,
-      rebuildSingleDaySchedule(dateStr, masterRules, patientsMap),
-    )
+    // 今日排程整天凍結（06:00 起）：跳過重建，今天由現場組長手動調整
+    if (isTodayScheduleFrozen(dateStr)) {
+      console.log(`[FirstDialysisPlan] ${dateStr} 今日排程已凍結，跳過重建（由現場手動調整）`)
+      continue
+    }
+    const finalSchedule = rebuildSingleDaySchedule(dateStr, masterRules, patientsMap)
     db.prepare(`
       INSERT INTO schedules (id, date, schedule, sync_method, last_modified_by, created_at, updated_at)
       VALUES (?, ?, ?, 'first_dialysis_rebuild', ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
@@ -1192,6 +1193,16 @@ router.post('/exceptions', ...isEditor, async (req, res) => {
     // 鏡像對收斂成 SWAP，最後 rebuild 當日排程寫回，避免調班暴量與互撞衝突。
     if (isSingleDayMove(data)) {
       const dateStr = data.to.goalDate
+
+      // 今日排程整天凍結（06:00 起）：今天的單日換床不收調班申請，
+      // 請組長直接於每日排程頁拖曳存檔（今天＝手動領域，2026-07-24 拍板）
+      if (isTodayScheduleFrozen(dateStr)) {
+        return res.status(400).json({
+          error: true,
+          message: '今日排程已凍結，當日換床請直接於每日排程頁拖曳調整並存檔。',
+        })
+      }
+
       const masterDoc = db.prepare(
         `SELECT schedule FROM base_schedules WHERE id = 'MASTER_SCHEDULE'`,
       ).get()
@@ -2055,11 +2066,12 @@ router.post('/admin/force-resync', ...isEditor, async (req, res) => {
     let syncedCount = 0
 
     for (const dateStr of futureDates) {
-      // 今天已開始的班次凍結不重算（已發生的事實不得被重算改寫）
-      const finalSchedule = preserveStartedShiftsToday(
-        dateStr,
-        rebuildSingleDaySchedule(dateStr, masterRules, patientsMap),
-      )
+      // 今日排程整天凍結（06:00 起）：跳過重建，今天由現場組長手動調整
+      if (isTodayScheduleFrozen(dateStr)) {
+        console.log(`[Admin] ${dateStr} 今日排程已凍結，跳過強制重同步（由現場手動調整）`)
+        continue
+      }
+      const finalSchedule = rebuildSingleDaySchedule(dateStr, masterRules, patientsMap)
 
       db.prepare(`
         INSERT INTO schedules (id, date, schedule, sync_method, last_modified_by, created_at, updated_at)

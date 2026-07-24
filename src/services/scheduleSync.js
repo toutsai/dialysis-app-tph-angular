@@ -737,38 +737,16 @@ export function getStartedShiftsForToday(dateStr) {
 }
 
 /**
- * 對重算結果套用「已開始班次凍結」：dateStr 為今天時，已開始班次的格位
- * 一律沿用資料庫現存排程，只讓未開始的班次吃重算結果。
- * rebuildSingleDaySchedule 拿「當下總表」整天重算，總表若在洗程開始後被修正，
- * 直接寫回會改寫已發生的班次（2026-07-23 陳慕正外圍早班遭抹除案）。
+ * 今日排程整天凍結（2026-07-24 拍板）：早班起算時間（06:00）之後，今天的排程檔
+ * 不得被任何「整天重算」寫回——今天是現場組長的手動領域，系統性重算一律跳過，
+ * 排程以排程頁手動存檔為準。呼叫端遇 true 應跳過 rebuild 寫回（連寫都不寫，
+ * 保持 sync_method/updated_at 乾淨以利查案）。
+ * 06:00 前不凍結：預約變更/預約刪除 cron 於凌晨清理「生效日當天」排程屬預期行為。
+ * 調班「初次套用」（外科手術式單格寫入，exceptionHandler）不在此限。
  */
-export function preserveStartedShiftsToday(dateStr, rebuiltSchedule) {
-  const startedShifts = getStartedShiftsForToday(dateStr)
-  if (startedShifts.length === 0) return rebuiltSchedule
-
-  const db = getDatabase()
-  const row = db.prepare(`SELECT schedule FROM schedules WHERE date = ?`).get(dateStr)
-  if (!row) return rebuiltSchedule
-
-  let savedSchedule
-  try {
-    savedSchedule = JSON.parse(row.schedule || '{}')
-  } catch {
-    return rebuiltSchedule
-  }
-
-  const startedSet = new Set(startedShifts)
-  const shiftPattern = new RegExp(`-(${SHIFTS.join('|')})$`)
-  const shiftOfKey = (key) => shiftPattern.exec(key)?.[1] ?? null
-
-  const merged = {}
-  for (const [key, slot] of Object.entries(rebuiltSchedule)) {
-    if (!startedSet.has(shiftOfKey(key))) merged[key] = slot
-  }
-  for (const [key, slot] of Object.entries(savedSchedule)) {
-    if (startedSet.has(shiftOfKey(key))) merged[key] = slot
-  }
-  return merged
+export function isTodayScheduleFrozen(dateStr) {
+  if (dateStr !== getTaipeiTodayString()) return false
+  return getTaipeiNowMinutes() >= SHIFT_START_MINUTES.early
 }
 
 /**
