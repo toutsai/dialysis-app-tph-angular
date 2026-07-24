@@ -855,6 +855,7 @@ CREATE TABLE IF NOT EXISTS catastrophic_illness_applications (
     patient_name TEXT NOT NULL,
     application_type TEXT NOT NULL DEFAULT 'initial',  -- initial=初次 / renewal=再次
     form_data TEXT DEFAULT '{}',
+    clerk_sent_date TEXT,                              -- 書記送出日期（總覽列表由書記填）
     created_by TEXT DEFAULT '{}',
     updated_by TEXT DEFAULT '{}',
     created_at TEXT DEFAULT (datetime('now', 'localtime')),
@@ -863,6 +864,14 @@ CREATE TABLE IF NOT EXISTS catastrophic_illness_applications (
 
 CREATE INDEX IF NOT EXISTS idx_cia_patient ON catastrophic_illness_applications(patient_id);
 CREATE INDEX IF NOT EXISTS idx_cia_type ON catastrophic_illness_applications(application_type);
+
+-- 重大傷病到期日（每病人一筆，總覽列表由書記手動輸入）
+CREATE TABLE IF NOT EXISTS catastrophic_illness_expiry (
+    patient_id TEXT PRIMARY KEY,
+    expiry_date TEXT,
+    updated_by TEXT DEFAULT '{}',
+    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
 
 -- ========================================
 -- 初始化預設資料

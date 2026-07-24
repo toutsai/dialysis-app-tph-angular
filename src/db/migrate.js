@@ -610,6 +610,26 @@ export function runMigrations() {
     db.exec('CREATE INDEX IF NOT EXISTS idx_cia_patient ON catastrophic_illness_applications(patient_id)')
     db.exec('CREATE INDEX IF NOT EXISTS idx_cia_type ON catastrophic_illness_applications(application_type)')
 
+    // 重大傷病申請進度總覽（2026-07-24）：書記送出日期（每筆申請）＋ 重大傷病到期日（每病人，書記手動輸入）
+    if (addColumnIfNotExists(db, 'catastrophic_illness_applications', 'clerk_sent_date', 'TEXT')) {
+      migrationsApplied++
+    }
+    const ciExpiryExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='catastrophic_illness_expiry'")
+      .get()
+    if (!ciExpiryExists) {
+      console.log('📋 建立 catastrophic_illness_expiry 表格...')
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS catastrophic_illness_expiry (
+          patient_id TEXT PRIMARY KEY,
+          expiry_date TEXT,
+          updated_by TEXT DEFAULT '{}',
+          updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+      `)
+      migrationsApplied++
+    }
+
     if (migrationsApplied > 0) {
       console.log(`✅ 已完成 ${migrationsApplied} 項遷移`)
     } else {

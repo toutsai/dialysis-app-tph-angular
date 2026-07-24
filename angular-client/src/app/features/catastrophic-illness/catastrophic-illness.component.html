@@ -4,6 +4,93 @@
     <span class="page-hint">全民健康保險慢性腎衰竭需定期透析治療患者重大傷病證明申請附表</span>
   </div>
 
+  <!-- 申請進度總覽 -->
+  <div class="overview-card">
+    <div class="overview-head">
+      <h3>申請進度總覽</h3>
+      <span class="overview-hint">
+        @if (isClerk) {
+          「書記送出日期」與「重大傷病到期日」可直接點格子填寫
+        } @else {
+          僅顯示您建立的申請紀錄；「書記送出日期」與「到期日」由書記填寫
+        }
+      </span>
+      @if (overviewLoading) {
+        <span class="loading-hint">載入中…</span>
+      }
+    </div>
+    <div class="overview-scroll">
+      <table class="overview-table">
+        <thead>
+          <tr>
+            <th rowspan="2" class="col-patient">病人</th>
+            <th colspan="2">初次申請</th>
+            <th colspan="2">再次申請</th>
+            <th colspan="2">三次申請</th>
+            <th rowspan="2" class="col-expiry">重大傷病到期日</th>
+          </tr>
+          <tr>
+            <th>完成日期</th>
+            <th>書記送出</th>
+            <th>完成日期</th>
+            <th>書記送出</th>
+            <th>完成日期</th>
+            <th>書記送出</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of overviewRows(); track row.patientId) {
+            <tr>
+              <td class="col-patient">
+                @if (canWrite) {
+                  <button class="patient-link" (click)="selectFromOverview(row)">{{ row.patientName }}</button>
+                } @else {
+                  {{ row.patientName }}
+                }
+              </td>
+              <td class="col-date">{{ row.initial?.physicianDate || '—' }}</td>
+              <td class="col-date">
+                @if (row.initial && isClerk) {
+                  <input type="date" class="clerk-input" [value]="row.initial.clerkSentDate" (change)="onClerkSentChange(row, row.initial, $event)" />
+                } @else {
+                  {{ row.initial?.clerkSentDate || '—' }}
+                }
+              </td>
+              <td class="col-date">{{ row.second?.physicianDate || '—' }}</td>
+              <td class="col-date">
+                @if (row.second && isClerk) {
+                  <input type="date" class="clerk-input" [value]="row.second.clerkSentDate" (change)="onClerkSentChange(row, row.second, $event)" />
+                } @else {
+                  {{ row.second?.clerkSentDate || '—' }}
+                }
+              </td>
+              <td class="col-date">{{ row.third?.physicianDate || '—' }}</td>
+              <td class="col-date">
+                @if (row.third && isClerk) {
+                  <input type="date" class="clerk-input" [value]="row.third.clerkSentDate" (change)="onClerkSentChange(row, row.third, $event)" />
+                } @else {
+                  {{ row.third?.clerkSentDate || '—' }}
+                }
+              </td>
+              <td class="col-expiry">
+                @if (isClerk) {
+                  <input type="date" class="clerk-input" [value]="row.expiryDate" (change)="onExpiryChange(row, $event)" />
+                } @else {
+                  {{ row.expiryDate || '—' }}
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="8" class="overview-empty">尚無申請紀錄</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  @if (canWrite) {
   <!-- 病人選擇 -->
   <div class="patient-picker">
     <label>病人：</label>
@@ -277,4 +364,5 @@
   } @else {
     <div class="empty-state">請先搜尋並選擇病人</div>
   }
+  } <!-- /canWrite -->
 </div>

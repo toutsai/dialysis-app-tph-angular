@@ -5,6 +5,23 @@
 .page-title { margin: 0; font-size: 2rem; font-weight: 700; color: #343a40; }
 .page-hint { color: #78909c; font-size: 0.85rem; }
 
+/* 申請進度總覽 */
+.overview-card { margin-bottom: 16px; border: 1px solid #dee2e6; border-radius: 8px; background: #fff; padding: 12px 14px; }
+.overview-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+.overview-head h3 { margin: 0; font-size: 1.05rem; color: #343a40; }
+.overview-hint { color: #868e96; font-size: 0.85rem; }
+.overview-scroll { overflow-x: auto; }
+.overview-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.overview-table th, .overview-table td { border: 1px solid #e9ecef; padding: 5px 8px; text-align: center; white-space: nowrap; }
+.overview-table thead th { background: #f1f3f5; color: #495057; font-weight: 600; }
+.overview-table .col-patient { text-align: left; min-width: 90px; }
+.overview-table .col-expiry { background: #fff9db; }
+.overview-table thead .col-expiry { background: #ffec99; }
+.patient-link { border: none; background: none; color: #1971c2; cursor: pointer; font-size: inherit; padding: 0; text-decoration: underline; }
+.patient-link:hover { color: #1864ab; }
+.clerk-input { border: 1px solid #ced4da; border-radius: 4px; padding: 2px 4px; font-size: 0.85rem; }
+.overview-empty { color: #adb5bd; padding: 12px; }
+
 /* 病人選擇 */
 .patient-picker { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 .picker-box { position: relative; width: 320px; }

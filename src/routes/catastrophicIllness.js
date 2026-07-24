@@ -8,8 +8,17 @@ import { authenticate, requireAnyRole } from '../middleware/auth.js'
 const router = Router()
 
 const isCatastrophicIllnessRole = [authenticate, requireAnyRole('admin', 'contributor')]
+// 進度總覽：醫師（contributor）看自己寫的、書記（viewer）與 admin 看全部
+const isOverviewRole = [authenticate, requireAnyRole('admin', 'contributor', 'viewer')]
+// 書記欄位（送出日期/到期日）：由書記輸入——書記帳號是 viewer；admin 亦可
+const isClerkRole = [authenticate, requireAnyRole('admin', 'viewer')]
 
 const VALID_TYPES = ['initial', 'renewal']
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+function isValidDateOrEmpty(v) {
+  return v === '' || v === null || v === undefined || (typeof v === 'string' && DATE_RE.test(v))
+}
 
 function toApiShape(row) {
   let formData = {}
@@ -24,6 +33,7 @@ function toApiShape(row) {
     patientName: row.patient_name,
     applicationType: row.application_type,
     formData,
+    clerkSentDate: row.clerk_sent_date || '',
     createdBy,
     updatedBy,
     createdAt: row.created_at,
@@ -53,6 +63,118 @@ router.get('/', ...isCatastrophicIllnessRole, (req, res) => {
   } catch (error) {
     console.error('取得重大傷病申請列表錯誤:', error)
     res.status(500).json({ error: true, message: '取得重大傷病申請列表失敗' })
+  }
+})
+
+/**
+ * GET /api/catastrophic-illness/overview
+ * 申請進度總覽：每病人一列，含初次/再次/三次的醫師簽章日期（完成日期）、書記送出日期、重大傷病到期日
+ * 醫師（contributor）只回自己建立的紀錄；admin 與書記（viewer）回全部
+ * ⚠️ 必須定義在 GET /:id 之前，否則會被 /:id 攔截
+ */
+router.get('/overview', ...isOverviewRole, (req, res) => {
+  try {
+    const db = getDatabase()
+    let rows = db.prepare('SELECT * FROM catastrophic_illness_applications ORDER BY created_at ASC').all()
+
+    if (req.user.role === 'contributor') {
+      rows = rows.filter((row) => {
+        try { return JSON.parse(row.created_by || '{}').uid === req.user.id } catch { return false }
+      })
+    }
+
+    const expiryMap = new Map(
+      db.prepare('SELECT patient_id, expiry_date FROM catastrophic_illness_expiry').all()
+        .map((r) => [r.patient_id, r.expiry_date || ''])
+    )
+
+    // 依病人彙整：初次取最新一筆 initial；再次/三次取 renewal 依建立順序前兩筆
+    const byPatient = new Map()
+    for (const row of rows) {
+      if (!byPatient.has(row.patient_id)) {
+        byPatient.set(row.patient_id, { patientName: row.patient_name, initials: [], renewals: [], latestUpdatedAt: '' })
+      }
+      const entry = byPatient.get(row.patient_id)
+      let formData = {}
+      try { formData = JSON.parse(row.form_data || '{}') } catch { /* 留空物件 */ }
+      const slot = {
+        id: row.id,
+        physicianDate: formData.physicianDate || '',
+        physicianName: formData.physicianName || '',
+        clerkSentDate: row.clerk_sent_date || ''
+      }
+      if (row.application_type === 'initial') entry.initials.push(slot)
+      else entry.renewals.push(slot)
+      if (row.updated_at > entry.latestUpdatedAt) entry.latestUpdatedAt = row.updated_at
+    }
+
+    const result = [...byPatient.entries()].map(([patientId, entry]) => ({
+      patientId,
+      patientName: entry.patientName,
+      initial: entry.initials.length > 0 ? entry.initials[entry.initials.length - 1] : null,
+      second: entry.renewals[0] || null,
+      third: entry.renewals[1] || null,
+      expiryDate: expiryMap.get(patientId) || '',
+      latestUpdatedAt: entry.latestUpdatedAt
+    }))
+    result.sort((a, b) => b.latestUpdatedAt.localeCompare(a.latestUpdatedAt))
+
+    res.json(result)
+  } catch (error) {
+    console.error('取得重大傷病申請總覽錯誤:', error)
+    res.status(500).json({ error: true, message: '取得重大傷病申請總覽失敗' })
+  }
+})
+
+/**
+ * PUT /api/catastrophic-illness/clerk-sent/:id
+ * 書記填某筆申請的送出日期（YYYY-MM-DD，空字串=清除）
+ */
+router.put('/clerk-sent/:id', ...isClerkRole, (req, res) => {
+  try {
+    const { clerkSentDate } = req.body
+    if (!isValidDateOrEmpty(clerkSentDate)) {
+      return res.status(400).json({ error: true, message: '送出日期格式必須為 YYYY-MM-DD' })
+    }
+    const db = getDatabase()
+    const result = db.prepare(`
+      UPDATE catastrophic_illness_applications
+      SET clerk_sent_date = ?, updated_by = ?, updated_at = datetime('now', 'localtime')
+      WHERE id = ?
+    `).run(clerkSentDate || null, JSON.stringify({ uid: req.user.id, name: req.user.name }), req.params.id)
+    if (result.changes === 0) {
+      return res.status(404).json({ error: true, message: '申請紀錄不存在' })
+    }
+    res.json({ success: true, clerkSentDate: clerkSentDate || '' })
+  } catch (error) {
+    console.error('更新書記送出日期錯誤:', error)
+    res.status(500).json({ error: true, message: '更新書記送出日期失敗' })
+  }
+})
+
+/**
+ * PUT /api/catastrophic-illness/expiry/:patientId
+ * 書記填該病人的重大傷病到期日（YYYY-MM-DD，空字串=清除）
+ */
+router.put('/expiry/:patientId', ...isClerkRole, (req, res) => {
+  try {
+    const { expiryDate } = req.body
+    if (!isValidDateOrEmpty(expiryDate)) {
+      return res.status(400).json({ error: true, message: '到期日格式必須為 YYYY-MM-DD' })
+    }
+    const db = getDatabase()
+    db.prepare(`
+      INSERT INTO catastrophic_illness_expiry (patient_id, expiry_date, updated_by, updated_at)
+      VALUES (?, ?, ?, datetime('now', 'localtime'))
+      ON CONFLICT(patient_id) DO UPDATE SET
+        expiry_date = excluded.expiry_date,
+        updated_by = excluded.updated_by,
+        updated_at = excluded.updated_at
+    `).run(req.params.patientId, expiryDate || null, JSON.stringify({ uid: req.user.id, name: req.user.name }))
+    res.json({ success: true, expiryDate: expiryDate || '' })
+  } catch (error) {
+    console.error('更新重大傷病到期日錯誤:', error)
+    res.status(500).json({ error: true, message: '更新重大傷病到期日失敗' })
   }
 })
 

@@ -134,8 +134,9 @@ export const PAGE_ACCESS = {
   catastrophicIllness: {
     path: '/catastrophic-illness',
     title: '重大傷病申請',
-    roles: DOCTOR_ROLES,
-    roleLabel: '管理員、貢獻者',
+    // viewer=書記：可看進度總覽並填送出日期/到期日，不能寫申請表（後端另有守門）
+    roles: DOCTOR_VIEW_ROLES,
+    roleLabel: '管理員、貢獻者、查看者',
   },
   inventory: {
     path: '/inventory',

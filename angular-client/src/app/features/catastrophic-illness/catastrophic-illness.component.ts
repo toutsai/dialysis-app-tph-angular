@@ -1,6 +1,6 @@
 // 重大傷病申請工作檯：初次/再次兩頁籤，選病人自動帶入基本資料與最近檢驗值，
 // 儲存至 catastrophic_illness_applications，並可依官方附表版面列印匯出
-// 權限：admin/contributor（醫師與專師）——page-access.ts DOCTOR_ROLES
+// 權限：admin/contributor（醫師與專師）可寫表單；viewer（書記）僅進度總覽＋填送出日期/到期日
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -40,6 +40,23 @@ interface LabReportRecord {
   [key: string]: unknown;
 }
 
+interface CiOverviewSlot {
+  id: string;
+  physicianDate: string;
+  physicianName: string;
+  clerkSentDate: string;
+}
+
+interface CiOverviewRow {
+  patientId: string;
+  patientName: string;
+  initial: CiOverviewSlot | null;
+  second: CiOverviewSlot | null;
+  third: CiOverviewSlot | null;
+  expiryDate: string;
+  latestUpdatedAt: string;
+}
+
 @Component({
   selector: 'app-catastrophic-illness',
   standalone: true,
@@ -53,6 +70,12 @@ export class CatastrophicIllnessComponent implements OnInit {
   readonly ULTRASOUND_OPTIONS = ULTRASOUND_OPTIONS;
   readonly RESTART_REASON_OPTIONS = RESTART_REASON_OPTIONS;
   readonly PRIMARY_DISEASE_CODES = PRIMARY_DISEASE_CODES;
+
+  // 申請進度總覽（醫師看自己寫的；admin/書記(viewer)看全部並可填書記欄）
+  overviewRows = signal<CiOverviewRow[]>([]);
+  overviewLoading = false;
+  isClerk = false; // admin/viewer：可填書記送出日期與到期日
+  canWrite = false; // admin/contributor：可選病人寫申請表
 
   // 病人選擇
   searchText = '';
@@ -88,7 +111,68 @@ export class CatastrophicIllnessComponent implements OnInit {
   }
 
   async ngOnInit(): Promise<void> {
-    await this.patientStore.fetchPatientsIfNeeded();
+    const role = this.auth.currentUser()?.role;
+    this.isClerk = role === 'admin' || role === 'viewer';
+    this.canWrite = role === 'admin' || role === 'contributor';
+    await Promise.all([
+      this.canWrite ? this.patientStore.fetchPatientsIfNeeded() : Promise.resolve(),
+      this.loadOverview(),
+    ]);
+  }
+
+  // ---------------------------------------------------------------
+  // 申請進度總覽
+  // ---------------------------------------------------------------
+
+  async loadOverview(): Promise<void> {
+    this.overviewLoading = true;
+    try {
+      const rows = await firstValueFrom(this.api.get<CiOverviewRow[]>('/catastrophic-illness/overview'));
+      this.overviewRows.set(Array.isArray(rows) ? rows : []);
+    } catch (err) {
+      console.error('載入申請進度總覽失敗:', err);
+      this.overviewRows.set([]);
+    } finally {
+      this.overviewLoading = false;
+    }
+  }
+
+  /** 點總覽列 → 選定該病人（醫師/管理員限定；病人可能已刪除則提示） */
+  selectFromOverview(row: CiOverviewRow): void {
+    if (!this.canWrite) return;
+    const p = this.patientStore.allPatients().find((x) => String(x['id']) === row.patientId);
+    if (p) {
+      void this.selectPatient(p);
+    } else {
+      alert('此病人不在病人清單中（可能已刪除），無法開啟表單');
+    }
+  }
+
+  async onClerkSentChange(row: CiOverviewRow, slot: CiOverviewSlot | null, event: Event): Promise<void> {
+    if (!slot) return;
+    const input = event.target as HTMLInputElement;
+    const value = input.value || '';
+    try {
+      await firstValueFrom(this.api.put(`/catastrophic-illness/clerk-sent/${slot.id}`, { clerkSentDate: value }));
+      slot.clerkSentDate = value;
+    } catch (err) {
+      console.error('更新書記送出日期失敗:', err);
+      input.value = slot.clerkSentDate;
+      alert('更新送出日期失敗，請重試');
+    }
+  }
+
+  async onExpiryChange(row: CiOverviewRow, event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const value = input.value || '';
+    try {
+      await firstValueFrom(this.api.put(`/catastrophic-illness/expiry/${row.patientId}`, { expiryDate: value }));
+      row.expiryDate = value;
+    } catch (err) {
+      console.error('更新重大傷病到期日失敗:', err);
+      input.value = row.expiryDate;
+      alert('更新到期日失敗，請重試');
+    }
   }
 
   // ---------------------------------------------------------------
@@ -421,7 +505,7 @@ export class CatastrophicIllnessComponent implements OnInit {
         );
         this.currentId = created?.id || null;
       }
-      await this.loadApplications();
+      await Promise.all([this.loadApplications(), this.loadOverview()]);
       this.statusMessage = '✅ 已儲存';
     } catch (err) {
       console.error('儲存重大傷病申請失敗:', err);
@@ -440,7 +524,7 @@ export class CatastrophicIllnessComponent implements OnInit {
         this.currentId = null;
         this.formLoaded = false;
       }
-      await this.loadApplications();
+      await Promise.all([this.loadApplications(), this.loadOverview()]);
     } catch (err) {
       console.error('刪除重大傷病申請失敗:', err);
       alert('刪除失敗，請重試');
