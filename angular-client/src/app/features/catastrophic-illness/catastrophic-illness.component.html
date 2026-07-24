@@ -4,21 +4,27 @@
     <span class="page-hint">全民健康保險慢性腎衰竭需定期透析治療患者重大傷病證明申請附表</span>
   </div>
 
-  <!-- 申請進度總覽 -->
-  <div class="overview-card">
-    <div class="overview-head">
+  <!-- 申請進度總覽（開啟申請表時自動收合，可點標題列展開） -->
+  <div class="overview-card" [class.collapsed]="overviewCollapsed">
+    <button type="button" class="overview-head" (click)="toggleOverview()">
+      <span class="overview-caret">{{ overviewCollapsed ? '▸' : '▾' }}</span>
       <h3>申請進度總覽</h3>
-      <span class="overview-hint">
-        @if (isClerk) {
-          「書記送出日期」與「重大傷病到期日」可直接點格子填寫
-        } @else {
-          僅顯示您建立的申請紀錄；「書記送出日期」與「到期日」由書記填寫
-        }
-      </span>
+      @if (overviewCollapsed) {
+        <span class="overview-hint">共 {{ overviewRows().length }} 位病人，點擊展開</span>
+      } @else {
+        <span class="overview-hint">
+          @if (isClerk) {
+            「書記送出日期」與「重大傷病到期日」可直接點格子填寫
+          } @else {
+            僅顯示您建立的申請紀錄；「書記送出日期」與「到期日」由書記填寫
+          }
+        </span>
+      }
       @if (overviewLoading) {
         <span class="loading-hint">載入中…</span>
       }
-    </div>
+    </button>
+    @if (!overviewCollapsed) {
     <div class="overview-scroll">
       <table class="overview-table">
         <thead>
@@ -88,6 +94,7 @@
         </tbody>
       </table>
     </div>
+    }
   </div>
 
   @if (canWrite) {

@@ -74,6 +74,7 @@ export class CatastrophicIllnessComponent implements OnInit {
   // 申請進度總覽（醫師看自己寫的；admin/書記(viewer)看全部並可填書記欄）
   overviewRows = signal<CiOverviewRow[]>([]);
   overviewLoading = false;
+  overviewCollapsed = false; // 開啟申請表時自動收合，避免疊在表單上；可手動展開
   isClerk = false; // admin/viewer：可填書記送出日期與到期日
   canWrite = false; // admin/contributor：可選病人寫申請表
 
@@ -135,6 +136,10 @@ export class CatastrophicIllnessComponent implements OnInit {
     } finally {
       this.overviewLoading = false;
     }
+  }
+
+  toggleOverview(): void {
+    this.overviewCollapsed = !this.overviewCollapsed;
   }
 
   /** 點總覽列 → 選定該病人（醫師/管理員限定；病人可能已刪除則提示） */
@@ -305,6 +310,7 @@ export class CatastrophicIllnessComponent implements OnInit {
     this.formLoaded = true;
     this.statusMessage = '';
     this.kiditSource = '';
+    this.overviewCollapsed = true;
   }
 
   /** 新增申請：以病人資料 + 最近檢驗值預填 */
@@ -444,6 +450,7 @@ export class CatastrophicIllnessComponent implements OnInit {
     this.currentId = null;
     this.formLoaded = true;
     this.statusMessage = '';
+    this.overviewCollapsed = true;
   }
 
   private isoDate(v: unknown): string {
@@ -541,5 +548,6 @@ export class CatastrophicIllnessComponent implements OnInit {
     this.formLoaded = false;
     this.currentId = null;
     this.statusMessage = '';
+    this.overviewCollapsed = false;
   }
 }
