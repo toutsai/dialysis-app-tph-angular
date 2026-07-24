@@ -2055,7 +2055,11 @@ router.post('/admin/force-resync', ...isEditor, async (req, res) => {
     let syncedCount = 0
 
     for (const dateStr of futureDates) {
-      const finalSchedule = rebuildSingleDaySchedule(dateStr, masterRules, patientsMap)
+      // 今天已開始的班次凍結不重算（已發生的事實不得被重算改寫）
+      const finalSchedule = preserveStartedShiftsToday(
+        dateStr,
+        rebuildSingleDaySchedule(dateStr, masterRules, patientsMap),
+      )
 
       db.prepare(`
         INSERT INTO schedules (id, date, schedule, sync_method, last_modified_by, created_at, updated_at)
