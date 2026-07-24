@@ -62,5 +62,5 @@ thead .sticky-col { z-index: 3; }
 .empty-state { padding: 40px; text-align: center; color: #868e96; }
 
 /* 依上半頁籤強化下半報告的對應檢驗欄位 */
-.matrix-table thead th.focus-col { background: #dbe4ff; color: #364fc7; }
-.matrix-table td.focus-col { background: #edf2ff; color: #364fc7; font-weight: 700; }
+.matrix-table thead th.focus-col { background: #ffe066; color: #c92a2a; font-weight: 700; }
+.matrix-table td.focus-col { background: #fff3bf; color: #c92a2a; font-weight: 700; }
