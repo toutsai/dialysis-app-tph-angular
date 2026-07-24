@@ -7,6 +7,7 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '@services/api.service';
 import { ApiManagerService, type ApiManagerCrud } from '@services/api-manager.service';
+import { AuthService } from '@services/auth.service';
 import { PatientStoreService, type Patient } from '@services/patient-store.service';
 import {
   CatastrophicFormData,
@@ -77,6 +78,7 @@ export class CatastrophicIllnessComponent implements OnInit {
   constructor(
     private api: ApiService,
     private apiManager: ApiManagerService,
+    private auth: AuthService,
     public patientStore: PatientStoreService,
   ) {
     this.labsApi = this.apiManager.create<LabReportRecord>('lab_reports');
@@ -233,6 +235,11 @@ export class CatastrophicIllnessComponent implements OnInit {
       f.weeklyHdCount = dayCount > 0 ? String(dayCount) : '';
       f.applicationNo = '2';
     }
+
+    // 負責醫師預設目前登入者、簽章日期預設今天（本地時區）
+    const user = this.auth.currentUser();
+    f.physicianName = user?.displayName || user?.name || '';
+    f.physicianDate = new Date().toLocaleDateString('sv-SE');
 
     this.form = f;
     this.currentId = null;
