@@ -22,7 +22,7 @@ import {
  * 季度造管 CSV 工作檯（KiDit「病患血液透析造管CSV檔」）
  * - 病人範圍＝常規門診 ∪ 該季有 confirmed 事件的病人
  * - 全欄位可編輯；使用者改過的值與人工欄存 overrides（PUT /vascular-access/quarter-exports）
- * - 匯出前檢查必填欄（本季最佳 pump blood flow）
+ * - 匯出前檢查必填欄（本季最佳 pump blood flow；預填自透析醫囑血流量，可改）
  */
 
 /** overrides JSON 形狀（前端自定，後端只存不解讀）：
@@ -404,7 +404,10 @@ export class KiditVascularQuarterlyComponent implements OnInit, OnDestroy {
       }
     }
 
-    // 欄 16-17：人工欄（bestPumpFlow 必填、accessFlow 選填）→ 預填空白
+    // 欄 16-17：bestPumpFlow 預填自透析醫囑血流量（仍必填、可改）；accessFlow 人工選填
+    const bfRaw = String((p?.dialysisOrders?.bloodFlow ?? p?.dialysisOrders?.blood_flow) ?? '');
+    const bfNum = bfRaw.match(/\d+/);
+    v['bestPumpFlow'] = bfNum ? bfNum[0] : '';
     // 欄 18-20 遠紅外線：預設 Y；次數=每週透析次數；分鐘=次數×40
     v['firYn'] = 'Y';
     const weekly = this.weeklySessionsFromFreq(p?.scheduleRule?.freq);

@@ -20,7 +20,7 @@
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
   overflow: hidden;
   color: #263238;
-  font-size: 0.82rem;
+  font-size: 0.95rem;
 }
 
 /* header */
@@ -36,13 +36,13 @@
 }
 .qv-header h3 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 1.2rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 .qv-count {
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   color: #78909c;
   font-weight: 400;
 }
@@ -75,7 +75,7 @@
   background: #fff;
   color: #607d8b;
   padding: 0.4rem 0.85rem;
-  font-size: 0.85rem;
+  font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
 }
@@ -94,7 +94,7 @@
   background: transparent;
   color: #607d8b;
   padding: 0.5rem 0.9rem;
-  font-size: 0.9rem;
+  font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   border-bottom: 2px solid transparent;
@@ -109,7 +109,7 @@
   background: #c92a2a;
   color: #fff;
   border-radius: 999px;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 700;
   padding: 0.05rem 0.45rem;
   line-height: 1.2;
@@ -124,14 +124,14 @@
   display: block;
   font-weight: 400;
   color: #90a4ae;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
 }
 .qv-actions {
   display: flex;
   align-items: center;
   gap: 0.6rem;
 }
-.qv-save-state { font-size: 0.78rem; min-width: 5rem; text-align: right; }
+.qv-save-state { font-size: 0.88rem; min-width: 5rem; text-align: right; }
 .qv-saving { color: #78909c; }
 .qv-saved { color: #2e7d32; }
 .qv-save-error { color: #c62828; font-weight: 600; }
@@ -140,7 +140,7 @@
   border: 1px solid #cfd8dc;
   border-radius: 6px;
   font-weight: 600;
-  font-size: 0.82rem;
+  font-size: 0.92rem;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -165,8 +165,8 @@
 
 .qv-hint {
   margin: 0;
-  padding: 0.45rem 1.1rem;
-  font-size: 0.76rem;
+  padding: 0.5rem 1.1rem;
+  font-size: 0.88rem;
   color: #78909c;
   border-bottom: 1px solid #f5f7f8;
   flex-shrink: 0;
@@ -208,7 +208,7 @@
 .qv-table {
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 0.76rem;
+  font-size: 0.9rem;
   white-space: nowrap;
 }
 .qv-table th,
@@ -229,22 +229,22 @@
 }
 .qv-group-row th {
   top: 0;
-  height: 1.7rem;
+  height: 2rem;
   border-bottom: 1px solid #dee2e6;
   background: #eef2f5;
   text-align: center;
 }
 .qv-field-row th {
-  top: 1.7rem;
+  top: 2rem;
 }
 /* 凍結左側欄（姓名/現況/排除） */
 .qv-sticky {
   position: sticky;
   z-index: 2;
 }
-.qv-sticky-1 { left: 0; min-width: 5.5rem; max-width: 7rem; }
-.qv-sticky-2 { left: 5.5rem; min-width: 4.6rem; }
-.qv-sticky-3 { left: 10.1rem; min-width: 2.6rem; text-align: center; }
+.qv-sticky-1 { left: 0; min-width: 6rem; max-width: 7.5rem; }
+.qv-sticky-2 { left: 6rem; min-width: 5rem; }
+.qv-sticky-3 { left: 11rem; min-width: 2.8rem; text-align: center; }
 .qv-table thead .qv-sticky { z-index: 4; }
 .qv-table tbody .qv-sticky { background: #fff; }
 .qv-sticky-3::after,
@@ -263,14 +263,14 @@ th.qv-sticky-3::after {
 .qv-status-tag {
   display: inline-block;
   padding: 0.05rem 0.35rem;
-  font-size: 0.68rem;
+  font-size: 0.78rem;
   border-radius: 4px;
   background: #fff3e0;
   color: #e65100;
   border: 1px solid #ffcc80;
 }
 .qv-row-flagged .qv-status-tag { font-weight: 600; }
-.qv-warn { color: #c62828; font-size: 0.7rem; max-width: 14rem; overflow: hidden; text-overflow: ellipsis; }
+.qv-warn { color: #c62828; font-size: 0.82rem; max-width: 14rem; overflow: hidden; text-overflow: ellipsis; }
 .qv-row-excluded td { opacity: 0.45; }
 .qv-row-excluded td.qv-exclude { opacity: 1; }
 
@@ -278,18 +278,18 @@ th.qv-sticky-3::after {
 .qv-input {
   border: 1px solid #e0e6ea;
   border-radius: 4px;
-  padding: 0.15rem 0.3rem;
-  font-size: 0.76rem;
+  padding: 0.2rem 0.35rem;
+  font-size: 0.9rem;
   color: #263238;
   background: #fff;
 }
 .qv-input:focus { outline: none; border-color: #64b5f6; }
-.qv-kind-id { width: 6.5rem; }
-.qv-kind-mrn { width: 5.5rem; }
-.qv-kind-date { width: 4.6rem; }
-.qv-kind-code { width: 2.6rem; text-align: center; }
-.qv-kind-num { width: 3.6rem; }
-.qv-kind-text { width: 6rem; }
+.qv-kind-id { width: 7.5rem; }
+.qv-kind-mrn { width: 6.2rem; }
+.qv-kind-date { width: 5.4rem; }
+.qv-kind-code { width: 3rem; text-align: center; }
+.qv-kind-num { width: 4.2rem; }
+.qv-kind-text { width: 6.8rem; }
 /* 使用者覆寫值：淡藍底標示與預填值不同 */
 .qv-overridden { background: #e7f1fb; border-color: #90caf9; }
 /* 必填未填：紅框 */
