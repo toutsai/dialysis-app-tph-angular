@@ -361,12 +361,23 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   readonly allPatients = this.patientStore.allPatients;
   readonly patientMap = this.patientStore.patientMap;
 
+  // 過去=歷史唯讀；未來=唯讀（2026-07-24 方向A：未來調整一律走調班申請入帳本，
+  // 在此直接改床會繞過帳本，總表同步/重算一來就被蓋掉）。只有今天可直接編輯存檔。
   readonly isPageLocked = computed(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const currentDay = new Date(this.currentDate());
     currentDay.setHours(0, 0, 0, 0);
-    return currentDay < today;
+    return currentDay.getTime() !== today.getTime();
+  });
+
+  /** 檢視中的日期是否為未來（顯示唯讀提示用） */
+  readonly isFutureView = computed(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const currentDay = new Date(this.currentDate());
+    currentDay.setHours(0, 0, 0, 0);
+    return currentDay > today;
   });
 
   readonly sortedBedNumbers = computed(() => {

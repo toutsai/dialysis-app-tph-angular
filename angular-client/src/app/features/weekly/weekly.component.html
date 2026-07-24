@@ -59,6 +59,9 @@
           </button>
         </div>
       </div>
+      <div class="future-readonly-hint">
+        週班表僅「今天」可直接編輯；未來日期為唯讀，床位調整請至「護理分組」或「調班管理」提出調班申請。
+      </div>
     </header>
 
     <main class="page-main-content">
@@ -82,7 +85,7 @@
           [weekDates]="weekDateStrings()"
           [hepatitisBeds]="hepatitisBeds"
           [getStyleFunc]="getWeeklyCellStyle"
-          [isDateInPast]="isDateInPast"
+          [isDateInPast]="isDateNotEditable"
           [typesMap]="typesMapForThisWeek()"
           [isPageLocked]="isPageLocked()"
           (gridClick)="handleGridClick($event)"

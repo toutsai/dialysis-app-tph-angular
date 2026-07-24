@@ -392,6 +392,21 @@ export class WeeklyComponent implements OnInit, OnDestroy {
     return scheduleDate.getTime() < today.getTime();
   };
 
+  // 2026-07-24 方向A：週班表僅「今天」可直接編輯。過去=歷史唯讀；
+  // 未來=唯讀（直接改會繞過調班帳本，總表同步/重算一來就被蓋掉），
+  // 未來調整請走護理分組/調班管理的調班申請。
+  isDateEditable = (dayIndex: number): boolean => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const scheduleDate = new Date(this.currentWeekStartDate());
+    scheduleDate.setDate(scheduleDate.getDate() + dayIndex);
+    return scheduleDate.getTime() === today.getTime();
+  };
+
+  private readonly futureLockMessage = '未來日期為唯讀：床位調整請至「護理分組」或「調班管理」提出調班申請。';
+
+  /** 傳給 schedule-table 的不可互動判斷：非「今天」皆唯讀（過去＝歷史、未來＝走調班申請） */
+  isDateNotEditable = (dayIndex: number): boolean => !this.isDateEditable(dayIndex);
+
   setChange(): void {
     if (this.isPageLocked()) return;
     this.hasUnsavedChanges.set(true);
@@ -414,8 +429,9 @@ export class WeeklyComponent implements OnInit, OnDestroy {
     const targetInfo = this.getDailyShiftIdFromWeekly(weeklySlotId);
     if (!targetInfo) return;
     const { dateStr, dailyShiftId } = targetInfo;
-    if (this.isDateInPast(this.weekDates().findIndex((d: any) => d.queryDate === dateStr))) {
-      this.showAlert('操作禁止', '無法修改已過去的排程。');
+    const dayIndex = this.weekDates().findIndex((d: any) => d.queryDate === dateStr);
+    if (!this.isDateEditable(dayIndex)) {
+      this.showAlert('操作禁止', this.isDateInPast(dayIndex) ? '無法修改已過去的排程。' : this.futureLockMessage);
       return;
     }
     const newWeekRecords = new Map(this.weekScheduleRecords());
@@ -438,7 +454,7 @@ export class WeeklyComponent implements OnInit, OnDestroy {
 
   handleGridClick(slotId: string): void {
     const dayIndex = parseInt(slotId.split('-').pop()!, 10);
-    if (this.isPageLocked() || this.isDateInPast(dayIndex)) {
+    if (this.isPageLocked() || !this.isDateEditable(dayIndex)) {
       const patientId = this.weekScheduleMap()[slotId]?.patientId;
       if (patientId) this.showPatientMemos(patientId);
       return;
@@ -474,13 +490,14 @@ export class WeeklyComponent implements OnInit, OnDestroy {
       const bed = parts.slice(0, -2).join('-');
       const shiftIndex = parts[parts.length - 2];
       dayIndices.forEach((di: number) => {
-        if (!this.isDateInPast(di) && this.weekScheduleMap()[`${bed}-${shiftIndex}-${di}`]?.patientId)
+        if (this.isDateEditable(di) && this.weekScheduleMap()[`${bed}-${shiftIndex}-${di}`]?.patientId)
           conflicts.push(this.WEEKDAYS[di]);
       });
       if (conflicts.length > 0) {
         this.showAlert('排班衝突', `無法依頻率排入，以下日期的床位已被佔用：\n${conflicts.join(', ')}`);
       } else {
-        dayIndices.forEach((di: number) => { if (!this.isDateInPast(di)) this.handleSlotUpdate(`${bed}-${shiftIndex}-${di}`, newPatientData); });
+        // 僅今天可直接排入；常規頻率排班請改總表，未來單次調整請走調班申請
+        dayIndices.forEach((di: number) => { if (this.isDateEditable(di)) this.handleSlotUpdate(`${bed}-${shiftIndex}-${di}`, newPatientData); });
       }
     }
     this.currentSlotId.set(null);
@@ -495,7 +512,7 @@ export class WeeklyComponent implements OnInit, OnDestroy {
     if (shiftIndex === -1 || dayIndices.length === 0) return;
     const newPatientData = { patientId: event.patientId, manualNote: patient.baseNote || (patient.status === 'ipd' ? '住' : patient.status === 'er' ? '急' : '') };
     dayIndices.forEach((di: number) => {
-      if (!this.isDateInPast(di) && !this.weekScheduleMap()[`${event.bedNum}-${shiftIndex}-${di}`]?.patientId)
+      if (this.isDateEditable(di) && !this.weekScheduleMap()[`${event.bedNum}-${shiftIndex}-${di}`]?.patientId)
         this.handleSlotUpdate(`${event.bedNum}-${shiftIndex}-${di}`, newPatientData);
     });
     this.isProblemSolverDialogVisible.set(false);
@@ -515,8 +532,8 @@ export class WeeklyComponent implements OnInit, OnDestroy {
       }
     }
     const startDayIndex = parseInt(this.clearingSlotId()!.split('-').pop()!, 10);
-    if (this.isDateInPast(startDayIndex) && selectedValue !== 'this_week_for_patient') {
-      this.showAlert('操作禁止', '無法修改已過去的排程。');
+    if (!this.isDateEditable(startDayIndex) && selectedValue !== 'this_week_for_patient') {
+      this.showAlert('操作禁止', this.isDateInPast(startDayIndex) ? '無法修改已過去的排程。' : this.futureLockMessage);
       this.isClearDialogVisible.set(false);
       return;
     }
@@ -525,7 +542,7 @@ export class WeeklyComponent implements OnInit, OnDestroy {
     } else if (selectedValue === 'this_week_for_patient' && patientIdToClear) {
       for (const slotId in this.weekScheduleMap()) {
         const currentDayIndex = parseInt(slotId.split('-').pop()!, 10);
-        if (this.weekScheduleMap()[slotId]?.patientId === patientIdToClear && !this.isDateInPast(currentDayIndex))
+        if (this.weekScheduleMap()[slotId]?.patientId === patientIdToClear && this.isDateEditable(currentDayIndex))
           this.handleSlotUpdate(slotId, null);
       }
     }
@@ -539,7 +556,8 @@ export class WeeklyComponent implements OnInit, OnDestroy {
     try {
       const promises: Promise<any>[] = [];
       for (const date of this.weekDates().map((d: any) => d.queryDate)) {
-        if (this.isDateInPast(this.weekDates().findIndex((d: any) => d.queryDate === date))) continue;
+        // 僅存今天：過去=歷史、未來=唯讀（未來直存會繞過調班帳本被重算蓋掉）
+        if (!this.isDateEditable(this.weekDates().findIndex((d: any) => d.queryDate === date))) continue;
         const dailyRecord = this.weekScheduleRecords().get(date);
         if (dailyRecord) {
           const scheduleToSave: Record<string, any> = {};
@@ -599,7 +617,7 @@ export class WeeklyComponent implements OnInit, OnDestroy {
     const dragged = this.draggedItem();
     if (!dragged) return;
     const targetDayIndex = parseInt(targetWeeklySlotId.split('-').pop()!, 10);
-    if (this.isDateInPast(targetDayIndex)) { this.draggedItem.set(null); return; }
+    if (!this.isDateEditable(targetDayIndex)) { this.draggedItem.set(null); return; }
     const sourceWeeklySlotId = dragged.source;
     const sourceSlotData = { ...dragged.data };
     const targetSlotData = { ...this.weekScheduleMap()[targetWeeklySlotId] };
@@ -617,7 +635,7 @@ export class WeeklyComponent implements OnInit, OnDestroy {
     if (targetSlotData?.patientId) {
       if (sourceWeeklySlotId === 'sidebar') { this.showAlert('操作失敗', '目標床位已被佔用，無法從側邊欄拖曳至此。'); this.draggedItem.set(null); return; }
       const sourceDayIndex = parseInt(sourceWeeklySlotId.split('-').pop()!, 10);
-      if (this.isDateInPast(sourceDayIndex)) { this.draggedItem.set(null); return; }
+      if (!this.isDateEditable(sourceDayIndex)) { this.draggedItem.set(null); return; }
       this.handleSlotUpdate(targetWeeklySlotId, sourceSlotData);
       this.handleSlotUpdate(sourceWeeklySlotId, targetSlotData);
     } else {
@@ -630,7 +648,7 @@ export class WeeklyComponent implements OnInit, OnDestroy {
   onDragStart(event: DragEvent, slotId: string): void {
     if (this.isPageLocked()) { event.preventDefault(); return; }
     const dayIndex = parseInt(slotId.split('-').pop()!, 10);
-    if (this.isDateInPast(dayIndex)) { event.preventDefault(); return; }
+    if (!this.isDateEditable(dayIndex)) { event.preventDefault(); return; }
     const slotData = this.weekScheduleMap()[slotId];
     if (!slotData?.patientId) { event.preventDefault(); return; }
     this.draggedItem.set({ source: slotId, data: { ...slotData } });
@@ -684,7 +702,7 @@ export class WeeklyComponent implements OnInit, OnDestroy {
     const targetSlot = (event.target as HTMLElement).closest('.schedule-slot');
     if (targetSlot) {
       const slotId = (targetSlot as HTMLElement).dataset['slotId'];
-      if (slotId && !this.isDateInPast(parseInt(slotId.split('-').pop()!, 10))) targetSlot.classList.add('drag-over');
+      if (slotId && this.isDateEditable(parseInt(slotId.split('-').pop()!, 10))) targetSlot.classList.add('drag-over');
     }
   }
 
