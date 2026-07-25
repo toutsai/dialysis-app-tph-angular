@@ -194,7 +194,7 @@ export class GroupAssignerService {
               if (group && shift) {
                 if (shift === '74') groupCounts[nurseId]['74'][group] = (groupCounts[nurseId]['74'][group] || 0) + 1;
                 else if (shift === '75') groupCounts[nurseId]['75'][group] = (groupCounts[nurseId]['75'][group] || 0) + 1;
-                else if (this.isNightShift(shift)) groupCounts[nurseId]['311'][group] = (groupCounts[nurseId]['311'][group] || 0) + 1;
+                else if (this.isNightShift(shift) && shift.trim() !== '128') groupCounts[nurseId]['311'][group] = (groupCounts[nurseId]['311'][group] || 0) + 1;
               }
               if (nurseData.standby75Days?.includes(day.dayIndex)) standby75Counts[nurseId]++;
             });
@@ -362,6 +362,7 @@ export class GroupAssignerService {
       const nurses816: string[] = [];
       const nurses311: string[] = [];
       const nurses311C: string[] = [];
+      const nurses128: string[] = [];
       const eligibleFor75Standby: string[] = [];
 
       Object.entries(schedule.scheduleByNurse).forEach(([nurseId, nurseData]: [string, any]) => {
@@ -375,6 +376,7 @@ export class GroupAssignerService {
         else if (s === '74/L') nurses74L.push(nurseId);
         else if (s === '816') nurses816.push(nurseId);
         else if (s === '311C') nurses311C.push(nurseId);
+        else if (s === '128') nurses128.push(nurseId);
         else if (this.isNightShift(s)) nurses311.push(nurseId);
       });
 
@@ -491,6 +493,24 @@ export class GroupAssignerService {
             }
           });
         }
+      }
+
+      // 128 班：白班組往後加一組——K 未被白班使用則 K，否則 L（再多位則繼續往後）；
+      // 不占夜班組池，也不計入夜班輪替公平性
+      if (nurses128.length > 0) {
+        const usedDayLetters = new Set<string>();
+        [...nurses74, ...nurses75, ...nurses74L].forEach(id => {
+          const g = schedule.scheduleByNurse[id].groups?.[dayIndex];
+          if (g) usedDayLetters.add(g);
+        });
+        nurses128.forEach(id => {
+          let letter = 'K';
+          while (usedDayLetters.has(letter)) {
+            letter = String.fromCharCode(letter.charCodeAt(0) + 1);
+          }
+          schedule.scheduleByNurse[id].groups[dayIndex] = letter;
+          usedDayLetters.add(letter);
+        });
       }
 
       // 311C -> C group

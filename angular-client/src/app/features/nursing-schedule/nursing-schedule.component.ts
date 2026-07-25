@@ -565,8 +565,11 @@ export class NursingScheduleComponent implements OnInit {
     if (s === '75') {
       return getDayShiftGroups().groups75;
     }
-    // 128 班分組併入夜班組池（同步後為 晚X）
-    if (['311', '3-11'].some((ns) => s.includes(ns)) || this.is128Shift(s)) {
+    // 128 班：白班組往後加一組（K 空則 K、K 滿則 L），不占夜班組池
+    if (this.is128Shift(s)) {
+      return ['K', 'L', 'M'];
+    }
+    if (['311', '3-11'].some((ns) => s.includes(ns))) {
       let groups = [...getNightShiftGroups()];
       if (
         nurseId &&
@@ -615,7 +618,7 @@ export class NursingScheduleComponent implements OnInit {
           const isOtherDayShift = ['74', '75', '816', '74/L'].includes(
             otherShift
           );
-          // 128 用獨立前綴 午X：與白班/夜班同組不衝突，只有 128 彼此同組才衝突
+          // 128 = 白班組往後加一組：與白班同組或 128 彼此同組都算衝突；與夜班同組不衝突
           const isCurrent128 = this.is128Shift(currentShift);
           const isOther128 = this.is128Shift(otherShift);
           const isCurrentNightShift =
@@ -626,7 +629,8 @@ export class NursingScheduleComponent implements OnInit {
           if (
             (isCurrentDayShift && isOtherDayShift) ||
             (isCurrentNightShift && isOtherNightShift) ||
-            (isCurrent128 && isOther128)
+            (isCurrent128 && (isOther128 || isOtherDayShift)) ||
+            (isCurrentDayShift && isOther128)
           ) {
             conflictingNurses.push({
               name: otherData.nurseName || otherId,
@@ -1286,7 +1290,7 @@ export class NursingScheduleComponent implements OnInit {
     this.shift128Data = {
       codes: '12-8*1',
       tasks:
-        '工作時間 12:00-20:00，半早班半晚班：可分配午班上針、午班收針與晚班主責（不分配早班）。\n分組為獨立午班組別（午X），工作內容比照所屬時段職責。\n※白班 12-8 組別由 Leader 安排。',
+        '工作時間 12:00-20:00，半早班半晚班：可分配午班上針、午班收針與晚班主責（不分配早班）。\n組別為白班組往後加一組（K 空則 K、K 滿則 L），工作內容比照所屬時段職責。\n※白班 12-8 組別由 Leader 安排。',
     };
     this.nightShiftDuties = [
       {
