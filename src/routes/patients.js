@@ -9,7 +9,7 @@ import { syncEventsToKiditLogbook } from '../services/kiditSync.js'
 import { emitExceptionChange } from '../services/eventBus.js'
 import { rebuildSingleDaySchedule, isTodayScheduleFrozen } from '../services/scheduleSync.js'
 import { removeAutoMovementFromDailyLog } from '../services/dailyLogMovementSync.js'
-import { normalizeDialysisOrdersMode } from '../utils/dialysisMode.js'
+import { normalizeDialysisMode, normalizeDialysisOrdersMode } from '../utils/dialysisMode.js'
 import { recordPatientHistory, createPatientSnapshot } from '../services/patientHistory.js'
 
 const router = Router()
@@ -955,10 +955,13 @@ router.get('/education-list', ...isEditor, (req, res) => {
         /* patient_status 解析失敗，忽略 */
       }
 
-      // 頻率 fallback：總表沒有規則的病人（如每日/臨時）退回醫囑 dialysis_orders.freq
+      // 醫囑 JSON：頻率 fallback（每日/臨時病人不在總表）＋透析模式（供預設排除判斷）
       let ordersFreq = ''
+      let dialysisMode = ''
       try {
-        ordersFreq = JSON.parse(r.dialysis_orders || '{}')?.freq || ''
+        const orders = JSON.parse(r.dialysis_orders || '{}') || {}
+        ordersFreq = orders.freq || ''
+        dialysisMode = normalizeDialysisMode(orders.mode || '') || ''
       } catch {
         /* dialysis_orders 解析失敗，忽略 */
       }
@@ -1037,8 +1040,11 @@ router.get('/education-list', ...isEditor, (req, res) => {
         status: r.status,
         wardNumber: r.ward_number || '',
         freq: masterRules?.[r.id]?.freq || ordersFreq || '',
-        // 外圍床（總表床位 peripheral-*）：外圍透析日不列入應衛教，進度頁預設隱藏
-        peripheral: String(masterRules?.[r.id]?.bedNum || '').startsWith('peripheral'),
+        // 進度頁預設排除：外圍床（外圍透析日不列入應衛教）或非 HD/SLED 模式
+        //（CVVHDF/PP/DFPP/Lipid 等每日洗不排常規床，頻率/床位無意義）
+        excluded:
+          String(masterRules?.[r.id]?.bedNum || '').startsWith('peripheral') ||
+          (!!dialysisMode && dialysisMode !== 'HD' && dialysisMode !== 'SLED'),
         firstDialysisActive: firstActive,
         firstDialysisDate: firstDate || '',
         admissionDate: r.edu_admission || '',

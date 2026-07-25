@@ -20,8 +20,8 @@ interface EducationListItem {
   wardNumber: string;
   /** 透析頻率（來源：總表規則，總表沒有時退回 dialysis_orders.freq，如每日/臨時） */
   freq: string;
-  /** 外圍床（總表床位 peripheral-*）：外圍透析日不列入應衛教，進度頁預設隱藏 */
-  peripheral: boolean;
+  /** 預設排除（不顯示）：外圍床（外圍透析日不列入應衛教）或非 HD/SLED 模式（CVVHDF/PP/DFPP/Lipid） */
+  excluded: boolean;
   firstDialysisActive: boolean;
   firstDialysisDate: string;
   admissionDate: string;
@@ -71,8 +71,8 @@ export class EducationDashboardComponent implements OnInit {
   readonly search = signal('');
   /** 完成狀態篩選：incomplete=未完成、edu_done=已完成(12次衛教做完,待主護確認)、confirmed=主護確認完成；預設未完成 */
   readonly completionFilter = signal<'incomplete' | 'edu_done' | 'confirmed'>('incomplete');
-  /** 外圍床病人（透析日不列入應衛教）預設不顯示，可勾選顯示 */
-  readonly showPeripheral = signal(false);
+  /** 排除名單（外圍床、非 HD/SLED 模式）預設不顯示，可勾選顯示 */
+  readonly showExcluded = signal(false);
 
   /** 列的完成階段：主護簽章全數通過(或紙本完成)=confirmed；12次衛教已做完=edu_done；其餘=incomplete */
   completionStage(r: EducationListItem): 'incomplete' | 'edu_done' | 'confirmed' {
@@ -123,7 +123,7 @@ export class EducationDashboardComponent implements OnInit {
     const term = this.search().trim().toLowerCase();
     const cf = this.completionFilter();
     const list = this.rows().filter((r) => {
-      if (r.peripheral && !this.showPeripheral()) return false;
+      if (r.excluded && !this.showExcluded()) return false;
       if (this.completionStage(r) !== cf) return false;
       if (!term) return true;
       return (

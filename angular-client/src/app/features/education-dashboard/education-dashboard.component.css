@@ -137,8 +137,8 @@
   font-size: 0.9rem;
 }
 
-/* 外圍床顯示開關（預設不顯示外圍床病人） */
-.chk-peripheral {
+/* 排除名單顯示開關（外圍床/非HD-SLED模式，預設不顯示） */
+.chk-excluded {
   display: inline-flex;
   align-items: center;
   gap: 5px;
