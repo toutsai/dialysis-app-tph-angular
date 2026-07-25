@@ -57,6 +57,7 @@ import {
   getShiftDisplayName,
   earlyTeams,
   lateTeams,
+  noonTeams,
   allTeams,
 } from '@/constants/scheduleConstants';
 import {
@@ -277,6 +278,8 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   readonly earlyTeams = earlyTeams;
   readonly lateTeams = lateTeams;
   readonly allTeams = allTeams;
+  /** 晚班單選下拉：晚X + 午X（128 班可接晚班主責） */
+  readonly lateSingleTeams = [...lateTeams, ...noonTeams];
   readonly freqToDays = FREQ_TO_DAYS;
 
   // Reactive state
@@ -2620,6 +2623,12 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     const earlyCfg = cfg.earlyShift;
     const lateCfg = cfg.lateShift;
 
+    // 128 班（午X，12:00-20:00 半早半晚）：當天名單有 午X 時，比照一般組納入
+    // 午班上針/收針與晚班主責的常規分配（上限同一般組 4 人）；早班不參與
+    const noonTeams128 = Object.keys(teamsRec.names || {})
+      .filter((k) => k.startsWith('午'))
+      .sort();
+
     // --- Early shift ---
     const earlyMain = mainArea(allEarlyPatients);
     const useEarlyLeader = earlyMain.length > earlyCfg.leaderThreshold;
@@ -2660,16 +2669,18 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       noonInpatientCap[teamKey] = Math.max(0, v - usedInEarly);
     }
 
+    const noonOnRegularTeams = [...earlyRegularTeams, ...noonTeams128];
     const noonOnRules = {
       priorityTeams: { hepatitis: `早${earlyCfg.hepatitisTeam}`, inPatientTeams: earlyInpatientTeams, inPatientCapacity: noonInpatientCap },
-      mainDistribution: { specialTeam: useNoonLeader ? { name: `早${earlyCfg.leaderTeam}`, capacity: earlyCfg.leaderCapacity } : null, regularTeams: earlyRegularTeams },
-      teamMaxCapacity: earlyTeamMaxCap,
+      mainDistribution: { specialTeam: useNoonLeader ? { name: `早${earlyCfg.leaderTeam}`, capacity: earlyCfg.leaderCapacity } : null, regularTeams: noonOnRegularTeams },
+      teamMaxCapacity: { ...earlyTeamMaxCap, ...buildRegularTeamCapacity(noonTeams128) },
     };
-    const noonOnAssignments = distributePatients(sortByBed(noonMain), earlyTeamsToUse, noonOnRules);
+    const noonOnAssignments = distributePatients(sortByBed(noonMain), [...earlyTeamsToUse, ...noonTeams128], noonOnRules);
     noonOnAssignments['早外圍'] = peripheral(allNoonPatients);
 
     // --- Late shift ---
-    const lateTeamsToUse = lateCfg.regularTeams.map(t => `晚${t}`);
+    // 午X 併入晚班常規組：午班收針與晚班主責都可被分到（上限 4 人）
+    const lateTeamsToUse = [...lateCfg.regularTeams.map((t: string) => `晚${t}`), ...noonTeams128];
     const lateInpatientTeams = lateCfg.inpatientTeams.map(t => `晚${t}`);
     const lateInpatientCap: Record<string, number> = {};
     for (const [k, v] of Object.entries(lateCfg.inpatientCapacity)) lateInpatientCap[`晚${k}`] = v;

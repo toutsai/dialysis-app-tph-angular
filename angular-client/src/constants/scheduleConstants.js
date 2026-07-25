@@ -53,6 +53,11 @@ export const earlyTeams = baseTeams.map((t) => `早${t}`)
 export const lateTeams = baseTeams.map((t) => `晚${t}`)
 
 /**
- * 所有可能的護理組別 (用於午班收針等情況)
+ * 128班(12:00-20:00, 半早半晚)可用的護理組別 (午 + 組名)：可分配午班上針/收針與晚班主責
  */
-export const allTeams = [...earlyTeams, ...lateTeams]
+export const noonTeams = baseTeams.map((t) => `午${t}`)
+
+/**
+ * 所有可能的護理組別 (用於午班上針/收針等情況)
+ */
+export const allTeams = [...earlyTeams, ...noonTeams, ...lateTeams]

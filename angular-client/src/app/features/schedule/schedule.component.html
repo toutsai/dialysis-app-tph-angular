@@ -1,4 +1,4 @@
-<!-- Page Container -->
+﻿<!-- Page Container -->
 <div class="page-container" [class.is-locked]="isPageLocked()">
   <!-- Loading overlay -->
   @if (isLoading()) {
@@ -405,7 +405,7 @@
                               [disabled]="isPageLocked()"
                             >
                               <option value="">-</option>
-                              @for (team of (shiftCode === SHIFT_CODES.EARLY ? earlyTeams : lateTeams); track team) {
+                              @for (team of (shiftCode === SHIFT_CODES.EARLY ? earlyTeams : lateSingleTeams); track team) {
                                 <option [value]="team">{{ team }}</option>
                               }
                             </select>
@@ -532,7 +532,7 @@
                             [disabled]="isPageLocked()"
                           >
                             <option value="">-</option>
-                            @for (team of (shiftCode === SHIFT_CODES.EARLY ? earlyTeams : lateTeams); track team) {
+                            @for (team of (shiftCode === SHIFT_CODES.EARLY ? earlyTeams : lateSingleTeams); track team) {
                               <option [value]="team">{{ team }}</option>
                             }
                           </select>

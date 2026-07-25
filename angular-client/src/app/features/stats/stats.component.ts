@@ -376,8 +376,13 @@ export class StatsComponent implements OnInit, OnDestroy {
     };
 
     const lateTakeOffTeams = this.lateBaseTeams.map(t => `夜間收針${t}`);
-    const earlyShiftStats = createTeamStats(this.earlyTeams, 'early');
-    const lateShiftStats = createTeamStats(this.lateTeams, 'late');
+    // 128 班（午X，12:00-20:00 半早半晚）：當天名單有 午X 時動態加欄——
+    // 早班區塊顯示其午班上針、晚班區塊顯示其午班收針+晚班主責
+    const noonTeams128 = Object.keys(this.currentTeamsRecord.names || {})
+      .filter((k: string) => k.startsWith('午'))
+      .sort();
+    const earlyShiftStats = createTeamStats([...this.earlyTeams, ...noonTeams128], 'early');
+    const lateShiftStats = createTeamStats([...this.lateTeams, ...noonTeams128], 'late');
     const lateTakeOffStats = createTeamStats(lateTakeOffTeams, 'lateTakeOff');
 
     if (this.currentRecord.schedule) {
@@ -501,6 +506,10 @@ export class StatsComponent implements OnInit, OnDestroy {
       if (b.includes('未分組')) return -1;
       if (a.includes('外圍')) return 1;
       if (b.includes('外圍')) return -1;
+      // 午X（128 班）排在該區塊常規組之後、外圍/未分組之前
+      const aNoon = a.startsWith('午') ? 1 : 0;
+      const bNoon = b.startsWith('午') ? 1 : 0;
+      if (aNoon !== bNoon) return aNoon - bNoon;
       return a.localeCompare(b);
     };
 
@@ -1724,7 +1733,8 @@ export class StatsComponent implements OnInit, OnDestroy {
         const teamKey = `${slot.patientId}-${shiftCode}`;
         if (!this.currentTeamsRecord.teams) this.currentTeamsRecord.teams = {};
         const teamInfo = this.currentTeamsRecord.teams[teamKey] || {};
-        if (teamInfo.nurseTeam) {
+        // 只複製 晚X：午X（128 班）20:00 下班不做夜間收針，其病人留「夜間收針未分組」待組長指派
+        if (teamInfo.nurseTeam && teamInfo.nurseTeam.startsWith('晚')) {
           const newTeamName = teamInfo.nurseTeam.replace('晚', '夜間收針');
           teamInfo.nurseTeamTakeOff = newTeamName;
           slot.nurseTeamTakeOff = newTeamName;
