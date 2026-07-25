@@ -18,6 +18,8 @@ interface EducationListItem {
   medicalRecordNumber: string;
   status: string;
   wardNumber: string;
+  /** 透析頻率（來源：總表規則 base_schedules MASTER_SCHEDULE） */
+  freq: string;
   firstDialysisActive: boolean;
   firstDialysisDate: string;
   admissionDate: string;

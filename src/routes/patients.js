@@ -938,6 +938,11 @@ router.get('/education-list', ...isEditor, (req, res) => {
 
     const total = EDUCATION_SESSION_COUNT
     const primaryNurseMap = getPrimaryNurseMap(db)
+    // 頻率真理之源=總表規則（迴圈外讀一次），供進度表「頻率」欄
+    const masterDoc = db.prepare(`
+      SELECT schedule FROM base_schedules WHERE id = 'MASTER_SCHEDULE'
+    `).get()
+    const masterRules = masterDoc ? safeJsonParse(masterDoc.schedule) : {}
     const list = []
     for (const r of rows) {
       let firstActive = false
@@ -1023,6 +1028,7 @@ router.get('/education-list', ...isEditor, (req, res) => {
         medicalRecordNumber: r.medical_record_number,
         status: r.status,
         wardNumber: r.ward_number || '',
+        freq: masterRules?.[r.id]?.freq || '',
         firstDialysisActive: firstActive,
         firstDialysisDate: firstDate || '',
         admissionDate: r.edu_admission || '',

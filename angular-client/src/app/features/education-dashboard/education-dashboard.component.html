@@ -66,6 +66,8 @@
           <tr>
             <th>病人</th>
             <th>身分</th>
+            <th class="col-ward">病房號</th>
+            <th class="col-freq">頻率</th>
             <th>初透日</th>
             <th title="來源：使用者管理的護理師分配病人照護清單">主護</th>
             <th>檢視／編輯</th>
@@ -88,6 +90,8 @@
               <td>
                 <span class="status-badge" [attr.data-status]="r.status">{{ statusLabel(r.status) }}</span>
               </td>
+              <td class="col-ward">{{ r.wardNumber || '—' }}</td>
+              <td class="col-freq">{{ r.freq || '—' }}</td>
               <td>{{ formatDate(r.firstDialysisDate) }}</td>
               <td class="col-nurse" [class.no-nurse]="!r.primaryNurse">{{ primaryNurseLabel(r) }}</td>
               <td>
@@ -148,6 +152,8 @@
             <span class="tag-off">已取消首透</span>
           }
           <div class="ec-meta">
+            <span>病房：{{ r.wardNumber || '—' }}</span>
+            <span>頻率：{{ r.freq || '—' }}</span>
             <span>初透日：{{ formatDate(r.firstDialysisDate) }}</span>
             <span>主護：{{ primaryNurseLabel(r) }}</span>
             <span>更新：{{ formatDate(r.lastUpdated) }}</span>
