@@ -136,6 +136,18 @@
   cursor: pointer;
   font-size: 0.9rem;
 }
+
+/* 外圍床顯示開關（預設不顯示外圍床病人） */
+.chk-peripheral {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.88rem;
+  color: #475569;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
 .btn-refresh:hover:not(:disabled) {
   background: #f1f5f9;
 }

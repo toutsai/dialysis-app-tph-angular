@@ -928,7 +928,7 @@ router.get('/education-list', ...isEditor, (req, res) => {
     const todayStr = getTaipeiTodayString()
     const rows = db.prepare(`
       SELECT p.id, p.name, p.medical_record_number, p.status, p.ward_number,
-             p.first_dialysis_date, p.patient_status,
+             p.first_dialysis_date, p.patient_status, p.dialysis_orders,
              e.sessions AS edu_sessions, e.admission_date AS edu_admission, e.updated_at AS edu_updated,
              e.paper_education AS edu_paper, e.paper_completed AS edu_paper_done
       FROM patients p
@@ -953,6 +953,14 @@ router.get('/education-list', ...isEditor, (req, res) => {
         if (ps?.isFirstDialysis?.date) firstDate = ps.isFirstDialysis.date
       } catch {
         /* patient_status 解析失敗，忽略 */
+      }
+
+      // 頻率 fallback：總表沒有規則的病人（如每日/臨時）退回醫囑 dialysis_orders.freq
+      let ordersFreq = ''
+      try {
+        ordersFreq = JSON.parse(r.dialysis_orders || '{}')?.freq || ''
+      } catch {
+        /* dialysis_orders 解析失敗，忽略 */
       }
 
       let educatedCount = 0
@@ -1028,7 +1036,9 @@ router.get('/education-list', ...isEditor, (req, res) => {
         medicalRecordNumber: r.medical_record_number,
         status: r.status,
         wardNumber: r.ward_number || '',
-        freq: masterRules?.[r.id]?.freq || '',
+        freq: masterRules?.[r.id]?.freq || ordersFreq || '',
+        // 外圍床（總表床位 peripheral-*）：外圍透析日不列入應衛教，進度頁預設隱藏
+        peripheral: String(masterRules?.[r.id]?.bedNum || '').startsWith('peripheral'),
         firstDialysisActive: firstActive,
         firstDialysisDate: firstDate || '',
         admissionDate: r.edu_admission || '',

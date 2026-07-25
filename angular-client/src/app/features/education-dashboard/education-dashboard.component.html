@@ -38,6 +38,10 @@
               (click)="completionFilter.set('confirmed')"
               title="主護簽章全數通過（或紙本衛教完成）">主護確認完成</button>
     </div>
+    <label class="chk-peripheral" title="外圍床（總表床位為外圍）的透析日不列入應衛教次數，預設不顯示">
+      <input type="checkbox" [ngModel]="showPeripheral()" (ngModelChange)="showPeripheral.set($event)" />
+      顯示外圍床
+    </label>
     <button class="btn-uneducated" (click)="openUneducated()" [disabled]="loading()"
             title="彙整所有病人的未衛教日期與當天照顧護理師（應衛教日已排除外圍床排程）">
       <i class="fas fa-user-clock"></i> 未衛教整合
