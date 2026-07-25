@@ -77,12 +77,25 @@
         </span>
       </h3>
       <div class="patient-cards" *ngIf="getShiftPatients(shiftCode).length > 0">
-        <div *ngFor="let patient of getShiftPatients(shiftCode)" class="patient-card">
+        <div
+          *ngFor="let patient of getShiftPatients(shiftCode)"
+          class="patient-card"
+          [class.card-needs-reg]="pendingRegPatientIds().has(patient.patientId)"
+        >
           <!-- Card Header -->
           <div class="card-header">
             <div class="patient-info">
               <span class="bed-badge">{{ patient.bedNum }}</span>
               <span class="patient-name">{{ patient.name }}</span>
+              <!-- 本院初透待建檔：點擊直達 KiDit 工作站建檔頁籤 -->
+              <button
+                *ngIf="pendingRegPatientIds().has(patient.patientId)"
+                class="reg-badge"
+                title="本院初透待建檔，點擊前往 KiDit 工作站填寫基本資料表"
+                (click)="openCardRegistration(patient.patientId)"
+              >
+                <i class="fas fa-hospital"></i> 需填寫基本資料
+              </button>
             </div>
             <div class="card-header-actions">
               <a

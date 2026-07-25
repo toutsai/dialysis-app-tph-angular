@@ -462,6 +462,32 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
     return n.team && n.nurse ? `${n.team} ${n.nurse}` : n.nurse || n.team || '—';
   }
 
+  // --- 病人卡「需填寫基本資料」標籤（本院初透待建檔） ---
+
+  /** patientId -> pending-registration row（有本院初透標記且 KiDit 未建檔完成者），供病人卡標籤顯示/點擊直達用 */
+  private pendingRegMap = new Map<string, any>();
+  readonly pendingRegPatientIds = signal<Set<string>>(new Set());
+
+  /** 載入頁面時抓一次本院初透待建檔名單，供病人卡「需填寫基本資料」標籤比對。
+   *  資料來源同 openFirstDiaModal；hospitalFirstDialysisDate 為 null = 未標記本院初透，
+   *  標記但沒填日期會是空字串，所以用 != null 判斷，勿改成 truthy（會漏掉沒填日期者）。 */
+  private async loadPendingRegistrations(): Promise<void> {
+    try {
+      const pending = await kiditService.fetchPendingRegistrations();
+      const rows = ((pending as any[]) || []).filter((r) => r.hospitalFirstDialysisDate != null);
+      this.pendingRegMap = new Map(rows.map((r) => [r.patientId, r]));
+      this.pendingRegPatientIds.set(new Set(this.pendingRegMap.keys()));
+    } catch (error) {
+      console.error('載入本院初透待建檔名單失敗:', error);
+    }
+  }
+
+  /** 病人卡「需填寫基本資料」標籤點擊：直達 KiDit 工作站該病人的基本資料建檔頁籤 */
+  openCardRegistration(patientId: string): void {
+    const row = this.pendingRegMap.get(patientId);
+    if (row) this.openFirstDiaTarget(row);
+  }
+
   // --- 血管通路事件（主護填寫入口；組長確認在工作日誌頁） ---
 
   readonly showVaModal = signal(false);
@@ -634,6 +660,8 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
       const eduTargetsPromise = this.loadEduTargets();
       // 血管通路「已退回」事件（病人卡圖示紅點用）：不擋卡片渲染，載到即補上紅點
       void this.loadVaRejected();
+      // 本院初透待建檔名單（病人卡「需填寫基本資料」標籤用）：同樣不擋卡片渲染
+      void this.loadPendingRegistrations();
 
       // 1. Ensure patients are loaded
       await this.patientStore.fetchPatientsIfNeeded();

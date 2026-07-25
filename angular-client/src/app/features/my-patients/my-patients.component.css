@@ -401,6 +401,31 @@
   background: #e03131;
   border: 1px solid #fff;
 }
+/* 本院初透待建檔：卡片琥珀色高亮 + 「需填寫基本資料」標籤（點擊直達 KiDit 建檔頁籤） */
+.patient-card.card-needs-reg {
+  border-color: #f59f00;
+  box-shadow:
+    0 0 0 2px rgba(245, 159, 0, 0.25),
+    0 1px 6px rgba(245, 159, 0, 0.35);
+}
+.reg-badge {
+  border: 1px solid #f59f00;
+  background: #fff4e6;
+  color: #b35c00;
+  font-size: 0.75rem;
+  font-weight: bold;
+  padding: 2px 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.2s;
+}
+.reg-badge:hover {
+  background: #ffe8cc;
+}
+.reg-badge i {
+  margin-right: 2px;
+}
 .card-section {
   padding: 0.75rem 1rem;
   border-bottom: 1px solid #f1f3f5;
