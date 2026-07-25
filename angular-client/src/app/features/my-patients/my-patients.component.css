@@ -401,27 +401,43 @@
   background: #e03131;
   border: 1px solid #fff;
 }
-/* 本院初透待建檔：卡片琥珀色高亮 + 「需填寫基本資料」標籤（點擊直達 KiDit 建檔頁籤） */
+/* 本院初透待建檔：卡片琥珀色高亮 + 上緣外側書籤（點擊直達 KiDit 建檔頁籤）。
+   書籤要凸出卡片外，所以這類卡片改 overflow: visible，
+   card-header 自帶背景色，須自補上圓角以免蓋出卡片圓角外。 */
 .patient-card.card-needs-reg {
+  position: relative;
+  overflow: visible;
   border-color: #f59f00;
   box-shadow:
     0 0 0 2px rgba(245, 159, 0, 0.25),
     0 1px 6px rgba(245, 159, 0, 0.35);
 }
+.patient-card.card-needs-reg .card-header {
+  border-radius: 7px 7px 0 0;
+}
+/* 書籤本體：凸出上緣 14px（卡片間距 1rem 內，不壓到上一列卡片），下緣 ~5px 疊在卡框上呈「長在卡片上」 */
 .reg-badge {
+  position: absolute;
+  top: -14px;
+  right: 14px;
+  z-index: 2;
   border: 1px solid #f59f00;
-  background: #fff4e6;
+  border-bottom: none;
+  background: #ffe8cc;
   color: #b35c00;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: bold;
-  padding: 2px 8px;
-  border-radius: 12px;
+  line-height: 1;
+  padding: 3px 10px 4px;
+  border-radius: 8px 8px 0 0;
   cursor: pointer;
   white-space: nowrap;
-  transition: background-color 0.2s;
+  box-shadow: 0 -1px 3px rgba(245, 159, 0, 0.3);
+  transition: background-color 0.2s, top 0.15s;
 }
 .reg-badge:hover {
-  background: #ffe8cc;
+  background: #ffd8a8;
+  top: -16px;
 }
 .reg-badge i {
   margin-right: 2px;
