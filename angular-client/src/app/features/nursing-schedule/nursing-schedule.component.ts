@@ -362,15 +362,15 @@ export class NursingScheduleComponent implements OnInit {
         if (nurseData.groups) {
           nurseData.groups.forEach((group: string, idx: number) => {
             if (group) {
-              const key = group.startsWith('白') || group.startsWith('晚') || group.startsWith('午')
+              // 128 半早半晚：組別直接卡入白班欄（白K/白L），不設獨立午欄
+              const key = group.startsWith('白') || group.startsWith('晚')
                 ? group
-                : this.is128Shift(nurseData.shifts?.[idx])
-                  ? `午${group}`
-                  : this.isDayShift(nurseData.shifts?.[idx])
-                    ? `白${group}`
-                    : this.isNightShift(nurseData.shifts?.[idx])
-                      ? `晚${group}`
-                      : group;
+                : this.isDayShift(nurseData.shifts?.[idx]) ||
+                    this.is128Shift(nurseData.shifts?.[idx])
+                  ? `白${group}`
+                  : this.isNightShift(nurseData.shifts?.[idx])
+                    ? `晚${group}`
+                    : group;
               groupSet.add(key);
               counts[key] = (counts[key] || 0) + 1;
             }
@@ -394,10 +394,9 @@ export class NursingScheduleComponent implements OnInit {
       // Put day shifts first, then night shifts, then standby
       const order = (g: string) => {
         if (g.startsWith('白')) return 0;
-        if (g.startsWith('午')) return 1;
-        if (g.startsWith('晚')) return 2;
-        if (g === '預備75') return 3;
-        return 4;
+        if (g.startsWith('晚')) return 1;
+        if (g === '預備75') return 2;
+        return 3;
       };
       return order(a) - order(b) || a.localeCompare(b);
     });
@@ -1290,7 +1289,7 @@ export class NursingScheduleComponent implements OnInit {
     this.shift128Data = {
       codes: '12-8*1',
       tasks:
-        '工作時間 12:00-20:00，半早班半晚班：可分配午班上針、午班收針與晚班主責（不分配早班）。\n組別為白班組往後加一組（K 空則 K、K 滿則 L），工作內容比照所屬時段職責。\n※白班 12-8 組別由 Leader 安排。',
+        '工作時間 12:00-20:00，半早班半晚班：可分配午班上針、午班收針與晚班主責（不分配早班）。\n組別為白班組往後加一組（K 空則 K、K 滿則 L），直接卡入早/晚班組別欄，工作內容比照所屬時段職責。\n※白班 12-8 組別由 Leader 安排。',
     };
     this.nightShiftDuties = [
       {

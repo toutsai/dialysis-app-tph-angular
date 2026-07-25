@@ -376,13 +376,17 @@ export class StatsComponent implements OnInit, OnDestroy {
     };
 
     const lateTakeOffTeams = this.lateBaseTeams.map(t => `夜間收針${t}`);
-    // 128 班（午X，12:00-20:00 半早半晚）：當天名單有 午X 時動態加欄——
-    // 早班區塊顯示其午班上針、晚班區塊顯示其午班收針+晚班主責
-    const noonTeams128 = Object.keys(this.currentTeamsRecord.names || {})
-      .filter((k: string) => k.startsWith('午'))
+    // 128 班（12:00-20:00 半早半晚）直接卡入早/晚班組別欄（如 早K/晚K）；
+    // 若 K 滿被排到 L 等固定清單外的組別，依當日 names 動態補欄（早L/晚L）
+    const recNames = (this.currentTeamsRecord.names || {}) as Record<string, string>;
+    const extraEarlyTeams = Object.keys(recNames)
+      .filter((k) => k.startsWith('早') && !this.earlyTeams.includes(k))
       .sort();
-    const earlyShiftStats = createTeamStats([...this.earlyTeams, ...noonTeams128], 'early');
-    const lateShiftStats = createTeamStats([...this.lateTeams, ...noonTeams128], 'late');
+    const extraLateTeams = Object.keys(recNames)
+      .filter((k) => k.startsWith('晚') && !this.lateTeams.includes(k))
+      .sort();
+    const earlyShiftStats = createTeamStats([...this.earlyTeams, ...extraEarlyTeams], 'early');
+    const lateShiftStats = createTeamStats([...this.lateTeams, ...extraLateTeams], 'late');
     const lateTakeOffStats = createTeamStats(lateTakeOffTeams, 'lateTakeOff');
 
     if (this.currentRecord.schedule) {
@@ -506,10 +510,6 @@ export class StatsComponent implements OnInit, OnDestroy {
       if (b.includes('未分組')) return -1;
       if (a.includes('外圍')) return 1;
       if (b.includes('外圍')) return -1;
-      // 午X（128 班）排在該區塊常規組之後、外圍/未分組之前
-      const aNoon = a.startsWith('午') ? 1 : 0;
-      const bNoon = b.startsWith('午') ? 1 : 0;
-      if (aNoon !== bNoon) return aNoon - bNoon;
       return a.localeCompare(b);
     };
 
@@ -1723,6 +1723,14 @@ export class StatsComponent implements OnInit, OnDestroy {
     this.isConfirmDialogVisible = true;
   }
 
+  /** 128 班（半早半晚）的 晚X：names 中 早X 與 晚X 同名即是。20:00 下班，不做夜間收針 */
+  private is128LateTeam(teamName: string): boolean {
+    if (!teamName?.startsWith('晚')) return false;
+    const names = (this.currentTeamsRecord.names || {}) as Record<string, string>;
+    const name = names[teamName];
+    return !!name && name === names[`早${teamName.slice(1)}`];
+  }
+
   private duplicateLateShiftForTakeOff(): void {
     if (this.isPageLocked) return;
     for (const shiftId in this.currentRecord.schedule) {
@@ -1733,8 +1741,12 @@ export class StatsComponent implements OnInit, OnDestroy {
         const teamKey = `${slot.patientId}-${shiftCode}`;
         if (!this.currentTeamsRecord.teams) this.currentTeamsRecord.teams = {};
         const teamInfo = this.currentTeamsRecord.teams[teamKey] || {};
-        // 只複製 晚X：午X（128 班）20:00 下班不做夜間收針，其病人留「夜間收針未分組」待組長指派
-        if (teamInfo.nurseTeam && teamInfo.nurseTeam.startsWith('晚')) {
+        // 128 班的 晚X 不複製：其病人留「夜間收針未分組」待組長指派
+        if (
+          teamInfo.nurseTeam &&
+          teamInfo.nurseTeam.startsWith('晚') &&
+          !this.is128LateTeam(teamInfo.nurseTeam)
+        ) {
           const newTeamName = teamInfo.nurseTeam.replace('晚', '夜間收針');
           teamInfo.nurseTeamTakeOff = newTeamName;
           slot.nurseTeamTakeOff = newTeamName;
@@ -1744,7 +1756,7 @@ export class StatsComponent implements OnInit, OnDestroy {
     }
     if (this.currentTeamsRecord.names) {
       for (const teamName in this.currentTeamsRecord.names) {
-        if (teamName.startsWith('晚')) {
+        if (teamName.startsWith('晚') && !this.is128LateTeam(teamName)) {
           const nurseName = this.currentTeamsRecord.names[teamName];
           if (nurseName) {
             const newTakeOffTeamName = teamName.replace('晚', '夜間收針');

@@ -381,7 +381,7 @@
                                 [disabled]="isPageLocked()"
                               >
                                 <option value="">-</option>
-                                @for (team of allTeams; track team) {
+                                @for (team of allTeamOptions(); track team) {
                                   <option [value]="team">{{ team }}</option>
                                 }
                               </select>
@@ -392,7 +392,7 @@
                                 [disabled]="isPageLocked()"
                               >
                                 <option value="">-</option>
-                                @for (team of allTeams; track team) {
+                                @for (team of allTeamOptions(); track team) {
                                   <option [value]="team">{{ team }}</option>
                                 }
                               </select>
@@ -405,7 +405,7 @@
                               [disabled]="isPageLocked()"
                             >
                               <option value="">-</option>
-                              @for (team of (shiftCode === SHIFT_CODES.EARLY ? earlyTeams : lateSingleTeams); track team) {
+                              @for (team of (shiftCode === SHIFT_CODES.EARLY ? earlyTeams : lateTeamOptions()); track team) {
                                 <option [value]="team">{{ team }}</option>
                               }
                             </select>
@@ -508,7 +508,7 @@
                               [disabled]="isPageLocked()"
                             >
                               <option value="">-</option>
-                              @for (team of allTeams; track team) {
+                              @for (team of allTeamOptions(); track team) {
                                 <option [value]="team">{{ team }}</option>
                               }
                             </select>
@@ -519,7 +519,7 @@
                               [disabled]="isPageLocked()"
                             >
                               <option value="">-</option>
-                              @for (team of allTeams; track team) {
+                              @for (team of allTeamOptions(); track team) {
                                 <option [value]="team">{{ team }}</option>
                               }
                             </select>
@@ -532,7 +532,7 @@
                             [disabled]="isPageLocked()"
                           >
                             <option value="">-</option>
-                            @for (team of (shiftCode === SHIFT_CODES.EARLY ? earlyTeams : lateSingleTeams); track team) {
+                            @for (team of (shiftCode === SHIFT_CODES.EARLY ? earlyTeams : lateTeamOptions()); track team) {
                               <option [value]="team">{{ team }}</option>
                             }
                           </select>
@@ -639,7 +639,7 @@
                         [disabled]="isPageLocked()"
                       >
                         <option value="">-</option>
-                        @for (team of allTeams; track team) {
+                        @for (team of allTeamOptions(); track team) {
                           <option [value]="team">{{ team }}</option>
                         }
                       </select>

@@ -348,11 +348,15 @@ function syncNurseNamesToAssignments(db, yearMonth, scheduleByNurse) {
       }
 
       // 判斷班別前綴
-      let prefix = '早' // 預設早班
+      // 128 (12:00-20:00) 半早半晚 → 同一人同時寫 早X 與 晚X（月班表分組規則保證字母不與白班/夜班重複；
+      // 前端以「早X 與 晚X 同名」辨識 128 組，藉此排除早班病人分配與夜間收針）
       if (shift === '128') {
-        // 128 (12:00-20:00) 半早半晚 → 獨立前綴 午X：可分配午班上針/收針與晚班主責，不碰早班
-        prefix = '午'
-      } else if (LATE_SHIFTS.includes(shift)) {
+        newNames[`早${group}`] = nurseData.nurseName
+        newNames[`晚${group}`] = nurseData.nurseName
+        continue
+      }
+      let prefix = '早' // 預設早班
+      if (LATE_SHIFTS.includes(shift)) {
         prefix = '晚'
       }
 
