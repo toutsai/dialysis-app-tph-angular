@@ -643,7 +643,8 @@ export class GroupAssignerService {
   // Shift type helpers
   private isNightShift(shift: string): boolean {
     const s = (shift || '').trim();
-    return ['311', '3-11', '311C'].some(ns => s.includes(ns));
+    // 128 班（12:00–20:00）分組併入夜班組池：與 311 同池輪替、公平性計入 '311' 桶、儀表板計入 晚X
+    return ['311', '3-11', '311C', '128'].some(ns => s.includes(ns));
   }
 
   /**

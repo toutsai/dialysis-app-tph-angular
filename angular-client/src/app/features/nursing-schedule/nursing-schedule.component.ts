@@ -84,6 +84,7 @@ export class NursingScheduleComponent implements OnInit {
   // --- "工作職責" 頁籤的狀態 ---
   announcementText = '';
   dayShiftData = { codes: '', tasks: '' };
+  shift128Data = { codes: '', tasks: '' };
   nightShiftDuties: any[] = [];
   checklistItems: string[] = [];
   teamworkItems: string[] = [];
@@ -99,7 +100,7 @@ export class NursingScheduleComponent implements OnInit {
   groupConflictMessage = signal('');
 
   // --- 常數定義 ---
-  shiftOptions = ['', '74', '75', '816', '74/L', '311', '休', '例', '國定'];
+  shiftOptions = ['', '74', '75', '816', '74/L', '311', '128', '休', '例', '國定'];
 
   // ========================================
   // 計算屬性 (Computed Properties)
@@ -304,7 +305,7 @@ export class NursingScheduleComponent implements OnInit {
                   hasOnlyHolidays = false;
                   if (
                     this.shiftFilter() === 'day' &&
-                    this.isDayShift(shift)
+                    (this.isDayShift(shift) || this.is128Shift(shift))
                   ) {
                     hasMatchingShift = true;
                   } else if (
@@ -447,12 +448,19 @@ export class NursingScheduleComponent implements OnInit {
 
   isNightShift(shift: string): boolean {
     const s = (shift || '').trim();
-    return ['311', '3-11'].some((ns) => s.includes(ns));
+    // 128 班（12:00–20:00）橫跨午+晚班，組別歸夜班陣營（後端同步成 晚X）；
+    // 週班表「只看白班」要同時顯示 128，特例在 filteredSortedSchedule / shouldDimCell
+    return ['311', '3-11', '128'].some((ns) => s.includes(ns));
   }
 
   isDayShift(shift: string): boolean {
     const s = (shift || '').trim();
     return ['74', '74/L', '75', '816', '84', '815'].includes(s);
+  }
+
+  /** 128 班（12:00–20:00）：負責午班與晚班，白/夜班篩選都要顯示 */
+  is128Shift(shift: string): boolean {
+    return (shift || '').trim() === '128';
   }
 
   shouldDimCell(nurseData: any, dayInfo: any): boolean {
@@ -463,7 +471,11 @@ export class NursingScheduleComponent implements OnInit {
     if (s.includes('休') || s.includes('例') || s.includes('國定')) {
       return true;
     }
-    if (this.shiftFilter() === 'day' && !this.isDayShift(shift)) {
+    if (
+      this.shiftFilter() === 'day' &&
+      !this.isDayShift(shift) &&
+      !this.is128Shift(shift)
+    ) {
       return true;
     }
     if (this.shiftFilter() === 'night' && !this.isNightShift(shift)) {
@@ -550,7 +562,8 @@ export class NursingScheduleComponent implements OnInit {
     if (s === '75') {
       return getDayShiftGroups().groups75;
     }
-    if (['311', '3-11'].some((ns) => s.includes(ns))) {
+    // 128 班分組併入夜班組池（同步後為 晚X）
+    if (['311', '3-11'].some((ns) => s.includes(ns)) || this.is128Shift(s)) {
       let groups = [...getNightShiftGroups()];
       if (
         nurseId &&
@@ -599,10 +612,9 @@ export class NursingScheduleComponent implements OnInit {
           const isOtherDayShift = ['74', '75', '816', '74/L'].includes(
             otherShift
           );
-          const isCurrentNightShift =
-            currentShift.includes('311') || currentShift.includes('3-11');
-          const isOtherNightShift =
-            otherShift.includes('311') || otherShift.includes('3-11');
+          // isNightShift 含 128：128 與夜班同用 晚X，同組即衝突
+          const isCurrentNightShift = this.isNightShift(currentShift);
+          const isOtherNightShift = this.isNightShift(otherShift);
 
           if (
             (isCurrentDayShift && isOtherDayShift) ||
@@ -633,6 +645,7 @@ export class NursingScheduleComponent implements OnInit {
     const shiftStr = String(shift).trim();
     const EARLY_SHIFTS = ['74', '75', '84', '74/L', '816', '815'];
     const LATE_SHIFTS = ['3-11', '311'];
+    if (shiftStr === '128') return 'shift-badge shift-128';
     if (EARLY_SHIFTS.some((s) => shiftStr.includes(s)))
       return 'shift-badge shift-早班';
     if (LATE_SHIFTS.some((s) => shiftStr.includes(s)))
@@ -1261,6 +1274,11 @@ export class NursingScheduleComponent implements OnInit {
       codes: '7-3*9\n8-4*1\n7-5*2',
       tasks:
         'A 組：預備機化消及測餘氯。\nB 組：點班(急救車、電擊器測試)。備 12-8，午班用物。\nQW3 血糖機測試並上傳測試數值。 (試劑沒有向檢驗科拿，試紙沒了請書記備)\nC 組：支援 ICU 組(含備機)，如 ICU 組被 P，接 ICU 組， ICU 機台化消及餘氯檢測，需 cover ICU 組吃飯時間 30 分鐘(要自行電話與 ICU 組約時間但要避開 OPD 上下針時間 11:30-13:00)。\nD 組：送消、點班(衛材、庫房溫溼度)、整理供應室衛材歸位， NO.1。\nE 組：點班(氧療、冰箱溫度、補充冰箱常備藥)。 NO.2。每月最後一周 W1 須執行氧氣桶鋼瓶 查核表(114.07.17)\nF 組：電訪關心病患， NO.3。\nG 組：協助準備醫師拔 D/L 備物及病人觀察。\nH 組： 住院組。\nI 組： 住院組。\nJ 組： W3 泡製 3 桶消毒液。 W6 幫忙協助收行動 RO 機(若 ICU 組無法收機時)\nK 組：擔任 Leader。\nICU 組：接 ICU 組， ICU 機台化消及餘氯檢測， W6 協助收行動 RO 機。\n※若放 P 一整天，則該組工作由 G 組負責。\n※若當日僅有十組組別，組長則併入 A 組， A 組負責工作由 G 組協助完成。\n※白班 12-8 組別由 Leader 安排。',
+    };
+    this.shift128Data = {
+      codes: '12-8*1',
+      tasks:
+        '工作時間 12:00-20:00，橫跨午班與晚班：午班收針、晚班主責。\n組別併入夜班分組（晚班組別），各組工作內容比照夜班職責。\n※白班 12-8 組別由 Leader 安排。',
     };
     this.nightShiftDuties = [
       {

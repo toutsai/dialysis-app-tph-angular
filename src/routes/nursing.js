@@ -320,8 +320,8 @@ function syncNurseNamesToAssignments(db, yearMonth, scheduleByNurse) {
 
   // 早班班別
   const EARLY_SHIFTS = ['74', '75', '816', '74/L', '84', '815', '7-3', '8-4', '7-5']
-  // 晚班班別
-  const LATE_SHIFTS = ['311', '3-11', '311C']
+  // 晚班班別（128 = 12:00-20:00 橫跨午+晚，組別歸 晚X：午班收針+晚班主責、不碰早班）
+  const LATE_SHIFTS = ['311', '3-11', '311C', '128']
   // 非工作班別
   const NON_WORK_SHIFTS = ['休', '例', '國定', '休息', '例假', '']
 
@@ -530,7 +530,7 @@ async function handleNursingScheduleUpload(req, res) {
     const processedNurses = new Set()
     const processingOrder = []
     const EARLY_SHIFTS = ['74', '75', '84', '74/L', '816', '815', '7-3', '8-4', '7-5']
-    const LATE_SHIFTS = ['3-11', '311']
+    const LATE_SHIFTS = ['3-11', '311', '128']
 
     for (let rowIndex = nurseStartRow; rowIndex < jsonData.length; rowIndex++) {
       const row = jsonData[rowIndex]

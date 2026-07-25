@@ -591,6 +591,37 @@
                 ></textarea>
               </td>
             </tr>
+            <tr>
+              <td class="shift-type-cell"><strong>128班</strong></td>
+              <td (click)="enterEditMode('shift128', 0, 'codes')">
+                <div
+                  *ngIf="!isEditing('shift128', 0, 'codes')"
+                  class="editable-text"
+                  [innerHTML]="formatText(shift128Data.codes)"
+                ></div>
+                <textarea
+                  *ngIf="isEditing('shift128', 0, 'codes')"
+                  [(ngModel)]="shift128Data.codes"
+                  (ngModelChange)="markUnsaved()"
+                  (blur)="exitEditMode()"
+                  class="edit-input"
+                ></textarea>
+              </td>
+              <td (click)="enterEditMode('shift128', 0, 'tasks')">
+                <div
+                  *ngIf="!isEditing('shift128', 0, 'tasks')"
+                  class="editable-text task-text"
+                  [innerHTML]="formatText(shift128Data.tasks)"
+                ></div>
+                <textarea
+                  *ngIf="isEditing('shift128', 0, 'tasks')"
+                  [(ngModel)]="shift128Data.tasks"
+                  (ngModelChange)="markUnsaved()"
+                  (blur)="exitEditMode()"
+                  class="edit-input"
+                ></textarea>
+              </td>
+            </tr>
             <tr *ngFor="let duty of nightShiftDuties; let i = index">
               <td *ngIf="i === 0" [attr.rowspan]="nightShiftDuties.length" class="shift-type-cell">
                 <strong>夜班</strong>
