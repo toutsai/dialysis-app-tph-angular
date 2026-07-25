@@ -79,6 +79,8 @@ interface MyPatientItem {
   // 是否為「初透衛教對象」（沿用 openEduModal 同一 predicate，非主護簽核完成者），
   // 於 fetchMyPatientData 建卡時一併算好存欄位，模板不重算。
   isEduTarget?: boolean;
+  // 待辦抽血留言（type='抽血'）：不列留言區，改以「需抽血」書籤呈現
+  bloodMemos: { id: string; content: string }[];
 }
 
 interface SelectableUser {
@@ -488,6 +490,38 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
     if (row) this.openFirstDiaTarget(row);
   }
 
+  // --- 病人卡「需抽血」書籤（抽血留言改書籤呈現） ---
+
+  /** 點擊需抽血書籤後的確認對象；確認＝該病人所有待辦抽血留言標記已讀 */
+  readonly bloodConfirmPatient = signal<MyPatientItem | null>(null);
+
+  bloodBookmarkTitle(patient: MyPatientItem): string {
+    const contents = patient.bloodMemos.map((m) => m.content).join('；');
+    return `抽血留言：${contents}。點擊確認完成抽血（留言標記已讀）`;
+  }
+
+  openBloodDrawConfirm(patient: MyPatientItem): void {
+    this.bloodConfirmPatient.set(patient);
+  }
+
+  bloodConfirmMessage(): string {
+    const p = this.bloodConfirmPatient();
+    if (!p) return '';
+    const contents = p.bloodMemos.map((m) => `「${m.content}」`).join('、');
+    return `${p.name} 的抽血留言：${contents}。確認已完成抽血？確認後留言將標記為已讀。`;
+  }
+
+  async executeBloodDrawComplete(): Promise<void> {
+    const p = this.bloodConfirmPatient();
+    this.bloodConfirmPatient.set(null);
+    if (!p) return;
+    for (const m of p.bloodMemos) {
+      await this.updateTaskStatus(m, 'completed');
+    }
+    // 重建卡片讓書籤即時消失
+    await this.fetchMyPatientData();
+  }
+
   // --- 血管通路事件（主護填寫入口；組長確認在工作日誌頁） ---
 
   readonly showVaModal = signal(false);
@@ -852,14 +886,20 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
       await eduTargetsPromise; // 確保衛教對象清單已就緒，供下方 isEduTarget 判定
       const eduTargetIds = this.eduTargetPatientIds();
       for (const item of pendingItems) {
-        const patientMemos = feedMessages
-          .filter(
-            (m) =>
-              m.patientId === item.slotData.patientId &&
-              m.status !== 'completed' &&
-              m.status !== 'resolved' &&
-              m.status !== 'cancelled'
-          )
+        const patientTasks = feedMessages.filter(
+          (m) =>
+            m.patientId === item.slotData.patientId &&
+            m.status !== 'completed' &&
+            m.status !== 'resolved' &&
+            m.status !== 'cancelled'
+        );
+        // 抽血留言不列留言區，改以卡片「需抽血」書籤呈現（點書籤確認完成＝標記已讀）
+        const bloodMemos = patientTasks
+          .filter((m) => m.type === '抽血')
+          .map((m) => ({ id: m.id, content: m.content }));
+        const patientMemos = patientTasks
+          // 調班申請自動產生的交班留言不在卡片顯示（調班管理/留言板仍看得到）＝使用者指定精簡
+          .filter((m) => m.type !== '調班' && m.type !== '抽血')
           .map((m) => ({
             id: m.id,
             content: m.content,
@@ -894,6 +934,7 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
           },
           injections,
           memos: patientMemos,
+          bloodMemos,
           isEduTarget: eduTargetIds.has(item.slotData.patientId),
         };
 

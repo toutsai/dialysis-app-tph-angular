@@ -82,11 +82,12 @@
           class="patient-card"
           [class.card-needs-reg]="pendingRegPatientIds().has(patient.patientId)"
           [class.card-needs-edu]="patient.isEduTarget"
+          [class.card-needs-blood]="patient.bloodMemos.length > 0"
         >
           <!-- 卡片書籤列：絕對定位凸出卡片上緣外側，不佔卡片內版面 -->
           <div
             class="card-bookmarks"
-            *ngIf="pendingRegPatientIds().has(patient.patientId) || patient.isEduTarget"
+            *ngIf="pendingRegPatientIds().has(patient.patientId) || patient.isEduTarget || patient.bloodMemos.length > 0"
           >
             <!-- 本院初透待建檔：點擊直達 KiDit 建檔頁籤 -->
             <button
@@ -105,6 +106,15 @@
               (click)="openCardEduRecord(patient.patientId)"
             >
               初透衛教+
+            </button>
+            <!-- 抽血留言：不列留言區改書籤呈現；點擊確認完成抽血=留言標記已讀 -->
+            <button
+              *ngIf="patient.bloodMemos.length > 0"
+              class="bookmark-tab blood-badge"
+              [title]="bloodBookmarkTitle(patient)"
+              (click)="openBloodDrawConfirm(patient)"
+            >
+              需抽血
             </button>
           </div>
           <!-- Card Header -->
@@ -273,6 +283,15 @@
     message="確定要刪除這則留言/交辦嗎？此操作無法復原。"
     (confirm)="executeDeleteTask()"
     (cancel)="onCancelConfirmDelete()"
+  ></app-confirm-dialog>
+
+  <!-- 需抽血書籤：確認完成抽血（留言標記已讀） -->
+  <app-confirm-dialog
+    *ngIf="bloodConfirmPatient()"
+    title="完成抽血"
+    [message]="bloodConfirmMessage()"
+    (confirm)="executeBloodDrawComplete()"
+    (cancel)="bloodConfirmPatient.set(null)"
   ></app-confirm-dialog>
 
   <!-- Dialysis Order Modal -->

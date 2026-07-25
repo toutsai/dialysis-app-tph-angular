@@ -405,12 +405,14 @@
    所以這類卡片改 overflow: visible，card-header 自帶背景色，
    須自補上圓角以免蓋出卡片圓角外。 */
 .patient-card.card-needs-reg,
-.patient-card.card-needs-edu {
+.patient-card.card-needs-edu,
+.patient-card.card-needs-blood {
   position: relative;
   overflow: visible;
 }
 .patient-card.card-needs-reg .card-header,
-.patient-card.card-needs-edu .card-header {
+.patient-card.card-needs-edu .card-header,
+.patient-card.card-needs-blood .card-header {
   border-radius: 7px 7px 0 0;
 }
 /* 卡片光暈：衛教紫；同時待建檔時由下面的琥珀規則覆蓋（建檔較急，優先） */
@@ -425,6 +427,13 @@
   box-shadow:
     0 0 0 2px rgba(245, 159, 0, 0.25),
     0 1px 6px rgba(245, 159, 0, 0.35);
+}
+/* 需抽血紅光暈：當日臨床待辦最急，宣告放最後，同時有其他書籤時紅色優先 */
+.patient-card.card-needs-blood {
+  border-color: #e03131;
+  box-shadow:
+    0 0 0 2px rgba(224, 49, 49, 0.25),
+    0 1px 6px rgba(224, 49, 49, 0.35);
 }
 /* 書籤列：凸出上緣 15px（卡片間距 1rem 內，不壓到上一列卡片），
    下緣疊在卡框上呈「長在卡片上」；兩書籤並存時橫向排列 */
@@ -464,6 +473,13 @@
 }
 .edu-badge:hover {
   background: #6f3381;
+}
+.blood-badge {
+  background: #e03131;
+  box-shadow: 0 -1px 4px rgba(224, 49, 49, 0.45);
+}
+.blood-badge:hover {
+  background: #c92a2a;
 }
 .card-section {
   padding: 0.75rem 1rem;
