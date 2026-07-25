@@ -37,18 +37,18 @@
               智慧排床
             </button>
             <button
-              class="btn desktop-only"
+              class="btn desktop-only btn-live-when-locked"
               style="background-color: #007bff; color: white; border-color: #007bff"
               (click)="autoAssignNurseTeams()"
-              [disabled]="isPageLocked()"
+              [disabled]="isTeamEditLocked()"
             >
               自動分組
             </button>
             <button
-              class="btn btn-config-icon desktop-only"
+              class="btn btn-config-icon desktop-only btn-live-when-locked"
               title="自動分組設定"
               (click)="isAutoAssignConfigVisible.set(true)"
-              [disabled]="isPageLocked()"
+              [disabled]="isTeamEditLocked()"
             >
               ⚙️
             </button>
@@ -59,9 +59,9 @@
         <span class="status-indicator">{{ statusIndicator() }}</span>
         @if (auth.canEditSchedules()) {
           <button
-            class="btn btn-success"
+            class="btn btn-success btn-live-when-locked"
             (click)="saveDataToCloud()"
-            [disabled]="isPageLocked() || !hasUnsavedChanges()"
+            [disabled]="!canSaveChanges()"
           >
             儲存
           </button>
@@ -72,7 +72,7 @@
 
     @if (isFutureView()) {
       <div class="sse-update-banner">
-        <span>未來日期為唯讀：床位調整請至「護理分組」或「調班管理」提出調班申請（衝突處理不受影響）。</span>
+        <span>未來日期為唯讀：床位調整請至「護理分組」或「調班管理」提出調班申請（衝突處理不受影響）；「自動分組」仍可執行並儲存。</span>
       </div>
     }
 

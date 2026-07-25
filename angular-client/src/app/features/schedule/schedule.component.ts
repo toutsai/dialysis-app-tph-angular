@@ -380,6 +380,17 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     return currentDay > today;
   });
 
+  // 護理分組（自動分組）鎖定範圍：只鎖過去。未來放行——自動分組只寫 nurse_assignments
+  // 不動排程本體，且此功能僅本頁提供（護理分組頁未來本可編輯，語意一致）。
+  readonly isTeamEditLocked = computed(() => this.isPageLocked() && !this.isFutureView());
+
+  /** 儲存鈕可用性：今天＝任何變更；未來＝僅分組變更（排程本體維持唯讀）；過去＝不可存 */
+  readonly canSaveChanges = computed(() => {
+    if (this.isTeamEditLocked()) return false;
+    if (this.isPageLocked()) return this.hasUnsavedTeamChanges();
+    return this.hasUnsavedChanges();
+  });
+
   readonly sortedBedNumbers = computed(() => {
     const numericBeds = ALL_BED_NUMBERS.filter((b): b is number => typeof b === 'number');
     return [...numericBeds].sort((a, b) => a - b);
@@ -1008,7 +1019,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       this.currentDate.set(newDate);
       this.dateState.setDate(newDate.toISOString());
     };
-    if ((this.hasUnsavedChanges() || this.hasUnsavedTeamChanges()) && !this.isPageLocked()) {
+    if ((this.hasUnsavedChanges() || this.hasUnsavedTeamChanges()) && !this.isTeamEditLocked()) {
       this.showConfirm('注意', '您有未儲存的變更，確定要切換日期嗎？', performChange);
     } else {
       performChange();
@@ -1021,7 +1032,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       this.currentDate.set(today);
       this.dateState.setDate(today.toISOString());
     };
-    if ((this.hasUnsavedChanges() || this.hasUnsavedTeamChanges()) && !this.isPageLocked()) {
+    if ((this.hasUnsavedChanges() || this.hasUnsavedTeamChanges()) && !this.isTeamEditLocked()) {
       this.showConfirm('注意', '您有未儲存的變更，確定要切換到今天嗎？', performChange);
     } else {
       performChange();
@@ -1051,7 +1062,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       this.currentDate.set(newDate);
       this.dateState.setDate(newDate.toISOString());
     };
-    if ((this.hasUnsavedChanges() || this.hasUnsavedTeamChanges()) && !this.isPageLocked()) {
+    if ((this.hasUnsavedChanges() || this.hasUnsavedTeamChanges()) && !this.isTeamEditLocked()) {
       this.showConfirm('注意', '您有未儲存的變更，確定要切換日期嗎？', performChange);
     } else {
       performChange();
@@ -1087,8 +1098,12 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   async saveDataToCloud(): Promise<void> {
-    if (this.isPageLocked()) {
+    if (this.isTeamEditLocked()) {
       this.showAlert('操作失敗', '操作被鎖定：權限不足或日期已過。');
+      return;
+    }
+    if (this.isPageLocked() && !this.hasUnsavedTeamChanges()) {
+      this.showAlert('操作失敗', '未來日期唯讀，僅自動分組（護理分組）變更可儲存。');
       return;
     }
     await this.attemptSaveDataToCloud(false);
@@ -1101,7 +1116,8 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   private async attemptSaveDataToCloud(forceOverwrite: boolean): Promise<void> {
     this.statusIndicator.set('儲存中...');
     try {
-      const scheduleDirty = this.hasUnsavedChanges();
+      // 鎖定日（未來）保險絲：無論 flag 狀態，排程本體一律視為未變更，只允許分組寫回
+      const scheduleDirty = this.hasUnsavedChanges() && !this.isPageLocked();
       const teamsRec = this.currentTeamsRecord();
       const teamsDirty =
         this.hasUnsavedTeamChanges() && Object.keys(teamsRec.teams).length > 0;
@@ -1769,8 +1785,8 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   async autoAssignNurseTeams(): Promise<void> {
-    if (this.isPageLocked()) {
-      this.showAlert('操作失敗', '頁面已鎖定，無法執行自動分組。');
+    if (this.isTeamEditLocked()) {
+      this.showAlert('操作失敗', '歷史日期已鎖定，無法執行自動分組。');
       return;
     }
     // Load latest config before executing
@@ -1994,10 +2010,11 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   private setTeamChange(): void {
-    if (this.isPageLocked()) return;
+    if (this.isTeamEditLocked()) return;
     this.scheduleRevision.update((revision) => revision + 1);
     this.hasUnsavedTeamChanges.set(true);
-    this.hasUnsavedChanges.set(true);
+    // 未來日期只標分組 dirty：排程本體唯讀，不可因分組變更連帶走 with-teams 把排程寫回
+    if (!this.isPageLocked()) this.hasUnsavedChanges.set(true);
     this.statusIndicator.set('有未儲存的變更');
   }
 
@@ -2703,7 +2720,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
 
     this.currentTeamsRecord.set(teamsRec);
     this.setTeamChange();
-    this.hasUnsavedChanges.set(true);
     this.statusIndicator.set('自動分組完成，請確認並儲存');
     this.showAlert('操作成功', '四個班次的自動分組已全部完成！請檢視結果並點擊「儲存」。');
   }

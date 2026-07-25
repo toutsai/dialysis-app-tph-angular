@@ -40,6 +40,11 @@
 .page-container.is-locked .btn:disabled {
   pointer-events: none;
 }
+/* 未來日期放行的按鈕（自動分組/設定/儲存）：不套鎖定頁的灰化樣式 */
+.page-container.is-locked .btn.btn-live-when-locked:not(:disabled) {
+  opacity: 1;
+  cursor: pointer;
+}
 .page-container.is-locked .page-main-content {
   cursor: not-allowed;
 }
