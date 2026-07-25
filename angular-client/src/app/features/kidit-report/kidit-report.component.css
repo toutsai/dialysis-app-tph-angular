@@ -107,6 +107,8 @@
 .firstdia-btn:hover:not(:disabled) { background: #f4e9f7; }
 .pendingreg-btn { border-color: #e65100; color: #e65100; }
 .pendingreg-btn:hover:not(:disabled) { background: #fdefe4; }
+.movements-btn { border-color: #1565c0; color: #1565c0; }
+.movements-btn:hover:not(:disabled) { background: #e3f2fd; }
 
 /* 待建檔清單 */
 .pr-hint {

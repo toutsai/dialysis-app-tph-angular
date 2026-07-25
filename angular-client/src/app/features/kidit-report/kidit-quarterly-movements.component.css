@@ -1,0 +1,231 @@
+/* 季度病人動態彙整彈窗（風格對齊 kidit-vascular-quarterly 的 qv-*） */
+.qm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+}
+
+.qm-modal {
+  background: #fff;
+  border-radius: 12px;
+  width: min(1180px, 96vw);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.qm-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1.25rem;
+  border-bottom: 1px solid #e0e6ea;
+  flex-shrink: 0;
+}
+
+.qm-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #263238;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.qm-header h3 i {
+  color: #1565c0;
+}
+
+.qm-count {
+  font-size: 0.85rem;
+  color: #78909c;
+  font-weight: 400;
+}
+
+.qm-quarter-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.qm-nav-btn {
+  border: 1px solid #cfd8dc;
+  background: #fff;
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  color: #546e7a;
+}
+
+.qm-nav-btn:hover {
+  background: #eceff1;
+}
+
+.qm-quarter {
+  font-weight: 700;
+  color: #263238;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.2;
+  min-width: 9.5rem;
+}
+
+.qm-quarter small {
+  font-weight: 400;
+  color: #90a4ae;
+  font-size: 0.72rem;
+}
+
+.qm-close-btn {
+  border: none;
+  background: transparent;
+  color: #90a4ae;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+}
+
+.qm-close-btn:hover {
+  color: #c62828;
+}
+
+.qm-hint {
+  margin: 0;
+  padding: 0.6rem 1.25rem;
+  font-size: 0.78rem;
+  color: #78909c;
+  background: #fafcff;
+  border-bottom: 1px solid #eceff1;
+  flex-shrink: 0;
+}
+
+.qm-body {
+  overflow-y: auto;
+  padding: 1rem 1.25rem 1.5rem;
+  min-height: 0;
+}
+
+.qm-loading,
+.qm-empty,
+.qm-error {
+  text-align: center;
+  color: #78909c;
+  padding: 2.5rem 0;
+}
+
+.qm-error {
+  color: #c62828;
+}
+
+.qm-group {
+  margin-bottom: 1.5rem;
+}
+
+.qm-group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1565c0;
+  border-left: 4px solid #1565c0;
+  padding-left: 0.5rem;
+}
+
+.qm-group[data-group='newPatient'] .qm-group-title {
+  color: #2e7d32;
+  border-left-color: #2e7d32;
+}
+
+.qm-group[data-group='external'] .qm-group-title {
+  color: #6a1b9a;
+  border-left-color: #6a1b9a;
+}
+
+.qm-group-count {
+  background: #eceff1;
+  color: #455a64;
+  border-radius: 999px;
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.qm-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #e0e6ea;
+  border-radius: 8px;
+}
+
+.qm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.83rem;
+}
+
+.qm-table th {
+  background: #f5f7f8;
+  color: #455a64;
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid #e0e6ea;
+  white-space: nowrap;
+}
+
+.qm-table td {
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid #f0f3f5;
+  color: #37474f;
+  vertical-align: top;
+}
+
+.qm-table tbody tr:hover {
+  background: #fafcff;
+}
+
+.qm-name {
+  font-weight: 600;
+}
+
+.qm-muted {
+  color: #78909c;
+}
+
+.qm-chain {
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.qm-center {
+  text-align: center;
+}
+
+.qm-reg {
+  display: inline-block;
+  background: #ffebee;
+  color: #c62828;
+  border-radius: 999px;
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.qm-reg-done {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.qm-reg-partial {
+  background: #fff8e1;
+  color: #e65100;
+}

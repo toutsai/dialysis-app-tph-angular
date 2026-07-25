@@ -27,6 +27,9 @@
       <button class="action-btn quarterly-btn" (click)="openQuarterlyModal()" [disabled]="isLoading()">
         <i class="fas fa-file-csv"></i> 季度造管 CSV
       </button>
+      <button class="action-btn movements-btn" (click)="openMovementsQuarterly()" [disabled]="isLoading()">
+        <i class="fas fa-stream"></i> 季度病人動態
+      </button>
       <button class="action-btn firstdia-btn" (click)="openFirstDialysisList()" [disabled]="isLoading()">
         <i class="fas fa-user-plus"></i> 當月初次透析名單
       </button>
@@ -272,6 +275,12 @@
     *ngIf="showQuarterlyModal()"
     (closeEvent)="closeQuarterlyModal()"
   ></app-kidit-vascular-quarterly>
+
+  <!-- 季度病人動態彙整（本院常規HD／新病患／外院） -->
+  <app-kidit-quarterly-movements
+    *ngIf="showMovementsQuarterly()"
+    (closeEvent)="closeMovementsQuarterly()"
+  ></app-kidit-quarterly-movements>
 
   <!-- Detail Modal -->
   <app-kidit-detail-modal

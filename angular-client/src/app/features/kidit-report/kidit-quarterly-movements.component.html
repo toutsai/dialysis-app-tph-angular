@@ -1,0 +1,88 @@
+<div class="qm-overlay" (click)="close()">
+  <div class="qm-modal" (click)="$event.stopPropagation()">
+    <div class="qm-header">
+      <h3>
+        <i class="fas fa-stream"></i>
+        季度病人動態
+        <span class="qm-count" *ngIf="!isLoading()">（{{ totalRows() }} 列）</span>
+      </h3>
+
+      <div class="qm-quarter-nav">
+        <button class="qm-nav-btn" (click)="changeQuarter(-1)" title="上一季">
+          <i class="fas fa-chevron-left"></i>
+        </button>
+        <span class="qm-quarter">
+          {{ year() }} 年 Q{{ q() }}
+          <small>{{ quarterRangeLabel() }}</small>
+        </span>
+        <button class="qm-nav-btn" (click)="changeQuarter(1)" title="下一季">
+          <i class="fas fa-chevron-right"></i>
+        </button>
+      </div>
+
+      <button class="qm-close-btn" (click)="close()" title="關閉">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <p class="qm-hint">
+      <i class="fas fa-info-circle"></i>
+      彙整季度內工作日誌的病人動態：按病人分組、依住院／出院切列，病程欄自動串出前後動態。
+      分區規則：外院＝非常規門診且有填「原透析院所」；新病患＝非常規門診（多為住院初透）；其餘＝本院常規。
+      「登錄」顯示該列動態在 KiDit 日誌本勾選登錄的比例。
+    </p>
+
+    <div class="qm-body">
+      <div *ngIf="isLoading()" class="qm-loading">
+        <i class="fas fa-circle-notch fa-spin"></i> 彙整中…
+      </div>
+      <div *ngIf="!isLoading() && loadError()" class="qm-error">{{ loadError() }}</div>
+      <div *ngIf="!isLoading() && !loadError() && groups().length === 0" class="qm-empty">
+        本季度尚無病人動態紀錄。
+      </div>
+
+      <section *ngFor="let group of groups(); trackBy: trackByGroup" class="qm-group" [attr.data-group]="group.key">
+        <h4 class="qm-group-title">
+          {{ group.label }}
+          <span class="qm-group-count">{{ group.rows.length }}</span>
+        </h4>
+        <div class="qm-table-wrap">
+          <table class="qm-table">
+            <thead>
+              <tr>
+                <th style="width:9%">病歷號</th>
+                <th style="width:9%">姓名</th>
+                <th style="width:7%">住院</th>
+                <th style="width:7%">出院</th>
+                <th *ngIf="group.key === 'external'" style="width:11%">院所</th>
+                <th>病程／備註</th>
+                <th style="width:7%">醫師</th>
+                <th style="width:8%" class="qm-center">登錄</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of group.rows; trackBy: trackByRow">
+                <td class="qm-muted">{{ row.medicalRecordNumber || '-' }}</td>
+                <td class="qm-name">{{ row.name }}</td>
+                <td>{{ row.admission || '-' }}</td>
+                <td>{{ row.discharge || '-' }}</td>
+                <td *ngIf="group.key === 'external'">{{ row.hospital || '-' }}</td>
+                <td class="qm-chain">{{ row.chain }}</td>
+                <td>{{ row.physician || '-' }}</td>
+                <td class="qm-center">
+                  <span
+                    class="qm-reg"
+                    [class.qm-reg-done]="row.registeredDone === row.registeredTotal"
+                    [class.qm-reg-partial]="row.registeredDone > 0 && row.registeredDone < row.registeredTotal"
+                  >
+                    {{ row.registeredDone }}/{{ row.registeredTotal }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>

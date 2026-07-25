@@ -2,11 +2,25 @@ import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, injec
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { kiditService } from '@/services/kiditService';
+import { PatientStoreService } from '@services/patient-store.service';
+import {
+  KIDIT_GROUP_LABELS,
+  KIDIT_GROUP_ORDER,
+  KiditPatientGroup,
+  classifyKiditPatient,
+  externalHospitalName,
+} from '@/app/core/utils/kidit-patient-groups';
 import { KiditPatientFormComponent } from './kidit-patient-form.component';
 import { KiditHistoryFormComponent } from './kidit-history-form.component';
 import { KiditVascularFormComponent } from './kidit-vascular-form.component';
 
 type TabKey = 'movement' | 'vascular' | 'registration';
+
+interface EventGroup {
+  key: KiditPatientGroup;
+  label: string;
+  events: any[];
+}
 
 interface Tab {
   key: TabKey;
@@ -30,12 +44,16 @@ export class KiditDetailModalComponent implements OnChanges {
   @Input() initialTab: TabKey | null = null;
   @Output() closeEvent = new EventEmitter<void>();
 
+  private readonly patientStore = inject(PatientStoreService);
+
   activeTab: TabKey = 'movement';
   subTab: 'current' | 'unused' = 'current';
   localEvents: any[] = [];
   /** 當日動態列表顯示用：血管通路事件(ACCESS)不顯示（使用者決策：動態只看病人動態；
    *  事件仍留在 localEvents 作為建檔/造管手填資料的載體，儲存時整包寫回不會弄丟） */
   visibleEvents: any[] = [];
+  /** 三區分組（本院常規HD／新病患／外院），空區不顯示 */
+  groupedEvents: EventGroup[] = [];
   selectedPatientId: string | null = null;
   selectedPatientName = '';
   selectedPatientData: any = null;
@@ -92,7 +110,30 @@ export class KiditDetailModalComponent implements OnChanges {
       : null;
     this.selectedEvent = this.localEvents.find(e => e.patientId === this.selectedPatientId) || {};
     this.visibleEvents = this.localEvents.filter(e => e.type !== 'ACCESS');
+    this.groupedEvents = this.buildGroups(this.visibleEvents);
   }
+
+  /** 依病人主檔把當日動態切成三區；主檔查不到時歸新病患（見 kidit-patient-groups.ts） */
+  private buildGroups(events: any[]): EventGroup[] {
+    const patientMap = this.patientStore.patientMap();
+    const buckets: Record<KiditPatientGroup, any[]> = { regular: [], newPatient: [], external: [] };
+    this.externalHospitalByEventId = new Map();
+    for (const event of events) {
+      const patient = patientMap.get(event.patientId);
+      const group = classifyKiditPatient(patient);
+      buckets[group].push(event);
+      // 院所名存旁路 Map，不掛在 event 上（localEvents 會整包存回後端）
+      if (group === 'external') {
+        this.externalHospitalByEventId.set(event.id, externalHospitalName(patient));
+      }
+    }
+    return KIDIT_GROUP_ORDER
+      .filter(key => buckets[key].length > 0)
+      .map(key => ({ key, label: KIDIT_GROUP_LABELS[key], events: buckets[key] }));
+  }
+
+  /** 外院區每列顯示的原透析院所（buildGroups 時預先算好，模板直接查） */
+  externalHospitalByEventId = new Map<string, string>();
 
   getEventData(key: string) {
     return this.selectedEvent[key] || null;

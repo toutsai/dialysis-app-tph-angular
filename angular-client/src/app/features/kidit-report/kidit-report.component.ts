@@ -11,6 +11,7 @@ import { exportFirstDialysisExcel, FirstDialysisRow } from '@/services/firstDial
 import { localApi } from '@/services/localApiClient';
 import { KiditDetailModalComponent } from '@app/components/kidit/kidit-detail-modal.component';
 import { KiditVascularQuarterlyComponent } from './kidit-vascular-quarterly.component';
+import { KiditQuarterlyMovementsComponent } from './kidit-quarterly-movements.component';
 import { describeVascularEvent, VascularAccessEvent } from '@app/core/constants/vascular-access-codes';
 
 interface DayData {
@@ -25,7 +26,7 @@ interface DayData {
 @Component({
   selector: 'app-kidit-report',
   standalone: true,
-  imports: [CommonModule, FormsModule, KiditDetailModalComponent, KiditVascularQuarterlyComponent],
+  imports: [CommonModule, FormsModule, KiditDetailModalComponent, KiditVascularQuarterlyComponent, KiditQuarterlyMovementsComponent],
   templateUrl: './kidit-report.component.html',
   styleUrl: './kidit-report.component.css',
 })
@@ -47,6 +48,8 @@ export class KiditReportComponent implements OnInit {
   readonly firstDialysisRows = signal<FirstDialysisRow[]>([]);
   // 季度造管 CSV 工作檯彈窗
   readonly showQuarterlyModal = signal(false);
+  // 季度病人動態彙整彈窗（本院常規HD／新病患／外院）
+  readonly showMovementsQuarterly = signal(false);
   // KiDit 待建檔清單彈窗（本院初透/首透且基本資料未完整）
   readonly showPendingRegModal = signal(false);
   readonly isLoadingPendingReg = signal(false);
@@ -248,6 +251,14 @@ export class KiditReportComponent implements OnInit {
 
   closeQuarterlyModal(): void {
     this.showQuarterlyModal.set(false);
+  }
+
+  openMovementsQuarterly(): void {
+    this.showMovementsQuarterly.set(true);
+  }
+
+  closeMovementsQuarterly(): void {
+    this.showMovementsQuarterly.set(false);
   }
 
   /** 匯出彈窗內已彙整的清單 */

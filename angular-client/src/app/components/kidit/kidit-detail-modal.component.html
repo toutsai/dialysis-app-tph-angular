@@ -38,70 +38,86 @@
           </p>
         </div>
 
-        <div class="table-responsive">
-          <table class="modern-table">
-            <thead>
-              <tr>
-                <th style="width:9%">類型</th>
-                <th style="width:11%">姓名</th>
-                <th style="width:11%">病歷號</th>
-                <th style="width:9%">透析模式</th>
-                <th style="width:24%">詳細內容</th>
-                <th style="width:16%">轉出院所</th>
-                <th style="width:10%" class="text-center">KiDit 登錄</th>
-                <th style="width:10%" class="text-center">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                *ngFor="let event of visibleEvents; trackBy: trackByEventId"
-                [class.is-selected]="selectedPatientId === event.patientId"
-                (click)="selectPatient(event)"
-              >
-                <td>
-                  <span class="status-badge" [ngClass]="getBadgeClass(event.type)">
-                    {{ translateType(event.type) }}
-                  </span>
-                </td>
-                <td class="font-medium">{{ event.patientName }}</td>
-                <td class="text-muted">{{ event.medicalRecordNumber || '-' }}</td>
-                <td class="text-muted">{{ event.dialysisMode || '-' }}</td>
-                <td class="text-muted">{{ event.details }}</td>
-                <td (click)="$event.stopPropagation()">
-                  <input
-                    type="text"
-                    [(ngModel)]="event.transferOutHospital"
-                    placeholder="輸入院所..."
-                    class="form-input"
-                  />
-                </td>
-                <td class="text-center" (click)="$event.stopPropagation()">
-                  <label class="checkbox-container">
-                    <input type="checkbox" [(ngModel)]="event.isRegistered" />
-                    <span class="checkmark"></span>
-                  </label>
-                </td>
-                <td class="text-center action-cell" (click)="$event.stopPropagation()">
-                  <button class="icon-btn goto-btn" (click)="openFormFor(event, 'registration')" title="開啟 KiDit 建檔（病患資料＋病史）">
-                    <i class="fas fa-id-card"></i>
-                  </button>
-                  <button class="icon-btn goto-btn" (click)="openFormFor(event, 'vascular')" title="開啟血管通路處置">
-                    <i class="fas fa-band-aid"></i>
-                  </button>
-                  <button class="icon-btn delete-btn" (click)="deleteEvent(event)" title="從列表中移除">
-                    <i class="fas fa-trash-alt"></i>
-                  </button>
-                  <div class="status-indicator">
-                    <i *ngIf="isKiDitDataComplete(event)" class="fas fa-check-circle text-green" title="KiDit 資料已完整"></i>
-                    <button *ngIf="!isKiDitDataComplete(event)" class="icon-btn warning-btn" (click)="handleIncompleteClick(event)" title="KiDit 資料尚未填寫完整">
-                      <i class="fas fa-exclamation-triangle"></i>
+        <!-- 三區分組：本院常規HD／新病患／外院（對應手動病患異動狀態表區塊，空區不顯示） -->
+        <section *ngFor="let group of groupedEvents" class="event-group" [attr.data-group]="group.key">
+          <h4 class="event-group-title" [class.is-external]="group.key === 'external'">
+            {{ group.label }}
+            <span class="event-group-count">{{ group.events.length }}</span>
+          </h4>
+          <div class="table-responsive">
+            <table class="modern-table">
+              <thead>
+                <tr>
+                  <th style="width:9%">類型</th>
+                  <th style="width:11%">姓名</th>
+                  <th style="width:11%">病歷號</th>
+                  <th *ngIf="group.key === 'external'" style="width:12%">院所</th>
+                  <th style="width:9%">透析模式</th>
+                  <th style="width:24%">詳細內容</th>
+                  <th style="width:16%">轉出院所</th>
+                  <th style="width:10%" class="text-center">KiDit 登錄</th>
+                  <th style="width:10%" class="text-center">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  *ngFor="let event of group.events; trackBy: trackByEventId"
+                  [class.is-selected]="selectedPatientId === event.patientId"
+                  (click)="selectPatient(event)"
+                >
+                  <td>
+                    <span class="status-badge" [ngClass]="getBadgeClass(event.type)">
+                      {{ translateType(event.type) }}
+                    </span>
+                  </td>
+                  <td class="font-medium">{{ event.patientName }}</td>
+                  <td class="text-muted">{{ event.medicalRecordNumber || '-' }}</td>
+                  <td *ngIf="group.key === 'external'" class="text-muted">
+                    {{ externalHospitalByEventId.get(event.id) || '-' }}
+                  </td>
+                  <td class="text-muted">{{ event.dialysisMode || '-' }}</td>
+                  <td class="text-muted">{{ event.details }}</td>
+                  <td (click)="$event.stopPropagation()">
+                    <input
+                      type="text"
+                      [(ngModel)]="event.transferOutHospital"
+                      placeholder="輸入院所..."
+                      class="form-input"
+                    />
+                  </td>
+                  <td class="text-center" (click)="$event.stopPropagation()">
+                    <label class="checkbox-container">
+                      <input type="checkbox" [(ngModel)]="event.isRegistered" />
+                      <span class="checkmark"></span>
+                    </label>
+                  </td>
+                  <td class="text-center action-cell" (click)="$event.stopPropagation()">
+                    <button class="icon-btn goto-btn" (click)="openFormFor(event, 'registration')" title="開啟 KiDit 建檔（病患資料＋病史）">
+                      <i class="fas fa-id-card"></i>
                     </button>
-                  </div>
-                </td>
-              </tr>
-              <tr *ngIf="visibleEvents.length === 0">
-                <td colspan="8" class="empty-row">本日無相關動態紀錄</td>
-              </tr>
+                    <button class="icon-btn goto-btn" (click)="openFormFor(event, 'vascular')" title="開啟血管通路處置">
+                      <i class="fas fa-band-aid"></i>
+                    </button>
+                    <button class="icon-btn delete-btn" (click)="deleteEvent(event)" title="從列表中移除">
+                      <i class="fas fa-trash-alt"></i>
+                    </button>
+                    <div class="status-indicator">
+                      <i *ngIf="isKiDitDataComplete(event)" class="fas fa-check-circle text-green" title="KiDit 資料已完整"></i>
+                      <button *ngIf="!isKiDitDataComplete(event)" class="icon-btn warning-btn" (click)="handleIncompleteClick(event)" title="KiDit 資料尚未填寫完整">
+                        <i class="fas fa-exclamation-triangle"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <div *ngIf="visibleEvents.length === 0" class="table-responsive">
+          <table class="modern-table">
+            <tbody>
+              <tr><td class="empty-row">本日無相關動態紀錄</td></tr>
             </tbody>
           </table>
         </div>
