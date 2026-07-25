@@ -81,16 +81,32 @@
           *ngFor="let patient of getShiftPatients(shiftCode)"
           class="patient-card"
           [class.card-needs-reg]="pendingRegPatientIds().has(patient.patientId)"
+          [class.card-needs-edu]="patient.isEduTarget"
         >
-          <!-- 本院初透待建檔書籤：絕對定位凸出卡片上緣外側，不佔卡片內版面；點擊直達 KiDit 建檔頁籤 -->
-          <button
-            *ngIf="pendingRegPatientIds().has(patient.patientId)"
-            class="reg-badge"
-            title="本院初透待建檔，點擊前往 KiDit 工作站填寫基本資料表"
-            (click)="openCardRegistration(patient.patientId)"
+          <!-- 卡片書籤列：絕對定位凸出卡片上緣外側，不佔卡片內版面 -->
+          <div
+            class="card-bookmarks"
+            *ngIf="pendingRegPatientIds().has(patient.patientId) || patient.isEduTarget"
           >
-            需填寫基本資料
-          </button>
+            <!-- 本院初透待建檔：點擊直達 KiDit 建檔頁籤 -->
+            <button
+              *ngIf="pendingRegPatientIds().has(patient.patientId)"
+              class="bookmark-tab reg-badge"
+              title="本院初透待建檔，點擊前往 KiDit 工作站填寫基本資料表"
+              (click)="openCardRegistration(patient.patientId)"
+            >
+              需填寫基本資料
+            </button>
+            <!-- 初透衛教對象：點擊直開該病人衛教紀錄視窗（與表頭紫圖示同一動作） -->
+            <button
+              *ngIf="patient.isEduTarget"
+              class="bookmark-tab edu-badge"
+              title="初透衛教紀錄，點擊直接開啟填寫"
+              (click)="openCardEduRecord(patient.patientId)"
+            >
+              初透衛教
+            </button>
+          </div>
           <!-- Card Header -->
           <div class="card-header">
             <div class="patient-info">
