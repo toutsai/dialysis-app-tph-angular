@@ -397,15 +397,15 @@
   border-left: 1px solid #d9dee3;
 }
 
-/* 128 班組別標記（紫，同護理班表 shift-128 色系） */
+/* 128 班組別標記：橘黃底白字，與藍色標頭對比醒目 */
 .badge-128 {
   display: inline-block;
   margin-left: 4px;
-  padding: 1px 5px;
-  border-radius: 8px;
-  background-color: #e5dbff;
-  color: #5f3dc4;
-  font-size: 0.7em;
+  padding: 2px 7px;
+  border-radius: 9px;
+  background-color: #f59f00;
+  color: #fff;
+  font-size: 0.85em;
   font-weight: bold;
   vertical-align: middle;
 }
