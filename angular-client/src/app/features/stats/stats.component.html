@@ -136,7 +136,7 @@
           <div class="grid-header">
             <div class="row-header section-title-cell">早班</div>
             <div *ngFor="let teamName of sortedEarlyTeams" class="team-header-cell" [class.unassigned-header]="teamName.includes('未分組')">
-              {{ teamName.includes('未分組') ? '未分組' : teamName.replace('早', '') + '組' }}
+              {{ teamName.includes('未分組') ? '未分組' : teamName.replace('早', '') + '組' }}<span *ngIf="effectiveStatsData.early[teamName]?.is128" class="badge-128" title="128班（12:00-20:00）">128</span>
             </div>
           </div>
           <div class="grid-body">
@@ -261,7 +261,7 @@
           <div class="grid-header">
             <div class="row-header section-title-cell">晚班</div>
             <div *ngFor="let teamName of sortedLateTeams" class="team-header-cell" [class.unassigned-header]="teamName.includes('未分組')">
-              {{ teamName.includes('未分組') ? '未分組' : teamName.replace('晚', '') + '組' }}
+              {{ teamName.includes('未分組') ? '未分組' : teamName.replace('晚', '') + '組' }}<span *ngIf="effectiveStatsData.late[teamName]?.is128" class="badge-128" title="128班（12:00-20:00）">128</span>
             </div>
           </div>
           <div class="grid-body">

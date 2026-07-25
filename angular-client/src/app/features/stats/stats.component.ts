@@ -503,6 +503,11 @@ export class StatsComponent implements OnInit, OnDestroy {
       });
     }
 
+    // 128 班的組別欄標記（模板顯示「128」小標），建快取時算好存欄位、模板不重算
+    for (const stats of [earlyShiftStats, lateShiftStats]) {
+      for (const team in stats) stats[team].is128 = this.is128Team(team);
+    }
+
     this.effectiveStatsData = { early: earlyShiftStats, late: lateShiftStats, lateTakeOff: lateTakeOffStats };
 
     const sortFn = (a: string, b: string) => {
@@ -1723,12 +1728,13 @@ export class StatsComponent implements OnInit, OnDestroy {
     this.isConfirmDialogVisible = true;
   }
 
-  /** 128 班（半早半晚）的 晚X：names 中 早X 與 晚X 同名即是。20:00 下班，不做夜間收針 */
-  private is128LateTeam(teamName: string): boolean {
-    if (!teamName?.startsWith('晚')) return false;
+  /** 128 班（半早半晚）的組：names 中 早X 與 晚X 同名即是（早X/晚X 都回 true）。20:00 下班，不做夜間收針 */
+  private is128Team(teamName: string): boolean {
+    if (!teamName || (!teamName.startsWith('早') && !teamName.startsWith('晚'))) return false;
     const names = (this.currentTeamsRecord.names || {}) as Record<string, string>;
-    const name = names[teamName];
-    return !!name && name === names[`早${teamName.slice(1)}`];
+    const letter = teamName.slice(1);
+    const n = names[`早${letter}`];
+    return !!n && n === names[`晚${letter}`];
   }
 
   private duplicateLateShiftForTakeOff(): void {
@@ -1745,7 +1751,7 @@ export class StatsComponent implements OnInit, OnDestroy {
         if (
           teamInfo.nurseTeam &&
           teamInfo.nurseTeam.startsWith('晚') &&
-          !this.is128LateTeam(teamInfo.nurseTeam)
+          !this.is128Team(teamInfo.nurseTeam)
         ) {
           const newTeamName = teamInfo.nurseTeam.replace('晚', '夜間收針');
           teamInfo.nurseTeamTakeOff = newTeamName;
@@ -1756,7 +1762,7 @@ export class StatsComponent implements OnInit, OnDestroy {
     }
     if (this.currentTeamsRecord.names) {
       for (const teamName in this.currentTeamsRecord.names) {
-        if (teamName.startsWith('晚') && !this.is128LateTeam(teamName)) {
+        if (teamName.startsWith('晚') && !this.is128Team(teamName)) {
           const nurseName = this.currentTeamsRecord.names[teamName];
           if (nurseName) {
             const newTakeOffTeamName = teamName.replace('晚', '夜間收針');
