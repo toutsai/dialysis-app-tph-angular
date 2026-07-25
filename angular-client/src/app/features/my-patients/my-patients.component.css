@@ -415,29 +415,29 @@
 .patient-card.card-needs-reg .card-header {
   border-radius: 7px 7px 0 0;
 }
-/* 書籤本體：凸出上緣 14px（卡片間距 1rem 內，不壓到上一列卡片），下緣 ~5px 疊在卡框上呈「長在卡片上」 */
+/* 書籤本體：飽滿橘底+白字求醒目；凸出上緣 16px（卡片間距 1rem 內，不壓到上一列卡片），
+   下緣疊在卡框上呈「長在卡片上」 */
 .reg-badge {
   position: absolute;
-  top: -14px;
+  top: -16px;
   right: 14px;
   z-index: 2;
-  border: 1px solid #f59f00;
-  border-bottom: none;
-  background: #ffe8cc;
-  color: #b35c00;
-  font-size: 0.72rem;
+  border: none;
+  background: #f08c00;
+  color: #fff;
+  font-size: 0.85rem;
   font-weight: bold;
   line-height: 1;
-  padding: 3px 10px 4px;
+  padding: 5px 12px 6px;
   border-radius: 8px 8px 0 0;
   cursor: pointer;
   white-space: nowrap;
-  box-shadow: 0 -1px 3px rgba(245, 159, 0, 0.3);
+  box-shadow: 0 -1px 4px rgba(240, 140, 0, 0.45);
   transition: background-color 0.2s, top 0.15s;
 }
 .reg-badge:hover {
-  background: #ffd8a8;
-  top: -16px;
+  background: #e8590c;
+  top: -18px;
 }
 .reg-badge i {
   margin-right: 2px;
