@@ -1,0 +1,58 @@
+<div class="print-panel">
+  <div class="toolbar">
+    <div class="month-nav">
+      <button class="nav-btn" (click)="goToPreviousMonth()" title="上個月">&#9664;</button>
+      <input
+        type="month"
+        [ngModel]="selectedYearMonth()"
+        (ngModelChange)="onMonthInputChange($event)"
+      />
+      <button class="nav-btn" (click)="goToNextMonth()" title="下個月">&#9654;</button>
+    </div>
+    <button class="btn-export" (click)="exportWord()" [disabled]="isLoading()">
+      匯出 Word
+    </button>
+  </div>
+
+  @if (isLoading()) {
+    <p class="hint">載入 {{ year() }} 年 {{ month() }} 月班表中…</p>
+  } @else if (loadError()) {
+    <p class="hint error">{{ loadError() }}</p>
+  } @else {
+    @if (isEmptyMonth()) {
+      <p class="hint">{{ year() }} 年 {{ month() }} 月尚未排班，匯出的班表會是空白格。</p>
+    }
+    <h3 class="preview-title">{{ month() }} 月醫師查房</h3>
+    <div class="table-scroll">
+      <table class="preview-table">
+        <thead>
+          <tr>
+            <th class="lbl"></th>
+            @for (wd of WEEKDAY_HEADERS; track wd) {
+              <th [class.wk]="wd === '六'">{{ wd }}</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (week of previewWeeks(); track $index) {
+            <tr class="dt-row">
+              <td class="lbl">日期</td>
+              @for (d of week; track $index) {
+                <td>{{ d.day ? month() + '/' + d.day : '' }}</td>
+              }
+            </tr>
+            @for (row of SHIFT_ROWS; track row.shift) {
+              <tr>
+                <td class="lbl">{{ row.label }}</td>
+                @for (d of week; track $index) {
+                  <td>{{ displayName(d.day, row.shift) }}</td>
+                }
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+    <p class="hint">預覽與匯出內容相同（不含星期日）；匯出檔為 A4 直式 Word 檔，可直接列印。</p>
+  }
+</div>

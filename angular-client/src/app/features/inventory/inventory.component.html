@@ -1,10 +1,30 @@
 <div class="page-container">
   <header class="page-header">
     <div class="header-main-content">
-      <h1>庫存管理</h1>
-      <p class="page-description">管理耗材進貨、消耗紀錄、每月盤點與每週訂單。</p>
+      <h1>書記專用</h1>
+      <p class="page-description">醫師班表列印、常規病人掛號與庫存管理。</p>
     </div>
   </header>
+
+  <div class="main-tabs">
+    <button [class.active]="mainTab() === 'physician'" (click)="mainTab.set('physician')">醫師班表列印</button>
+    <button [class.active]="mainTab() === 'register'" (click)="mainTab.set('register')">常規病人掛號</button>
+    <button [class.active]="mainTab() === 'inventory'" (click)="mainTab.set('inventory')">庫存管理</button>
+  </div>
+
+  @if (mainTab() === 'physician') {
+    <div class="clerk-tab-host">
+      <app-clerk-physician-print />
+    </div>
+  }
+
+  @if (mainTab() === 'register') {
+    <div class="clerk-tab-host">
+      <app-clerk-registration />
+    </div>
+  }
+
+  @if (mainTab() === 'inventory') {
 
   <div class="tabs-navigation">
     <button [class.active]="activeTab() === 'dashboard'" (click)="activeTab.set('dashboard'); loadDashboard()">庫存總覽</button>
@@ -1091,6 +1111,8 @@
     </div>
   </div>
   }
+
+  } <!-- /mainTab inventory -->
 
   <app-alert-dialog
     [isVisible]="isAlertDialogVisible()"

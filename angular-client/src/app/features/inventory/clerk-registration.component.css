@@ -1,0 +1,161 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.register-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.day-tabs,
+.shift-tabs {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.day-tabs button,
+.shift-tabs button {
+  padding: 0.45rem 1rem;
+  font-size: 1rem;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  background: #fff;
+  color: #495057;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.day-tabs button.active {
+  background: #007bff;
+  border-color: #007bff;
+  color: #fff;
+  font-weight: 600;
+}
+
+.shift-tabs button.active {
+  background: #e7f1ff;
+  border-color: #007bff;
+  color: #007bff;
+  font-weight: 600;
+}
+
+.day-tabs button:hover:not(.active),
+.shift-tabs button:hover:not(.active) {
+  background: #e9ecef;
+}
+
+.shift-tabs .count {
+  display: inline-block;
+  min-width: 1.5rem;
+  margin-left: 0.3rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: #6c757d;
+  color: #fff;
+  font-size: 0.85rem;
+}
+
+.shift-tabs button.active .count {
+  background: #007bff;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.search-input {
+  padding: 0.45rem 0.7rem;
+  font-size: 1rem;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  width: 13rem;
+}
+
+.btn-export {
+  padding: 0.5rem 1.2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  background: #28a745;
+  color: #fff;
+  cursor: pointer;
+}
+
+.btn-export:hover:not(:disabled) {
+  background: #218838;
+}
+
+.btn-export:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.summary {
+  margin: 0;
+  font-size: 1rem;
+  color: #343a40;
+  flex-shrink: 0;
+}
+
+.table-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+}
+
+.register-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.register-table th,
+.register-table td {
+  border-bottom: 1px solid #dee2e6;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  font-size: 1rem;
+}
+
+.register-table thead th {
+  position: sticky;
+  top: 0;
+  background: #f8f9fa;
+  z-index: 1;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.register-table tbody tr:hover {
+  background: #f1f7ff;
+}
+
+.register-table .mrn {
+  font-variant-numeric: tabular-nums;
+}
+
+.hint {
+  margin: 0;
+  color: #6c757d;
+  font-size: 0.95rem;
+}

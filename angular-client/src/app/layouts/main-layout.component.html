@@ -227,12 +227,12 @@
               </li>
             }
 
-            <!-- 7. [庫存管理] Admin, Viewer -->
+            <!-- 7. [書記專用] Admin, Viewer（醫師班表列印/常規病人掛號/庫存管理） -->
             @if (canAccessPage('inventory')) {
               <li>
                 <a routerLink="/inventory" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
                   <div class="nav-item-content">
-                    <span class="nav-title">庫存管理</span>
+                    <span class="nav-title">書記專用</span>
                   </div>
                 </a>
               </li>

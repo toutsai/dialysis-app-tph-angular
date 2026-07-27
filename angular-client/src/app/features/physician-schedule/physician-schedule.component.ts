@@ -10,6 +10,7 @@ import { PatientStoreService } from '@app/core/services/patient-store.service';
 import { UserDirectoryService } from '@app/core/services/user-directory.service';
 import { AlertDialogComponent } from '@app/components/dialogs/alert-dialog/alert-dialog.component';
 import { ConfirmDialogComponent } from '@app/components/dialogs/confirm-dialog/confirm-dialog.component';
+import { exportRoundingWordDoc } from '@app/core/utils/physician-rounding-word';
 
 @Component({
   selector: 'app-physician-schedule',
@@ -765,69 +766,14 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
     XLSX.writeFile(wb, `醫師緊急出勤紀錄_${this.selectedYear()}-${this.selectedMonth()}.xlsx`);
   }
 
-  /** 匯出整月查房班表為 Word (.doc，HTML+Word 版面，A4 直式 0.5cm 邊界、大字) */
+  /** 匯出整月查房班表為 Word（實作抽至共用 util，書記專用頁同款） */
   exportRoundingWord(): void {
-    const y = this.selectedYear();
-    const m = this.selectedMonth();
-    const weeks = this.weeklyData();
-
-    // 查房班表（同網頁週曆格：日期 / 早班 / 午班 / 夜班）
-    // 不含星期日：每週取前 6 格（一~六）
-    const headTh = ['', '一', '二', '三', '四', '五', '六']
-      .map((t, i) => `<th class="${i === 6 ? 'wk' : ''}">${t}</th>`)
-      .join('');
-    let body = '';
-    for (const week of weeks) {
-      const days = week.slice(0, 6);
-      const dateCells = days
-        .map((d: any) => `<td>${d.day ? m + '/' + d.day : ''}</td>`)
-        .join('');
-      const shiftRow = (label: string, shift: string) =>
-        `<tr><td class="lbl">${label}</td>` +
-        days
-          .map((d: any) => `<td>${d.day ? this.getPhysicianDisplayName(d, shift) : ''}</td>`)
-          .join('') +
-        '</tr>';
-      body +=
-        `<tr class="dt"><td class="lbl">日期</td>${dateCells}</tr>` +
-        shiftRow('早班', 'early') +
-        shiftRow('午班', 'noon') +
-        shiftRow('夜班', 'late');
-    }
-    const scheduleTable = `<table class="sch"><thead><tr>${headTh}</tr></thead><tbody>${body}</tbody></table>`;
-
-    // 用 Word 專用 XML + Section 版面，讓 Word 真正套 A4 直式 0.5cm 邊界
-    // （單純 @page CSS 會被 Word 忽略而改用預設 2.54cm 邊界 → 撐成 2 頁）
-    const html =
-      `<html xmlns:o="urn:schemas-microsoft-com:office:office" ` +
-      `xmlns:w="urn:schemas-microsoft-com:office:word" ` +
-      `xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8">` +
-      `<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View>` +
-      `<w:Zoom>100</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]-->` +
-      `<style>` +
-      `@page Section1{size:21.0cm 29.7cm;margin:0.5cm 0.5cm 0.5cm 0.5cm;mso-page-orientation:portrait;}` +
-      `div.Section1{page:Section1;}` +
-      `*{margin:0;padding:0;}` +
-      `body{font-family:'Microsoft JhengHei','微軟正黑體',sans-serif;}` +
-      `h2{text-align:center;font-size:20pt;font-weight:bold;margin:0 0 4pt;line-height:1.1;}` +
-      `table{border-collapse:collapse;width:100%;table-layout:fixed;}` +
-      `.sch th,.sch td{border:1px solid #000;text-align:center;font-size:20pt;font-weight:bold;` +
-      `height:22pt;padding:0 2pt;line-height:1.0;word-break:break-all;}` +
-      `.sch .lbl{width:1.6cm;background:#f0f0f0;}` +
-      `.sch .dt td{background:#f7f7f7;}` +
-      `.sch th.wk{color:#c00000;}` +
-      `</style></head><body><div class="Section1">` +
-      `<h2>${m} 月醫師查房</h2>` +
-      `${scheduleTable}` +
-      `</div></body></html>`;
-
-    const blob = new Blob(['﻿' + html], { type: 'application/msword' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${y}年${m}月醫師查房.doc`;
-    a.click();
-    URL.revokeObjectURL(url);
+    exportRoundingWordDoc({
+      year: this.selectedYear(),
+      month: this.selectedMonth(),
+      weeks: this.weeklyData(),
+      resolveName: (day, shift) => this.getPhysicianDisplayName({ day }, shift),
+    });
   }
 
   getPhysicianNameById(physicianId: string): string {

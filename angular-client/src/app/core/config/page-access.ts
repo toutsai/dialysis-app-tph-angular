@@ -140,7 +140,8 @@ export const PAGE_ACCESS = {
   },
   inventory: {
     path: '/inventory',
-    title: '庫存管理',
+    // 2026-07 改名：頁內三大頁籤 = 醫師班表列印 / 常規病人掛號 / 庫存管理
+    title: '書記專用',
     roles: INVENTORY_ROLES,
     roleLabel: '管理員、查看者',
   },

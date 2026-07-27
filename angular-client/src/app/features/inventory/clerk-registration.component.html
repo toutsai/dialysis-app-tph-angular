@@ -1,0 +1,76 @@
+<div class="register-panel">
+  <div class="toolbar">
+    <div class="day-tabs">
+      @for (label of WEEKDAY_LABELS; track $index) {
+        <button
+          [class.active]="selectedDay() === $index"
+          (click)="selectedDay.set($index)"
+        >
+          {{ label }}
+        </button>
+      }
+    </div>
+    <div class="toolbar-right">
+      <input
+        type="text"
+        class="search-input"
+        placeholder="搜尋姓名或病歷號"
+        [ngModel]="searchTerm()"
+        (ngModelChange)="searchTerm.set($event)"
+      />
+      <button
+        class="btn-export"
+        (click)="exportExcel()"
+        [disabled]="filteredRows().length === 0"
+      >
+        匯出 Excel
+      </button>
+    </div>
+  </div>
+
+  <div class="shift-tabs">
+    @for (opt of SHIFT_OPTIONS; track opt.value) {
+      <button [class.active]="shiftFilter() === opt.value" (click)="shiftFilter.set(opt.value)">
+        {{ opt.label }}
+        @if (opt.value !== 'all') {
+          <span class="count">{{ shiftCounts()[$index - 1] }}</span>
+        }
+      </button>
+    }
+  </div>
+
+  @if (patientStore.isLoading()) {
+    <p class="hint">載入床位總表資料中…</p>
+  } @else if (filteredRows().length === 0) {
+    <p class="hint">{{ WEEKDAY_LABELS[selectedDay()] }}沒有符合條件的常規病人。</p>
+  } @else {
+    <p class="summary">
+      {{ WEEKDAY_LABELS[selectedDay()] }} 共 {{ filteredRows().length }} 人
+      （早 {{ shiftCounts()[0] }}／午 {{ shiftCounts()[1] }}／晚 {{ shiftCounts()[2] }}）
+    </p>
+    <div class="table-scroll">
+      <table class="register-table">
+        <thead>
+          <tr>
+            <th>班別</th>
+            <th>床位</th>
+            <th>病人姓名</th>
+            <th>病歷號</th>
+            <th>頻率</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of filteredRows(); track row.patientId) {
+            <tr>
+              <td>{{ row.shiftLabel }}</td>
+              <td>{{ row.bedLabel }}</td>
+              <td>{{ row.name }}</td>
+              <td class="mrn">{{ row.medicalRecordNumber || '—' }}</td>
+              <td>{{ row.freq }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>
