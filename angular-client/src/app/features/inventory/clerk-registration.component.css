@@ -22,16 +22,13 @@
   flex-shrink: 0;
 }
 
-.day-tabs,
-.shift-tabs {
+.day-tabs {
   display: flex;
   gap: 0.4rem;
   flex-wrap: wrap;
-  flex-shrink: 0;
 }
 
-.day-tabs button,
-.shift-tabs button {
+.day-tabs button {
   padding: 0.45rem 1rem;
   font-size: 1rem;
   border: 1px solid #ced4da;
@@ -49,31 +46,8 @@
   font-weight: 600;
 }
 
-.shift-tabs button.active {
-  background: #e7f1ff;
-  border-color: #007bff;
-  color: #007bff;
-  font-weight: 600;
-}
-
-.day-tabs button:hover:not(.active),
-.shift-tabs button:hover:not(.active) {
+.day-tabs button:hover:not(.active) {
   background: #e9ecef;
-}
-
-.shift-tabs .count {
-  display: inline-block;
-  min-width: 1.5rem;
-  margin-left: 0.3rem;
-  padding: 0 0.35rem;
-  border-radius: 999px;
-  background: #6c757d;
-  color: #fff;
-  font-size: 0.85rem;
-}
-
-.shift-tabs button.active .count {
-  background: #007bff;
 }
 
 .toolbar-right {
@@ -110,48 +84,175 @@
   cursor: not-allowed;
 }
 
+.summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
 .summary {
   margin: 0;
   font-size: 1rem;
   color: #343a40;
-  flex-shrink: 0;
+}
+
+.legend {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.legend-item {
+  padding: 0.1rem 0.6rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #333;
 }
 
 .table-scroll {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  border: 1px solid #dee2e6;
+  border: 1px solid #ccc;
   border-radius: 6px;
 }
 
-.register-table {
-  border-collapse: collapse;
+/* === 比照每日排程「臨床查閱」簡表 === */
+.simplified-table {
   width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  table-layout: fixed;
 }
 
-.register-table th,
-.register-table td {
-  border-bottom: 1px solid #dee2e6;
-  padding: 0.5rem 0.75rem;
-  text-align: left;
-  font-size: 1rem;
+.simplified-table th,
+.simplified-table td {
+  border: 1px solid #ccc;
+  padding: 0.5rem;
+  text-align: center;
+  vertical-align: top;
 }
 
-.register-table thead th {
+.simplified-table th {
+  background-color: #e9ecef;
+  font-weight: 600;
   position: sticky;
   top: 0;
-  background: #f8f9fa;
-  z-index: 1;
-  border-bottom: 2px solid #dee2e6;
+  z-index: 2;
 }
 
-.register-table tbody tr:hover {
-  background: #f1f7ff;
+.simplified-table .col-bed {
+  font-weight: bold;
+  background-color: #f8f9fa;
+  width: 80px;
 }
 
-.register-table .mrn {
-  font-variant-numeric: tabular-nums;
+.patient-info-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  text-align: left;
+}
+
+.patient-mrn-name {
+  font-weight: bold;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.medical-record-number {
+  color: #6c757d;
+  cursor: copy;
+  position: relative;
+  white-space: nowrap;
+}
+
+.medical-record-number:hover {
+  color: #007bff;
+  text-decoration: underline;
+}
+
+.copied-tip {
+  display: inline-block;
+  margin-left: 0.3rem;
+  padding: 0 0.4rem;
+  border-radius: 4px;
+  background: #28a745;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.patient-name-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.ward-number {
+  font-weight: bold;
+  background: #ffc107;
+  color: #333;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.patient-freq {
+  font-size: 0.8rem;
+  color: #6c757d;
+}
+
+/* 身分底色：與每日排程 schedule.component.css 同款配色 */
+.status-opd {
+  background-color: #e8f5e9;
+}
+
+.status-ipd {
+  background-color: #ffebee;
+}
+
+.status-er {
+  background-color: #f3e5f5;
+}
+
+.status-biweekly {
+  background-color: #ffcc80;
+}
+
+.status-deleted {
+  background-color: #e0e0e0;
+  text-decoration: line-through;
+}
+
+/* 高優先標籤（備註含抽/新等，getUnifiedCellStyle 可能回傳） */
+.tag-chou {
+  background-color: #658ee0;
+  color: #fff;
+}
+
+.tag-new {
+  background-color: #f5ec8e;
+}
+
+/* 桌機大螢幕：病歷號與姓名同一行（比照每日排程 ≥993px 行為） */
+@media (min-width: 993px) {
+  .simplified-table {
+    font-size: 1rem;
+  }
+
+  .patient-mrn-name {
+    flex-direction: row;
+    gap: 0.4rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
 }
 
 .hint {

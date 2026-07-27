@@ -18,59 +18,75 @@
         [ngModel]="searchTerm()"
         (ngModelChange)="searchTerm.set($event)"
       />
-      <button
-        class="btn-export"
-        (click)="exportExcel()"
-        [disabled]="filteredRows().length === 0"
-      >
+      <button class="btn-export" (click)="exportExcel()" [disabled]="totalCount() === 0">
         匯出 Excel
       </button>
     </div>
   </div>
 
-  <div class="shift-tabs">
-    @for (opt of SHIFT_OPTIONS; track opt.value) {
-      <button [class.active]="shiftFilter() === opt.value" (click)="shiftFilter.set(opt.value)">
-        {{ opt.label }}
-        @if (opt.value !== 'all') {
-          <span class="count">{{ shiftCounts()[$index - 1] }}</span>
-        }
-      </button>
-    }
-  </div>
-
   @if (patientStore.isLoading()) {
     <p class="hint">載入床位總表資料中…</p>
-  } @else if (filteredRows().length === 0) {
-    <p class="hint">{{ WEEKDAY_LABELS[selectedDay()] }}沒有符合條件的常規病人。</p>
+  } @else if (totalCount() === 0) {
+    <p class="hint">{{ WEEKDAY_LABELS[selectedDay()] }}沒有常規病人。</p>
   } @else {
-    <p class="summary">
-      {{ WEEKDAY_LABELS[selectedDay()] }} 共 {{ filteredRows().length }} 人
-      （早 {{ shiftCounts()[0] }}／午 {{ shiftCounts()[1] }}／晚 {{ shiftCounts()[2] }}）
-    </p>
+    <div class="summary-row">
+      <p class="summary">
+        {{ WEEKDAY_LABELS[selectedDay()] }} 共 {{ totalCount() }} 人
+        （早 {{ shiftCounts()[0] }}／午 {{ shiftCounts()[1] }}／晚 {{ shiftCounts()[2] }}）
+      </p>
+      <div class="legend">
+        <span class="legend-item status-opd">門診</span>
+        <span class="legend-item status-ipd">住院</span>
+        <span class="legend-item status-er">急診</span>
+        <span class="legend-item status-biweekly">兩班頻率</span>
+      </div>
+    </div>
     <div class="table-scroll">
-      <table class="register-table">
+      <table class="simplified-table">
         <thead>
           <tr>
-            <th>班別</th>
-            <th>床位</th>
-            <th>病人姓名</th>
-            <th>病歷號</th>
-            <th>頻率</th>
+            <th class="col-bed">床號</th>
+            @for (header of SHIFT_HEADERS; track $index) {
+              <th>{{ header }}</th>
+            }
           </tr>
         </thead>
         <tbody>
-          @for (row of filteredRows(); track row.patientId) {
+          @for (bed of visibleBedRows(); track bed.label) {
             <tr>
-              <td>{{ row.shiftLabel }}</td>
-              <td>{{ row.bedLabel }}</td>
-              <td>{{ row.name }}</td>
-              <td class="mrn">{{ row.medicalRecordNumber || '—' }}</td>
-              <td>{{ row.freq }}</td>
+              <td class="col-bed">{{ bed.label }}</td>
+              @for (si of SHIFT_INDICES; track si) {
+                <td [ngClass]="cellStyleFor(bed.label, si)">
+                  @for (p of cellsFor(bed.label, si); track p.patientId) {
+                    <div class="patient-info-cell">
+                      <div class="patient-mrn-name">
+                        <span
+                          class="medical-record-number"
+                          title="點擊以複製病歷號"
+                          (click)="copyMedicalRecordNumber(p.medicalRecordNumber)"
+                        >
+                          {{ p.medicalRecordNumber || '—' }}
+                          @if (copiedMrn() && copiedMrn() === p.medicalRecordNumber) {
+                            <span class="copied-tip">已複製</span>
+                          }
+                        </span>
+                        <span class="patient-name-wrapper">
+                          {{ p.name }}
+                          @if (p.statusBadge) {
+                            <span class="ward-number">{{ p.statusBadge }}</span>
+                          }
+                        </span>
+                      </div>
+                      <div class="patient-freq">{{ p.freq }}</div>
+                    </div>
+                  }
+                </td>
+              }
             </tr>
           }
         </tbody>
       </table>
     </div>
+    <p class="hint">點病歷號可複製；格子底色＝身分（比照每日排程配色），住院/急診另標病房號。</p>
   }
 </div>
