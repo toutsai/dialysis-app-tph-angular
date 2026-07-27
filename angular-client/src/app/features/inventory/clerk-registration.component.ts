@@ -56,13 +56,15 @@ export class ClerkRegistrationComponent implements OnInit {
     const rows: RegistrationRow[] = [];
     for (const [patientId, ruleRaw] of Object.entries(rules)) {
       const rule = ruleRaw as any;
-      if (!rule?.freq) continue;
-      const dayIndices = FREQ_MAP_TO_DAY_INDEX[rule.freq] ?? [];
-      if (!dayIndices.includes(day)) continue;
-      const shiftIndex = Number(rule.shiftIndex);
-      if (!ORDERED_SHIFT_CODES[shiftIndex]) continue;
       const patient = pMap.get(patientId);
       if (!patient || (patient as any).isDeleted) continue;
+      // 頻率認定與病人清單一致：patient.freq（總表 scheduleRule.freq 優先，缺時退回病人頂層 freq）
+      const freq = String((patient as any).freq || '');
+      if (!freq) continue;
+      const dayIndices = FREQ_MAP_TO_DAY_INDEX[freq] ?? [];
+      if (!dayIndices.includes(day)) continue;
+      const shiftIndex = Number(rule?.shiftIndex);
+      if (!ORDERED_SHIFT_CODES[shiftIndex]) continue;
       const bed = this.parseBed(rule.bedNum);
       rows.push({
         patientId,
@@ -72,7 +74,7 @@ export class ClerkRegistrationComponent implements OnInit {
         bedSortKey: bed.sortKey,
         shiftIndex,
         shiftLabel: getShiftDisplayName(ORDERED_SHIFT_CODES[shiftIndex]),
-        freq: rule.freq,
+        freq,
       });
     }
     rows.sort((a, b) => a.shiftIndex - b.shiftIndex || a.bedSortKey - b.bedSortKey);
