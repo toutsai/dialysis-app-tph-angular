@@ -272,6 +272,7 @@
               <tr>
                 <th>病歷號</th><th>姓名</th><th>病床號</th><th>主治醫師</th><th>科別</th>
                 @if (isCkdView()) { <th>CKD 分期</th><th>最新 eGFR</th> } @else { <th>AKI Stage</th> }
+                @if (isAkiView()) { <th>AKI 發生日</th> }
                 <th>病程</th>
                 @if (isDischargedView()) {
                   <th>出院日</th><th>回診安排</th><th>回診日期</th><th>追蹤抽血</th><th>電訪</th><th>結案</th>
@@ -304,6 +305,9 @@
                     <td class="nowrap">
                       <span class="stage-badge" [style.background]="color(it.category)" [style.color]="fgColor(it.category)">{{ stageLabel(it) }}</span>
                     </td>
+                  }
+                  @if (isAkiView()) {
+                    <td class="nowrap">{{ it.akiOnsetDate || '—' }}</td>
                   }
                   <td class="nowrap course-cell">
                     @for (b of courseBadges(it); track b.label) {

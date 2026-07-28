@@ -151,6 +151,8 @@ export interface AkiCareItem extends AkiCourseFields {
   physician: string;
   category: AkiCategory;
   stage: number | null;
+  // 最近一次 AKI 事件起始日（含已緩解；ESRD/資料不足者為 null）
+  akiOnsetDate?: string | null;
   latestEgfr?: number | null;
   ckdBasis?: string | null;
   autoDialysisMode: string | null;

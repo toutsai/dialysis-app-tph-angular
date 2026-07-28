@@ -182,13 +182,19 @@ export class AkiMapComponent implements OnInit {
 
   readonly isDischargedView = computed(() => this.activeTab() === 'discharged');
   readonly isCkdView = computed(() => this.activeTab() === 'ckd');
+  readonly isAkiView = computed(() => this.activeTab() === 'care');
   readonly currentCareItems = computed(() =>
     this.isDischargedView() ? this.filteredDischargedItems()
       : this.isCkdView() ? this.ckdItems()
       : this.careItems(),
   );
 
-  // 病房別篩選：全部 / 加護 / 一般病房
+  // 病房別篩選：全部 / 加護 / 一般病房（各名單頁籤獨立記憶；AKI 名單預設加護）
+  private readonly wardFilterByTab: Record<'ckd' | 'care' | 'discharged', 'all' | 'icu' | 'ward'> = {
+    ckd: 'all',
+    care: 'icu',
+    discharged: 'all',
+  };
   readonly careWardFilter = signal<'all' | 'icu' | 'ward'>('all');
   // AKI 名單專屬篩選：Stage 多選（空集合 = 全部，含疑似 ESRD 等無分期者）、簽核狀態；預設 未簽核 + Stage 3+2
   readonly careStageFilter = signal<ReadonlySet<number>>(new Set([3, 2]));
@@ -420,7 +426,10 @@ export class AkiMapComponent implements OnInit {
   // ---------- 頁籤 / 關懷名單 ----------
 
   switchTab(tab: 'map' | 'ckd' | 'care' | 'discharged'): void {
+    const prev = this.activeTab();
+    if (prev === 'ckd' || prev === 'care' || prev === 'discharged') this.wardFilterByTab[prev] = this.careWardFilter();
     this.activeTab.set(tab);
+    if (tab === 'ckd' || tab === 'care' || tab === 'discharged') this.careWardFilter.set(this.wardFilterByTab[tab]);
     if (tab === 'ckd' && !this.ckdLoaded()) this.loadCkd();
     if (tab === 'care' && !this.careLoaded()) this.loadCare();
     if (tab === 'discharged' && !this.dischargedLoaded()) this.loadDischarged();
@@ -543,6 +552,7 @@ export class AkiMapComponent implements OnInit {
         row['判定依據'] = it.ckdBasis || '';
       } else {
         row['AKI Stage'] = this.stageLabel(it);
+        if (!discharged) row['AKI發生日'] = it.akiOnsetDate || '';
       }
       if (discharged) row['出院日'] = it.dischargeDate || it.lastSeenDate || '';
       row['疑似CKD'] = it.ckdSuspected ? (it.ckdBand || 'Y') : '';

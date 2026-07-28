@@ -392,7 +392,7 @@ function getCareRecord(db, mrn) {
   )
 }
 
-// 關懷名單排序：Stage 3→2→1→ESRD，其次床號
+// 關懷名單排序：AKI 發生日新→舊（無日期者沉底），同日再 Stage 3→2→1→ESRD，其次床號
 const CARE_RANK = { 'stage-3': 0, 'stage-2': 1, 'stage-1': 2, esrd: 3 }
 // CKD 名單排序：G5 → G3a
 const CKD_RANK = { G5: 0, G4: 1, G3b: 2, G3a: 3 }
@@ -430,6 +430,8 @@ function toCareItem(c) {
     category: c.staging.category,
     stage: c.staging.stage,
     ...flattenCourse(c.analysis),
+    // 最近一次 AKI 事件起始日（含已緩解；ESRD/資料不足者為 null）
+    akiOnsetDate: c.analysis?.akd?.lastOnsetDate ?? null,
     latestEgfr: c.analysis?.ckd?.latestEgfr ?? null,
     ckdBasis: c.analysis?.ckd?.basis || (c.analysis?.isEsrd ? '全段 Cr≥4.0 疑似 ESRD' : null),
     autoDialysisMode: c.dialysisMode,
@@ -458,6 +460,7 @@ router.get('/care-list', (req, res) => {
       .map(toCareItem)
     items.sort(
       (a, b) =>
+        String(b.akiOnsetDate || '').localeCompare(String(a.akiOnsetDate || '')) ||
         (CARE_RANK[a.category] ?? 9) - (CARE_RANK[b.category] ?? 9) ||
         String(a.bed || '').localeCompare(String(b.bed || ''), undefined, { numeric: true }),
     )

@@ -475,6 +475,8 @@ export function analyzeSeries(rawPoints, { admitDate = null, today = null, dataD
   // 逐點依時序分期；達 Stage≥1 開啟事件，回到 stage 0（回 baseline 範圍）即關閉。
   // 走完仍開著 = 目前未緩解，其起始日即 AKD 起算點。
   let activeOnset = null
+  // 最近一次事件的起始日（含已緩解的事件；關懷名單「AKI 發生日」用，事件關閉不清空）
+  let lastOnsetDate = null
   // 當日 AKI：全庫「最新資料日」(dataDate) 當天有點達 AKI 門檻（早上上傳後的當日警示用）
   const daily = { active: false, date: dataDate, stage: null, cr: null }
   if (!isEsrd && crPts.length >= 2) {
@@ -493,6 +495,7 @@ export function analyzeSeries(rawPoints, { admitDate = null, today = null, dataD
       const st = guardedStageOf(cur, ref, crPts)
       if (st >= 1 && !activeOnset) {
         activeOnset = { date: cur.date, stage: st, value: cur.value, refDate: ref.date, refValue: ref.value }
+        lastOnsetDate = cur.date
       } else if (st === 0) {
         activeOnset = null
       }
@@ -517,7 +520,7 @@ export function analyzeSeries(rawPoints, { admitDate = null, today = null, dataD
   }
 
   // --- AKD（急性腎臟病：AKI 後 7–90 天未回 baseline） ---
-  const akd = { active: false, onsetDate: null, daysSinceOnset: null, latestCr: null, latestRatio: null }
+  const akd = { active: false, onsetDate: null, daysSinceOnset: null, latestCr: null, latestRatio: null, lastOnsetDate }
   if (activeOnset && refDate) {
     const days = daysBetween(activeOnset.date, refDate)
     const latest = crPts[crPts.length - 1]
