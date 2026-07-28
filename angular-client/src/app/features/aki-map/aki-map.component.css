@@ -524,9 +524,13 @@
 .care-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   white-space: normal;
 }
+/* 三名單表格內元素同步放大（床卡/詳情等表外用途不動） */
+.care-table .link { font-size: 0.92rem; }
+.care-table .stage-badge { font-size: 0.78rem; }
+.care-table .course-badge { font-size: 0.7rem; }
 .care-table th, .care-table td {
   border-bottom: 1px solid #eceff1;
   padding: 0.4rem 0.55rem;
@@ -559,7 +563,7 @@
   border: 1px solid #cfd8dc;
   border-radius: 5px;
   padding: 0.3rem 0.4rem;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   color: #263238;
 }
 .cell-input.wide { width: 12rem; }
@@ -585,7 +589,7 @@
   font-weight: 600;
   padding: 0.3rem 0.7rem;
 }
-.signed { color: #2e7d32; font-size: 0.78rem; line-height: 1.25; }
+.signed { color: #2e7d32; font-size: 0.85rem; line-height: 1.25; }
 .signed small { color: #78909c; }
 
 /* ===== 病程徽章 / 篩選 ===== */
