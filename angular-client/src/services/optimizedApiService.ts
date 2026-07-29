@@ -96,6 +96,18 @@ export async function updateSchedule(scheduleId: string, updateData: any): Promi
   clearCacheByPattern('schedules');
   return result;
 }
+/**
+ * 住院趴趴走接送方式窄通道：只合併各 slot 的 transportMethod，不動排程本體。
+ * 未來日期排程唯讀（方向A）下仍可登記接送方式用。
+ */
+export async function updateScheduleTransportMethods(
+  date: string,
+  transportMethods: Record<string, string>,
+): Promise<any> {
+  const result = await localApi.put(`/schedules/${date}/transport-methods`, { transportMethods });
+  clearCacheByPattern('schedules');
+  return result;
+}
 
 // Patient functions
 export async function fetchAllPatients(): Promise<any[]> {

@@ -688,6 +688,81 @@ router.put('/:date', ...isEditor, async (req, res) => {
   }
 })
 
+/**
+ * PUT /api/schedules/:date/transport-methods
+ * 住院趴趴走接送方式窄通道：只合併各 slot 的 transportMethod，不動排程本體。
+ * 方向A（2026-07-24）未來排程唯讀後，接送方式仍需可對未來日期登記，故開此通道；
+ * 歷史日期維持唯讀拒收。不做 isTodayScheduleFrozen 守門——凍結是防「重算改寫
+ * 既成事實」，這裡是純人工登記欄位，不動床位歸屬。
+ * Body: { transportMethods: { [shiftId]: '推床'|'輪椅' } }
+ */
+router.put('/:date/transport-methods', ...isEditor, async (req, res) => {
+  try {
+    const { date } = req.params
+    const { transportMethods } = req.body
+
+    if (!transportMethods || typeof transportMethods !== 'object' || Array.isArray(transportMethods)) {
+      return res.status(400).json({ error: true, message: 'transportMethods 必須是物件' })
+    }
+    const ALLOWED_TRANSPORT_METHODS = new Set(['推床', '輪椅'])
+    for (const value of Object.values(transportMethods)) {
+      if (!ALLOWED_TRANSPORT_METHODS.has(value)) {
+        return res.status(400).json({ error: true, message: `無效的接送方式: ${value}` })
+      }
+    }
+    if (date < getTaipeiTodayString()) {
+      return res.status(400).json({ error: true, message: '歷史日期唯讀，無法修改接送方式' })
+    }
+
+    const db = getDatabase()
+    const existing = db.prepare(`SELECT schedule FROM schedules WHERE date = ?`).get(date)
+    if (!existing) {
+      return res.status(404).json({ error: true, message: '該日期尚無排程資料' })
+    }
+
+    const schedule = JSON.parse(existing.schedule || '{}')
+    let changedCount = 0
+    for (const [shiftId, method] of Object.entries(transportMethods)) {
+      const slot = schedule[shiftId]
+      if (slot?.patientId && slot.transportMethod !== method) {
+        slot.transportMethod = method
+        changedCount++
+      }
+    }
+
+    if (changedCount > 0) {
+      const lastModifiedBy = JSON.stringify({ uid: req.user.id, name: req.user.name })
+      db.prepare(`
+        UPDATE schedules
+        SET schedule = ?,
+            last_modified_by = ?,
+            updated_at = datetime('now', 'localtime')
+        WHERE date = ?
+      `).run(JSON.stringify(schedule), lastModifiedBy, date)
+
+      await logAudit('SCHEDULE_TRANSPORT_UPDATE', req.user.id, req.user.name, 'schedules', date, {
+        slotCount: changedCount
+      })
+    }
+
+    const updated = db.prepare(`SELECT * FROM schedules WHERE date = ?`).get(date)
+    res.json({
+      id: updated.id,
+      date: updated.date,
+      schedule: JSON.parse(updated.schedule || '{}'),
+      version: updated.version,
+      updatedAt: updated.updated_at,
+      changedCount
+    })
+  } catch (error) {
+    console.error('更新接送方式錯誤:', error)
+    res.status(500).json({
+      error: true,
+      message: '更新接送方式失敗'
+    })
+  }
+})
+
 // ========================================
 // 基礎排班總表 API
 // ========================================

@@ -79,6 +79,7 @@ import {
   updateSchedule as optimizedUpdateSchedule,
   updatePatient as optimizedUpdatePatient,
   createDialysisOrderAndUpdatePatient,
+  updateScheduleTransportMethods,
 } from '@/services/optimizedApiService';
 import {
   extractVersionConflict,
@@ -404,6 +405,13 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     currentDay.setHours(0, 0, 0, 0);
     return currentDay > today;
   });
+
+  /**
+   * 檢視中的日期是否為過去（歷史唯讀）。
+   * 純病人資料類彈窗（ICU 醫囑單）與接送方式窄通道只鎖過去、未來放行——
+   * 它們不動排程本體，與方向A「未來排程唯讀」不衝突。
+   */
+  readonly isHistoryView = computed(() => this.isPageLocked() && !this.isFutureView());
 
   // 護理分組（自動分組）鎖定範圍：只鎖過去。未來放行——自動分組只寫 nurse_assignments
   // 不動排程本體，且此功能僅本頁提供（護理分組頁未來本可編輯，語意一致）。
@@ -1428,15 +1436,35 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     this.currentWardNumber.set('');
   }
 
-  handleInpatientRoundsSave(patients: any[]): void {
+  async handleInpatientRoundsSave(patients: any[]): Promise<void> {
+    if (this.isHistoryView()) {
+      this.statusIndicator.set('歷史日期唯讀，接送方式未儲存');
+      return;
+    }
     // Update transport methods in schedule slots
+    const changes: Record<string, string> = {};
     for (const patient of patients) {
       if (patient.shiftId && this.currentRecord.schedule[patient.shiftId]) {
         this.currentRecord.schedule[patient.shiftId].transportMethod = patient.transportMethod;
+        changes[patient.shiftId] = patient.transportMethod;
       }
     }
-    this.hasUnsavedChanges.set(true);
-    this.statusIndicator.set('住院趴趴走已更新，請儲存');
+    if (!this.isPageLocked()) {
+      // 今天：接送方式隨排程本體走既有整包存檔流程（避免窄通道 bump version 撞樂觀鎖）
+      this.hasUnsavedChanges.set(true);
+      this.statusIndicator.set('住院趴趴走已更新，請儲存');
+      return;
+    }
+    // 未來日期：排程本體唯讀（方向A），走只合併接送方式的窄通道直接存檔
+    if (Object.keys(changes).length === 0) return;
+    try {
+      const updated = await updateScheduleTransportMethods(this.currentRecord.date, changes);
+      if (updated?.version !== undefined) this.currentRecord.version = updated.version;
+      this.statusIndicator.set('接送方式已儲存');
+    } catch (error) {
+      console.error('儲存接送方式失敗:', error);
+      this.showAlert('操作失敗', '接送方式儲存失敗，請稍後再試。');
+    }
   }
 
   async handleIcuOrdersSaveAndPrint(data: { localNotes: Record<string, string>; crrtEmergencyData: Record<string, any> }): Promise<void> {
@@ -1490,8 +1518,8 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   async handleIcuOrdersSave(payload: { localNotes: Record<string, string>; crrtEmergencyData: Record<string, any> }): Promise<void> {
-    if (this.isPageLocked()) {
-      this.showAlert('操作失敗', '無法修改ICU醫囑單資料，請確認權限或日期。');
+    if (this.isHistoryView()) {
+      this.showAlert('操作失敗', '歷史日期唯讀，無法修改ICU醫囑單資料。');
       return;
     }
     this.isIcuSaving.set(true);
@@ -1549,7 +1577,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   async handleSaveOrder(orderData: any): Promise<void> {
-    if (this.isPageLocked()) {
+    if (this.isHistoryView()) {
       this.showAlert('操作失敗', '過去的排程無法修改。');
       return;
     }

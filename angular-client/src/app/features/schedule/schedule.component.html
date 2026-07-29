@@ -93,10 +93,10 @@
         >
           &#9654; {{ isSimplifiedViewVisible() ? '關閉臨床查閱' : '展開臨床查閱' }}
         </button>
-        <button class="btn btn-secondary" (click)="isInpatientRoundsDialogVisible.set(true)">
+        <button class="btn btn-secondary btn-live-when-locked" (click)="isInpatientRoundsDialogVisible.set(true)">
           <i class="fas fa-hospital"></i> 住院趴趴走 ({{ todayInpatients.length }})
         </button>
-        <button class="btn btn-secondary" (click)="openIcuOrders()">
+        <button class="btn btn-secondary btn-live-when-locked" (click)="openIcuOrders()">
           <i class="fas fa-clipboard-list"></i> ICU醫囑單
         </button>
       </div>
@@ -851,7 +851,7 @@
   [schedule]="currentRecord.schedule"
   [patientMap]="patientMap()"
   [effectiveOrders]="icuEffectiveOrders()"
-  [isEditable]="!isPageLocked()"
+  [isEditable]="!isHistoryView()"
   (closeEvent)="isIcuOrdersDialogVisible.set(false)"
   (saveAndPrint)="handleIcuOrdersSave($event)"
   (changeDateEvent)="handleIcuDateChange($event)"

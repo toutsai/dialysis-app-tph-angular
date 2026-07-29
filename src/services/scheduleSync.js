@@ -246,6 +246,17 @@ export async function syncMasterScheduleToFuture(beforeRules, afterRules, modifi
             const oldKey = getScheduleKey(ruleBefore.bedNum, oldShiftCode)
             const newKey = getScheduleKey(ruleAfter.bedNum, newSlot.shiftId)
 
+            // createSlotObject 產生的是全新物件，接送方式（住院趴趴走）要從舊 slot 跟人帶走
+            const prevSlot =
+              currentSchedule[oldKey]?.patientId === patientId
+                ? currentSchedule[oldKey]
+                : currentSchedule[newKey]?.patientId === patientId
+                  ? currentSchedule[newKey]
+                  : null
+            if (prevSlot?.transportMethod) {
+              newSlot.transportMethod = prevSlot.transportMethod
+            }
+
             if (oldKey !== newKey) {
               // 床位或班別變更，需要移除舊的
               if (currentSchedule[oldKey]?.patientId === patientId) {
@@ -646,6 +657,10 @@ function rebuildSingleDaySchedule(dateStr, masterRules, patientsMap) {
     patientsMap
   )
 
+  // 重建是從總表憑空重生 slots，不帶 transportMethod（住院趴趴走接送方式），
+  // 未來日期已登記的接送方式會被總表異動觸發的重建洗掉，這裡從舊排程貼回
+  preserveTransportMethods(db, dateStr, finalSchedule)
+
   // 標記衝突的調班（含目標床位被佔、來源床位已不再是該病人 等等）
   if (conflictingExceptions.length > 0) {
     const conflictStmt = db.prepare(`
@@ -710,6 +725,35 @@ function rebuildSingleDaySchedule(dateStr, masterRules, patientsMap) {
   }
 
   return finalSchedule
+}
+
+/**
+ * 把某日既有排程各 slot 的 transportMethod（住院趴趴走接送方式）貼回重建後的排程。
+ * 依 patientId 跟人走：換床/換班後仍保留（一天一人一筆接送方式）。
+ */
+function preserveTransportMethods(db, dateStr, newSchedule) {
+  const row = db.prepare(`SELECT schedule FROM schedules WHERE date = ?`).get(dateStr)
+  if (!row?.schedule) return
+  let oldSchedule
+  try {
+    oldSchedule = JSON.parse(row.schedule)
+  } catch {
+    return
+  }
+  const transportByPatientId = new Map()
+  for (const key in oldSchedule) {
+    const slot = oldSchedule[key]
+    if (slot?.patientId && slot.transportMethod) {
+      transportByPatientId.set(slot.patientId, slot.transportMethod)
+    }
+  }
+  if (transportByPatientId.size === 0) return
+  for (const key in newSchedule) {
+    const slot = newSchedule[key]
+    if (!slot?.patientId) continue
+    const method = transportByPatientId.get(slot.patientId)
+    if (method) slot.transportMethod = method
+  }
 }
 
 // ── 今天「已開始」班次凍結 ──────────────────────────────────────────────

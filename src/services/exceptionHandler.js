@@ -192,7 +192,8 @@ async function handleMove(db, exceptionId, data) {
     : (targetScheduleRow ? JSON.parse(targetScheduleRow.schedule || '{}') : {})
 
   // 先在記憶體中移除來源（衝突檢查通過前不寫庫，避免病人「哪裡都不在」）
-  const sourceRemoved = sourceSchedule[sourceKey]?.patientId === patientId
+  const sourceSlot = sourceSchedule[sourceKey]
+  const sourceRemoved = sourceSlot?.patientId === patientId
   if (sourceRemoved) {
     delete sourceSchedule[sourceKey]
     console.log(`  └─ 移除 ${patientName} 從 ${from.sourceDate} ${sourceKey}`)
@@ -207,6 +208,11 @@ async function handleMove(db, exceptionId, data) {
     manualNote: `(換班)`,
     exceptionId: exceptionId,
     appliedAt: new Date().toISOString(),
+  }
+
+  // 接送方式（住院趴趴走）跟人走：換床/換日不掉登記
+  if (sourceRemoved && sourceSlot?.transportMethod) {
+    newSlotData.transportMethod = sourceSlot.transportMethod
   }
 
   // 支援臨時透析模式覆寫 (如 HD→HDF)
