@@ -2197,6 +2197,14 @@ router.post('/admin/migrate-to-archive', ...isEditor, async (req, res) => {
     const todayStr = getTaipeiTodayString()
     const targetDate = beforeDate || todayStr
 
+    // 防呆：不得晚於今天，否則會把今天/未來的現行排程搬進歸檔並從 schedules 刪除
+    if (targetDate > todayStr) {
+      return res.status(400).json({
+        error: true,
+        message: `beforeDate 不得晚於今天（${todayStr}），收到 ${targetDate}`,
+      })
+    }
+
     console.log(`[Admin] 📁 開始遷移 ${targetDate} 之前的排程到歸檔...`)
 
     const db = getDatabase()
