@@ -590,6 +590,11 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
     changeDesc: string,
     onConfirm: () => void
   ): Promise<void> {
+    // 凌晨（<06:00）不走守門：今日尚未凍結，變更依既有設計算今天的
+    if (new Date().getHours() < 6) {
+      onConfirm();
+      return;
+    }
     const inToday = await this.checkPatientInTodaySchedule(patientId);
     if (!inToday) {
       onConfirm();

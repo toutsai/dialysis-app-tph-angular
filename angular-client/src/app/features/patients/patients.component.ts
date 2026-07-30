@@ -862,7 +862,11 @@ export class PatientsComponent implements OnInit, OnDestroy {
       if (pick(patientData, 'mode') !== pick(originalPatient, 'mode')) identityChanges.push('透析模式');
       if (pick(patientData, 'freq') !== pick(originalPatient, 'freq')) identityChanges.push('透析頻率');
 
-      if (identityChanges.length > 0 && (await this.checkPatientInTodaySchedule(patientData.id))) {
+      if (
+        identityChanges.length > 0 &&
+        this.isTodayFrozenWindow() &&
+        (await this.checkPatientInTodaySchedule(patientData.id))
+      ) {
         this.pendingEditSave = () => {
           void doSave();
         };
@@ -1068,6 +1072,11 @@ export class PatientsComponent implements OnInit, OnDestroy {
   }
 
   // --- Schedule Conflict ---
+  /** 今日凍結窗（06:00 起）：凌晨的變更依既有設計算今天的，不走當日守門（與後端 isTodayScheduleFrozen 邊界一致） */
+  private isTodayFrozenWindow(): boolean {
+    return new Date().getHours() >= 6;
+  }
+
   private async checkPatientInTodaySchedule(patientId: string): Promise<boolean> {
     try {
       // 用本地時區取今天（toISOString 是 UTC，凌晨 0-8 點會差一天）
@@ -1178,7 +1187,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
     if (!patient) return;
 
     const isInTodaySchedule = await this.checkPatientInTodaySchedule(patientId);
-    if (isInTodaySchedule) {
+    if (isInTodaySchedule && this.isTodayFrozenWindow()) {
       const targetStatusText: Record<string, string> = { ipd: '住院', opd: '門診', er: '急診' };
       this.showScheduleConflictDialog(
         '今日有排程 — 確認立即變更',
@@ -1231,7 +1240,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
     if (!patient) return;
 
     const isInTodaySchedule = await this.checkPatientInTodaySchedule(patientId);
-    if (isInTodaySchedule) {
+    if (isInTodaySchedule && this.isTodayFrozenWindow()) {
       this.showScheduleConflictDialog(
         '今日有排程 — 確認立即刪除',
         `病人「${patient.name}」今天有排程透析。\n\n選「是」立即刪除：\n・今日排程維持不動（不受影響）\n・明日起自動從排程中移除\n（今天出院/轉出請選這個）\n\n若出院是未來日期才發生，選「否」改用預約變更。`,

@@ -1422,8 +1422,13 @@ async function updatePatientHandler(req, res) {
       const statusChanged = updated.status !== existing.status
       const modeChanged = (newOrders.mode || null) !== (oldOrders.mode || null)
       const freqChanged = (newOrders.freq || null) !== (oldOrders.freq || null)
-      if (statusChanged || modeChanged || freqChanged || (!wasDeleted && isNowDeleted)) {
-        const todayStr = getTaipeiTodayString()
+      const todayStr = getTaipeiTodayString()
+      // 僅在今日凍結窗（06:00 起）內寫快照：凌晨的變更依既有設計本來就算今天的，
+      // 不該把變更前狀態凍進今天（與 isTodayScheduleFrozen 的重建放行邊界一致）
+      if (
+        (statusChanged || modeChanged || freqChanged || (!wasDeleted && isNowDeleted)) &&
+        isTodayScheduleFrozen(todayStr)
+      ) {
         const todayRow = db.prepare(`SELECT schedule FROM schedules WHERE date = ?`).get(todayStr)
         if (todayRow) {
           const todaySchedule = JSON.parse(todayRow.schedule || '{}')
