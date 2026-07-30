@@ -2,6 +2,12 @@
   <div class="selection-dialog-overlay" (click)="onOverlayClick($event)">
     <div class="selection-dialog-content">
       <h3>{{ title }}</h3>
+      @if (dateFieldLabel) {
+        <div class="date-field">
+          <label>{{ dateFieldLabel }}</label>
+          <input type="date" [(ngModel)]="dateValue" />
+        </div>
+      }
       <div class="button-group">
         @for (option of options; track option.value) {
           <button (click)="handleSelect(option.value)">

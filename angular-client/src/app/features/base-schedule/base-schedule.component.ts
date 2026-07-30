@@ -576,7 +576,7 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
           [patientId]: newRuleData,
         },
       });
-      this.statusText.set('總表已更新');
+      this.statusText.set('總表已更新（今日排程維持不動，明日起套用）');
       await this.loadAllData();
     } catch (error: any) {
       this.statusText.set('儲存失敗');

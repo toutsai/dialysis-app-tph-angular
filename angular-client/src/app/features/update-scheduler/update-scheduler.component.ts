@@ -71,12 +71,12 @@ export class UpdateSchedulerComponent implements OnInit, OnDestroy {
   }
 
   TYPE_MAP: Record<string, string> = {
-    UPDATE_STATUS: '身分變更',
-    UPDATE_MODE: '模式變更',
-    UPDATE_FREQ: '頻率變更',
-    UPDATE_BASE_SCHEDULE_RULE: '總表規則變更',
-    DELETE_PATIENT: '刪除病人',
-    RESTORE_PATIENT: '復原病人',
+    UPDATE_STATUS: '變更身分別/病房號',
+    UPDATE_MODE: '變更透析模式',
+    UPDATE_FREQ: '變更透析頻率',
+    UPDATE_BASE_SCHEDULE_RULE: '變更透析頻率/班別/床位',
+    DELETE_PATIENT: '預約刪除（出院/轉出）',
+    RESTORE_PATIENT: '預約復原',
   };
 
   STATUS_MAP: Record<string, { text: string; color: string; prefix: string }> = {

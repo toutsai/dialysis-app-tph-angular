@@ -101,3 +101,14 @@
 .text-muted {
   color: #6c757d;
 }
+
+.usage-hint {
+  background: #fff8e1;
+  border: 1px solid #ffe082;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0 0 14px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: #6d5200;
+}

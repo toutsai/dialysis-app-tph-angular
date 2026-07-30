@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 
 export interface SelectionOption {
   value: string;
@@ -9,7 +10,7 @@ export interface SelectionOption {
 @Component({
   selector: 'app-selection-dialog',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './selection-dialog.component.html',
   styleUrl: './selection-dialog.component.css'
 })
@@ -17,6 +18,9 @@ export class SelectionDialogComponent implements OnChanges {
   @Input() isVisible = true;
   @Input() title = '';
   @Input() options: SelectionOption[] = [];
+  /** 選填的日期欄位：設定 dateFieldLabel 即顯示，值由父層透過 template ref 讀取 dateValue */
+  @Input() dateFieldLabel = '';
+  dateValue = new Date().toLocaleDateString('sv-SE');
   @Output() select = new EventEmitter<string>();
   @Output() cancel = new EventEmitter<void>();
 

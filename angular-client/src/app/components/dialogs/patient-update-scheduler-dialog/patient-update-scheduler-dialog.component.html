@@ -14,7 +14,9 @@
         <fieldset class="step-group">
           <legend>設定變更內容</legend>
           <div class="form-group">
-            <label for="effectiveDate">生效日期</label>
+            <label for="effectiveDate">
+              {{ changeType === 'DELETE_PATIENT' ? '生效日期（出院日）' : '生效日期' }}
+            </label>
             <input type="date" id="effectiveDate" [(ngModel)]="formData.effectiveDate" />
           </div>
 

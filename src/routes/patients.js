@@ -1423,8 +1423,15 @@ async function updatePatientHandler(req, res) {
       )
       deletedFutureMessages = deleteFutureMessagesForPatient(db, id)
 
+      // 出院/事件日期：前端可帶 deleteEventDate（YYYY-MM-DD），未帶或格式不符則以今天計
+      const deleteEventDate =
+        typeof data.deleteEventDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.deleteEventDate)
+          ? data.deleteEventDate
+          : getTaipeiTodayString()
+
       recordPatientHistory(db, id, existing.name, 'DELETE', {
         reason: data.deleteReason || '未提供原因',
+        eventDate: deleteEventDate,
         fromStatus: existing.status
       }, createPatientSnapshot(existing))
 
@@ -1434,7 +1441,7 @@ async function updatePatientHandler(req, res) {
         name: existing.name,
         patientId: id,
         medicalRecordNumber: existing.medical_record_number,
-        dischargeDate: getTaipeiTodayString(),
+        dischargeDate: deleteEventDate,
         physician: existing.physician || '',
         reason: data.deleteReason || '',
         remarks: data.deleteReason

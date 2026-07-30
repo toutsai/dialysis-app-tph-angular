@@ -25,6 +25,26 @@
   text-align: center;
 }
 
+.date-field {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.date-field label {
+  font-weight: 600;
+  color: #444;
+}
+
+.date-field input[type='date'] {
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
+
 .selection-dialog-content h3 {
   margin-top: 0;
   margin-bottom: 25px;

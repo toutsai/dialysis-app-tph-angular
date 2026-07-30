@@ -1104,10 +1104,10 @@ export class PatientsComponent implements OnInit, OnDestroy {
       this.schedulerChangeType.set('');
 
       const changeTypeText: Record<string, string> = {
-        DELETE_PATIENT: '刪除病人',
-        UPDATE_STATUS: '身分變更',
-        UPDATE_MODE: '透析模式變更',
-        UPDATE_FREQ: '頻率變更',
+        DELETE_PATIENT: '刪除（出院/轉出）',
+        UPDATE_STATUS: '變更身分別/病房號',
+        UPDATE_MODE: '變更透析模式',
+        UPDATE_FREQ: '變更透析頻率',
       };
       const text = changeTypeText[dataToSubmit.changeType] || '變更';
       this.notificationService.createNotification(
@@ -1138,8 +1138,8 @@ export class PatientsComponent implements OnInit, OnDestroy {
     if (isInTodaySchedule) {
       const targetStatusText: Record<string, string> = { ipd: '住院', opd: '門診', er: '急診' };
       this.showScheduleConflictDialog(
-        '當日排程中有此病人',
-        `病人「${patient.name}」今天有排程透析。\n\n若直接轉移身分（至${targetStatusText[newStatus] || '未知'}），當日排程不會自動更新。\n\n是否仍要繼續操作？\n選擇「否」可使用預約變更，於未來日期生效。`,
+        '今日有排程 — 確認立即變更',
+        `病人「${patient.name}」今天有排程透析。\n\n選「是」立即轉為${targetStatusText[newStatus] || '未知'}：\n・今日排程維持不動（不受影響）\n・明日起排程自動依新身分更新\n（今天發生的異動請選這個）\n\n若異動是未來日期才發生，選「否」改用預約變更。`,
         'transfer',
         patientId,
         newStatus
@@ -1172,7 +1172,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
             `轉移病人：${patient.name} 至 ${targetStatusText[newStatus] || '未知'}`,
             'patient'
           );
-          this.showAlert('轉移成功', `${patient.name} 已成功轉至${targetStatusText[newStatus] || '未知'}。`);
+          this.showAlert('轉移成功', `${patient.name} 已成功轉至${targetStatusText[newStatus] || '未知'}。\n今日排程維持不動；明日起排程將依新身分自動更新。`);
           this.globalSearchTerm.set('');
         } catch (err: any) {
           this.showAlert('操作失敗', err.message || '轉床失敗！');
@@ -1190,8 +1190,8 @@ export class PatientsComponent implements OnInit, OnDestroy {
     const isInTodaySchedule = await this.checkPatientInTodaySchedule(patientId);
     if (isInTodaySchedule) {
       this.showScheduleConflictDialog(
-        '當日排程中有此病人',
-        `病人「${patient.name}」今天有排程透析。\n\n若直接刪除病人，當日排程不會自動更新。\n\n是否仍要繼續操作？\n選擇「否」可使用預約變更，於未來日期生效。`,
+        '今日有排程 — 確認立即刪除',
+        `病人「${patient.name}」今天有排程透析。\n\n選「是」立即刪除：\n・今日排程維持不動（不受影響）\n・明日起自動從排程中移除\n（今天出院/轉出請選這個）\n\n若出院是未來日期才發生，選「否」改用預約變更。`,
         'delete',
         patientId,
         null
@@ -1202,7 +1202,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
     }
   }
 
-  async handleDeleteReasonSelected(reason: string): Promise<void> {
+  async handleDeleteReasonSelected(reason: string, eventDate?: string): Promise<void> {
     if (this.isDeleteLocked()) {
       this.showAlert('操作失敗', '權限不足：您的角色無法刪除病人資料。');
       return;
@@ -1228,6 +1228,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
         isDeleted: true,
         originalStatus: patient.status,
         deleteReason: reason,
+        deleteEventDate: eventDate || undefined,
         deletedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
@@ -1243,7 +1244,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
       );
       this.showAlert(
         '操作成功',
-        `病人 "${patientNameForNotification}" 已從「${fromStatusText}」清單中刪除。\n系統將會同步更新並移除其未來的固定排程。`
+        `病人 "${patientNameForNotification}" 已從「${fromStatusText}」清單中刪除。\n出院/事件日期：${eventDate || '今天'}\n今日排程維持不動；明日起將自動從排程中移除。`
       );
     } catch (err: any) {
       this.showAlert('操作失敗', `刪除病人失敗。錯誤：${err.message}`);

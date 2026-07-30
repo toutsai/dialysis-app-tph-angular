@@ -61,11 +61,11 @@ export class PatientUpdateSchedulerDialogComponent implements OnChanges {
   get dialogTitle(): string {
     const baseTitle = this.isEditing ? '\u4FEE\u6539\u9810\u7D04\u8B8A\u66F4' : '\u9810\u7D04\u8B8A\u66F4';
     const typeMap: Record<string, string> = {
-      UPDATE_STATUS: '\u9810\u7D04\u8EAB\u5206\u8B8A\u66F4',
-      UPDATE_MODE: '\u9810\u7D04\u900F\u6790\u6A21\u5F0F\u8B8A\u66F4',
-      UPDATE_FREQ: '\u9810\u7D04\u983B\u7387\u8B8A\u66F4',
-      UPDATE_BASE_SCHEDULE_RULE: '\u9810\u7D04\u7E3D\u8868\u898F\u5247\u8B8A\u66F4',
-      DELETE_PATIENT: '\u9810\u7D04\u522A\u9664\u75C5\u4EBA',
+      UPDATE_STATUS: '\u9810\u7D04\u8B8A\u66F4\u8EAB\u5206\u5225/\u75C5\u623F\u865F',
+      UPDATE_MODE: '\u9810\u7D04\u8B8A\u66F4\u900F\u6790\u6A21\u5F0F',
+      UPDATE_FREQ: '\u9810\u7D04\u8B8A\u66F4\u900F\u6790\u983B\u7387',
+      UPDATE_BASE_SCHEDULE_RULE: '\u9810\u7D04\u8B8A\u66F4\u900F\u6790\u983B\u7387/\u73ED\u5225/\u5E8A\u4F4D',
+      DELETE_PATIENT: '\u9810\u7D04\u522A\u9664\uFF08\u51FA\u9662/\u8F49\u51FA\uFF09',
     };
     const typeText = typeMap[this.changeType] ? ` - ${typeMap[this.changeType]}` : '';
     return baseTitle + typeText;

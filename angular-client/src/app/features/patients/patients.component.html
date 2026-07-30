@@ -380,10 +380,12 @@
   ></app-patient-form-modal>
 
   <app-selection-dialog
+    #deleteReasonDlg
     *ngIf="isDeleteDialogVisible()"
     title="請選擇刪除原因"
+    dateFieldLabel="出院/事件日期"
     [options]="DELETE_REASONS"
-    (select)="handleDeleteReasonSelected($event)"
+    (select)="handleDeleteReasonSelected($event, deleteReasonDlg.dateValue)"
     (cancel)="cancelDelete()"
   ></app-selection-dialog>
 
@@ -435,8 +437,8 @@
     *ngIf="isScheduleConflictDialogVisible()"
     [title]="scheduleConflictTitle()"
     [message]="scheduleConflictMessage()"
-    confirmText="是，繼續操作"
-    cancelText="否，使用預約變更"
+    confirmText="是，立即變更"
+    cancelText="否，改用預約變更"
     (confirm)="handleScheduleConflictConfirm()"
     (cancel)="handleScheduleConflictCancel()"
   ></app-confirm-dialog>
