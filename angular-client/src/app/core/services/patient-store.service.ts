@@ -174,9 +174,19 @@ export class PatientStoreService {
   // Private methods
   // -----------------------------------------------------------------------
 
-  private async loadPatients(): Promise<void> {
-    if (this.isLoading()) return;
+  /** 進行中的載入請求；併發呼叫共用同一個 Promise，避免第二個呼叫者不等資料就繼續執行 */
+  private inFlightLoad: Promise<void> | null = null;
 
+  private loadPatients(): Promise<void> {
+    if (!this.inFlightLoad) {
+      this.inFlightLoad = this.doLoadPatients().finally(() => {
+        this.inFlightLoad = null;
+      });
+    }
+    return this.inFlightLoad;
+  }
+
+  private async doLoadPatients(): Promise<void> {
     try {
       this.isLoading.set(true);
       this.error.set(null);

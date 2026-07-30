@@ -139,8 +139,13 @@ export class UpdateSchedulerComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** 上一輪輪詢是否仍在途；防止回應慢於 15 秒時請求重疊 */
+  private isFetchingUpdates = false;
+
   /** Fetch all scheduled updates via REST API. */
   private async fetchScheduledUpdates(): Promise<void> {
+    if (this.isFetchingUpdates) return;
+    this.isFetchingUpdates = true;
     try {
       const results = await this.scheduledUpdatesApi.fetchAll();
       // Sort by createdAt descending (matching original Firestore orderBy)
@@ -154,6 +159,8 @@ export class UpdateSchedulerComponent implements OnInit, OnDestroy {
     } catch (error) {
       console.error('監聽預約變更時發生錯誤:', error);
       this.isLoading.set(false);
+    } finally {
+      this.isFetchingUpdates = false;
     }
   }
 
