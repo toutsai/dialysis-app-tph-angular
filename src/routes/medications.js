@@ -131,48 +131,6 @@ router.get('/injections', authenticate, (req, res) => {
 })
 
 /**
- * POST /api/medications/daily-drafts
- * Angular 前端別名（查詢每日藥囑草稿）
- */
-router.post('/daily-drafts', authenticate, (req, res) => {
-  try {
-    const { targetDate, patientIds } = req.body
-    const db = getDatabase()
-
-    let query = 'SELECT * FROM medication_drafts WHERE 1=1'
-    const params = []
-
-    if (targetDate) {
-      query += ' AND target_date = ?'
-      params.push(targetDate)
-    }
-    if (patientIds && patientIds.length > 0) {
-      query += ` AND patient_id IN (${patientIds.map(() => '?').join(',')})`
-      params.push(...patientIds)
-    }
-
-    const drafts = db.prepare(query).all(...params)
-    res.json({
-      success: true,
-      drafts: drafts.map(d => ({
-        id: d.id,
-        patientId: d.patient_id,
-        patientName: d.patient_name,
-        targetDate: d.target_date,
-        medications: JSON.parse(d.medications || '[]'),
-        status: d.status,
-        createdBy: JSON.parse(d.created_by || '{}'),
-        createdAt: d.created_at,
-        updatedAt: d.updated_at
-      }))
-    })
-  } catch (error) {
-    console.error('查詢每日藥囑草稿錯誤:', error)
-    res.status(500).json({ error: true, message: '查詢草稿失敗' })
-  }
-})
-
-/**
  * GET /api/medications/patient/:patientId
  * 取得特定病人的用藥列表
  */

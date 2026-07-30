@@ -147,13 +147,6 @@
                       >
                         💉
                       </button>
-                      <button
-                        class="summary-icon-btn-table"
-                        (click)="showShiftMedicationDrafts(shiftCode)"
-                        title="藥囑草稿"
-                      >
-                        <i class="fas fa-file-prescription"></i>
-                      </button>
                     </div>
                   </th>
                 }
@@ -901,18 +894,6 @@
     (filterActiveChange)="filterSpecificInjections.set($event)"
     (refreshEvent)="refreshInjections()"
   ></app-daily-injection-list-dialog>
-}
-
-<!-- Daily Draft List Dialog (📝 藥囑草稿) -->
-@if (isDraftDialogVisible()) {
-  <app-daily-draft-list-dialog
-    [isVisible]="isDraftDialogVisible()"
-    [isLoading]="isDraftLoading()"
-    [drafts]="dailyDrafts()"
-    [patientsInShift]="patientsForDraftDialog()"
-    [targetDate]="draftDialogDate()"
-    (closeEvent)="isDraftDialogVisible.set(false)"
-  ></app-daily-draft-list-dialog>
 }
 
 <!-- Patient Detail Modal (臨床查閱 病人總覽) -->

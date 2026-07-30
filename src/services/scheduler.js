@@ -425,6 +425,17 @@ async function applyScheduledPatientUpdates() {
             if (changeType === 'UPDATE_MODE' && !payload.mode) {
               throw new Error('UPDATE_MODE 缺少 mode（change_data 為空）')
             }
+            // 欄位白名單：payload 的 key 會轉成 UPDATE 的欄位名，不能放行任意 key
+            {
+              const allowedKeys =
+                changeType === 'UPDATE_STATUS'
+                  ? new Set(['status', 'wardNumber'])
+                  : new Set(['mode'])
+              const unknownKeys = Object.keys(payload).filter((k) => !allowedKeys.has(k))
+              if (unknownKeys.length > 0) {
+                throw new Error(`${changeType} 含未允許的欄位: ${unknownKeys.join(', ')}`)
+              }
+            }
             // 更新病人屬性
             // 分離 DB 欄位與 JSON 欄位 (mode, freq 在 dialysis_orders 中)
             // 先擷取變更前的病人資料，供工作日誌/歷史比對

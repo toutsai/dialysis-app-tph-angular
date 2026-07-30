@@ -42,7 +42,6 @@ import { DialysisOrderModalComponent } from '@app/components/dialogs/dialysis-or
 import { CrrtOrderModalComponent } from '@app/components/dialogs/crrt-order-modal/crrt-order-modal.component';
 import { DailyRecordsSummaryDialogComponent } from '@app/components/dialogs/daily-records-summary-dialog/daily-records-summary-dialog.component';
 import { DailyInjectionListDialogComponent } from '@app/components/dialogs/daily-injection-list-dialog/daily-injection-list-dialog.component';
-import { DailyDraftListDialogComponent } from '@app/components/dialogs/daily-draft-list-dialog/daily-draft-list-dialog.component';
 import { PatientDetailModalComponent } from '@app/components/dialogs/patient-detail-modal/patient-detail-modal.component';
 import { PatientMessagesIconComponent } from '@app/components/patient-messages-icon/patient-messages-icon.component';
 import { MemoDisplayDialogComponent } from '@app/components/dialogs/memo-display-dialog/memo-display-dialog.component';
@@ -237,7 +236,7 @@ const PERIPHERAL_BED_RANGE = Array.from({ length: PERIPHERAL_BED_COUNT }, (_, i)
 @Component({
   selector: 'app-schedule',
   standalone: true,
-  imports: [CommonModule, FormsModule, InpatientSidebarComponent, BedAssignmentDialogComponent, DailyStaffDisplayComponent, StatsToolbarComponent, WardNumberDialogComponent, InpatientRoundsDialogComponent, IcuOrdersDialogComponent, DialysisOrderModalComponent, CrrtOrderModalComponent, DailyRecordsSummaryDialogComponent, DailyInjectionListDialogComponent, DailyDraftListDialogComponent, PatientDetailModalComponent, PatientMessagesIconComponent, MemoDisplayDialogComponent, ConditionRecordDisplayDialogComponent, AutoAssignConfigDialogComponent, PatientSelectDialogComponent],
+  imports: [CommonModule, FormsModule, InpatientSidebarComponent, BedAssignmentDialogComponent, DailyStaffDisplayComponent, StatsToolbarComponent, WardNumberDialogComponent, InpatientRoundsDialogComponent, IcuOrdersDialogComponent, DialysisOrderModalComponent, CrrtOrderModalComponent, DailyRecordsSummaryDialogComponent, DailyInjectionListDialogComponent, PatientDetailModalComponent, PatientMessagesIconComponent, MemoDisplayDialogComponent, ConditionRecordDisplayDialogComponent, AutoAssignConfigDialogComponent, PatientSelectDialogComponent],
   templateUrl: './schedule.component.html',
   styleUrl: './schedule.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -336,8 +335,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   readonly isRecordsSummaryDialogVisible = signal(false);
   readonly isInjectionDialogVisible = signal(false);
   readonly isInjectionLoading = signal(false);
-  readonly isDraftDialogVisible = signal(false);
-  readonly isDraftLoading = signal(false);
   readonly isIcuOrdersDialogVisible = signal(false);
   readonly isIcuSaving = signal(false);
   readonly icuEffectiveOrders = signal<Record<string, any>>({});
@@ -364,9 +361,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   readonly injectionDialogDate = signal('');
   readonly filterSpecificInjections = signal(false);
   readonly lastInjectionShiftCode = signal('');
-  readonly dailyDrafts = signal<Record<string, unknown>[]>([]);
-  readonly draftDialogDate = signal('');
-  readonly patientsForDraftDialog = signal<Record<string, unknown>[]>([]);
   readonly sortedSlotsForModal = signal<Record<string, unknown>[]>([]);
   readonly currentPatientIndexForModal = signal(0);
   readonly editingPatientForOrder = signal<any>(null);
@@ -1746,62 +1740,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     const shiftCode = this.lastInjectionShiftCode();
     if (shiftCode) {
       await this.showShiftInjections(shiftCode);
-    }
-  }
-
-  async showShiftMedicationDrafts(shiftCode: string): Promise<void> {
-    if (!shiftCode) return;
-    const patientsInShift = Object.entries(this.currentRecord.schedule)
-      .filter(([shiftId, slot]) => slot?.patientId && shiftId.endsWith(`-${shiftCode}`))
-      .map(([shiftId, slot]) => {
-        const patientData = this.patientMap().get(slot.patientId!) as Record<string, unknown>;
-        if (!patientData) return null;
-        const bedNum = shiftId.startsWith('peripheral') ? `外${shiftId.split('-')[1]}` : shiftId.split('-')[1];
-        const shift = shiftId.split('-')[2];
-        return { ...patientData, bedNum, shift };
-      })
-      .filter(Boolean)
-      .sort((a: any, b: any) => {
-        const bedA = String(a.bedNum).startsWith('外') ? 1000 + parseInt(String(a.bedNum).substring(1)) : parseInt(a.bedNum);
-        const bedB = String(b.bedNum).startsWith('外') ? 1000 + parseInt(String(b.bedNum).substring(1)) : parseInt(b.bedNum);
-        return bedA - bedB;
-      });
-    this.patientsForDraftDialog.set(patientsInShift as Record<string, unknown>[]);
-    const patientIds = patientsInShift.map((p: any) => p['id'] as string);
-    this.draftDialogDate.set(this.formatDate(this.currentDate()));
-    this.isDraftDialogVisible.set(true);
-    this.isDraftLoading.set(true);
-    this.dailyDrafts.set([]);
-    if (patientIds.length === 0) {
-      this.isDraftLoading.set(false);
-      return;
-    }
-    try {
-      const CHUNK_SIZE = 30;
-      const combinedDrafts: Record<string, unknown>[] = [];
-      for (let i = 0; i < patientIds.length; i += CHUNK_SIZE) {
-        const chunk = patientIds.slice(i, i + CHUNK_SIZE);
-        const payload = { targetDate: this.draftDialogDate(), patientIds: chunk };
-        const res = await fetch(`${this.firebaseService.apiBaseUrl}/medications/daily-drafts`, {
-          method: 'POST',
-          headers: this.firebaseService.getHeaders(),
-          body: JSON.stringify(payload),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.success && Array.isArray(data.drafts)) {
-            combinedDrafts.push(...data.drafts);
-          }
-        }
-      }
-      this.dailyDrafts.set(combinedDrafts);
-    } catch (error: unknown) {
-      console.error(`獲取 ${shiftCode} 班藥囑草稿失敗:`, error);
-      const msg = error instanceof Error ? error.message : '獲取藥囑草稿時發生未知錯誤';
-      this.showAlert('查詢失敗', `獲取藥囑草稿清單時發生錯誤: ${msg}`);
-      this.isDraftDialogVisible.set(false);
-    } finally {
-      this.isDraftLoading.set(false);
     }
   }
 
