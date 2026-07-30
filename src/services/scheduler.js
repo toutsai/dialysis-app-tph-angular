@@ -270,10 +270,13 @@ async function archiveDailySchedule() {
     }
 
     // 為每個排程項目添加病人快照
+    // 已有 archivedPatientInfo 的格子保留不覆蓋——當日異動（轉身分/改模式/刪除）時
+    // 已寫入「變更前」快照，歸檔時用當下病人資料覆蓋會讓歷史身分變成變更後的值
     let missingCount = 0
     for (const shiftId in scheduleData) {
       const slot = scheduleData[shiftId]
       if (slot?.patientId) {
+        if (slot.archivedPatientInfo) continue
         const patient = patientsMap.get(slot.patientId)
         if (patient) {
           const dialysisOrders = JSON.parse(patient.dialysis_orders || '{}')

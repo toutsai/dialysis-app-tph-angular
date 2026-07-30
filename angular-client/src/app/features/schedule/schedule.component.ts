@@ -449,7 +449,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       const shiftCode = shiftId.split('-').pop() || '';
       const teamData = teams[`${patientId}-${shiftCode}`] || {};
       const modeOverride = slotData.modeOverride as string | undefined;
-      const patientMode = (patient?.['mode'] as string | undefined) || null;
+      const patientMode = (patientInfo?.['mode'] as string | undefined) || null;
       const mode = modeOverride && modeOverride !== 'HD'
         ? modeOverride
         : patientMode && patientMode !== 'HD'
@@ -467,7 +467,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
         combinedNote: this.buildCombinedNote(slotData),
         cellStyle: getUnifiedCellStyle(slotData, patientInfo, null, dailyTypes),
         messageTypes: pendingTypes,
-        wardNumber: ((patient?.['wardNumber'] || patientInfo?.['wardNumber']) as string) || '',
+        wardNumber: ((patientInfo?.['wardNumber'] || patient?.['wardNumber']) as string) || '',
         isInpatientOrER: status === 'ipd' || status === 'er',
         nurseTeam: (teamData['nurseTeam'] as string) || '',
         nurseTeamIn: (teamData['nurseTeamIn'] as string) || '',
@@ -531,14 +531,15 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     if (this.currentRecord.schedule) {
       for (const [shiftKey, slotData] of Object.entries(this.currentRecord.schedule)) {
         if (slotData?.patientId) {
-          const patient = this.patientMap().get(slotData.patientId);
-          if (!patient) continue;
+          // 優先用排程格快照（當日異動保護/歸檔），統計以「當天當下」的身分計
+          const info = this.getArchivedOrLivePatientInfo(slotData);
+          if (!info) continue;
           const shiftCode = shiftKey.split('-').pop()!;
           if (shiftCode && dailyData.counts[shiftCode]) {
             const shiftStats = dailyData.counts[shiftCode];
             shiftStats['total']++;
             dailyData.total++;
-            const status = (patient as Record<string, unknown>)['status'] as string;
+            const status = info['status'] as string;
             if (status === 'opd') shiftStats['opd']++;
             else if (status === 'ipd') shiftStats['ipd']++;
             else if (status === 'er') shiftStats['er']++;

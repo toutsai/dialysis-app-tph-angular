@@ -6,7 +6,7 @@ import { authenticate, isContributor, isEditor, logAudit } from '../middleware/a
 import { formatDateToYYYYMMDD, getTaipeiTodayString } from '../utils/dateUtils.js'
 import { validate } from '../middleware/validate.js'
 import { syncEventsToKiditLogbook } from '../services/kiditSync.js'
-import { emitExceptionChange } from '../services/eventBus.js'
+import { emitExceptionChange, emitScheduleSaved } from '../services/eventBus.js'
 import { rebuildSingleDaySchedule, isTodayScheduleFrozen } from '../services/scheduleSync.js'
 import { removeAutoMovementFromDailyLog } from '../services/dailyLogMovementSync.js'
 import { normalizeDialysisMode, normalizeDialysisOrdersMode } from '../utils/dialysisMode.js'
@@ -1412,6 +1412,56 @@ async function updatePatientHandler(req, res) {
     const modifiedBy = { uid: req.user.id, name: req.user.name }
     let deletedFutureExceptions = []
     let deletedFutureMessages = []
+
+    // 當日異動保護：身分/模式變更或刪除時，把「變更前」的快照寫進今天排程格的
+    // archivedPatientInfo，今日的統計/身分底色/模式顯示維持變更前狀態。
+    // 已有快照的格子不覆蓋（保留當天最早的狀態，多次變更以第一次為準）。
+    try {
+      const oldOrders = JSON.parse(existing.dialysis_orders || '{}')
+      const newOrders = JSON.parse(updated.dialysis_orders || '{}')
+      const statusChanged = updated.status !== existing.status
+      const modeChanged = (newOrders.mode || null) !== (oldOrders.mode || null)
+      if (statusChanged || modeChanged || (!wasDeleted && isNowDeleted)) {
+        const todayStr = getTaipeiTodayString()
+        const todayRow = db.prepare(`SELECT schedule FROM schedules WHERE date = ?`).get(todayStr)
+        if (todayRow) {
+          const todaySchedule = JSON.parse(todayRow.schedule || '{}')
+          let snapshotWritten = false
+          for (const slot of Object.values(todaySchedule)) {
+            if (slot?.patientId === id && !slot.archivedPatientInfo) {
+              slot.archivedPatientInfo = {
+                status: existing.status || 'unknown',
+                mode: oldOrders.mode || null,
+                wardNumber: existing.ward_number || null,
+                medicalRecordNumber: existing.medical_record_number || null,
+                freq: oldOrders.freq || null,
+              }
+              snapshotWritten = true
+            }
+          }
+          if (snapshotWritten) {
+            db.prepare(
+              `UPDATE schedules SET schedule = ?, updated_at = datetime('now', 'localtime') WHERE date = ?`,
+            ).run(JSON.stringify(todaySchedule), todayStr)
+            const bumped = db.prepare(`SELECT version FROM schedules WHERE date = ?`).get(todayStr)
+            try {
+              emitScheduleSaved({
+                kind: 'schedule',
+                date: todayStr,
+                savedBy: req.user ? { uid: req.user.id, name: req.user.name } : null,
+                scheduleVersion: bumped?.version ?? null,
+                teamsVersion: null,
+                ts: Date.now(),
+              })
+            } catch (emitErr) {
+              console.warn('[eventBus] emitScheduleSaved failed:', emitErr.message)
+            }
+          }
+        }
+      }
+    } catch (snapErr) {
+      console.warn('[patients] 當日排程快照寫入失敗（非致命）:', snapErr.message)
+    }
 
     if (!wasDeleted && isNowDeleted) {
       // 刪除操作：從正常狀態 → 已刪除
