@@ -46,6 +46,7 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
   readonly patientStore = inject(PatientStoreService);
 
   private baseSchedulesApi!: ApiManager<any>;
+  private schedulesApi!: ApiManager<any>;
 
   readonly SHIFTS = ORDERED_SHIFT_CODES;
   readonly WEEKDAYS = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
@@ -213,6 +214,7 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.baseSchedulesApi = this.apiManagerService.create('base_schedules');
+    this.schedulesApi = this.apiManagerService.create('schedules');
     this.loadAllData();
     window.addEventListener('patient-data-updated', this.handlePatientDataUpdateBound);
     window.addEventListener('schedule-updated', this.handleScheduleUpdateBound);
@@ -389,28 +391,39 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
       }
     }
 
-    if (newFreq && patient.freq !== newFreq) {
-      try {
-        await updatePatient(patientId, { freq: newFreq });
-        await this.patientStore.forceRefreshPatients();
-      } catch (error: any) {
-        console.error('更新病人頻率失敗:', error);
-        this.showAlert('錯誤', '更新病人頻率失敗，請稍後再試。');
-        return;
+    const freqChanged = !!(newFreq && patient.freq !== newFreq);
+    const applyAssignment = async (): Promise<void> => {
+      if (freqChanged) {
+        try {
+          await updatePatient(patientId, { freq: newFreq });
+          await this.patientStore.forceRefreshPatients();
+        } catch (error: any) {
+          console.error('更新病人頻率失敗:', error);
+          this.showAlert('錯誤', '更新病人頻率失敗，請稍後再試。');
+          return;
+        }
       }
-    }
 
-    const newRuleData = {
-      ...(currentRule || {}),
-      bedNum: bedNum,
-      shiftIndex: newShiftIndex,
-      freq: finalFreq,
-      autoNote: generateAutoNote({ ...patient, freq: finalFreq }),
-      manualNote: currentRule?.manualNote || patient.baseNote || '',
+      const newRuleData = {
+        ...(currentRule || {}),
+        bedNum: bedNum,
+        shiftIndex: newShiftIndex,
+        freq: finalFreq,
+        autoNote: generateAutoNote({ ...patient, freq: finalFreq }),
+        manualNote: currentRule?.manualNote || patient.baseNote || '',
+      };
+
+      await this.updateRuleInCloud(patientId, newRuleData);
+      this.isAssignmentDialogVisible.set(false);
     };
 
-    await this.updateRuleInCloud(patientId, newRuleData);
-    this.isAssignmentDialogVisible.set(false);
+    await this.confirmSameDayRuleChange(
+      patientId,
+      freqChanged ? '床位/班別/頻率' : '床位/班別',
+      () => {
+        void applyAssignment();
+      }
+    );
   }
 
   onDragStart(event: DragEvent, slotId: string): void {
@@ -483,7 +496,9 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
     }
 
     const newRuleData = { ...sourceRuleData, bedNum, shiftIndex };
-    await this.updateRuleInCloud(sourcePatientId, newRuleData);
+    await this.confirmSameDayRuleChange(sourcePatientId, '床位/班別', () => {
+      void this.updateRuleInCloud(sourcePatientId, newRuleData);
+    });
     this.draggedItem.set(null);
   }
 
@@ -556,6 +571,39 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
     this.confirmAction.set(null);
   }
 
+  /** 病人今天是否已有排程（守門用；查不到當日排程視為否） */
+  private async checkPatientInTodaySchedule(patientId: string): Promise<boolean> {
+    try {
+      const dateStr = new Date().toLocaleDateString('sv-SE');
+      const dailyRecords = (await this.schedulesApi.fetchWhere({ date: dateStr })) as any[];
+      if (!dailyRecords || dailyRecords.length === 0) return false;
+      const schedule: any = dailyRecords[0].schedule || {};
+      return Object.values(schedule).some((slot: any) => slot?.patientId === patientId);
+    } catch {
+      return false;
+    }
+  }
+
+  /** 統一守門：改到會寫入今日歷史的欄位（床位/班別/頻率）時，今天有排程先確認再套用 */
+  private async confirmSameDayRuleChange(
+    patientId: string,
+    changeDesc: string,
+    onConfirm: () => void
+  ): Promise<void> {
+    const inToday = await this.checkPatientInTodaySchedule(patientId);
+    if (!inToday) {
+      onConfirm();
+      return;
+    }
+    const patient: any = this.patientStore.patientMap().get(patientId);
+    this.confirmDialogTitle.set('今日有排程 — 確認立即變更');
+    this.confirmDialogMessage.set(
+      `病人「${patient?.name || ''}」今天有排程透析，本次修改：${changeDesc}。\n\n按「確定」立即套用：\n・今日排程維持不動（不受影響）\n・明日起排程依新規則生效\n\n若變更是未來日期才發生，請按「取消」改用預約變更。`
+    );
+    this.confirmAction.set(onConfirm);
+    this.isConfirmDialogVisible.set(true);
+  }
+
   private showAlert(title: string, message: string): void {
     this.alertDialogTitle.set(title);
     this.alertDialogMessage.set(message);
@@ -591,8 +639,13 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
     const patientName = this.actionTarget().patientName;
     if (!patientId) return;
 
+    const inToday = await this.checkPatientInTodaySchedule(patientId);
     this.confirmDialogTitle.set('刪除排班規則');
-    this.confirmDialogMessage.set(`您確定要將 ${patientName} 從總表中移除嗎？\n\n此操作將立即從後台刪除其固定規則，並自動取消所有相關的未來調班申請。`);
+    this.confirmDialogMessage.set(
+      `您確定要將 ${patientName} 從總表中移除嗎？\n\n此操作將立即從後台刪除其固定規則，並自動取消所有相關的未來調班申請。${
+        inToday ? '\n\n該病人今天有排程：今日排程維持不動，明日起不再產生。' : ''
+      }`
+    );
 
     this.confirmAction.set(async () => {
       this.statusText.set(`正在移除 ${patientName} 的規則...`);

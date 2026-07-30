@@ -149,6 +149,9 @@ export class PatientsComponent implements OnInit, OnDestroy {
   readonly scheduleConflictMessage = signal('');
   private pendingOperationType = '';
   private pendingPatientId: string | null = null;
+  /** 編輯守門：確認後要執行的存檔動作與取消時導向預約變更的類型 */
+  private pendingEditSave: (() => void) | null = null;
+  private pendingEditFallbackType = '';
   private cachedPatientHistory: any[] | null = null;
   private pendingNewStatus: string | null = null;
 
@@ -809,45 +812,76 @@ export class PatientsComponent implements OnInit, OnDestroy {
       }
 
       // Normal edit
-      try {
-        const dataToUpdate = { ...patientData };
-        delete dataToUpdate.id;
-        delete dataToUpdate.firstDialysisPlan;
-        dataToUpdate.updatedAt = new Date().toISOString();
+      const doSave = async (): Promise<void> => {
+        try {
+          const dataToUpdate = { ...patientData };
+          delete dataToUpdate.id;
+          delete dataToUpdate.firstDialysisPlan;
+          dataToUpdate.updatedAt = new Date().toISOString();
 
-        const updatePromises: Promise<any>[] = [this.patientsApi.save(patientData.id, dataToUpdate)];
+          const updatePromises: Promise<any>[] = [this.patientsApi.save(patientData.id, dataToUpdate)];
 
-        if (!wasFirstDialysis && isNowFirstDialysis) {
-          updatePromises.push(this.createAutomatedTask(patientData, '衛教', creatorInfo));
-        }
-        if (!wasBloodDraw && isNowBloodDraw) {
-          updatePromises.push(this.createAutomatedTask(patientData, '抽血', creatorInfo));
-        }
+          if (!wasFirstDialysis && isNowFirstDialysis) {
+            updatePromises.push(this.createAutomatedTask(patientData, '衛教', creatorInfo));
+          }
+          if (!wasBloodDraw && isNowBloodDraw) {
+            updatePromises.push(this.createAutomatedTask(patientData, '抽血', creatorInfo));
+          }
 
-        await Promise.all(updatePromises);
-        if (firstDialysisPlan) {
-          await this.applyFirstDialysisPlan(patientData.id, firstDialysisPlan);
-        }
-        const localUpdate = firstDialysisPlan
-          ? {
-              ...dataToUpdate,
-              firstDialysisPlan,
-              dialysisOrders: {
-                ...(originalPatient.dialysisOrders || {}),
-                ...(dataToUpdate.dialysisOrders || {}),
-                freq: firstDialysisPlan.regularRule?.freq || dataToUpdate.freq,
+          await Promise.all(updatePromises);
+          if (firstDialysisPlan) {
+            await this.applyFirstDialysisPlan(patientData.id, firstDialysisPlan);
+          }
+          const localUpdate = firstDialysisPlan
+            ? {
+                ...dataToUpdate,
                 firstDialysisPlan,
-              },
-            }
-          : dataToUpdate;
-        this.patientStore.updatePatientInStore(patientData.id, localUpdate);
-        await this.recalculateStatsLocally();
-        window.dispatchEvent(new CustomEvent('patient-data-updated'));
-        this.notificationService.createNotification(`編輯病人：${patientData.name}`, 'patient');
-        this.closeModal();
-      } catch (err) {
-        this.showAlert('操作失敗', '更新病人資料失敗！');
+                dialysisOrders: {
+                  ...(originalPatient.dialysisOrders || {}),
+                  ...(dataToUpdate.dialysisOrders || {}),
+                  freq: firstDialysisPlan.regularRule?.freq || dataToUpdate.freq,
+                  firstDialysisPlan,
+                },
+              }
+            : dataToUpdate;
+          this.patientStore.updatePatientInStore(patientData.id, localUpdate);
+          await this.recalculateStatsLocally();
+          window.dispatchEvent(new CustomEvent('patient-data-updated'));
+          this.notificationService.createNotification(`編輯病人：${patientData.name}`, 'patient');
+          this.closeModal();
+        } catch (err) {
+          this.showAlert('操作失敗', '更新病人資料失敗！');
+        }
+      };
+
+      // 當日異動守門：編輯若改到身分/模式/頻率，且病人今天有排程，先確認（今日維持、明日生效）
+      const pick = (obj: any, key: string): string | null =>
+        (obj?.[key] ?? obj?.dialysisOrders?.[key] ?? null) || null;
+      const identityChanges: string[] = [];
+      if (patientData.status && patientData.status !== originalPatient.status) identityChanges.push('身分');
+      if (pick(patientData, 'mode') !== pick(originalPatient, 'mode')) identityChanges.push('透析模式');
+      if (pick(patientData, 'freq') !== pick(originalPatient, 'freq')) identityChanges.push('透析頻率');
+
+      if (identityChanges.length > 0 && (await this.checkPatientInTodaySchedule(patientData.id))) {
+        this.pendingEditSave = () => {
+          void doSave();
+        };
+        this.pendingEditFallbackType = identityChanges.includes('身分')
+          ? 'UPDATE_STATUS'
+          : identityChanges.includes('透析模式')
+            ? 'UPDATE_MODE'
+            : 'UPDATE_BASE_SCHEDULE_RULE';
+        this.showScheduleConflictDialog(
+          '今日有排程 — 確認立即變更',
+          `病人「${patientData.name}」今天有排程透析，本次修改包含：${identityChanges.join('、')}。\n\n選「是」立即儲存：\n・今日排程與統計維持變更前狀態（快照保護）\n・明日起依新設定生效\n\n若變更是未來日期才發生，選「否」改用預約變更。`,
+          'edit',
+          patientData.id,
+          null
+        );
+        return;
       }
+
+      await doSave();
       return;
     }
 
@@ -1036,8 +1070,8 @@ export class PatientsComponent implements OnInit, OnDestroy {
   // --- Schedule Conflict ---
   private async checkPatientInTodaySchedule(patientId: string): Promise<boolean> {
     try {
-      const today = new Date();
-      const dateStr = today.toISOString().split('T')[0];
+      // 用本地時區取今天（toISOString 是 UTC，凌晨 0-8 點會差一天）
+      const dateStr = new Date().toLocaleDateString('sv-SE');
       // 後端 /schedules 支援 ?date= 篩選，無須全量載入
       const dailyRecords = (await this.schedulesApi.fetchWhere({ date: dateStr })) as any[];
       if (dailyRecords.length === 0) return false;
@@ -1071,10 +1105,14 @@ export class PatientsComponent implements OnInit, OnDestroy {
       this.isDeleteDialogVisible.set(true);
     } else if (this.pendingOperationType === 'transfer') {
       await this.executeTransferPatient(this.pendingPatientId!, this.pendingNewStatus!);
+    } else if (this.pendingOperationType === 'edit') {
+      this.pendingEditSave?.();
     }
     this.pendingOperationType = '';
     this.pendingPatientId = null;
     this.pendingNewStatus = null;
+    this.pendingEditSave = null;
+    this.pendingEditFallbackType = '';
   }
 
   handleScheduleConflictCancel(): void {
@@ -1087,6 +1125,9 @@ export class PatientsComponent implements OnInit, OnDestroy {
       this.schedulerChangeType.set('DELETE_PATIENT');
     } else if (this.pendingOperationType === 'transfer') {
       this.schedulerChangeType.set('UPDATE_STATUS');
+    } else if (this.pendingOperationType === 'edit') {
+      this.schedulerChangeType.set(this.pendingEditFallbackType || 'UPDATE_MODE');
+      this.closeModal();
     }
 
     this.schedulerPatient.set(patient);
@@ -1094,6 +1135,8 @@ export class PatientsComponent implements OnInit, OnDestroy {
     this.pendingOperationType = '';
     this.pendingPatientId = null;
     this.pendingNewStatus = null;
+    this.pendingEditSave = null;
+    this.pendingEditFallbackType = '';
   }
 
   async handleSchedulerSubmit(dataToSubmit: any): Promise<void> {

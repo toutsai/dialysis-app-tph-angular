@@ -1421,7 +1421,8 @@ async function updatePatientHandler(req, res) {
       const newOrders = JSON.parse(updated.dialysis_orders || '{}')
       const statusChanged = updated.status !== existing.status
       const modeChanged = (newOrders.mode || null) !== (oldOrders.mode || null)
-      if (statusChanged || modeChanged || (!wasDeleted && isNowDeleted)) {
+      const freqChanged = (newOrders.freq || null) !== (oldOrders.freq || null)
+      if (statusChanged || modeChanged || freqChanged || (!wasDeleted && isNowDeleted)) {
         const todayStr = getTaipeiTodayString()
         const todayRow = db.prepare(`SELECT schedule FROM schedules WHERE date = ?`).get(todayStr)
         if (todayRow) {
