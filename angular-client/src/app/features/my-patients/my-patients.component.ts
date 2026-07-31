@@ -31,7 +31,11 @@ import { formatDateToYYYYMMDD, getTaipeiWeekdayIndex } from '@/utils/dateUtils';
 import { resolveDailyRotationValue, getUnifiedCellStyle } from '@/utils/scheduleUtils';
 import { ORDERED_SHIFT_CODES, getShiftDisplayName } from '@/constants/scheduleConstants';
 import { handleTaskCreated } from '@/utils/taskHandlers';
-import { createDialysisOrderAndUpdatePatient } from '@/services/optimizedApiService';
+import {
+  createDialysisOrderAndUpdatePatient,
+  updatePatient as optimizedUpdatePatient,
+} from '@/services/optimizedApiService';
+import { fetchEffectiveOrders } from '@/services/effectiveOrdersService';
 import { localApi } from '@/services/localApiClient';
 import { kiditService } from '@/services/kiditService';
 
@@ -46,6 +50,8 @@ import { PatientDetailModalComponent } from '@app/components/dialogs/patient-det
 import { PatientMessagesIconComponent } from '@app/components/patient-messages-icon/patient-messages-icon.component';
 import { DailyRecordsSummaryDialogComponent } from '@app/components/dialogs/daily-records-summary-dialog/daily-records-summary-dialog.component';
 import { DailyInjectionListDialogComponent } from '@app/components/dialogs/daily-injection-list-dialog/daily-injection-list-dialog.component';
+import { IcuOrdersDialogComponent } from '@app/components/dialogs/icu-orders-dialog/icu-orders-dialog.component';
+import { CrrtOrderModalComponent } from '@app/components/dialogs/crrt-order-modal/crrt-order-modal.component';
 import type { VascularAccessEvent } from '@app/core/constants/vascular-access-codes';
 import * as XLSX from 'xlsx';
 
@@ -161,6 +167,8 @@ interface SelectableUser {
     PatientMessagesIconComponent,
     DailyRecordsSummaryDialogComponent,
     DailyInjectionListDialogComponent,
+    IcuOrdersDialogComponent,
+    CrrtOrderModalComponent,
   ],
   templateUrl: './my-patients.component.html',
   styleUrl: './my-patients.component.css',
@@ -258,6 +266,17 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
       specificMedCodes.includes(injection['orderCode'] as string),
     );
   });
+
+  // ICU 醫囑單（與每日排程頁同一個彈窗；過去日期唯讀，與該頁 isHistoryView 同語意）
+  readonly patientMapForIcu = this.patientStore.patientMap;
+  readonly isIcuOrdersDialogVisible = signal(false);
+  readonly icuEffectiveOrders = signal<Record<string, any>>({});
+  readonly isIcuSaving = signal(false);
+  readonly isCRRTOrderModalVisible = signal(false);
+  readonly editingPatientForCRRT = signal<any>(null);
+  readonly isClinicalPastDate = computed(
+    () => this.selectedDate() < formatDateToYYYYMMDD(new Date()),
+  );
 
   readonly clinicalRows = computed<ClinicalRow[]>(() => {
     const schedule = this.rawSchedule();
@@ -530,6 +549,108 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
 
   printClinicalTable(): void {
     window.print();
+  }
+
+  /** 前一日/後一日快速切換 */
+  shiftDate(days: number): void {
+    const d = new Date(this.selectedDate() + 'T00:00:00');
+    if (isNaN(d.getTime())) return;
+    d.setDate(d.getDate() + days);
+    this.selectedDate.set(formatDateToYYYYMMDD(d));
+    this.reloadData();
+  }
+
+  // --- ICU 醫囑單（複製自每日排程頁，醫師查房免切頁） ---
+  async openIcuOrders(): Promise<void> {
+    this.isIcuOrdersDialogVisible.set(true);
+    await this.loadIcuEffectiveOrders();
+  }
+
+  /** 取 ipd/er + CVVHDF 病人在選取日期生效的醫囑（涵蓋 ICU 醫囑單會用到的對象） */
+  private async loadIcuEffectiveOrders(): Promise<void> {
+    try {
+      const ids = Array.from(this.patientStore.patientMap().values())
+        .filter((p: any) => !p.isDeleted && (p.status === 'ipd' || p.status === 'er' || p.mode === 'CVVHDF'))
+        .map((p: any) => p.id);
+      this.icuEffectiveOrders.set(await fetchEffectiveOrders(ids, this.selectedDate()));
+    } catch (error) {
+      console.error('[MyPatients] 取 ICU 生效醫囑失敗:', error);
+    }
+  }
+
+  handleIcuDateChange(dateString: string): void {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return;
+    this.selectedDate.set(dateString);
+    this.reloadData();
+    this.loadIcuEffectiveOrders();
+  }
+
+  async handleIcuOrdersSave(payload: { localNotes: Record<string, string>; crrtEmergencyData: Record<string, any> }): Promise<void> {
+    if (this.isClinicalPastDate()) {
+      this.notificationService.createNotification('歷史日期唯讀，無法修改ICU醫囑單資料', 'error');
+      return;
+    }
+    this.isIcuSaving.set(true);
+    const { localNotes: notes, crrtEmergencyData: crrtEmergency } = payload;
+    const updatePromises: Promise<void>[] = [];
+    for (const patientId in notes) {
+      const patient = this.patientStore.patientMap().get(patientId) as any;
+      if (patient) {
+        const newDialysisOrders = { ...(patient.dialysisOrders || {}), memo: notes[patientId] };
+        updatePromises.push(optimizedUpdatePatient(patientId, { dialysisOrders: newDialysisOrders }));
+      }
+    }
+    for (const patientId in crrtEmergency) {
+      const { withdraw, note } = crrtEmergency[patientId];
+      updatePromises.push(
+        optimizedUpdatePatient(patientId, {
+          emergencyWithdraw: withdraw,
+          emergencyWithdrawNote: note || '',
+        }),
+      );
+    }
+    try {
+      if (updatePromises.length > 0) {
+        await Promise.all(updatePromises);
+        await this.patientStore.forceRefreshPatients();
+      }
+      this.notificationService.createNotification('醫囑單資料已儲存', 'success');
+    } catch (error: any) {
+      console.error('儲存 ICU 醫囑單資料發生錯誤：', error);
+      this.notificationService.createNotification(`儲存 ICU 醫囑單失敗: ${error.message}`, 'error');
+    } finally {
+      this.isIcuSaving.set(false);
+    }
+  }
+
+  openOrderModalFromIcu(patient: any): void {
+    if (!patient?.id) return;
+    // 以 store 內最新資料為準（ICU 彈窗傳來的物件混入了生效醫囑快照）
+    const fresh = this.patientStore.allPatients().find((p) => p.id === patient.id);
+    this.selectedPatientForOrder.set(fresh ? JSON.parse(JSON.stringify(fresh)) : patient);
+    this.isOrderModalVisible.set(true);
+  }
+
+  openCrrtOrderModalFromIcu(patient: any): void {
+    if (!patient?.id) return;
+    this.editingPatientForCRRT.set(JSON.parse(JSON.stringify(patient)));
+    this.isCRRTOrderModalVisible.set(true);
+  }
+
+  async handleSaveCrrtOrder(orderData: any): Promise<void> {
+    const patient = this.editingPatientForCRRT();
+    if (!patient?.id) return;
+    try {
+      await optimizedUpdatePatient(patient.id, { crrtOrders: orderData });
+      // 樂觀更新讓 ICU 醫囑單 CRRT 卡片（讀 top-level crrtOrders）即時反映
+      this.patientStore.updatePatientInStore(patient.id, { crrtOrders: orderData } as any);
+      await this.patientStore.forceRefreshPatients();
+      this.isCRRTOrderModalVisible.set(false);
+      this.notificationService.createNotification(`已更新病人 ${patient.name} 的CRRT醫囑`, 'success');
+    } catch (error: any) {
+      console.error('儲存 CRRT 醫囑失敗:', error);
+      this.notificationService.createNotification(`儲存 CRRT 醫囑失敗: ${error.message}`, 'error');
+    }
   }
 
   copyMedicalRecordNumber(mrn: string): void {

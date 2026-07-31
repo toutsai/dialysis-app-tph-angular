@@ -16,12 +16,18 @@
           {{ user.name }}
         </option>
       </select>
+      <button (click)="shiftDate(-1)" class="btn-date-nav" [disabled]="isLoading()" title="前一日">
+        <i class="fas fa-chevron-left"></i> 前一日
+      </button>
       <input
         type="date"
         [ngModel]="selectedDate()"
         (ngModelChange)="selectedDate.set($event); reloadData()"
         class="date-input"
       />
+      <button (click)="shiftDate(1)" class="btn-date-nav" [disabled]="isLoading()" title="後一日">
+        後一日 <i class="fas fa-chevron-right"></i>
+      </button>
       <button (click)="reloadData()" class="btn-reload" [disabled]="isLoading()">
         <i class="fas fa-sync-alt"></i> 重新整理
       </button>
@@ -61,6 +67,9 @@
         @if (isLabLoading()) {
           <span class="lab-loading-hint"><i class="fas fa-spinner fa-spin"></i> 載入當月檢驗…</span>
         }
+        <button class="btn-clinical-tool" (click)="openIcuOrders()">
+          <i class="fas fa-clipboard-list"></i> ICU醫囑單
+        </button>
         <button class="btn-clinical-tool" (click)="exportClinicalExcel()">
           <i class="fas fa-file-excel"></i> 匯出 Excel
         </button>
@@ -612,6 +621,31 @@
       (filterActiveChange)="filterSpecificInjections.set($event)"
       (refreshEvent)="refreshInjections()"
     ></app-daily-injection-list-dialog>
+  }
+
+  <!-- 臨床查閱：ICU 醫囑單（與每日排程頁同一彈窗；過去日期唯讀） -->
+  <app-icu-orders-dialog
+    [isVisible]="isIcuOrdersDialogVisible()"
+    [targetDate]="selectedDate()"
+    [schedule]="rawSchedule()"
+    [patientMap]="patientMapForIcu()"
+    [effectiveOrders]="icuEffectiveOrders()"
+    [isEditable]="!isClinicalPastDate()"
+    [isSaving]="isIcuSaving()"
+    (closeEvent)="isIcuOrdersDialogVisible.set(false)"
+    (saveAndPrint)="handleIcuOrdersSave($event)"
+    (changeDateEvent)="handleIcuDateChange($event)"
+    (openOrderModal)="openOrderModalFromIcu($event)"
+    (openCrrtOrderModal)="openCrrtOrderModalFromIcu($event)"
+  ></app-icu-orders-dialog>
+
+  @if (isCRRTOrderModalVisible() && editingPatientForCRRT()) {
+    <app-crrt-order-modal
+      [isVisible]="isCRRTOrderModalVisible()"
+      [patientData]="editingPatientForCRRT()"
+      (closeEvent)="isCRRTOrderModalVisible.set(false)"
+      (saveEvent)="handleSaveCrrtOrder($event)"
+    ></app-crrt-order-modal>
   }
 
   <!-- 臨床查閱：病人總覽（醫師檢視點格子開啟） -->

@@ -38,6 +38,25 @@
   height: 38px;
   box-sizing: border-box;
 }
+.btn-date-nav {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #6c757d;
+  background-color: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+.btn-date-nav:hover:not(:disabled) {
+  background-color: #e9ecef;
+}
+.btn-date-nav:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .btn-reload {
   padding: 0.5rem 1rem;
   border: 1px solid #6c757d;
