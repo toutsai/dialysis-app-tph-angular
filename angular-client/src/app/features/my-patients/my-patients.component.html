@@ -57,13 +57,38 @@
         <p>{{ selectedDate() }} 沒有排程資料。</p>
       </div>
     } @else {
+      <div class="clinical-toolbar no-print">
+        @if (isLabLoading()) {
+          <span class="lab-loading-hint"><i class="fas fa-spinner fa-spin"></i> 載入當月檢驗…</span>
+        }
+        <button class="btn-clinical-tool" (click)="exportClinicalExcel()">
+          <i class="fas fa-file-excel"></i> 匯出 Excel
+        </button>
+        <button class="btn-clinical-tool" (click)="printClinicalTable()">
+          <i class="fas fa-print"></i> 列印
+        </button>
+      </div>
       <div class="clinical-view-wrapper">
         <table class="simplified-table">
           <thead>
             <tr>
               <th class="col-bed">床號</th>
-              @for (header of clinicalShiftHeaders; track header) {
-                <th>{{ header }}</th>
+              @for (shiftCode of ORDERED_SHIFT_CODES; track shiftCode; let i = $index) {
+                <th>
+                  <div class="shift-header-content">
+                    <span>{{ clinicalShiftHeaders[i] }}</span>
+                    <button
+                      class="summary-icon-btn-table no-print"
+                      (click)="showShiftRecordsSummary(shiftCode)"
+                      title="班次總覽"
+                    >📋</button>
+                    <button
+                      class="summary-icon-btn-table no-print"
+                      (click)="showShiftInjections(shiftCode)"
+                      title="應打針劑"
+                    >💉</button>
+                  </div>
+                </th>
               }
             </tr>
           </thead>
@@ -105,6 +130,20 @@
                             <span class="patient-note">{{ cell.note }}</span>
                           }
                         </div>
+                        @if (cell.labAbnormals.length > 0) {
+                          <div class="lab-abnormal-row" title="本月檢驗異常（點格子看完整報告）">
+                            @for (lab of cell.labAbnormals; track lab.key) {
+                              <span class="lab-badge" [class.high]="lab.direction === 'high'">
+                                {{ lab.key }} {{ lab.value }}{{ lab.direction === 'high' ? '↑' : '↓' }}
+                              </span>
+                            }
+                          </div>
+                        }
+                        @for (handover of cell.handovers; track $index) {
+                          <div class="handover-line" [title]="handover">
+                            <i class="fas fa-thumbtack"></i> {{ handover }}
+                          </div>
+                        }
                       </div>
                     }
                   </td>
@@ -547,6 +586,33 @@
     [patientName]="vp.patientName"
     (close)="closeVaRecord()"
   ></app-vascular-access-event-dialog>
+
+  <!-- 臨床查閱：班次總覽（📋） -->
+  @if (isRecordsSummaryDialogVisible()) {
+    <app-daily-records-summary-dialog
+      [isVisible]="isRecordsSummaryDialogVisible()"
+      [targetDate]="selectedDate()"
+      [shiftCode]="shiftCodeForDialog()"
+      [patientIds]="patientIdsForDialog()"
+      [patientInfoMap]="patientInfoMapForDialog()"
+      (closeEvent)="closeRecordsSummaryDialog()"
+    ></app-daily-records-summary-dialog>
+  }
+
+  <!-- 臨床查閱：應打針劑（💉） -->
+  @if (isInjectionDialogVisible()) {
+    <app-daily-injection-list-dialog
+      [isVisible]="isInjectionDialogVisible()"
+      [injections]="filteredDailyInjections()"
+      [isLoading]="isInjectionLoading()"
+      [targetDate]="injectionDialogDate()"
+      [filterActive]="filterSpecificInjections()"
+      [showFilter]="true"
+      (closeEvent)="isInjectionDialogVisible.set(false)"
+      (filterActiveChange)="filterSpecificInjections.set($event)"
+      (refreshEvent)="refreshInjections()"
+    ></app-daily-injection-list-dialog>
+  }
 
   <!-- 臨床查閱：病人總覽（醫師檢視點格子開啟） -->
   @if (isDetailModalVisible() && selectedPatientForDetail()) {

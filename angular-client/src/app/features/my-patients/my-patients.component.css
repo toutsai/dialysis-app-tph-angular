@@ -685,6 +685,11 @@
   align-items: center;
   gap: 4px;
   padding: 2px 0;
+  /* 查房辨識度：姓名為格內主資訊，字級與字重都拉高 */
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #212529;
 }
 .clinical-view-wrapper .patient-ward-note {
   display: flex;
@@ -728,4 +733,111 @@
   padding: 6px 14px;
   border-radius: 16px;
   font-size: 0.85rem;
+}
+
+/* 臨床查閱：工具列、檢驗異常徽章、交班留言、列印 */
+.clinical-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.lab-loading-hint {
+  margin-right: auto;
+  font-size: 0.85rem;
+  color: #6c757d;
+}
+.btn-clinical-tool {
+  background: #fff;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-clinical-tool:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+.clinical-view-wrapper .shift-header-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.clinical-view-wrapper .summary-icon-btn-table {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: 1.1rem;
+  opacity: 0.65;
+  transition: all 0.2s;
+}
+.clinical-view-wrapper .summary-icon-btn-table:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}
+.lab-abnormal-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 2px;
+}
+.lab-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #e3f2fd;
+  color: #0d47a1;
+  border: 1px solid #90caf9;
+  white-space: nowrap;
+}
+.lab-badge.high {
+  background: #fdecea;
+  color: #b71c1c;
+  border-color: #ef9a9a;
+}
+.handover-line {
+  font-size: 0.78rem;
+  color: #6a1b9a;
+  background: #f3e5f5;
+  border-left: 3px solid #ab47bc;
+  padding: 1px 4px;
+  margin-top: 2px;
+  border-radius: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media print {
+  .no-print,
+  .page-header,
+  .care-tools-bar,
+  app-marquee-banner {
+    display: none !important;
+  }
+  .clinical-view-wrapper {
+    box-shadow: none;
+    padding: 0;
+    overflow: visible;
+  }
+  .simplified-table {
+    min-width: 0;
+    font-size: 0.72rem;
+  }
+  .simplified-table th,
+  .simplified-table td {
+    padding: 2px 3px;
+  }
+  .clinical-view-wrapper .patient-name-wrapper {
+    font-size: 0.85rem;
+  }
+  .handover-line {
+    white-space: normal;
+  }
 }

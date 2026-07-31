@@ -44,7 +44,28 @@ import { EducationRecordDialogComponent } from '@app/components/dialogs/educatio
 import { VascularAccessEventDialogComponent } from '@app/components/dialogs/vascular-access-event-dialog/vascular-access-event-dialog.component';
 import { PatientDetailModalComponent } from '@app/components/dialogs/patient-detail-modal/patient-detail-modal.component';
 import { PatientMessagesIconComponent } from '@app/components/patient-messages-icon/patient-messages-icon.component';
+import { DailyRecordsSummaryDialogComponent } from '@app/components/dialogs/daily-records-summary-dialog/daily-records-summary-dialog.component';
+import { DailyInjectionListDialogComponent } from '@app/components/dialogs/daily-injection-list-dialog/daily-injection-list-dialog.component';
 import type { VascularAccessEvent } from '@app/core/constants/vascular-access-codes';
+import * as XLSX from 'xlsx';
+
+// 臨床查閱的檢驗異常判定：沿用藥檢關聯視圖同一組參考範圍（min/max 為字面上下限）
+const CLINICAL_LAB_RANGES: Record<string, { min?: number; max?: number }> = {
+  Hb: { min: 8, max: 12 },
+  P: { max: 5.5 },
+  iPTH: { min: 150, max: 300 },
+  Ca: { min: 8.6, max: 10.3 },
+  Ferritin: { max: 800 },
+  Albumin: { min: 3.5 },
+  K: { min: 3.5, max: 5.5 },
+};
+
+/** 一項異常檢驗值（供簡表格內徽章顯示） */
+interface LabAbnormal {
+  key: string;
+  value: number;
+  direction: 'high' | 'low';
+}
 
 // 醫師臨床查閱簡表的床位配置（與 base-schedule / 書記掛號頁同一份配置）
 const CLINICAL_BED_LAYOUT: number[] = [
@@ -67,6 +88,10 @@ interface ClinicalCell {
   isDoNotMove: boolean;
   doNotMoveReason: string;
   messageTypes: string[];
+  /** 當月檢驗異常（點格子看病人總覽可查完整報告） */
+  labAbnormals: LabAbnormal[];
+  /** 今日交班留言（tasks category=message） */
+  handovers: string[];
 }
 
 interface ClinicalRow {
@@ -134,6 +159,8 @@ interface SelectableUser {
     VascularAccessEventDialogComponent,
     PatientDetailModalComponent,
     PatientMessagesIconComponent,
+    DailyRecordsSummaryDialogComponent,
+    DailyInjectionListDialogComponent,
   ],
   templateUrl: './my-patients.component.html',
   styleUrl: './my-patients.component.css',
@@ -207,12 +234,39 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
   readonly sortedSlotsForModal = signal<Record<string, unknown>[]>([]);
   readonly currentPatientIndexForModal = signal(0);
 
+  /** 當月檢驗異常：patientId → 異常項目清單 */
+  readonly labAbnormalMap = signal<Map<string, LabAbnormal[]>>(new Map());
+  readonly isLabLoading = signal(false);
+
+  // 班次總覽（📋）
+  readonly isRecordsSummaryDialogVisible = signal(false);
+  readonly shiftCodeForDialog = signal<string | null>(null);
+  readonly patientIdsForDialog = signal<string[]>([]);
+  readonly patientInfoMapForDialog = signal<Record<string, Record<string, string>>>({});
+
+  // 應打針劑（💉）
+  readonly isInjectionDialogVisible = signal(false);
+  readonly isInjectionLoading = signal(false);
+  readonly allDailyInjections = signal<Record<string, unknown>[]>([]);
+  readonly injectionDialogDate = signal('');
+  readonly filterSpecificInjections = signal(false);
+  readonly lastInjectionShiftCode = signal('');
+  readonly filteredDailyInjections = computed(() => {
+    if (!this.filterSpecificInjections()) return this.allDailyInjections();
+    const specificMedCodes = ['ICAC', 'IFER2', 'IPAR1'];
+    return this.allDailyInjections().filter((injection) =>
+      specificMedCodes.includes(injection['orderCode'] as string),
+    );
+  });
+
   readonly clinicalRows = computed<ClinicalRow[]>(() => {
     const schedule = this.rawSchedule();
     if (!schedule || Object.keys(schedule).length === 0) return [];
     const pMap = this.patientStore.patientMap();
     const messageMap = this.taskStore.getPatientMessageTypesMapForDate(this.selectedDate());
     const shiftCodes = ORDERED_SHIFT_CODES as string[];
+    const labMap = this.labAbnormalMap();
+    const handoverMap = this.handoverMessageMap();
 
     const buildCell = (shiftId: string): ClinicalCell | null => {
       const slot = schedule[shiftId];
@@ -247,6 +301,8 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
         isDoNotMove: !!doNotMove?.active,
         doNotMoveReason: String(doNotMove?.reason || '無原因說明'),
         messageTypes,
+        labAbnormals: labMap.get(slot.patientId) || [],
+        handovers: handoverMap.get(slot.patientId) || [],
       };
     };
 
@@ -269,6 +325,210 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
   readonly hasClinicalPatients = computed(() =>
     this.clinicalRows().some((row) => row.cells.some((cell) => !!cell)),
   );
+
+  /** 當日交班留言：patientId → 內容清單（來源 tasks category=message，與病人卡片同一份 feed） */
+  private readonly handoverMessageMap = computed<Map<string, string[]>>(() => {
+    const target = this.selectedDate();
+    const map = new Map<string, string[]>();
+    for (const msg of this.taskStore.feedMessages() as any[]) {
+      const patientId = msg?.patientId;
+      if (!patientId) continue;
+      const status = String(msg?.status || '');
+      if (['completed', 'resolved', 'cancelled', 'deleted'].includes(status)) continue;
+      // 有指定日期者僅在當日顯示；未指定者視為長期留言
+      const msgDate = String(msg?.targetDate || '').slice(0, 10);
+      if (msgDate && msgDate !== target) continue;
+      const content = String(msg?.content || msg?.title || '').trim();
+      if (!content) continue;
+      const type = String(msg?.type || '');
+      const list = map.get(patientId) || [];
+      list.push(type && type !== '常規' ? `[${type}] ${content}` : content);
+      map.set(patientId, list);
+    }
+    return map;
+  });
+
+  /** 抓當月檢驗報告並算出異常項（醫師檢視專用；批次端點一次帶多位病人） */
+  private async loadLabAbnormals(patientIds: string[]): Promise<void> {
+    if (patientIds.length === 0) {
+      this.labAbnormalMap.set(new Map());
+      return;
+    }
+    this.isLabLoading.set(true);
+    try {
+      const target = this.selectedDate();
+      const startDate = `${target.slice(0, 7)}-01`;
+      const endDate = `${target.slice(0, 7)}-31`;
+      const map = new Map<string, LabAbnormal[]>();
+      // patientId 支援逗號分隔批次；分批避免 URL 過長
+      const CHUNK = 40;
+      for (let i = 0; i < patientIds.length; i += CHUNK) {
+        const chunk = patientIds.slice(i, i + CHUNK);
+        const reports = (await localApi.get(
+          `/patients/lab-reports?patientId=${chunk.join(',')}&startDate=${startDate}&endDate=${endDate}`,
+        )) as any[];
+        if (!Array.isArray(reports)) continue;
+        // 同月多份報告取最新一份
+        const latestByPatient = new Map<string, any>();
+        for (const report of reports) {
+          const prev = latestByPatient.get(report.patientId);
+          if (!prev || String(report.reportDate || '') > String(prev.reportDate || '')) {
+            latestByPatient.set(report.patientId, report);
+          }
+        }
+        for (const [patientId, report] of latestByPatient) {
+          const data = report?.data || {};
+          const abnormals: LabAbnormal[] = [];
+          for (const [key, range] of Object.entries(CLINICAL_LAB_RANGES)) {
+            const raw = data[key];
+            const value = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
+            if (!Number.isFinite(value)) continue;
+            if (range.max !== undefined && value > range.max) {
+              abnormals.push({ key, value, direction: 'high' });
+            } else if (range.min !== undefined && value < range.min) {
+              abnormals.push({ key, value, direction: 'low' });
+            }
+          }
+          if (abnormals.length > 0) map.set(patientId, abnormals);
+        }
+      }
+      this.labAbnormalMap.set(map);
+    } catch (error) {
+      console.error('[MyPatients] 載入當月檢驗異常失敗:', error);
+      this.labAbnormalMap.set(new Map());
+    } finally {
+      this.isLabLoading.set(false);
+    }
+  }
+
+  // --- 班次總覽 / 應打針劑（原掛在每日排程臨床查閱表頭） ---
+  showShiftRecordsSummary(shiftCode: string): void {
+    const schedule = this.rawSchedule();
+    const pMap = this.patientStore.patientMap();
+    const patientIds = new Set<string>();
+    const infoMap: Record<string, Record<string, string>> = {};
+    for (const [shiftId, slot] of Object.entries(schedule)) {
+      if (!shiftId.endsWith(`-${shiftCode}`) || !(slot as any)?.patientId) continue;
+      const patientId = (slot as any).patientId;
+      patientIds.add(patientId);
+      const parts = shiftId.split('-');
+      const patient = pMap.get(patientId) as Record<string, unknown> | undefined;
+      infoMap[patientId] = {
+        bedNum: parts[0] === 'peripheral' ? `外${parts[1]}` : parts[1],
+        patientName: (patient?.['name'] as string) || '',
+        medicalRecordNumber: (patient?.['medicalRecordNumber'] as string) || '',
+      };
+    }
+    this.shiftCodeForDialog.set(shiftCode);
+    this.patientIdsForDialog.set([...patientIds]);
+    this.patientInfoMapForDialog.set(infoMap);
+    this.isRecordsSummaryDialogVisible.set(true);
+  }
+
+  closeRecordsSummaryDialog(): void {
+    this.isRecordsSummaryDialogVisible.set(false);
+    this.shiftCodeForDialog.set(null);
+    this.patientIdsForDialog.set([]);
+    this.patientInfoMapForDialog.set({});
+  }
+
+  async showShiftInjections(shiftCode: string): Promise<void> {
+    if (!shiftCode) return;
+    const schedule = this.rawSchedule();
+    const patientInfoMap = new Map<string, { shift: string; bedNum: string }>();
+    const patientIds: string[] = [];
+    for (const [shiftId, slot] of Object.entries(schedule)) {
+      if (!shiftId.endsWith(`-${shiftCode}`) || !(slot as any)?.patientId) continue;
+      const patientId = (slot as any).patientId;
+      patientIds.push(patientId);
+      const parts = shiftId.split('-');
+      patientInfoMap.set(patientId, {
+        shift: shiftCode,
+        bedNum: parts[0] === 'peripheral' ? `外${parts[1]}` : parts[1],
+      });
+    }
+
+    this.lastInjectionShiftCode.set(shiftCode);
+    this.injectionDialogDate.set(this.selectedDate());
+    this.isInjectionDialogVisible.set(true);
+    this.isInjectionLoading.set(true);
+    this.allDailyInjections.set([]);
+    this.filterSpecificInjections.set(false);
+    try {
+      const injections = await this.medicationStore.fetchDailyInjections(
+        this.injectionDialogDate(),
+        patientIds,
+      );
+      const enriched = injections.map((inj: any) => {
+        const info = patientInfoMap.get(inj.patientId);
+        return { ...inj, shift: info?.shift || shiftCode, bedNum: info?.bedNum || '' };
+      });
+      enriched.sort((a: any, b: any) => {
+        const bedA = String(a.bedNum).startsWith('外')
+          ? 1000 + parseInt(String(a.bedNum).substring(1))
+          : parseInt(a.bedNum) || 999;
+        const bedB = String(b.bedNum).startsWith('外')
+          ? 1000 + parseInt(String(b.bedNum).substring(1))
+          : parseInt(b.bedNum) || 999;
+        if (bedA !== bedB) return bedA - bedB;
+        return (a.patientName || '').localeCompare(b.patientName || '');
+      });
+      this.allDailyInjections.set(enriched);
+    } catch (error) {
+      console.error('[MyPatients] 獲取應打針劑失敗:', error);
+      this.isInjectionDialogVisible.set(false);
+    } finally {
+      this.isInjectionLoading.set(this.medicationStore.isLoading());
+    }
+  }
+
+  async refreshInjections(): Promise<void> {
+    this.medicationStore.clearCache();
+    const shiftCode = this.lastInjectionShiftCode();
+    if (shiftCode) await this.showShiftInjections(shiftCode);
+  }
+
+  /** 臨床查閱簡表匯出 Excel（矩陣型：列＝床號、欄＝三班） */
+  exportClinicalExcel(): void {
+    const rows = this.clinicalRows();
+    if (rows.length === 0) return;
+    const data: unknown[][] = [];
+    data.push([`部立台北醫院 臨床查閱 ${this.selectedDate()}`]);
+    data.push([]);
+    data.push(['床號', ...this.clinicalShiftHeaders]);
+    for (const row of rows) {
+      data.push([
+        row.bedLabel,
+        ...row.cells.map((cell) => {
+          if (!cell) return '';
+          const lines = [`${cell.medicalRecordNumber} ${cell.name}`.trim()];
+          if (cell.mode) lines.push(cell.mode);
+          if (cell.wardNumber) lines.push(`病房 ${cell.wardNumber}`);
+          if (cell.labAbnormals.length > 0) {
+            lines.push(
+              '異常：' +
+                cell.labAbnormals
+                  .map((a) => `${a.key} ${a.value}${a.direction === 'high' ? '↑' : '↓'}`)
+                  .join('、'),
+            );
+          }
+          if (cell.handovers.length > 0) lines.push('交班：' + cell.handovers.join('；'));
+          if (cell.note) lines.push(cell.note);
+          return lines.join('\n');
+        }),
+      ]);
+    }
+    const worksheet = XLSX.utils.aoa_to_sheet(data);
+    worksheet['!cols'] = [{ wch: 8 }, { wch: 34 }, { wch: 34 }, { wch: 34 }];
+    worksheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, '臨床查閱');
+    XLSX.writeFile(workbook, `臨床查閱_${this.selectedDate()}.xlsx`);
+  }
+
+  printClinicalTable(): void {
+    window.print();
+  }
 
   copyMedicalRecordNumber(mrn: string): void {
     if (!mrn) return;
@@ -941,6 +1201,15 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
         this.patientListByShift.set({});
         this.nurseGroupLabel.set('');
         this.nurseGroupDuties.set([]);
+        // 當月檢驗異常：非阻斷，格線先出來、徽章稍後補上
+        const scheduledIds = [
+          ...new Set(
+            Object.values(schedule)
+              .map((slot: any) => slot?.patientId)
+              .filter(Boolean) as string[],
+          ),
+        ];
+        void this.loadLabAbnormals(scheduledIds);
         return;
       }
 
