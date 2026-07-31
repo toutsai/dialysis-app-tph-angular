@@ -21,6 +21,20 @@
         </div>
       </div>
       <div class="header-controls">
+        @if (isDoctorView()) {
+          @if (isLabLoading()) {
+            <span class="lab-loading-hint"><i class="fas fa-spinner fa-spin"></i> 載入當月檢驗…</span>
+          }
+          <button class="btn-clinical-tool" (click)="openIcuOrders()" [disabled]="isLoading()">
+            <i class="fas fa-clipboard-list"></i> ICU醫囑單
+          </button>
+          <button class="btn-clinical-tool" (click)="exportClinicalExcel()" [disabled]="isLoading() || !hasClinicalPatients()">
+            <i class="fas fa-file-excel"></i> 匯出 Excel
+          </button>
+          <button class="btn-clinical-tool" (click)="printClinicalTable()" [disabled]="isLoading() || !hasClinicalPatients()">
+            <i class="fas fa-print"></i> 列印
+          </button>
+        }
         <select
           *ngIf="canSwitchUser() && selectableUsers().length > 0"
           [ngModel]="selectedUserId()"
@@ -67,20 +81,6 @@
         <p>{{ selectedDate() }} 沒有排程資料。</p>
       </div>
     } @else {
-      <div class="clinical-toolbar no-print">
-        @if (isLabLoading()) {
-          <span class="lab-loading-hint"><i class="fas fa-spinner fa-spin"></i> 載入當月檢驗…</span>
-        }
-        <button class="btn-clinical-tool" (click)="openIcuOrders()">
-          <i class="fas fa-clipboard-list"></i> ICU醫囑單
-        </button>
-        <button class="btn-clinical-tool" (click)="exportClinicalExcel()">
-          <i class="fas fa-file-excel"></i> 匯出 Excel
-        </button>
-        <button class="btn-clinical-tool" (click)="printClinicalTable()">
-          <i class="fas fa-print"></i> 列印
-        </button>
-      </div>
       <div class="clinical-view-wrapper">
         <table class="simplified-table">
           <thead>
