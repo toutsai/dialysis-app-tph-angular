@@ -99,17 +99,17 @@
 }
 
 .btn-reload {
-  padding: 0.5rem 1rem;
-  border: 1px solid #6c757d;
+  padding: 8px 15px;
+  border: 1px solid #ccc;
   background-color: #fff;
-  border-radius: 4px;
+  border-radius: 5px;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  height: 38px;
-  font-size: 0.95rem;
-  transition: background-color 0.2s;
+  font-size: 1em;
+  transition: all 0.2s ease-in-out;
+  white-space: nowrap;
 }
 .btn-reload:hover:not(:disabled) {
   background-color: #e9ecef;
@@ -671,7 +671,9 @@
   .weekday-display {
     font-size: 1.1rem;
   }
-  .date-navigator .btn {
+  .date-navigator .btn,
+  .btn-clinical-tool,
+  .btn-reload {
     padding: 0.4rem 0.6rem;
     font-size: 0.8rem;
   }
@@ -822,19 +824,19 @@
   color: #6c757d;
   white-space: nowrap;
 }
+/* 與日期導覽按鈕（每日排程標題列規格）同一套樣式 */
 .btn-clinical-tool {
-  background: #fff;
-  border: 1px solid #ced4da;
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 0.88rem;
+  padding: 8px 15px;
+  font-size: 1em;
+  border: 1px solid #ccc;
+  border-radius: 5px;
   cursor: pointer;
-  transition: all 0.15s;
+  background-color: #fff;
+  transition: all 0.2s ease-in-out;
   white-space: nowrap;
 }
 .btn-clinical-tool:hover:not(:disabled) {
-  background: #e9ecef;
-  border-color: #adb5bd;
+  background-color: #e9ecef;
 }
 .btn-clinical-tool:disabled {
   opacity: 0.6;
