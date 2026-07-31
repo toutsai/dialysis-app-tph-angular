@@ -54,10 +54,11 @@ export const PAGE_ACCESS = {
     roleLabel: '管理員、編輯者',
   },
   myPatients: {
+    // 醫師/專師登入後的預設落點：同一頁依職稱切換呈現（主治醫師/專師＝臨床查閱簡表，護理師＝分組分班卡片）
     path: '/my-patients',
     title: '我的今日病人',
-    roles: STAFF_ROLES,
-    roleLabel: '管理員、編輯者',
+    roles: CLINICAL_ROLES,
+    roleLabel: '管理員、編輯者、醫師',
   },
   weekly: {
     path: '/weekly',

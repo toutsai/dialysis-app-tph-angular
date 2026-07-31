@@ -2,7 +2,9 @@
   <app-marquee-banner></app-marquee-banner>
 
   <div class="page-header">
-    <h1 class="page-title">我的今日病人 <small>{{ todayDateString() }}</small></h1>
+    <h1 class="page-title">
+      {{ isDoctorView() ? '臨床查閱' : '我的今日病人' }} <small>{{ todayDateString() }}</small>
+    </h1>
     <div class="header-controls">
       <select
         *ngIf="canSwitchUser() && selectableUsers().length > 0"
@@ -26,8 +28,8 @@
     </div>
   </div>
 
-  <!-- 照護工作按鈕列 -->
-  <div *ngIf="!isLoading()" class="care-tools-bar">
+  <!-- 照護工作按鈕列（護理師檢視專用） -->
+  <div *ngIf="!isLoading() && !isDoctorView()" class="care-tools-bar">
     <button class="care-tool-btn edu" (click)="openEduModal()">
       <i class="fas fa-chalkboard-teacher"></i> 初透衛教
     </button>
@@ -44,15 +46,86 @@
 
   <div *ngIf="isLoading()" class="loading-state">
     <div class="spinner"></div>
-    <span>正在載入您的病人...</span>
+    <span>{{ isDoctorView() ? '正在載入今日排程...' : '正在載入您的病人...' }}</span>
   </div>
 
-  <div *ngIf="!isLoading() && !hasAnyPatients()" class="empty-state">
+  <!-- 醫師/專師檢視：臨床查閱簡表（列＝床位、欄＝班別，點格子開病人總覽） -->
+  @if (!isLoading() && isDoctorView()) {
+    @if (!hasClinicalPatients()) {
+      <div class="empty-state">
+        <i class="fas fa-calendar-times"></i>
+        <p>{{ selectedDate() }} 沒有排程資料。</p>
+      </div>
+    } @else {
+      <div class="clinical-view-wrapper">
+        <table class="simplified-table">
+          <thead>
+            <tr>
+              <th class="col-bed">床號</th>
+              @for (header of clinicalShiftHeaders; track header) {
+                <th>{{ header }}</th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of clinicalRows(); track row.bedLabel) {
+              <tr>
+                <td class="col-bed">{{ row.bedLabel }}</td>
+                @for (cell of row.cells; track $index) {
+                  <td [ngClass]="cell?.cellStyle || {}" (click)="openClinicalDetail(cell)">
+                    @if (cell) {
+                      <div class="patient-info-cell">
+                        <div class="patient-mrn-name">
+                          <span
+                            class="medical-record-number"
+                            title="點擊以複製病歷號"
+                            (click)="$event.stopPropagation(); copyMedicalRecordNumber(cell.medicalRecordNumber)"
+                          >{{ cell.medicalRecordNumber }}</span>
+                          <span class="patient-name-wrapper">
+                            {{ cell.name }}
+                            @if (cell.mode) {
+                              <span class="stats-special-mode">{{ cell.mode }}</span>
+                            }
+                          </span>
+                          @if (cell.isDoNotMove) {
+                            <i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + cell.doNotMoveReason"></i>
+                          }
+                          <app-patient-messages-icon
+                            [patientId]="cell.patientId"
+                            [messageTypes]="cell.messageTypes"
+                            context="dialog"
+                            (click)="$event.stopPropagation()"
+                          ></app-patient-messages-icon>
+                        </div>
+                        <div class="patient-ward-note">
+                          @if (cell.wardNumber) {
+                            <span class="ward-number ward-number-badge">{{ cell.wardNumber }}</span>
+                          }
+                          @if (cell.note) {
+                            <span class="patient-note">{{ cell.note }}</span>
+                          }
+                        </div>
+                      </div>
+                    }
+                  </td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+        @if (copiedMrn()) {
+          <div class="copied-toast">已複製病歷號 {{ copiedMrn() }}</div>
+        }
+      </div>
+    }
+  }
+
+  <div *ngIf="!isLoading() && !isDoctorView() && !hasAnyPatients()" class="empty-state">
     <i class="fas fa-user-nurse"></i>
     <p>{{ statusMessage() }}</p>
   </div>
 
-  <div *ngIf="!isLoading() && hasAnyPatients()" class="shifts-container">
+  <div *ngIf="!isLoading() && !isDoctorView() && hasAnyPatients()" class="shifts-container">
     <!-- Nurse Group Info Banner -->
     <div class="group-info-banner" *ngIf="nurseGroupLabel()">
       <div class="group-badge-row">
@@ -474,4 +547,18 @@
     [patientName]="vp.patientName"
     (close)="closeVaRecord()"
   ></app-vascular-access-event-dialog>
+
+  <!-- 臨床查閱：病人總覽（醫師檢視點格子開啟） -->
+  @if (isDetailModalVisible() && selectedPatientForDetail()) {
+    <app-patient-detail-modal
+      [isVisible]="isDetailModalVisible()"
+      [patient]="selectedPatientForDetail()"
+      [slotList]="sortedSlotsForModal()"
+      [currentIndex]="currentPatientIndexForModal()"
+      [currentDate]="selectedDate()"
+      (closeEvent)="isDetailModalVisible.set(false)"
+      (switchPatientEvent)="switchClinicalPatient($event)"
+      (recordUpdated)="reloadData()"
+    ></app-patient-detail-modal>
+  }
 </div>

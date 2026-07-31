@@ -28,7 +28,8 @@ import {
   type FirestoreRecord,
 } from '@services/api-manager.service';
 import { formatDateToYYYYMMDD, getTaipeiWeekdayIndex } from '@/utils/dateUtils';
-import { resolveDailyRotationValue } from '@/utils/scheduleUtils';
+import { resolveDailyRotationValue, getUnifiedCellStyle } from '@/utils/scheduleUtils';
+import { ORDERED_SHIFT_CODES, getShiftDisplayName } from '@/constants/scheduleConstants';
 import { handleTaskCreated } from '@/utils/taskHandlers';
 import { createDialysisOrderAndUpdatePatient } from '@/services/optimizedApiService';
 import { localApi } from '@/services/localApiClient';
@@ -41,7 +42,37 @@ import { DialysisOrderModalComponent } from '@app/components/dialogs/dialysis-or
 import { MarqueeBannerComponent } from '@app/components/marquee-banner/marquee-banner.component';
 import { EducationRecordDialogComponent } from '@app/components/dialogs/education-record-dialog/education-record-dialog.component';
 import { VascularAccessEventDialogComponent } from '@app/components/dialogs/vascular-access-event-dialog/vascular-access-event-dialog.component';
+import { PatientDetailModalComponent } from '@app/components/dialogs/patient-detail-modal/patient-detail-modal.component';
+import { PatientMessagesIconComponent } from '@app/components/patient-messages-icon/patient-messages-icon.component';
 import type { VascularAccessEvent } from '@app/core/constants/vascular-access-codes';
+
+// 醫師臨床查閱簡表的床位配置（與 base-schedule / 書記掛號頁同一份配置）
+const CLINICAL_BED_LAYOUT: number[] = [
+  1, 2, 3, 5, 6, 7, 8, 9, 11, 12, 13, 15, 16, 17, 18, 19,
+  21, 22, 23, 25, 26, 27, 28, 29, 31, 32, 33, 35, 36, 37, 38, 39,
+  51, 52, 53, 55, 56, 57, 58, 59, 61, 62, 63, 65,
+];
+const CLINICAL_PERIPHERAL_COUNT = 6;
+
+/** 臨床查閱簡表的一格（無病人時為 null） */
+interface ClinicalCell {
+  shiftId: string;
+  patientId: string;
+  medicalRecordNumber: string;
+  name: string;
+  mode: string | null;
+  wardNumber: string;
+  note: string;
+  cellStyle: Record<string, boolean>;
+  isDoNotMove: boolean;
+  doNotMoveReason: string;
+  messageTypes: string[];
+}
+
+interface ClinicalRow {
+  bedLabel: string;
+  cells: (ClinicalCell | null)[];
+}
 
 interface MedicationMaster {
   code: string;
@@ -101,6 +132,8 @@ interface SelectableUser {
     MarqueeBannerComponent,
     EducationRecordDialogComponent,
     VascularAccessEventDialogComponent,
+    PatientDetailModalComponent,
+    PatientMessagesIconComponent,
   ],
   templateUrl: './my-patients.component.html',
   styleUrl: './my-patients.component.css',
@@ -152,7 +185,154 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
 
   // Computed
   readonly currentUser = computed(() => this.authService.currentUser());
-  readonly canSwitchUser = computed(() => !!this.currentUser());
+  // 醫師/專師檢視：同一頁改呈現臨床查閱簡表（查房用），不做護理分組比對
+  readonly isDoctorView = computed(() => {
+    const title = (this.currentUser() as AppUser | null)?.title || '';
+    return title === '主治醫師' || title === '專科護理師';
+  });
+
+  readonly canSwitchUser = computed(() => !!this.currentUser() && !this.isDoctorView());
+
+  // --- 臨床查閱簡表 ---
+  readonly ORDERED_SHIFT_CODES = ORDERED_SHIFT_CODES;
+  readonly clinicalShiftHeaders = (ORDERED_SHIFT_CODES as string[]).map((code) =>
+    getShiftDisplayName(code),
+  );
+  /** 當日整份排程（醫師檢視用；護理師檢視不使用） */
+  readonly rawSchedule = signal<Record<string, any>>({});
+  readonly copiedMrn = signal('');
+  private copiedTimer: ReturnType<typeof setTimeout> | null = null;
+  readonly isDetailModalVisible = signal(false);
+  readonly selectedPatientForDetail = signal<Record<string, unknown> | null>(null);
+  readonly sortedSlotsForModal = signal<Record<string, unknown>[]>([]);
+  readonly currentPatientIndexForModal = signal(0);
+
+  readonly clinicalRows = computed<ClinicalRow[]>(() => {
+    const schedule = this.rawSchedule();
+    if (!schedule || Object.keys(schedule).length === 0) return [];
+    const pMap = this.patientStore.patientMap();
+    const messageMap = this.taskStore.getPatientMessageTypesMapForDate(this.selectedDate());
+    const shiftCodes = ORDERED_SHIFT_CODES as string[];
+
+    const buildCell = (shiftId: string): ClinicalCell | null => {
+      const slot = schedule[shiftId];
+      if (!slot?.patientId) return null;
+      const patient = pMap.get(slot.patientId) as Record<string, any> | undefined;
+      // 快照優先（當日異動保護／歸檔），與每日排程格線同一套判讀
+      const info = (slot.archivedPatientInfo || patient) as Record<string, any> | undefined;
+      if (!info && !patient) return null;
+      const status = String(info?.['status'] || '');
+      const modeRaw = String(slot.modeOverride || info?.['mode'] || patient?.['mode'] || '');
+      const autoTags = String(slot.autoNote || '').split(' ').filter(Boolean);
+      const manualTags = String(slot.manualNote || '').split(' ').filter(Boolean);
+      const note = [...new Set([...autoTags, ...manualTags])]
+        .filter((tag) => !['住', '急'].includes(tag))
+        .join(' ');
+      const messageTypes = [...(messageMap.get(slot.patientId) || [])];
+      const doNotMove = patient?.['patientStatus']?.doNotMove;
+      return {
+        shiftId,
+        patientId: slot.patientId,
+        medicalRecordNumber: String(
+          info?.['medicalRecordNumber'] || patient?.['medicalRecordNumber'] || '',
+        ),
+        name: String(patient?.['name'] || info?.['name'] || ''),
+        mode: modeRaw && modeRaw !== 'HD' ? modeRaw : null,
+        wardNumber:
+          status === 'ipd' || status === 'er'
+            ? String(info?.['wardNumber'] || patient?.['wardNumber'] || '')
+            : '',
+        note,
+        cellStyle: getUnifiedCellStyle(slot as any, info as any, null, messageTypes),
+        isDoNotMove: !!doNotMove?.active,
+        doNotMoveReason: String(doNotMove?.reason || '無原因說明'),
+        messageTypes,
+      };
+    };
+
+    const rows: ClinicalRow[] = [];
+    for (const bedNum of CLINICAL_BED_LAYOUT) {
+      rows.push({
+        bedLabel: String(bedNum),
+        cells: shiftCodes.map((code) => buildCell(`bed-${bedNum}-${code}`)),
+      });
+    }
+    for (let i = 1; i <= CLINICAL_PERIPHERAL_COUNT; i++) {
+      rows.push({
+        bedLabel: `外${i}`,
+        cells: shiftCodes.map((code) => buildCell(`peripheral-${i}-${code}`)),
+      });
+    }
+    return rows;
+  });
+
+  readonly hasClinicalPatients = computed(() =>
+    this.clinicalRows().some((row) => row.cells.some((cell) => !!cell)),
+  );
+
+  copyMedicalRecordNumber(mrn: string): void {
+    if (!mrn) return;
+    const done = () => {
+      this.copiedMrn.set(mrn);
+      if (this.copiedTimer) clearTimeout(this.copiedTimer);
+      this.copiedTimer = setTimeout(() => this.copiedMrn.set(''), 1500);
+    };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(mrn).then(done).catch(() => {});
+      return;
+    }
+    // 非 secure context（院內 http）沒有 clipboard API，退回 execCommand
+    const textarea = document.createElement('textarea');
+    textarea.value = mrn;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      document.execCommand('copy');
+      done();
+    } catch {
+      /* 複製失敗不影響查閱 */
+    }
+    document.body.removeChild(textarea);
+  }
+
+  /** 點格子開病人總覽；slotList＝同班別所有病人（依床號排序），供彈窗內上下床切換 */
+  openClinicalDetail(cell: ClinicalCell | null): void {
+    if (!cell) return;
+    const shiftCode = cell.shiftId.split('-').pop() || '';
+    const schedule = this.rawSchedule();
+    const pMap = this.patientStore.patientMap();
+    const slots: Record<string, unknown>[] = [];
+    for (const [shiftId, slot] of Object.entries(schedule)) {
+      if (!shiftId.endsWith(`-${shiftCode}`)) continue;
+      const patientId = (slot as any)?.patientId;
+      if (!patientId) continue;
+      const patient = pMap.get(patientId);
+      if (!patient) continue;
+      const parts = shiftId.split('-');
+      const isPeripheral = shiftId.startsWith('peripheral');
+      slots.push({
+        ...(patient as Record<string, unknown>),
+        shiftId,
+        bedNum: isPeripheral ? `外${parts[1]}` : parts[1],
+        sortKey: isPeripheral ? 1000 + Number(parts[1]) : Number(parts[1]),
+      });
+    }
+    slots.sort((a, b) => Number(a['sortKey']) - Number(b['sortKey']));
+    const index = Math.max(0, slots.findIndex((s) => s['shiftId'] === cell.shiftId));
+    this.sortedSlotsForModal.set(slots);
+    this.currentPatientIndexForModal.set(index);
+    this.selectedPatientForDetail.set(slots[index] || null);
+    this.isDetailModalVisible.set(true);
+  }
+
+  switchClinicalPatient(index: number): void {
+    const slots = this.sortedSlotsForModal();
+    if (index < 0 || index >= slots.length) return;
+    this.currentPatientIndexForModal.set(index);
+    this.selectedPatientForDetail.set(slots[index]);
+  }
 
   readonly hasAnyPatients = computed(() => {
     const shifts = this.patientListByShift();
@@ -754,6 +934,15 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
       }
 
       console.log('[MyPatients DEBUG] schedule slots:', Object.keys(schedule).length, 'hasTeams:', !!teamsRecord);
+
+      // 醫師/專師檢視：只需要整份排程來畫臨床查閱簡表，不做護理分組比對
+      this.rawSchedule.set(schedule);
+      if (this.isDoctorView()) {
+        this.patientListByShift.set({});
+        this.nurseGroupLabel.set('');
+        this.nurseGroupDuties.set([]);
+        return;
+      }
 
       if (Object.keys(schedule).length === 0) {
         console.log('[MyPatients DEBUG] EXIT: no schedule data');
