@@ -8,6 +8,8 @@ import {
   untracked,
   OnInit,
   OnDestroy,
+  ViewChild,
+  ElementRef,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -266,6 +268,12 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
       specificMedCodes.includes(injection['orderCode'] as string),
     );
   });
+
+  // 標題列日期導覽（比照每日排程頁：可點日期開 picker、前後一天、今天）
+  @ViewChild('datePickerInput') datePickerInput?: ElementRef<HTMLInputElement>;
+  readonly weekdayDisplay = computed(
+    () => ['一', '二', '三', '四', '五', '六', '日'][getTaipeiWeekdayIndex(this.selectedDate())],
+  );
 
   // ICU 醫囑單（與每日排程頁同一個彈窗；過去日期唯讀，與該頁 isHistoryView 同語意）
   readonly patientMapForIcu = this.patientStore.patientMap;
@@ -560,6 +568,33 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
     this.reloadData();
   }
 
+  goToToday(): void {
+    this.selectedDate.set(formatDateToYYYYMMDD(new Date()));
+    this.reloadData();
+  }
+
+  openDatePicker(): void {
+    const el = this.datePickerInput?.nativeElement;
+    if (!el) return;
+    const anyEl = el as any;
+    if (typeof anyEl.showPicker === 'function') {
+      try {
+        anyEl.showPicker();
+        return;
+      } catch {
+        // 某些瀏覽器沒有使用者手勢時會 throw，退回 click()
+      }
+    }
+    el.click();
+  }
+
+  onDatePicked(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+    this.selectedDate.set(value);
+    this.reloadData();
+  }
+
   // --- ICU 醫囑單（複製自每日排程頁，醫師查房免切頁） ---
   async openIcuOrders(): Promise<void> {
     this.isIcuOrdersDialogVisible.set(true);
@@ -723,13 +758,6 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
     return Object.values(shifts).some((list) => list.length > 0);
   });
 
-  readonly todayDateString = computed(() =>
-    new Date().toLocaleDateString('zh-TW', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    })
-  );
 
   readonly statusMessage = computed(() => {
     if (this.selectedUserId() !== this.currentUser()?.uid) {

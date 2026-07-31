@@ -1,38 +1,42 @@
 <div class="page-container">
   <app-marquee-banner></app-marquee-banner>
 
-  <div class="page-header">
-    <h1 class="page-title">
-      {{ isDoctorView() ? '臨床查閱' : '我的今日病人' }} <small>{{ todayDateString() }}</small>
-    </h1>
-    <div class="header-controls">
-      <select
-        *ngIf="canSwitchUser() && selectableUsers().length > 0"
-        [ngModel]="selectedUserId()"
-        (ngModelChange)="selectedUserId.set($event); reloadData()"
-        class="user-select"
-      >
-        <option *ngFor="let user of selectableUsers()" [ngValue]="user.uid">
-          {{ user.name }}
-        </option>
-      </select>
-      <button (click)="shiftDate(-1)" class="btn-date-nav" [disabled]="isLoading()" title="前一日">
-        <i class="fas fa-chevron-left"></i> 前一日
-      </button>
-      <input
-        type="date"
-        [ngModel]="selectedDate()"
-        (ngModelChange)="selectedDate.set($event); reloadData()"
-        class="date-input"
-      />
-      <button (click)="shiftDate(1)" class="btn-date-nav" [disabled]="isLoading()" title="後一日">
-        後一日 <i class="fas fa-chevron-right"></i>
-      </button>
-      <button (click)="reloadData()" class="btn-reload" [disabled]="isLoading()">
-        <i class="fas fa-sync-alt"></i> 重新整理
-      </button>
+  <header class="page-header">
+    <div class="header-toolbar">
+      <div class="toolbar-left">
+        <h1 class="page-title">{{ isDoctorView() ? '臨床查閱' : '我的今日病人' }}</h1>
+        <div class="date-navigator">
+          <button class="btn" (click)="shiftDate(-1)" [disabled]="isLoading()">&laquo;<span class="btn-label"> 前一天</span></button>
+          <span class="current-date-text date-clickable" (click)="openDatePicker()" title="點擊選擇日期">{{ selectedDate() }}</span>
+          <span class="weekday-display date-clickable" (click)="openDatePicker()" title="點擊選擇日期">({{ weekdayDisplay() }})</span>
+          <input
+            #datePickerInput
+            type="date"
+            class="date-picker-hidden"
+            [value]="selectedDate()"
+            (change)="onDatePicked($event)"
+          />
+          <button class="btn" (click)="shiftDate(1)" [disabled]="isLoading()"><span class="btn-label">後一天 </span>&raquo;</button>
+          <button class="btn btn-today-ghost" (click)="goToToday()">今天</button>
+        </div>
+      </div>
+      <div class="header-controls">
+        <select
+          *ngIf="canSwitchUser() && selectableUsers().length > 0"
+          [ngModel]="selectedUserId()"
+          (ngModelChange)="selectedUserId.set($event); reloadData()"
+          class="user-select"
+        >
+          <option *ngFor="let user of selectableUsers()" [ngValue]="user.uid">
+            {{ user.name }}
+          </option>
+        </select>
+        <button (click)="reloadData()" class="btn-reload" [disabled]="isLoading()">
+          <i class="fas fa-sync-alt"></i> 重新整理
+        </button>
+      </div>
     </div>
-  </div>
+  </header>
 
   <!-- 照護工作按鈕列（護理師檢視專用） -->
   <div *ngIf="!isLoading() && !isDoctorView()" class="care-tools-bar">
