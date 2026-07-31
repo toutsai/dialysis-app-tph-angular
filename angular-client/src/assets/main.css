@@ -283,4 +283,8 @@ body {
   .sidebar {
     display: none !important;
   }
+  /* 行動版頂欄（漢堡鈕＋頁名）：桌面螢幕看不到但列印媒體會現形，一律不印 */
+  .main-header {
+    display: none !important;
+  }
 }
