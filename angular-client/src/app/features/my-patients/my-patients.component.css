@@ -935,7 +935,7 @@
     line-height: 1.2;
   }
   .simplified-table td {
-    padding: 1px 2px;
+    padding: 0 2px;
     vertical-align: middle;
     line-height: 1.1;
   }
