@@ -109,6 +109,34 @@
 .pendingreg-btn:hover:not(:disabled) { background: #fdefe4; }
 .movements-btn { border-color: #1565c0; color: #1565c0; }
 .movements-btn:hover:not(:disabled) { background: #e3f2fd; }
+.basicdata-btn { border-color: #00695c; color: #00695c; }
+.basicdata-btn:hover:not(:disabled) { background: #e0f2f1; }
+
+/* 每月基本資料彈窗 */
+.bd-warn { color: #c62828; font-weight: 700; margin-left: 0.5rem; }
+.bd-ok { color: #2e7d32; font-weight: 700; margin-left: 0.5rem; }
+.bd-row-incomplete { background: #fff8e1; }
+.bd-status {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.bd-status.done { background: #e8f5e9; color: #2e7d32; }
+.bd-status.missing { background: #fdecea; color: #b71c1c; }
+.bd-date-missing {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: #fff3e0;
+  color: #e65100;
+  white-space: nowrap;
+}
 
 /* 待建檔清單 */
 .pr-hint {

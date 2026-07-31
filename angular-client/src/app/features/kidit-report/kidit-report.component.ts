@@ -8,6 +8,11 @@ import { kiditService } from '@/services/kiditService';
 import { exportKiDitExcel } from '@/services/kiditExportService';
 import { exportVascularAccessExcel, VascularAccessRow } from '@/services/vascularAccessExportService';
 import { exportFirstDialysisExcel, FirstDialysisRow } from '@/services/firstDialysisExportService';
+import {
+  downloadMonthlyBasicDataCsv,
+  basicDataStatusText,
+  MonthlyBasicDataRow,
+} from '@/services/kiditBasicDataCsvService';
 import { localApi } from '@/services/localApiClient';
 import { KiditDetailModalComponent } from '@app/components/kidit/kidit-detail-modal.component';
 import { KiditVascularQuarterlyComponent } from './kidit-vascular-quarterly.component';
@@ -54,6 +59,10 @@ export class KiditReportComponent implements OnInit {
   readonly showPendingRegModal = signal(false);
   readonly isLoadingPendingReg = signal(false);
   readonly pendingRegRows = signal<any[]>([]);
+  // 每月基本資料彈窗（本院初透 × 建檔基本資料，含未建檔比對）
+  readonly showBasicDataModal = signal(false);
+  readonly isLoadingBasicData = signal(false);
+  readonly basicDataRows = signal<MonthlyBasicDataRow[]>([]);
   readonly weekDays = ['日', '一', '二', '三', '四', '五', '六'];
 
   // Modal state
@@ -384,6 +393,47 @@ export class KiditReportComponent implements OnInit {
     const filename = `初次透析名單_${this.currentYear()}_${String(this.currentMonth()).padStart(2, '0')}.xlsx`;
     try {
       exportFirstDialysisExcel(rows, filename);
+    } catch (error) {
+      console.error('匯出失敗:', error);
+      alert('匯出失敗，請稍後再試。');
+    }
+  }
+
+  /** 開啟「當月基本資料」：該月本院初透病人 × KiDit 建檔基本資料（後端即時彙整，含未建檔比對） */
+  async openBasicDataList(): Promise<void> {
+    this.showBasicDataModal.set(true);
+    this.isLoadingBasicData.set(true);
+    this.basicDataRows.set([]);
+    try {
+      const month = `${this.currentYear()}-${String(this.currentMonth()).padStart(2, '0')}`;
+      const rows = await localApi.get(`/nursing/kidit-monthly-basic-data?month=${month}`);
+      this.basicDataRows.set(Array.isArray(rows) ? rows : []);
+    } catch (error) {
+      console.error('載入每月基本資料彙整失敗:', error);
+      alert('載入每月基本資料彙整失敗，請稍後再試。');
+    } finally {
+      this.isLoadingBasicData.set(false);
+    }
+  }
+
+  closeBasicDataModal(): void {
+    this.showBasicDataModal.set(false);
+  }
+
+  basicDataStatus(row: MonthlyBasicDataRow): string {
+    return basicDataStatusText(row);
+  }
+
+  /** 未建檔/不完整人數（彈窗提示比對結果用） */
+  basicDataIncompleteCount(): number {
+    return this.basicDataRows().filter((r) => !r.complete).length;
+  }
+
+  exportBasicDataCsv(): void {
+    const rows = this.basicDataRows();
+    if (!rows.length) { alert('本月份尚無標記本院初透的病人。'); return; }
+    try {
+      downloadMonthlyBasicDataCsv(rows, this.currentYear(), this.currentMonth());
     } catch (error) {
       console.error('匯出失敗:', error);
       alert('匯出失敗，請稍後再試。');

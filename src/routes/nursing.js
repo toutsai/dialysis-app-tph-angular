@@ -1563,6 +1563,105 @@ router.get('/kidit-pending-registrations', authenticate, (req, res) => {
 })
 
 /**
+ * GET /api/nursing/kidit-monthly-basic-data?month=YYYY-MM
+ * 每月基本資料彙整：該月標記「本院初透」的病人（含已刪除，與初次透析名單同語意）
+ * × KiDit 建檔基本資料（kidit_profile/kidit_history 各取最新一筆）。
+ * 未建檔者也回傳（hasProfile/hasHistory/complete 皆 false），供比對是否漏存。
+ */
+router.get('/kidit-monthly-basic-data', authenticate, (req, res) => {
+  try {
+    const month = String(req.query.month || '')
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      return res.status(400).json({ error: true, message: 'month 需為 YYYY-MM 格式' })
+    }
+    const db = getDatabase()
+
+    const patientRows = db
+      .prepare('SELECT id, name, medical_record_number, patient_status, is_deleted FROM patients')
+      .all()
+    // 先收全部標記者（不分月），歸月要等建檔資料補上日期 fallback 後才能判斷
+    const flagged = []
+    for (const p of patientRows) {
+      let ps
+      try {
+        ps = JSON.parse(p.patient_status || '{}')
+      } catch {
+        continue
+      }
+      const hfd = ps?.hospitalFirstDialysis
+      if (!hfd?.active) continue
+      flagged.push({
+        patientId: p.id,
+        name: p.name,
+        medicalRecordNumber: p.medical_record_number || '',
+        hospitalFirstDialysisDate: String(hfd.date || ''),
+        isDeleted: !!p.is_deleted,
+      })
+    }
+    if (flagged.length === 0) return res.json([])
+
+    // 建檔可能發生在任何日期，掃全部 logbook（同 kidit-pending-registrations）
+    const idSet = new Set(flagged.map((f) => f.patientId))
+    const logRows = db.prepare('SELECT date, events FROM kidit_logbook ORDER BY date').all()
+    const dataByPatient = new Map()
+    for (const row of logRows) {
+      let events
+      try {
+        events = JSON.parse(row.events || '[]')
+      } catch {
+        continue
+      }
+      for (const e of events) {
+        if (!e?.patientId || !idSet.has(e.patientId)) continue
+        const cur =
+          dataByPatient.get(e.patientId) ||
+          { profile: null, history: null, profileDate: null, historyDate: null, complete: false }
+        if (e.kidit_profile?.idNumber) {
+          cur.profile = e.kidit_profile
+          cur.profileDate = row.date
+        }
+        if (e.kidit_history?.diagnosisCategory) {
+          cur.history = e.kidit_history
+          cur.historyDate = row.date
+        }
+        // 完成判定與 kidit-pending-registrations／前端 isKiDitDataComplete 一致：同一事件內兩欄皆有值
+        if (e.kidit_profile?.idNumber && e.kidit_history?.diagnosisCategory) cur.complete = true
+        dataByPatient.set(e.patientId, cur)
+      }
+    }
+
+    // 歸月：本院初透日優先；未填日期者（曾實際發生：標記 active 但 date=null）
+    // 退用建檔基本資料的「本院開始治療日期」，再退建檔儲存日，避免永遠不出現在任何月份
+    const rows = flagged
+      .map((f) => {
+        const k = dataByPatient.get(f.patientId)
+        const effectiveDate =
+          f.hospitalFirstDialysisDate ||
+          String(k?.profile?.hospitalStartDate || '') ||
+          String(k?.profileDate || '')
+        return {
+          ...f,
+          effectiveDate,
+          dateMissing: !f.hospitalFirstDialysisDate,
+          hasProfile: !!k?.profile,
+          hasHistory: !!k?.history,
+          complete: !!k?.complete,
+          profileDate: k?.profileDate || null,
+          historyDate: k?.historyDate || null,
+          profile: k?.profile || null,
+          history: k?.history || null,
+        }
+      })
+      .filter((r) => r.effectiveDate.startsWith(month))
+    rows.sort((a, b) => String(a.effectiveDate).localeCompare(String(b.effectiveDate)))
+    res.json(rows)
+  } catch (error) {
+    console.error('取得每月基本資料彙整錯誤:', error)
+    res.status(500).json({ error: true, message: '取得每月基本資料彙整失敗' })
+  }
+})
+
+/**
  * GET /api/nursing/kidit-logbook/:date
  * 取得特定日期的 Kidit 日誌本
  */

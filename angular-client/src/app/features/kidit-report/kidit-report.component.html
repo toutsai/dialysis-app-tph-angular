@@ -33,6 +33,9 @@
       <button class="action-btn firstdia-btn" (click)="openFirstDialysisList()" [disabled]="isLoading()">
         <i class="fas fa-user-plus"></i> 當月初次透析名單
       </button>
+      <button class="action-btn basicdata-btn" (click)="openBasicDataList()" [disabled]="isLoading()">
+        <i class="fas fa-id-card"></i> 當月基本資料
+      </button>
       <button class="action-btn pendingreg-btn" (click)="openPendingRegList()" [disabled]="isLoading()">
         <i class="fas fa-user-clock"></i> 待建檔清單
       </button>
@@ -202,6 +205,91 @@
               <td>{{ r.physician || '—' }}</td>
               <td>{{ r.isDeleted ? (r.deleteReason || '—') : '' }}</td>
               <td>{{ r.isDeleted ? (r.deletedDate || '—') : '' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 每月基本資料彙整彈窗（本院初透 × 建檔基本資料比對） -->
+  <div class="va-modal-overlay" *ngIf="showBasicDataModal()" (click)="closeBasicDataModal()">
+    <div class="va-modal" (click)="$event.stopPropagation()">
+      <div class="va-modal-header">
+        <h3>
+          <i class="fas fa-id-card"></i>
+          {{ currentYear() }} 年 {{ currentMonth() }} 月 本院初透基本資料
+          <span class="va-count" *ngIf="!isLoadingBasicData()">（{{ basicDataRows().length }} 人）</span>
+        </h3>
+        <div class="va-modal-actions">
+          <button class="action-btn export-btn" (click)="exportBasicDataCsv()"
+                  [disabled]="isLoadingBasicData() || basicDataRows().length === 0">
+            <i class="fas fa-file-csv"></i> 匯出 CSV
+          </button>
+          <button class="va-close-btn" (click)="closeBasicDataModal()" title="關閉">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="va-modal-body">
+        <p class="pr-hint">
+          <i class="fas fa-info-circle"></i>
+          名單＝病人清單標記「本院初透」且日期在本月的病人（含已刪除），比對 KiDit 建檔是否已儲存基本資料。
+          <span *ngIf="!isLoadingBasicData() && basicDataIncompleteCount() > 0" class="bd-warn">
+            ⚠️ {{ basicDataIncompleteCount() }} 位尚未建檔完成
+          </span>
+          <span *ngIf="!isLoadingBasicData() && basicDataRows().length > 0 && basicDataIncompleteCount() === 0" class="bd-ok">
+            ✓ 全數已建檔
+          </span>
+        </p>
+
+        <div *ngIf="isLoadingBasicData()" class="va-loading">
+          <div class="spinner"></div>
+          <p>正在彙整本月基本資料...</p>
+        </div>
+
+        <div *ngIf="!isLoadingBasicData() && basicDataRows().length === 0" class="va-empty">
+          本月份尚無標記本院初透的病人。
+        </div>
+
+        <table *ngIf="!isLoadingBasicData() && basicDataRows().length > 0" class="va-table">
+          <thead>
+            <tr>
+              <th>姓名</th>
+              <th>病歷號</th>
+              <th>本院初透日</th>
+              <th>建檔狀態</th>
+              <th>基本資料儲存日</th>
+              <th>身分證號</th>
+              <th>生日</th>
+              <th>透析代號</th>
+              <th>原發病大類</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let r of basicDataRows()"
+                [class.va-row-deleted]="r.isDeleted"
+                [class.bd-row-incomplete]="!r.complete">
+              <td>
+                {{ r.profile?.['name'] || r.name || '—' }}
+                <span class="va-deleted-tag" *ngIf="r.isDeleted">已刪除</span>
+              </td>
+              <td>{{ r.profile?.['medicalRecordNumber'] || r.medicalRecordNumber || '—' }}</td>
+              <td>
+                {{ r.hospitalFirstDialysisDate || r.effectiveDate || '—' }}
+                <span class="bd-date-missing" *ngIf="r.dateMissing" title="病人清單的本院初透標記未填日期，以建檔日期歸月">未填日期</span>
+              </td>
+              <td>
+                <span class="bd-status" [class.done]="r.complete" [class.missing]="!r.complete">
+                  {{ basicDataStatus(r) }}
+                </span>
+              </td>
+              <td>{{ r.profileDate || '—' }}</td>
+              <td>{{ r.profile?.['idNumber'] || '—' }}</td>
+              <td>{{ r.profile?.['birthDate'] || '—' }}</td>
+              <td>{{ r.profile?.['dialysisCode'] || '—' }}</td>
+              <td>{{ r.profile?.['diagnosisCategory'] || '—' }}</td>
             </tr>
           </tbody>
         </table>
