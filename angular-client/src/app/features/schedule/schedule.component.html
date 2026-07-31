@@ -87,24 +87,12 @@
     <!-- Row 2: Quick access buttons + Staff display + Stats toolbar -->
     <div class="controls-panel">
       <div class="controls-left">
-        <!-- 班次工具：原掛在臨床查閱簡表表頭，簡表移至「我的病人」後改掛此處 -->
-        <div class="shift-tools desktop-only">
-          @for (shiftCode of ORDERED_SHIFT_CODES; track shiftCode) {
-            <span class="shift-tool-group">
-              <span class="shift-tool-label">{{ getShiftDisplayName(shiftCode).charAt(0) }}</span>
-              <button
-                class="summary-icon-btn-table"
-                (click)="showShiftRecordsSummary(shiftCode)"
-                [title]="getShiftDisplayName(shiftCode) + ' 班次總覽'"
-              >📋</button>
-              <button
-                class="summary-icon-btn-table"
-                (click)="showShiftInjections(shiftCode)"
-                [title]="getShiftDisplayName(shiftCode) + ' 應打針劑'"
-              >💉</button>
-            </span>
-          }
-        </div>
+        <button
+          class="btn view-toggle-btn desktop-only"
+          (click)="isSimplifiedViewVisible.set(!isSimplifiedViewVisible())"
+        >
+          &#9654; {{ isSimplifiedViewVisible() ? '關閉臨床查閱' : '展開臨床查閱' }}
+        </button>
         <button class="btn btn-secondary btn-live-when-locked" (click)="isInpatientRoundsDialogVisible.set(true)">
           <i class="fas fa-hospital"></i> 住院趴趴走 ({{ todayInpatients.length }})
         </button>
@@ -134,6 +122,163 @@
   <div class="page-main-content">
     <!-- Schedule Content -->
     <div class="schedule-content">
+      <!-- Simplified View Overlay -->
+      @if (isSimplifiedViewVisible()) {
+        <div class="simplified-view-wrapper desktop-only">
+          <table class="simplified-table">
+            <thead>
+              <tr>
+                <th class="col-bed">床號</th>
+                @for (shiftCode of ORDERED_SHIFT_CODES; track shiftCode) {
+                  <th>
+                    <div class="shift-header-content">
+                      <span>{{ getShiftDisplayName(shiftCode) }}</span>
+                      <button
+                        class="summary-icon-btn-table"
+                        (click)="showShiftRecordsSummary(shiftCode)"
+                        title="班次總覽"
+                      >
+                        📋
+                      </button>
+                      <button
+                        class="summary-icon-btn-table"
+                        (click)="showShiftInjections(shiftCode)"
+                        title="應打針劑"
+                      >
+                        💉
+                      </button>
+                    </div>
+                  </th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (bedNum of sortedBedNumbers(); track bedNum) {
+                <tr>
+                  <td class="col-bed">{{ bedNum }}</td>
+                  @for (shiftCode of ORDERED_SHIFT_CODES; track shiftCode) {
+                    <td
+                      [ngClass]="getPatientCellStyle('bed-' + bedNum + '-' + shiftCode)"
+                      (click)="handleSimplifiedCellClick('bed-' + bedNum + '-' + shiftCode)"
+                    >
+                      @if (currentRecord.schedule['bed-' + bedNum + '-' + shiftCode]?.patientId; as patientId) {
+                        <div class="patient-info-cell">
+                          <div class="patient-mrn-name">
+                            <span
+                              class="medical-record-number"
+                              title="點擊以複製病歷號"
+                              (click)="$event.stopPropagation(); copyMedicalRecordNumber($any(patientMap().get(patientId))?.medicalRecordNumber)"
+                            >
+                              {{ $any(patientMap().get(patientId))?.medicalRecordNumber }}
+                            </span>
+                            <span class="patient-name-wrapper">
+                              {{ $any(patientMap().get(patientId))?.name }}
+                              @if (getPatientMode('bed-' + bedNum + '-' + shiftCode); as mode) {
+                                <span class="stats-special-mode">{{ mode }}</span>
+                              }
+                            </span>
+                            @if (isDoNotMove(patientId)) {
+                              <i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patientId)"></i>
+                            }
+                            <app-patient-messages-icon
+                              [patientId]="patientId"
+                              [messageTypes]="getMessageTypesForPatient(patientId)"
+                              context="dialog"
+                              (click)="$event.stopPropagation()"
+                              (iconClick)="handleIconClick($event)"
+                            ></app-patient-messages-icon>
+                          </div>
+                          <div class="patient-ward-note">
+                            @if (isInpatientOrER('bed-' + bedNum + '-' + shiftCode)) {
+                              @if (getPatientWardNumber(patientId)) {
+                                <span
+                                  class="ward-number ward-number-badge"
+                                  (click)="$event.stopPropagation(); promptWardNumber('bed-' + bedNum + '-' + shiftCode)"
+                                >{{ getPatientWardNumber(patientId) }}</span>
+                              } @else {
+                                <button
+                                  class="ward-edit-icon"
+                                  (click)="$event.stopPropagation(); promptWardNumber('bed-' + bedNum + '-' + shiftCode)"
+                                  [disabled]="isPageLocked()"
+                                >🛏️</button>
+                              }
+                            }
+                            @if (getCombinedNote('bed-' + bedNum + '-' + shiftCode)) {
+                              <span class="patient-note">{{ getCombinedNote('bed-' + bedNum + '-' + shiftCode) }}</span>
+                            }
+                          </div>
+                        </div>
+                      }
+                    </td>
+                  }
+                </tr>
+              }
+              <!-- Peripheral beds -->
+              @for (i of peripheralBedRange(); track i) {
+                <tr>
+                  <td class="col-bed">外{{ i }}</td>
+                  @for (shiftCode of ORDERED_SHIFT_CODES; track shiftCode) {
+                    <td
+                      [ngClass]="getPatientCellStyle('peripheral-' + i + '-' + shiftCode)"
+                      (click)="handleSimplifiedCellClick('peripheral-' + i + '-' + shiftCode)"
+                    >
+                      @if (currentRecord.schedule['peripheral-' + i + '-' + shiftCode]?.patientId; as patientId) {
+                        <div class="patient-info-cell">
+                          <div class="patient-mrn-name">
+                            <span
+                              class="medical-record-number"
+                              title="點擊以複製病歷號"
+                              (click)="$event.stopPropagation(); copyMedicalRecordNumber($any(patientMap().get(patientId))?.medicalRecordNumber)"
+                            >
+                              {{ $any(patientMap().get(patientId))?.medicalRecordNumber }}
+                            </span>
+                            <span class="patient-name-wrapper">
+                              {{ $any(patientMap().get(patientId))?.name }}
+                              @if (getPatientMode('peripheral-' + i + '-' + shiftCode); as mode) {
+                                <span class="stats-special-mode">{{ mode }}</span>
+                              }
+                            </span>
+                            @if (isDoNotMove(patientId)) {
+                              <i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + doNotMoveReasonText(patientId)"></i>
+                            }
+                            <app-patient-messages-icon
+                              [patientId]="patientId"
+                              [messageTypes]="getMessageTypesForPatient(patientId)"
+                              context="dialog"
+                              (click)="$event.stopPropagation()"
+                              (iconClick)="handleIconClick($event)"
+                            ></app-patient-messages-icon>
+                          </div>
+                          <div class="patient-ward-note">
+                            @if (isInpatientOrER('peripheral-' + i + '-' + shiftCode)) {
+                              @if (getPatientWardNumber(patientId)) {
+                                <span
+                                  class="ward-number ward-number-badge"
+                                  (click)="$event.stopPropagation(); promptWardNumber('peripheral-' + i + '-' + shiftCode)"
+                                >{{ getPatientWardNumber(patientId) }}</span>
+                              } @else {
+                                <button
+                                  class="ward-edit-icon"
+                                  (click)="$event.stopPropagation(); promptWardNumber('peripheral-' + i + '-' + shiftCode)"
+                                  [disabled]="isPageLocked()"
+                                >🛏️</button>
+                              }
+                            }
+                            @if (getCombinedNote('peripheral-' + i + '-' + shiftCode)) {
+                              <span class="patient-note">{{ getCombinedNote('peripheral-' + i + '-' + shiftCode) }}</span>
+                            }
+                          </div>
+                        </div>
+                      }
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
       <!-- Mobile simplified view (always shown on mobile) -->
       <div class="simplified-view mobile-and-print-only">
         <table class="simplified-table">

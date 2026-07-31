@@ -1062,25 +1062,3 @@ td.conflict-cell {
   padding: 4px 10px;
   font-size: 0.85em;
 }
-
-/* 班次工具（班次總覽/應打針劑）：原掛在臨床查閱簡表表頭，簡表移至「我的病人」後改掛控制列 */
-.shift-tools {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 2px 8px;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  background: #fff;
-}
-.shift-tool-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-}
-.shift-tool-label {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: #495057;
-  margin-right: 2px;
-}

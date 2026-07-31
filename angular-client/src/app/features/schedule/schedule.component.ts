@@ -326,6 +326,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   // 樂觀鎖 409 版本衝突對話框
   readonly isVersionConflictDialogVisible = signal(false);
   readonly versionConflictMessage = signal('');
+  readonly isSimplifiedViewVisible = signal(false);
   readonly isMemoDialogVisible = signal(false);
   readonly isConditionRecordDialogVisible = signal(false);
   readonly isDetailModalVisible = signal(false);
