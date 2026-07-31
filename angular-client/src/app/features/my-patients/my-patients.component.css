@@ -904,7 +904,7 @@
 /* 列印：0.5cm 邊界、單頁 A4；格內只留 病歷號/姓名/病房號/B,C肝，字級拉大 */
 @page {
   size: A4 portrait;
-  margin: 0.5cm;
+  margin: 0.3cm;
 }
 @media print {
   .no-print,
