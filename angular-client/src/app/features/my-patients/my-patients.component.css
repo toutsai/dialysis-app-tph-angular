@@ -895,8 +895,9 @@
   white-space: nowrap;
 }
 
-/* 列印專用 B/C 肝標籤：螢幕不顯示（螢幕版已有完整 note），只在列印時出現 */
-.print-hepatitis {
+/* 列印專用 B/C 肝標籤與頁首日期：螢幕不顯示，只在列印時出現 */
+.print-hepatitis,
+.print-date-header {
   display: none;
 }
 
@@ -920,18 +921,26 @@
   .simplified-table {
     min-width: 0;
     width: 100%;
-    font-size: 12px;
+    font-size: 10px;
   }
-  .simplified-table th {
-    position: static;
-    padding: 2px 3px;
+  /* 表頭列不印，改印上方一行日期頁首（省一列高度） */
+  .simplified-table thead {
+    display: none;
+  }
+  .print-date-header {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    margin: 0 0 2px;
+    line-height: 1.2;
   }
   .simplified-table td {
-    padding: 1px 3px;
+    padding: 0 2px;
     vertical-align: middle;
+    line-height: 1.1;
   }
   .simplified-table .col-bed {
-    width: 44px;
+    width: 40px;
   }
   /* 不印：模式徽章、勿動鎖、留言圖示、備註標籤、檢驗異常徽章、交班留言 */
   .clinical-view-wrapper .stats-special-mode,
@@ -942,30 +951,31 @@
   .handover-line {
     display: none !important;
   }
-  /* 病歷號＋姓名＋B/C肝＋病房號 併成一行，列高由字級撐滿 */
+  /* 病歷號＋姓名＋B/C肝＋病房號 併成一行；置中對齊避免混字級撐高列 */
   .clinical-view-wrapper .patient-info-cell {
     flex-direction: row;
-    align-items: baseline;
-    gap: 6px;
+    align-items: center;
+    gap: 4px;
   }
   .clinical-view-wrapper .patient-mrn-name {
     flex-direction: row;
-    align-items: baseline;
-    gap: 6px;
+    align-items: center;
+    gap: 4px;
+    line-height: 1.1;
   }
   .clinical-view-wrapper .medical-record-number {
-    font-size: 12px;
+    font-size: 10px;
     color: #000;
   }
   .clinical-view-wrapper .patient-name-wrapper {
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 700;
     padding: 0;
-    line-height: 1.2;
+    line-height: 1.1;
   }
   .print-hepatitis {
     display: inline;
-    font-size: 12px;
+    font-size: 10px;
     font-weight: 700;
     color: #b71c1c;
   }
@@ -974,9 +984,10 @@
   }
   /* 底色列印常被瀏覽器關閉，病房號改用框線確保可辨 */
   .clinical-view-wrapper .ward-number-badge {
-    font-size: 12px;
+    font-size: 10px;
+    line-height: 1.1;
     background: none;
     border: 1px solid #333;
-    padding: 0 3px;
+    padding: 0 2px;
   }
 }

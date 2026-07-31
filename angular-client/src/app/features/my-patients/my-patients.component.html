@@ -82,6 +82,10 @@
       </div>
     } @else {
       <div class="clinical-view-wrapper">
+        <!-- 列印專用頁首：取代表頭列，只印日期＋欄序說明（螢幕不顯示） -->
+        <div class="print-date-header">
+          {{ selectedDate() }}（{{ weekdayDisplay() }}）　欄序：{{ clinicalShiftHeaders.join('／') }}
+        </div>
         <table class="simplified-table">
           <thead>
             <tr>
