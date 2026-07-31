@@ -341,6 +341,8 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
       const content = String(msg?.content || msg?.title || '').trim();
       if (!content) continue;
       const type = String(msg?.type || '');
+      // 調班申請自動產生的留言（臨時調班/加洗/交換皆 type='調班'）不進簡表＝使用者指定
+      if (type === '調班') continue;
       const list = map.get(patientId) || [];
       list.push(type && type !== '常規' ? `[${type}] ${content}` : content);
       map.set(patientId, list);
