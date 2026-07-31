@@ -125,6 +125,9 @@
                               <span class="stats-special-mode">{{ cell.mode }}</span>
                             }
                           </span>
+                          @if (cell.hepatitisTags) {
+                            <span class="print-hepatitis">{{ cell.hepatitisTags }}</span>
+                          }
                           @if (cell.isDoNotMove) {
                             <i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + cell.doNotMoveReason"></i>
                           }

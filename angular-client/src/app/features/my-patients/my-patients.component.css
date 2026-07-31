@@ -895,6 +895,16 @@
   white-space: nowrap;
 }
 
+/* 列印專用 B/C 肝標籤：螢幕不顯示（螢幕版已有完整 note），只在列印時出現 */
+.print-hepatitis {
+  display: none;
+}
+
+/* 列印：0.5cm 邊界、單頁 A4；格內只留 病歷號/姓名/病房號/B,C肝，字級拉大 */
+@page {
+  size: A4 portrait;
+  margin: 0.5cm;
+}
 @media print {
   .no-print,
   .page-header,
@@ -909,16 +919,64 @@
   }
   .simplified-table {
     min-width: 0;
-    font-size: 0.72rem;
+    width: 100%;
+    font-size: 12px;
   }
-  .simplified-table th,
-  .simplified-table td {
+  .simplified-table th {
+    position: static;
     padding: 2px 3px;
   }
-  .clinical-view-wrapper .patient-name-wrapper {
-    font-size: 0.85rem;
+  .simplified-table td {
+    padding: 1px 3px;
+    vertical-align: middle;
   }
+  .simplified-table .col-bed {
+    width: 44px;
+  }
+  /* 不印：模式徽章、勿動鎖、留言圖示、備註標籤、檢驗異常徽章、交班留言 */
+  .clinical-view-wrapper .stats-special-mode,
+  .clinical-view-wrapper .do-not-move-icon,
+  .clinical-view-wrapper app-patient-messages-icon,
+  .clinical-view-wrapper .patient-note,
+  .lab-abnormal-row,
   .handover-line {
-    white-space: normal;
+    display: none !important;
+  }
+  /* 病歷號＋姓名＋B/C肝＋病房號 併成一行，列高由字級撐滿 */
+  .clinical-view-wrapper .patient-info-cell {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .clinical-view-wrapper .patient-mrn-name {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .clinical-view-wrapper .medical-record-number {
+    font-size: 12px;
+    color: #000;
+  }
+  .clinical-view-wrapper .patient-name-wrapper {
+    font-size: 15px;
+    font-weight: 700;
+    padding: 0;
+    line-height: 1.2;
+  }
+  .print-hepatitis {
+    display: inline;
+    font-size: 12px;
+    font-weight: 700;
+    color: #b71c1c;
+  }
+  .clinical-view-wrapper .patient-ward-note {
+    justify-content: flex-start;
+  }
+  /* 底色列印常被瀏覽器關閉，病房號改用框線確保可辨 */
+  .clinical-view-wrapper .ward-number-badge {
+    font-size: 12px;
+    background: none;
+    border: 1px solid #333;
+    padding: 0 3px;
   }
 }

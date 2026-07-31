@@ -83,6 +83,9 @@ const CLINICAL_BED_LAYOUT: number[] = [
 ];
 const CLINICAL_PERIPHERAL_COUNT = 6;
 
+// 列印簡表僅保留的 B/C 肝相關標籤（來源同格內 note 的標籤集，與排程格線 generateAutoNotes 同一套代碼）
+const HEPATITIS_PRINT_TAGS = new Set(['B', 'C', 'BC?', 'C癒']);
+
 /** 臨床查閱簡表的一格（無病人時為 null） */
 interface ClinicalCell {
   shiftId: string;
@@ -100,6 +103,8 @@ interface ClinicalCell {
   labAbnormals: LabAbnormal[];
   /** 今日交班留言（tasks category=message） */
   handovers: string[];
+  /** 列印專用：B/C 肝標籤（螢幕版顯示完整 note，列印時只印這個） */
+  hepatitisTags: string;
 }
 
 interface ClinicalRow {
@@ -306,9 +311,9 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
       const modeRaw = String(slot.modeOverride || info?.['mode'] || patient?.['mode'] || '');
       const autoTags = String(slot.autoNote || '').split(' ').filter(Boolean);
       const manualTags = String(slot.manualNote || '').split(' ').filter(Boolean);
-      const note = [...new Set([...autoTags, ...manualTags])]
-        .filter((tag) => !['住', '急'].includes(tag))
-        .join(' ');
+      const allTags = [...new Set([...autoTags, ...manualTags])];
+      const note = allTags.filter((tag) => !['住', '急'].includes(tag)).join(' ');
+      const hepatitisTags = allTags.filter((tag) => HEPATITIS_PRINT_TAGS.has(tag)).join(' ');
       const messageTypes = [...(messageMap.get(slot.patientId) || [])];
       const doNotMove = patient?.['patientStatus']?.doNotMove;
       return {
@@ -330,6 +335,7 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
         messageTypes,
         labAbnormals: labMap.get(slot.patientId) || [],
         handovers: handoverMap.get(slot.patientId) || [],
+        hepatitisTags,
       };
     };
 
