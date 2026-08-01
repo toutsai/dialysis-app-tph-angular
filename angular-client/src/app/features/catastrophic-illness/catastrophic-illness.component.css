@@ -1,4 +1,6 @@
-.ci-page { padding: 16px 20px; max-width: 1100px; }
+.ci-page { padding: 16px 20px; }
+/* 頁面比照其他頁全寬（總覽表+提醒卡用得到）；申請表單維持原窄版面，欄位不被拉散 */
+.form-card { max-width: 1060px; }
 
 /* 標題列：比照其他頁（2rem 粗體 + 副標 + 底線分隔，基準見 med-adjustment） */
 .page-header { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #dee2e6; }
