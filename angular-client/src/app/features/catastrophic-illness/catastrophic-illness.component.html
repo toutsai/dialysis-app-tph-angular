@@ -55,7 +55,16 @@
               </td>
               <td class="col-physician">{{ row.physicianName || '—' }}</td>
               @for (label of overviewColumns(); track $index) {
-                <td class="col-date">{{ slotAt(row, $index)?.physicianDate || '—' }}</td>
+                <td class="col-date">
+                  @if (slotAt(row, $index); as slot) {
+                    {{ slot.physicianDate || '—' }}
+                    @if (canWrite) {
+                      <button type="button" class="slot-edit-btn" title="編輯這筆申請" (click)="editFromOverview(row, slot, $event)">✎</button>
+                    }
+                  } @else {
+                    —
+                  }
+                </td>
                 <td class="col-date">
                   @if (slotAt(row, $index); as slot) {
                     @if (isClerk) {

@@ -24,6 +24,8 @@
 .overview-table thead .col-expiry { background: #ffec99; }
 .patient-link { border: none; background: none; color: #1971c2; cursor: pointer; font-size: inherit; padding: 0; text-decoration: underline; }
 .patient-link:hover { color: #1864ab; }
+.slot-edit-btn { border: 1px solid #ced4da; background: #fff; color: #1971c2; cursor: pointer; border-radius: 4px; padding: 0 4px; margin-left: 4px; font-size: 0.8rem; line-height: 1.4; }
+.slot-edit-btn:hover { background: #e7f5ff; border-color: #74c0fc; }
 .clerk-input { border: 1px solid #ced4da; border-radius: 4px; padding: 2px 4px; font-size: 0.85rem; }
 .overview-empty { color: #adb5bd; padding: 12px; }
 

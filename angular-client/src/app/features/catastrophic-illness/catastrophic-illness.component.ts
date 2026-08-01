@@ -166,6 +166,25 @@ export class CatastrophicIllnessComponent implements OnInit {
     }
   }
 
+  /** 總覽列的編輯鈕 → 選定病人並直接開啟該筆申請表（醫師/管理員限定） */
+  async editFromOverview(row: CiOverviewRow, slot: CiOverviewSlot, event: Event): Promise<void> {
+    event.stopPropagation();
+    if (!this.canWrite) return;
+    const p = this.patientStore.allPatients().find((x) => String(x['id']) === row.patientId);
+    if (!p) {
+      alert('此病人不在病人清單中（可能已刪除），無法開啟表單');
+      return;
+    }
+    await this.selectPatient(p);
+    const app = this.applications().find((a) => a.id === slot.id);
+    if (!app) {
+      alert('找不到該筆申請紀錄，請重新整理後再試');
+      return;
+    }
+    this.activeTab = app.applicationType;
+    this.openApplication(app);
+  }
+
   async onClerkSentChange(row: CiOverviewRow, slot: CiOverviewSlot | null, event: Event): Promise<void> {
     if (!slot) return;
     const input = event.target as HTMLInputElement;
