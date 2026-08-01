@@ -35,8 +35,8 @@
             @for (label of overviewColumns(); track $index) {
               <th colspan="2">{{ label }}</th>
             }
-            <th colspan="3" class="col-prep">到期續辦追蹤（書記）</th>
             <th rowspan="2" class="col-expiry">重大傷病到期日</th>
+            <th colspan="3" class="col-prep">到期續辦追蹤（書記）</th>
           </tr>
           <tr>
             @for (label of overviewColumns(); track $index) {
@@ -82,6 +82,13 @@
                   }
                 </td>
               }
+              <td class="col-expiry">
+                @if (isClerk) {
+                  <input type="date" class="clerk-input" [value]="row.expiryDate" (change)="onExpiryChange(row, $event)" />
+                } @else {
+                  {{ row.expiryDate || '—' }}
+                }
+              </td>
               @for (col of RENEWAL_PREP_COLUMNS; track col.key) {
                 <td class="col-date col-prep">
                   @if (isLifetime(row)) {
@@ -93,13 +100,6 @@
                   }
                 </td>
               }
-              <td class="col-expiry">
-                @if (isClerk) {
-                  <input type="date" class="clerk-input" [value]="row.expiryDate" (change)="onExpiryChange(row, $event)" />
-                } @else {
-                  {{ row.expiryDate || '—' }}
-                }
-              </td>
             </tr>
           } @empty {
             <tr>
