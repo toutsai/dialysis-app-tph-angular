@@ -68,7 +68,7 @@ router.get('/', ...isCatastrophicIllnessRole, (req, res) => {
 
 /**
  * GET /api/catastrophic-illness/overview
- * 申請進度總覽：每病人一列，含初次/再次/三次的醫師簽章日期（完成日期）、書記送出日期、重大傷病到期日
+ * 申請進度總覽：每病人一列，含負責醫師、各次申請（初次/再次/三次/四次…不限次數）的醫師簽章日期（完成日期）、書記送出日期、重大傷病到期日
  * 醫師（contributor）只回自己建立的紀錄；admin 與書記（viewer）回全部
  * ⚠️ 必須定義在 GET /:id 之前，否則會被 /:id 攔截
  */
@@ -88,11 +88,11 @@ router.get('/overview', ...isOverviewRole, (req, res) => {
         .map((r) => [r.patient_id, r.expiry_date || ''])
     )
 
-    // 依病人彙整：初次取最新一筆 initial；再次/三次取 renewal 依建立順序前兩筆
+    // 依病人彙整：初次取最新一筆 initial；再次起為 renewal 依建立順序全列（第 N 筆＝第 N+1 次申請）
     const byPatient = new Map()
     for (const row of rows) {
       if (!byPatient.has(row.patient_id)) {
-        byPatient.set(row.patient_id, { patientName: row.patient_name, initials: [], renewals: [], latestUpdatedAt: '' })
+        byPatient.set(row.patient_id, { patientName: row.patient_name, physicianName: '', initials: [], renewals: [], latestUpdatedAt: '' })
       }
       const entry = byPatient.get(row.patient_id)
       let formData = {}
@@ -105,15 +105,19 @@ router.get('/overview', ...isOverviewRole, (req, res) => {
       }
       if (row.application_type === 'initial') entry.initials.push(slot)
       else entry.renewals.push(slot)
+      // 負責醫師＝最新一筆有填負責醫師姓名的申請（rows 已依 created_at ASC 排序）
+      if (slot.physicianName) entry.physicianName = slot.physicianName
       if (row.updated_at > entry.latestUpdatedAt) entry.latestUpdatedAt = row.updated_at
     }
 
     const result = [...byPatient.entries()].map(([patientId, entry]) => ({
       patientId,
       patientName: entry.patientName,
-      initial: entry.initials.length > 0 ? entry.initials[entry.initials.length - 1] : null,
-      second: entry.renewals[0] || null,
-      third: entry.renewals[1] || null,
+      physicianName: entry.physicianName,
+      applications: [
+        entry.initials.length > 0 ? entry.initials[entry.initials.length - 1] : null,
+        ...entry.renewals
+      ],
       expiryDate: expiryMap.get(patientId) || '',
       latestUpdatedAt: entry.latestUpdatedAt
     }))

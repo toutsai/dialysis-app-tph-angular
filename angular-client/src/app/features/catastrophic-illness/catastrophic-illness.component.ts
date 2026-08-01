@@ -1,7 +1,7 @@
 // 重大傷病申請工作檯：初次/再次兩頁籤，選病人自動帶入基本資料與最近檢驗值，
 // 儲存至 catastrophic_illness_applications，並可依官方附表版面列印匯出
 // 權限：admin/contributor（醫師與專師）可寫表單；viewer（書記）僅進度總覽＋填送出日期/到期日
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -50,12 +50,15 @@ interface CiOverviewSlot {
 interface CiOverviewRow {
   patientId: string;
   patientName: string;
-  initial: CiOverviewSlot | null;
-  second: CiOverviewSlot | null;
-  third: CiOverviewSlot | null;
+  physicianName: string;
+  /** 第 1 筆＝初次，之後依序再次/三次/四次…（缺該次時為 null） */
+  applications: (CiOverviewSlot | null)[];
   expiryDate: string;
   latestUpdatedAt: string;
 }
+
+/** 申請次數欄位標題：有幾次就顯示幾欄 */
+const APPLICATION_ORDINALS = ['初次', '再次', '三次', '四次', '五次', '六次', '七次', '八次', '九次', '十次'];
 
 @Component({
   selector: 'app-catastrophic-illness',
@@ -136,6 +139,16 @@ export class CatastrophicIllnessComponent implements OnInit {
     } finally {
       this.overviewLoading = false;
     }
+  }
+
+  // 申請次數欄依資料動態決定（最少 3 欄維持版面），標題初次/再次/三次/四次…
+  readonly overviewColumns = computed(() => {
+    const max = Math.max(3, ...this.overviewRows().map((r) => r.applications?.length || 0));
+    return Array.from({ length: max }, (_, i) => (APPLICATION_ORDINALS[i] || `第${i + 1}次`) + '申請');
+  });
+
+  slotAt(row: CiOverviewRow, index: number): CiOverviewSlot | null {
+    return row.applications?.[index] ?? null;
   }
 
   toggleOverview(): void {
