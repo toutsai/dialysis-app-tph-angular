@@ -630,6 +630,13 @@ export function runMigrations() {
       migrationsApplied++
     }
 
+    // 重大傷病到期續辦準備追蹤（2026-08-02）：已掛號/已填寫申請書/已收齊證件診斷書（書記填日期，非終身到期者用）
+    for (const col of ['renewal_registered_date', 'renewal_form_date', 'renewal_docs_date']) {
+      if (addColumnIfNotExists(db, 'catastrophic_illness_expiry', col, 'TEXT')) {
+        migrationsApplied++
+      }
+    }
+
     if (migrationsApplied > 0) {
       console.log(`✅ 已完成 ${migrationsApplied} 項遷移`)
     } else {

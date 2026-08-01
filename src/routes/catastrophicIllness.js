@@ -84,8 +84,8 @@ router.get('/overview', ...isOverviewRole, (req, res) => {
     }
 
     const expiryMap = new Map(
-      db.prepare('SELECT patient_id, expiry_date FROM catastrophic_illness_expiry').all()
-        .map((r) => [r.patient_id, r.expiry_date || ''])
+      db.prepare('SELECT patient_id, expiry_date, renewal_registered_date, renewal_form_date, renewal_docs_date FROM catastrophic_illness_expiry').all()
+        .map((r) => [r.patient_id, r])
     )
 
     // 依病人彙整：初次取最新一筆 initial；再次起為 renewal 依建立順序全列（第 N 筆＝第 N+1 次申請）
@@ -110,17 +110,23 @@ router.get('/overview', ...isOverviewRole, (req, res) => {
       if (row.updated_at > entry.latestUpdatedAt) entry.latestUpdatedAt = row.updated_at
     }
 
-    const result = [...byPatient.entries()].map(([patientId, entry]) => ({
-      patientId,
-      patientName: entry.patientName,
-      physicianName: entry.physicianName,
-      applications: [
-        entry.initials.length > 0 ? entry.initials[entry.initials.length - 1] : null,
-        ...entry.renewals
-      ],
-      expiryDate: expiryMap.get(patientId) || '',
-      latestUpdatedAt: entry.latestUpdatedAt
-    }))
+    const result = [...byPatient.entries()].map(([patientId, entry]) => {
+      const expiry = expiryMap.get(patientId) || {}
+      return {
+        patientId,
+        patientName: entry.patientName,
+        physicianName: entry.physicianName,
+        applications: [
+          entry.initials.length > 0 ? entry.initials[entry.initials.length - 1] : null,
+          ...entry.renewals
+        ],
+        expiryDate: expiry.expiry_date || '',
+        renewalRegisteredDate: expiry.renewal_registered_date || '',
+        renewalFormDate: expiry.renewal_form_date || '',
+        renewalDocsDate: expiry.renewal_docs_date || '',
+        latestUpdatedAt: entry.latestUpdatedAt
+      }
+    })
     result.sort((a, b) => b.latestUpdatedAt.localeCompare(a.latestUpdatedAt))
 
     res.json(result)
@@ -179,6 +185,48 @@ router.put('/expiry/:patientId', ...isClerkRole, (req, res) => {
   } catch (error) {
     console.error('更新重大傷病到期日錯誤:', error)
     res.status(500).json({ error: true, message: '更新重大傷病到期日失敗' })
+  }
+})
+
+/**
+ * PUT /api/catastrophic-illness/renewal-prep/:patientId
+ * 書記填該病人的到期續辦準備追蹤日期（已掛號/已填寫申請書/已收齊證件診斷書）
+ * body 只帶要改的欄位（registeredDate/formDate/docsDate），未帶欄位不動＝守衛式部分更新
+ */
+router.put('/renewal-prep/:patientId', ...isClerkRole, (req, res) => {
+  try {
+    const FIELD_MAP = {
+      registeredDate: 'renewal_registered_date',
+      formDate: 'renewal_form_date',
+      docsDate: 'renewal_docs_date'
+    }
+    const updates = []
+    const values = []
+    for (const [key, column] of Object.entries(FIELD_MAP)) {
+      if (req.body[key] === undefined) continue
+      if (!isValidDateOrEmpty(req.body[key])) {
+        return res.status(400).json({ error: true, message: '日期格式必須為 YYYY-MM-DD' })
+      }
+      updates.push(column)
+      values.push(req.body[key] || null)
+    }
+    if (updates.length === 0) {
+      return res.status(400).json({ error: true, message: '未提供任何欄位' })
+    }
+    const db = getDatabase()
+    const updatedBy = JSON.stringify({ uid: req.user.id, name: req.user.name })
+    db.prepare(`
+      INSERT INTO catastrophic_illness_expiry (patient_id, ${updates.join(', ')}, updated_by, updated_at)
+      VALUES (?, ${updates.map(() => '?').join(', ')}, ?, datetime('now', 'localtime'))
+      ON CONFLICT(patient_id) DO UPDATE SET
+        ${updates.map((c) => `${c} = excluded.${c}`).join(', ')},
+        updated_by = excluded.updated_by,
+        updated_at = excluded.updated_at
+    `).run(req.params.patientId, ...values, updatedBy)
+    res.json({ success: true })
+  } catch (error) {
+    console.error('更新重大傷病續辦追蹤錯誤:', error)
+    res.status(500).json({ error: true, message: '更新重大傷病續辦追蹤失敗' })
   }
 })
 

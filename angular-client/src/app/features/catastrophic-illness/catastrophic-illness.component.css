@@ -26,6 +26,21 @@
 .patient-link:hover { color: #1864ab; }
 .slot-edit-btn { border: 1px solid #ced4da; background: #fff; color: #1971c2; cursor: pointer; border-radius: 4px; padding: 0 4px; margin-left: 4px; font-size: 0.8rem; line-height: 1.4; }
 .slot-edit-btn:hover { background: #e7f5ff; border-color: #74c0fc; }
+.overview-body { display: flex; gap: 12px; align-items: flex-start; }
+.overview-body .overview-scroll { flex: 1; min-width: 0; }
+.overview-table .col-prep { background: #f3f0ff; }
+.overview-table thead .col-prep { background: #e5dbff; }
+.lifetime-tag { color: #868e96; }
+.expiry-reminder { flex: 0 0 220px; background: #fff4e6; border: 1px solid #ffd8a8; border-radius: 6px; padding: 10px 12px; }
+.expiry-reminder h4 { margin: 0 0 8px; font-size: 0.95rem; color: #d9480f; }
+.reminder-item { border-bottom: 1px dashed #ffd8a8; padding: 6px 0; font-size: 0.88rem; }
+.reminder-item:last-child { border-bottom: none; }
+.reminder-line { display: flex; justify-content: space-between; gap: 6px; }
+.reminder-name { font-weight: 600; color: #343a40; }
+.reminder-date { color: #e8590c; white-space: nowrap; }
+.reminder-item.expired .reminder-date { color: #c92a2a; font-weight: 600; }
+.reminder-action { color: #495057; margin-top: 2px; }
+.reminder-empty { color: #868e96; font-size: 0.88rem; }
 .clerk-input { border: 1px solid #ced4da; border-radius: 4px; padding: 2px 4px; font-size: 0.85rem; }
 .overview-empty { color: #adb5bd; padding: 12px; }
 

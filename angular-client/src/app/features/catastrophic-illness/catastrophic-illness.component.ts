@@ -54,11 +54,22 @@ interface CiOverviewRow {
   /** 第 1 筆＝初次，之後依序再次/三次/四次…（缺該次時為 null） */
   applications: (CiOverviewSlot | null)[];
   expiryDate: string;
+  renewalRegisteredDate: string;
+  renewalFormDate: string;
+  renewalDocsDate: string;
   latestUpdatedAt: string;
 }
 
 /** 申請次數欄位標題：有幾次就顯示幾欄 */
 const APPLICATION_ORDINALS = ['初次', '再次', '三次', '四次', '五次', '六次', '七次', '八次', '九次', '十次'];
+
+/** 到期續辦準備追蹤欄（書記填日期；API body key → 總覽列欄位） */
+type RenewalPrepKey = 'registeredDate' | 'formDate' | 'docsDate';
+const RENEWAL_PREP_PROPS: Record<RenewalPrepKey, 'renewalRegisteredDate' | 'renewalFormDate' | 'renewalDocsDate'> = {
+  registeredDate: 'renewalRegisteredDate',
+  formDate: 'renewalFormDate',
+  docsDate: 'renewalDocsDate',
+};
 
 @Component({
   selector: 'app-catastrophic-illness',
@@ -146,6 +157,52 @@ export class CatastrophicIllnessComponent implements OnInit {
     const max = Math.max(3, ...this.overviewRows().map((r) => r.applications?.length || 0));
     return Array.from({ length: max }, (_, i) => (APPLICATION_ORDINALS[i] || `第${i + 1}次`) + '申請');
   });
+
+  readonly RENEWAL_PREP_COLUMNS: { key: RenewalPrepKey; label: string }[] = [
+    { key: 'registeredDate', label: '已掛號' },
+    { key: 'formDate', label: '已填寫申請書' },
+    { key: 'docsDate', label: '已收齊證件/診斷書' },
+  ];
+
+  /** 到期日年份 ≥2900（民國 999 年＝西元 2910）視為終身有效 */
+  isLifetime(row: CiOverviewRow): boolean {
+    return !!row.expiryDate && row.expiryDate >= '2900';
+  }
+
+  // 到期提醒：非終身且到期日在一個月內（含已過期，續辦完成書記更新到期日後自動退場）
+  readonly expiryReminders = computed(() => {
+    const today = new Date();
+    const fmt = (d: Date) => d.toLocaleDateString('sv-SE');
+    const todayStr = fmt(today);
+    const oneMonthLater = fmt(new Date(today.getFullYear(), today.getMonth() + 1, today.getDate()));
+    return this.overviewRows()
+      .filter((r) => r.expiryDate && !this.isLifetime(r) && r.expiryDate <= oneMonthLater)
+      .map((r) => ({
+        patientId: r.patientId,
+        patientName: r.patientName,
+        physicianName: r.physicianName,
+        expiryDate: r.expiryDate,
+        isExpired: r.expiryDate < todayStr,
+      }))
+      .sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
+  });
+
+  prepValue(row: CiOverviewRow, key: RenewalPrepKey): string {
+    return row[RENEWAL_PREP_PROPS[key]] || '';
+  }
+
+  async onRenewalPrepChange(row: CiOverviewRow, key: RenewalPrepKey, event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const value = input.value || '';
+    try {
+      await firstValueFrom(this.api.put(`/catastrophic-illness/renewal-prep/${row.patientId}`, { [key]: value }));
+      row[RENEWAL_PREP_PROPS[key]] = value;
+    } catch (err) {
+      console.error('更新續辦追蹤日期失敗:', err);
+      input.value = row[RENEWAL_PREP_PROPS[key]];
+      alert('更新失敗，請重試');
+    }
+  }
 
   slotAt(row: CiOverviewRow, index: number): CiOverviewSlot | null {
     return row.applications?.[index] ?? null;

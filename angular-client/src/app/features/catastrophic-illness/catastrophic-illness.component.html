@@ -25,6 +25,7 @@
       }
     </button>
     @if (!overviewCollapsed) {
+    <div class="overview-body">
     <div class="overview-scroll">
       <table class="overview-table">
         <thead>
@@ -34,12 +35,16 @@
             @for (label of overviewColumns(); track $index) {
               <th colspan="2">{{ label }}</th>
             }
+            <th colspan="3" class="col-prep">到期續辦追蹤（書記）</th>
             <th rowspan="2" class="col-expiry">重大傷病到期日</th>
           </tr>
           <tr>
             @for (label of overviewColumns(); track $index) {
               <th>完成日期</th>
               <th>書記送出</th>
+            }
+            @for (col of RENEWAL_PREP_COLUMNS; track col.key) {
+              <th class="col-prep">{{ col.label }}</th>
             }
           </tr>
         </thead>
@@ -77,6 +82,17 @@
                   }
                 </td>
               }
+              @for (col of RENEWAL_PREP_COLUMNS; track col.key) {
+                <td class="col-date col-prep">
+                  @if (isLifetime(row)) {
+                    <span class="lifetime-tag">終身</span>
+                  } @else if (isClerk) {
+                    <input type="date" class="clerk-input" [value]="prepValue(row, col.key)" (change)="onRenewalPrepChange(row, col.key, $event)" />
+                  } @else {
+                    {{ prepValue(row, col.key) || '—' }}
+                  }
+                </td>
+              }
               <td class="col-expiry">
                 @if (isClerk) {
                   <input type="date" class="clerk-input" [value]="row.expiryDate" (change)="onExpiryChange(row, $event)" />
@@ -87,11 +103,26 @@
             </tr>
           } @empty {
             <tr>
-              <td [attr.colspan]="overviewColumns().length * 2 + 3" class="overview-empty">尚無申請紀錄</td>
+              <td [attr.colspan]="overviewColumns().length * 2 + 6" class="overview-empty">尚無申請紀錄</td>
             </tr>
           }
         </tbody>
       </table>
+    </div>
+    <aside class="expiry-reminder">
+      <h4>⏰ 到期提醒（一個月內）</h4>
+      @for (r of expiryReminders(); track r.patientId) {
+        <div class="reminder-item" [class.expired]="r.isExpired">
+          <div class="reminder-line">
+            <span class="reminder-name">{{ r.patientName }}</span>
+            <span class="reminder-date">{{ r.expiryDate }}{{ r.isExpired ? ' 已到期' : ' 到期' }}</span>
+          </div>
+          <div class="reminder-action">協助掛 {{ r.physicianName || '負責醫師' }}</div>
+        </div>
+      } @empty {
+        <div class="reminder-empty">一個月內無到期病人</div>
+      }
+    </aside>
     </div>
     }
   </div>
