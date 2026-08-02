@@ -91,13 +91,18 @@
         </div>
       </div>
 
-      <div class="ov-card ov-wip">
+      <div class="ov-card">
         <div class="ov-card-head">
           <i class="fas fa-prescription"></i>
           <h3>HD處方</h3>
           <span class="ov-freq">每季・當季最後一次透析日</span>
         </div>
-        <p class="ov-desc">建置中：由透析醫囑自動產生季度處方快照，逐欄可修改後匯出官方 CSV。</p>
+        <p class="ov-desc">由透析醫囑自動產生季度處方快照（血流量、時數、AK 對應官方代碼等），逐欄核對修改後匯出官方 CSV。</p>
+        <div class="ov-actions">
+          <button class="action-btn quarterly-btn" (click)="setTab('hdrx')">
+            <i class="fas fa-arrow-right"></i> 前往 HD處方
+          </button>
+        </div>
       </div>
 
       <div class="ov-card">
@@ -463,6 +468,11 @@
       <div class="spinner"></div>
       <p>正在讀取申報資料...</p>
     </div>
+  </section>
+
+  <!-- ========== HD處方季度工作檯 ========== -->
+  <section class="tab-panel" *ngIf="activeTab() === 'hdrx'">
+    <app-kidit-hdrx-quarterly></app-kidit-hdrx-quarterly>
   </section>
 
   <!-- ========== 季度輸入彙整（透析紀錄／醫療狀況評估／合併症） ========== -->

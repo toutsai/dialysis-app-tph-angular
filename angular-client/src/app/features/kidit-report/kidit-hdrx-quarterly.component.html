@@ -1,0 +1,125 @@
+<div class="hx-container">
+  <div class="hx-toolbar">
+    <div class="hx-quarter-nav">
+      <button class="hx-nav-btn" (click)="changeQuarter(-1)" title="上一季">
+        <i class="fas fa-chevron-left"></i>
+      </button>
+      <span class="hx-quarter">
+        {{ year() }} 年 <span class="hx-q">Q{{ q() }}</span>
+        <small>{{ quarterRangeLabel() }}</small>
+      </span>
+      <button class="hx-nav-btn" (click)="changeQuarter(1)" title="下一季">
+        <i class="fas fa-chevron-right"></i>
+      </button>
+    </div>
+
+    <span class="hx-save-state" [ngSwitch]="saveState()">
+      <span *ngSwitchCase="'saving'" class="hx-saving"><i class="fas fa-circle-notch fa-spin"></i> 儲存中…</span>
+      <span *ngSwitchCase="'saved'" class="hx-saved"><i class="fas fa-check"></i> 已儲存</span>
+      <span *ngSwitchCase="'error'" class="hx-error"><i class="fas fa-exclamation-triangle"></i> 儲存失敗</span>
+    </span>
+
+    <span class="hx-warn-count" *ngIf="!isLoading() && warningCount() > 0">
+      <i class="fas fa-exclamation-triangle"></i> {{ warningCount() }} 位 AK 待對應
+    </span>
+
+    <button class="hx-btn hx-export-btn" (click)="exportCsv()" [disabled]="isLoading() || rows().length === 0">
+      <i class="fas fa-file-export"></i> 匯出 CSV
+    </button>
+  </div>
+
+  <p class="hx-hint">
+    <i class="fas fa-info-circle"></i>
+    名單＝常規門診病人，欄位由透析醫囑預帶（申報日期預設季度最後一天＝當季最後一次透析日；透析方式 HD 預設 3 High flux、透析液流速 500、鹼基 2、鉀 2 為常規預設請核對）。
+    所有欄位可直接修改並自動儲存；AK 輪替病人取第一顆對應官方代碼，「透析器型號」請輸入對應代碼（可用下拉建議搜尋）。勾「排除」不列入匯出。
+  </p>
+
+  <div *ngIf="isLoading()" class="hx-loading">
+    <div class="hx-spinner"></div>
+    <p>正在產生本季 HD處方快照...</p>
+  </div>
+
+  <div class="hx-table-wrap" *ngIf="!isLoading() && rows().length > 0">
+    <table class="hx-table">
+      <thead>
+        <tr>
+          <th class="hx-sticky">姓名</th>
+          <th>病歷號</th>
+          <th>排除</th>
+          <th>警告</th>
+          <th>醫囑 AK（原）</th>
+          <th>日期</th>
+          <th>透析方式</th>
+          <th>血液流速</th>
+          <th>透析液流速</th>
+          <th>每週次數</th>
+          <th>HDF每月次數</th>
+          <th>每次時間(hr)</th>
+          <th>表面積(m²)</th>
+          <th>抗凝劑</th>
+          <th>初劑量(U)</th>
+          <th>維持劑量(U/hr)</th>
+          <th>透析器型號代碼</th>
+          <th>鹼基</th>
+          <th>Ca(meq/L)</th>
+          <th>K(meq/L)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let r of rows(); trackBy: trackByPatient" [class.hx-excluded]="r.excluded">
+          <td class="hx-sticky hx-name">{{ r.name }}</td>
+          <td class="hx-muted">{{ r.medicalRecordNumber || '—' }}</td>
+          <td class="hx-center">
+            <input type="checkbox" [checked]="r.excluded" (change)="onExcludedChange(r, $any($event.target).checked)" />
+          </td>
+          <td class="hx-warn-cell">
+            <i class="fas fa-exclamation-triangle" *ngIf="r.warnings.length" [title]="r.warnings.join('；')"></i>
+          </td>
+          <td class="hx-ak-name" [title]="r.akName">{{ r.akName || '—' }}</td>
+          <td><input class="hx-in hx-date" type="date" [ngModel]="r.values['date']" (ngModelChange)="onCellChange(r, 'date', $event)" /></td>
+          <td>
+            <select class="hx-in" [ngModel]="r.values['mode']" (ngModelChange)="onCellChange(r, 'mode', $event)">
+              <option value=""></option>
+              <option *ngFor="let o of modeOptions" [value]="o.value">{{ o.label }}</option>
+            </select>
+          </td>
+          <td><input class="hx-in hx-num" type="number" [ngModel]="r.values['bloodFlow']" (ngModelChange)="onCellChange(r, 'bloodFlow', $event)" /></td>
+          <td><input class="hx-in hx-num" type="number" [ngModel]="r.values['dialysateFlow']" (ngModelChange)="onCellChange(r, 'dialysateFlow', $event)" /></td>
+          <td><input class="hx-in hx-num" type="number" [ngModel]="r.values['weeklyFreq']" (ngModelChange)="onCellChange(r, 'weeklyFreq', $event)" /></td>
+          <td><input class="hx-in hx-num" type="number" [ngModel]="r.values['hdfMonthly']" (ngModelChange)="onCellChange(r, 'hdfMonthly', $event)" /></td>
+          <td><input class="hx-in hx-num" type="number" step="0.25" [ngModel]="r.values['hours']" (ngModelChange)="onCellChange(r, 'hours', $event)" /></td>
+          <td><input class="hx-in hx-num" type="number" step="0.1" [ngModel]="r.values['surfaceArea']" (ngModelChange)="onCellChange(r, 'surfaceArea', $event)" /></td>
+          <td>
+            <select class="hx-in" [ngModel]="r.values['anticoag']" (ngModelChange)="onCellChange(r, 'anticoag', $event)">
+              <option value=""></option>
+              <option *ngFor="let o of anticoagOptions" [value]="o.value">{{ o.label }}</option>
+            </select>
+          </td>
+          <td><input class="hx-in hx-num" type="number" [ngModel]="r.values['initDose']" (ngModelChange)="onCellChange(r, 'initDose', $event)" /></td>
+          <td><input class="hx-in hx-num" type="number" [ngModel]="r.values['maintDose']" (ngModelChange)="onCellChange(r, 'maintDose', $event)" /></td>
+          <td>
+            <input class="hx-in hx-ak" type="text" list="hx-ak-codes"
+                   [ngModel]="r.values['dialyzerCode']" (ngModelChange)="onCellChange(r, 'dialyzerCode', $event)"
+                   [class.hx-missing]="!r.values['dialyzerCode']" placeholder="代碼" />
+          </td>
+          <td>
+            <select class="hx-in" [ngModel]="r.values['base']" (ngModelChange)="onCellChange(r, 'base', $event)">
+              <option value=""></option>
+              <option *ngFor="let o of baseOptions" [value]="o.value">{{ o.label }}</option>
+            </select>
+          </td>
+          <td><input class="hx-in hx-num" type="number" step="0.5" [ngModel]="r.values['ca']" (ngModelChange)="onCellChange(r, 'ca', $event)" /></td>
+          <td><input class="hx-in hx-num" type="number" step="0.5" [ngModel]="r.values['k']" (ngModelChange)="onCellChange(r, 'k', $event)" /></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <datalist id="hx-ak-codes">
+      <option *ngFor="let e of akList" [value]="e.code">{{ e.brand }} {{ e.name }}</option>
+    </datalist>
+  </div>
+
+  <div *ngIf="!isLoading() && rows().length === 0" class="hx-empty">
+    目前沒有常規門診病人。
+  </div>
+</div>

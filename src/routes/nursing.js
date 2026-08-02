@@ -1809,6 +1809,8 @@ router.get('/kidit-quarter-records/:quarter', authenticate, (req, res) => {
 /**
  * PUT /api/nursing/kidit-quarter-records/:quarter/:patientId
  * 儲存單一病人的季度表單（主護 contributor 以上可寫）
+ * data 採「頂層鍵淺合併」：只覆寫請求帶到的鍵（hdrecord/diagnose/comorbid/completed/nurse/hdrx…），
+ * 讓護理端表單與工作站 HD處方覆寫共存同一筆記錄不互相清掉
  */
 router.put('/kidit-quarter-records/:quarter/:patientId', ...isContributor, (req, res) => {
   try {
@@ -1823,6 +1825,15 @@ router.put('/kidit-quarter-records/:quarter/:patientId', ...isContributor, (req,
 
     const db = getDatabase()
     const id = `${quarter}_${patientId}`
+    const existing = db.prepare(`SELECT data FROM kidit_quarter_records WHERE id = ?`).get(id)
+    let existingData = {}
+    try {
+      existingData = JSON.parse(existing?.data || '{}') || {}
+    } catch {
+      existingData = {}
+    }
+    const mergedData = { ...existingData, ...data }
+
     const updatedBy = JSON.stringify({ uid: req.user.id, name: req.user.name })
     db.prepare(
       `INSERT INTO kidit_quarter_records (id, quarter, patient_id, data, updated_by, updated_at)
@@ -1831,7 +1842,7 @@ router.put('/kidit-quarter-records/:quarter/:patientId', ...isContributor, (req,
          data = excluded.data,
          updated_by = excluded.updated_by,
          updated_at = datetime('now','localtime')`
-    ).run(id, quarter, patientId, JSON.stringify(data), updatedBy)
+    ).run(id, quarter, patientId, JSON.stringify(mergedData), updatedBy)
 
     res.json({ success: true })
   } catch (error) {

@@ -30,6 +30,7 @@ import { localApi } from '@/services/localApiClient';
 import { KiditDetailModalComponent } from '@app/components/kidit/kidit-detail-modal.component';
 import { KiditVascularQuarterlyComponent } from './kidit-vascular-quarterly.component';
 import { KiditQuarterlyMovementsComponent } from './kidit-quarterly-movements.component';
+import { KiditHdrxQuarterlyComponent } from './kidit-hdrx-quarterly.component';
 import { describeVascularEvent, VascularAccessEvent } from '@app/core/constants/vascular-access-codes';
 
 interface DayData {
@@ -48,7 +49,7 @@ type InitialSubTab = 'pending' | 'basic' | 'first';
 @Component({
   selector: 'app-kidit-report',
   standalone: true,
-  imports: [CommonModule, FormsModule, KiditDetailModalComponent, KiditVascularQuarterlyComponent, KiditQuarterlyMovementsComponent],
+  imports: [CommonModule, FormsModule, KiditDetailModalComponent, KiditVascularQuarterlyComponent, KiditQuarterlyMovementsComponent, KiditHdrxQuarterlyComponent],
   templateUrl: './kidit-report.component.html',
   styleUrl: './kidit-report.component.css',
 })
@@ -61,7 +62,7 @@ export class KiditReportComponent implements OnInit {
     { key: 'initial', label: '初次建檔', icon: 'fa-id-card' },
     { key: 'vascular', label: '季度造管', icon: 'fa-file-csv' },
     { key: 'movement', label: '病人動態', icon: 'fa-calendar-alt' },
-    { key: 'hdrx', label: 'HD處方', icon: 'fa-prescription', wip: true },
+    { key: 'hdrx', label: 'HD處方', icon: 'fa-prescription' },
     { key: 'qinput', label: '季度輸入', icon: 'fa-notes-medical' },
     { key: 'hosp', label: '住出院', icon: 'fa-hospital', wip: true },
   ];
@@ -70,7 +71,7 @@ export class KiditReportComponent implements OnInit {
   readonly initialSubTab = signal<InitialSubTab>('pending');
   /** 月份導覽只在月份相關頁籤顯示（總覽與建置中頁籤用不到） */
   readonly showMonthNav = computed(() => ['initial', 'vascular', 'movement'].includes(this.activeTab()));
-  readonly isWipTab = computed(() => ['hdrx', 'hosp'].includes(this.activeTab()));
+  readonly isWipTab = computed(() => this.activeTab() === 'hosp');
 
   readonly currentYear = signal(new Date().getFullYear());
   readonly currentMonth = signal(new Date().getMonth() + 1);
@@ -489,21 +490,13 @@ export class KiditReportComponent implements OnInit {
 
   /** 建置中頁籤的說明文案（後續批次逐一實作） */
   wipTitle(): string {
-    switch (this.activeTab()) {
-      case 'hdrx': return 'HD處方（每季）';
-      case 'hosp': return '住出院紀錄';
-      default: return '';
-    }
+    return this.activeTab() === 'hosp' ? '住出院紀錄' : '';
   }
 
   wipDesc(): string {
-    switch (this.activeTab()) {
-      case 'hdrx':
-        return '規劃中：由透析醫囑自動產生本季處方快照（血流量、透析時間、透析器、抗凝劑等），逐欄可修改後匯出官方 CSV。申報日期＝當季最後一次透析日。';
-      case 'hosp':
-        return '規劃中：由病人動態自動配對住院／出院日期，於此補登住院原因大類／細類代碼後匯出官方 CSV。';
-      default: return '';
-    }
+    return this.activeTab() === 'hosp'
+      ? '規劃中：由病人動態自動配對住院／出院日期，於此補登住院原因大類／細類代碼後匯出官方 CSV。'
+      : '';
   }
 
   // ========== 季度輸入彙整（透析紀錄／醫療狀況評估／合併症） ==========
