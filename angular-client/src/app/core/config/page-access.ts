@@ -96,6 +96,13 @@ export const PAGE_ACCESS = {
     roles: STAFF_ROLES,
     roleLabel: '管理員、編輯者',
   },
+  kiditQuarterlyInput: {
+    // 主護（contributor）為照護清單分配病人填寫季度 KiDit 表單（透析紀錄/醫療狀況評估/合併症）
+    path: '/kidit-quarterly-input',
+    title: '季度病人 KiDit 輸入',
+    roles: CLINICAL_ROLES,
+    roleLabel: '管理員、編輯者、貢獻者',
+  },
   patients: {
     path: '/patients',
     title: '病人管理',

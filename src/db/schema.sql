@@ -847,6 +847,20 @@ CREATE TABLE IF NOT EXISTS vascular_quarter_exports (
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_vqe_quarter_patient ON vascular_quarter_exports(quarter, patient_id);
 
+-- 季度病人 KiDit 輸入（透析紀錄/醫療狀況評估/合併症）：主護每季為分配病人填寫
+-- 只存人工填寫值與完成註記，預帶值（EPO藥囑/Hb/Hct/門住診）由前端載入時即時計算
+CREATE TABLE IF NOT EXISTS kidit_quarter_records (
+    id TEXT PRIMARY KEY,                     -- `${quarter}_${patient_id}`
+    quarter TEXT NOT NULL,                   -- 例 2026Q3
+    patient_id TEXT NOT NULL,
+    data TEXT DEFAULT '{}',                  -- JSON：{ hdrecord:{}, diagnose:{}, comorbid:{}, completed:{}, nurse:{} }
+    updated_by TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_kqr_quarter_patient ON kidit_quarter_records(quarter, patient_id);
+
 -- 重大傷病申請（初次/再次）：慢性腎衰竭定期透析重大傷病證明申請附表
 -- 限 admin/contributor（醫師與專師）；表單內容存 form_data JSON（欄位對應官方附表）
 CREATE TABLE IF NOT EXISTS catastrophic_illness_applications (

@@ -10,6 +10,15 @@ import {
   downloadPatientCsv,
   downloadHistoryCsv,
 } from '@/services/kiditInitialCsvService';
+import { quarterRange, currentQuarter } from '@/services/kiditVascularCsvService';
+import {
+  KiditQuarterRecord,
+  QuarterExportRow,
+  fetchQuarterRecords,
+  downloadHdrecordCsv,
+  downloadDiagnoseCsv,
+  downloadComorbidCsv,
+} from '@/services/kiditQuarterInputService';
 import { exportVascularAccessExcel, VascularAccessRow } from '@/services/vascularAccessExportService';
 import { exportFirstDialysisExcel, FirstDialysisRow } from '@/services/firstDialysisExportService';
 import {
@@ -53,7 +62,7 @@ export class KiditReportComponent implements OnInit {
     { key: 'vascular', label: '季度造管', icon: 'fa-file-csv' },
     { key: 'movement', label: '病人動態', icon: 'fa-calendar-alt' },
     { key: 'hdrx', label: 'HD處方', icon: 'fa-prescription', wip: true },
-    { key: 'qinput', label: '季度輸入', icon: 'fa-notes-medical', wip: true },
+    { key: 'qinput', label: '季度輸入', icon: 'fa-notes-medical' },
     { key: 'hosp', label: '住出院', icon: 'fa-hospital', wip: true },
   ];
 
@@ -61,7 +70,7 @@ export class KiditReportComponent implements OnInit {
   readonly initialSubTab = signal<InitialSubTab>('pending');
   /** 月份導覽只在月份相關頁籤顯示（總覽與建置中頁籤用不到） */
   readonly showMonthNav = computed(() => ['initial', 'vascular', 'movement'].includes(this.activeTab()));
-  readonly isWipTab = computed(() => ['hdrx', 'qinput', 'hosp'].includes(this.activeTab()));
+  readonly isWipTab = computed(() => ['hdrx', 'hosp'].includes(this.activeTab()));
 
   readonly currentYear = signal(new Date().getFullYear());
   readonly currentMonth = signal(new Date().getMonth() + 1);
@@ -126,6 +135,7 @@ export class KiditReportComponent implements OnInit {
     this.activeTab.set(tab);
     if (tab === 'initial') this.loadInitialSubTab();
     else if (tab === 'vascular') this.loadVascularList();
+    else if (tab === 'qinput') this.loadQuarterInput();
   }
 
   setInitialSubTab(sub: InitialSubTab): void {
@@ -481,7 +491,6 @@ export class KiditReportComponent implements OnInit {
   wipTitle(): string {
     switch (this.activeTab()) {
       case 'hdrx': return 'HD處方（每季）';
-      case 'qinput': return '季度輸入彙整（透析紀錄／醫療狀況評估／合併症）';
       case 'hosp': return '住出院紀錄';
       default: return '';
     }
@@ -491,11 +500,130 @@ export class KiditReportComponent implements OnInit {
     switch (this.activeTab()) {
       case 'hdrx':
         return '規劃中：由透析醫囑自動產生本季處方快照（血流量、透析時間、透析器、抗凝劑等），逐欄可修改後匯出官方 CSV。申報日期＝當季最後一次透析日。';
-      case 'qinput':
-        return '規劃中：主護於「我的病人」開啟「季度病人 KiDit 輸入」，為分配到的病人填寫透析紀錄、醫療狀況評估與合併症；此頁彙整各主護填寫進度並匯出三支官方 CSV。申報日期＝當季最後一次抽血日。';
       case 'hosp':
         return '規劃中：由病人動態自動配對住院／出院日期，於此補登住院原因大類／細類代碼後匯出官方 CSV。';
       default: return '';
+    }
+  }
+
+  // ========== 季度輸入彙整（透析紀錄／醫療狀況評估／合併症） ==========
+
+  readonly qiYear = signal(currentQuarter().year);
+  readonly qiQ = signal(currentQuarter().q);
+  readonly qiQuarter = computed(() => `${this.qiYear()}Q${this.qiQ()}`);
+  readonly isLoadingQi = signal(false);
+  readonly qiRecords = signal<KiditQuarterRecord[]>([]);
+  readonly qiAssignments = signal<{ nurseId: string; nurseName: string; patientIds: string[] }[]>([]);
+
+  qiRangeLabel(): string {
+    const r = quarterRange(this.qiYear(), this.qiQ());
+    return `${r.startDate} ~ ${r.endDate}`;
+  }
+
+  async loadQuarterInput(): Promise<void> {
+    this.isLoadingQi.set(true);
+    try {
+      await this.patientStore.fetchPatientsIfNeeded();
+      const [records, care] = await Promise.all([
+        fetchQuarterRecords(this.qiQuarter()),
+        localApi.get('/nursing/patient-care'),
+      ]);
+      const excluded = new Set<string>((care as any)?.excludedNurseIds || []);
+      this.qiAssignments.set(
+        (((care as any)?.assignments || []) as any[]).filter(
+          (a) => !excluded.has(a.nurseId) && (a.patientIds || []).length > 0,
+        ),
+      );
+      this.qiRecords.set(records);
+    } catch (error) {
+      console.error('載入季度輸入彙整失敗:', error);
+      alert('載入季度輸入彙整失敗，請稍後再試。');
+    } finally {
+      this.isLoadingQi.set(false);
+    }
+  }
+
+  changeQiQuarter(offset: number): void {
+    let q = this.qiQ() + offset;
+    let y = this.qiYear();
+    if (q > 4) { q = 1; y++; }
+    else if (q < 1) { q = 4; y--; }
+    this.qiQ.set(q);
+    this.qiYear.set(y);
+    this.loadQuarterInput();
+  }
+
+  /** 進度列：分配病人 ∪ 有填寫紀錄的病人，依主護分組排序 */
+  qiProgressRows(): any[] {
+    const byId = new Map<string, any>(this.patientStore.allPatients().map((p: any) => [p.id, p]));
+    const recordByPatient = new Map(this.qiRecords().map((r) => [r.patientId, r]));
+    const nurseByPatient = new Map<string, string>();
+    for (const a of this.qiAssignments()) {
+      for (const pid of a.patientIds || []) nurseByPatient.set(pid, a.nurseName);
+    }
+
+    const allIds = new Set<string>([...nurseByPatient.keys(), ...recordByPatient.keys()]);
+    const rows: any[] = [];
+    for (const pid of allIds) {
+      const p = byId.get(pid);
+      if (!p || p.isDeleted) continue;
+      const rec = recordByPatient.get(pid);
+      const c = rec?.data?.completed || {};
+      rows.push({
+        patientId: pid,
+        nurseName: nurseByPatient.get(pid) || '（未分配）',
+        name: p.name || '',
+        medicalRecordNumber: p.medicalRecordNumber || '',
+        hasIdNumber: !!p.idNumber,
+        hdrecord: !!c.hdrecord,
+        diagnose: !!c.diagnose,
+        comorbid: !!c.comorbid,
+        touched: !!rec,
+        updatedAt: rec?.updatedAt || '',
+        editorName: rec?.data?.nurse?.name || rec?.updatedBy?.name || '',
+      });
+    }
+    rows.sort(
+      (a, b) => a.nurseName.localeCompare(b.nurseName) || a.name.localeCompare(b.name),
+    );
+    return rows;
+  }
+
+  qiCompletedCount(kind: 'hdrecord' | 'diagnose' | 'comorbid'): number {
+    return this.qiProgressRows().filter((r) => r[kind]).length;
+  }
+
+  /** 匯出範圍＝該表單勾選「完成」的病人（未完成不出列，避免半套資料進 KiDit） */
+  private qiExportRows(kind: 'hdrecord' | 'diagnose' | 'comorbid'): QuarterExportRow[] {
+    const byId = new Map<string, any>(this.patientStore.allPatients().map((p: any) => [p.id, p]));
+    return this.qiRecords()
+      .filter((r) => r.data?.completed?.[kind])
+      .map((r) => {
+        const p = byId.get(r.patientId) || {};
+        return {
+          idNumber: p.idNumber || '',
+          medicalRecordNumber: p.medicalRecordNumber || '',
+          data: r.data,
+        };
+      })
+      .sort((a, b) => a.medicalRecordNumber.localeCompare(b.medicalRecordNumber));
+  }
+
+  exportQiCsv(kind: 'hdrecord' | 'diagnose' | 'comorbid'): void {
+    const rows = this.qiExportRows(kind);
+    if (!rows.length) { alert('本季尚無勾選「完成」的病人可匯出。'); return; }
+    const missingId = rows.filter((r) => !r.idNumber).length;
+    if (missingId > 0 && !confirm(`有 ${missingId} 位病人缺身份證號（病人管理未填），匯出後需人工補上。仍要匯出？`)) {
+      return;
+    }
+    const { startDate, endDate } = quarterRange(this.qiYear(), this.qiQ());
+    try {
+      if (kind === 'hdrecord') downloadHdrecordCsv(rows, startDate, endDate);
+      else if (kind === 'diagnose') downloadDiagnoseCsv(rows, startDate, endDate);
+      else downloadComorbidCsv(rows, startDate, endDate);
+    } catch (error) {
+      console.error('匯出失敗:', error);
+      alert('匯出失敗，請稍後再試。');
     }
   }
 }

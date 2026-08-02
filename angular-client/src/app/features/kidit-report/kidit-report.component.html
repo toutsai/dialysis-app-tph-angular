@@ -100,13 +100,18 @@
         <p class="ov-desc">建置中：由透析醫囑自動產生季度處方快照，逐欄可修改後匯出官方 CSV。</p>
       </div>
 
-      <div class="ov-card ov-wip">
+      <div class="ov-card">
         <div class="ov-card-head">
           <i class="fas fa-notes-medical"></i>
           <h3>季度輸入</h3>
           <span class="ov-freq">每季・當季最後一次抽血日</span>
         </div>
-        <p class="ov-desc">建置中：透析紀錄／醫療狀況評估／合併症。主護於「我的病人」填寫季度表單，此處彙整進度並匯出。</p>
+        <p class="ov-desc">透析紀錄／醫療狀況評估／合併症。主護於「我的病人 → 季度病人 KiDit 輸入」填寫，此處彙整進度並匯出三支官方 CSV。</p>
+        <div class="ov-actions">
+          <button class="action-btn movements-btn" (click)="setTab('qinput')">
+            <i class="fas fa-arrow-right"></i> 前往季度輸入
+          </button>
+        </div>
       </div>
 
       <div class="ov-card ov-wip">
@@ -460,7 +465,92 @@
     </div>
   </section>
 
-  <!-- ========== 建置中佔位（HD處方／季度輸入／住出院） ========== -->
+  <!-- ========== 季度輸入彙整（透析紀錄／醫療狀況評估／合併症） ========== -->
+  <section class="tab-panel" *ngIf="activeTab() === 'qinput'">
+    <div class="tool-row">
+      <div class="qi-quarter-nav">
+        <button class="nav-btn" (click)="changeQiQuarter(-1)" title="上一季">
+          <i class="fas fa-chevron-left"></i>
+        </button>
+        <span class="qi-quarter">
+          {{ qiYear() }} 年 <span class="month-number">Q{{ qiQ() }}</span>
+          <small>{{ qiRangeLabel() }}</small>
+        </span>
+        <button class="nav-btn" (click)="changeQiQuarter(1)" title="下一季">
+          <i class="fas fa-chevron-right"></i>
+        </button>
+      </div>
+      <span class="pr-hint tool-hint">
+        <i class="fas fa-info-circle"></i>
+        主護於「我的病人 → 季度病人 KiDit 輸入」填寫；匯出只含勾選「完成」的病人（日期＝當季最後一次抽血日）。
+      </span>
+    </div>
+
+    <div class="tool-row">
+      <button class="action-btn export-btn" (click)="exportQiCsv('hdrecord')" [disabled]="isLoadingQi()">
+        <i class="fas fa-file-csv"></i> 匯出透析紀錄 CSV（{{ qiCompletedCount('hdrecord') }}）
+      </button>
+      <button class="action-btn export-btn" (click)="exportQiCsv('diagnose')" [disabled]="isLoadingQi()">
+        <i class="fas fa-file-csv"></i> 匯出醫療狀況評估 CSV（{{ qiCompletedCount('diagnose') }}）
+      </button>
+      <button class="action-btn export-btn" (click)="exportQiCsv('comorbid')" [disabled]="isLoadingQi()">
+        <i class="fas fa-file-csv"></i> 匯出合併症 CSV（{{ qiCompletedCount('comorbid') }}）
+      </button>
+    </div>
+
+    <div class="list-panel">
+      <div class="list-panel-header">
+        <h3>
+          <i class="fas fa-notes-medical"></i>
+          {{ qiYear() }} 年 Q{{ qiQ() }} 填寫進度
+          <span class="va-count" *ngIf="!isLoadingQi()">（{{ qiProgressRows().length }} 人）</span>
+        </h3>
+      </div>
+
+      <div *ngIf="isLoadingQi()" class="va-loading">
+        <div class="spinner"></div>
+        <p>正在彙整季度輸入進度...</p>
+      </div>
+
+      <div *ngIf="!isLoadingQi() && qiProgressRows().length === 0" class="va-empty">
+        目前照護清單沒有分配病人，也沒有任何填寫紀錄。
+      </div>
+
+      <div class="table-wrap" *ngIf="!isLoadingQi() && qiProgressRows().length > 0">
+        <table class="va-table">
+          <thead>
+            <tr>
+              <th>主護</th>
+              <th>病人</th>
+              <th>病歷號</th>
+              <th>透析紀錄</th>
+              <th>醫療狀況評估</th>
+              <th>合併症</th>
+              <th>最後儲存</th>
+              <th>填寫人</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let r of qiProgressRows()" [class.qi-untouched]="!r.touched">
+              <td>{{ r.nurseName }}</td>
+              <td>
+                {{ r.name }}
+                <span class="qi-noid" *ngIf="!r.hasIdNumber" title="病人管理未填身份證號，匯出將留空">無身份證號</span>
+              </td>
+              <td>{{ r.medicalRecordNumber || '—' }}</td>
+              <td><span class="qi-flag" [class.done]="r.hdrecord">{{ r.hdrecord ? '完成' : (r.touched ? '填寫中' : '未填') }}</span></td>
+              <td><span class="qi-flag" [class.done]="r.diagnose">{{ r.diagnose ? '完成' : (r.touched ? '填寫中' : '未填') }}</span></td>
+              <td><span class="qi-flag" [class.done]="r.comorbid">{{ r.comorbid ? '完成' : (r.touched ? '填寫中' : '未填') }}</span></td>
+              <td>{{ r.updatedAt || '—' }}</td>
+              <td>{{ r.editorName || '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 建置中佔位（HD處方／住出院） ========== -->
   <section class="tab-panel" *ngIf="isWipTab()">
     <div class="wip-box">
       <i class="fas fa-hard-hat"></i>

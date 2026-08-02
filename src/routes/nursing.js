@@ -3,7 +3,7 @@ import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import XLSX from 'xlsx'
 import { getDatabase } from '../db/init.js'
-import { authenticate, isEditor, isAdmin, logAudit } from '../middleware/auth.js'
+import { authenticate, isEditor, isAdmin, isContributor, logAudit } from '../middleware/auth.js'
 import { getTaipeiTodayString, formatDateToTaipeiString } from '../utils/dateUtils.js'
 import {
   syncEventsToKiditLogbook,
@@ -1762,6 +1762,81 @@ router.post('/kidit-logbook/:date/sync', ...isEditor, async (req, res) => {
       error: true,
       message: '同步 Kidit 日誌本失敗',
     })
+  }
+})
+
+/**
+ * GET /api/nursing/kidit-quarter-records/:quarter
+ * 季度病人 KiDit 輸入（透析紀錄/醫療狀況評估/合併症）：取整季所有病人的表單資料
+ * 設計比照 vascular_quarter_exports：只存人工填寫/覆寫，預帶值由前端載入時即時計算
+ */
+router.get('/kidit-quarter-records/:quarter', authenticate, (req, res) => {
+  try {
+    const { quarter } = req.params
+    if (!/^\d{4}Q[1-4]$/.test(quarter)) {
+      return res.status(400).json({ error: true, message: '季度格式錯誤（例：2026Q3）' })
+    }
+
+    const db = getDatabase()
+    const rows = db
+      .prepare(`SELECT patient_id, data, updated_by, updated_at FROM kidit_quarter_records WHERE quarter = ?`)
+      .all(quarter)
+
+    const parseJsonSafe = (str, fallback) => {
+      try {
+        return JSON.parse(str || '') ?? fallback
+      } catch {
+        return fallback
+      }
+    }
+
+    res.json({
+      success: true,
+      quarter,
+      records: rows.map((r) => ({
+        patientId: r.patient_id,
+        data: parseJsonSafe(r.data, {}),
+        updatedBy: parseJsonSafe(r.updated_by, {}),
+        updatedAt: r.updated_at,
+      })),
+    })
+  } catch (error) {
+    console.error('讀取季度 KiDit 輸入失敗:', error)
+    res.status(500).json({ error: true, message: '讀取季度 KiDit 輸入失敗' })
+  }
+})
+
+/**
+ * PUT /api/nursing/kidit-quarter-records/:quarter/:patientId
+ * 儲存單一病人的季度表單（主護 contributor 以上可寫）
+ */
+router.put('/kidit-quarter-records/:quarter/:patientId', ...isContributor, (req, res) => {
+  try {
+    const { quarter, patientId } = req.params
+    if (!/^\d{4}Q[1-4]$/.test(quarter)) {
+      return res.status(400).json({ error: true, message: '季度格式錯誤（例：2026Q3）' })
+    }
+    const { data } = req.body || {}
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      return res.status(400).json({ error: true, message: 'data 必須是物件' })
+    }
+
+    const db = getDatabase()
+    const id = `${quarter}_${patientId}`
+    const updatedBy = JSON.stringify({ uid: req.user.id, name: req.user.name })
+    db.prepare(
+      `INSERT INTO kidit_quarter_records (id, quarter, patient_id, data, updated_by, updated_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now','localtime'))
+       ON CONFLICT(id) DO UPDATE SET
+         data = excluded.data,
+         updated_by = excluded.updated_by,
+         updated_at = datetime('now','localtime')`
+    ).run(id, quarter, patientId, JSON.stringify(data), updatedBy)
+
+    res.json({ success: true })
+  } catch (error) {
+    console.error('儲存季度 KiDit 輸入失敗:', error)
+    res.status(500).json({ error: true, message: '儲存季度 KiDit 輸入失敗' })
   }
 })
 

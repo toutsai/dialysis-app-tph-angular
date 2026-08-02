@@ -285,6 +285,18 @@ export const routes: Routes = [
         },
       },
       {
+        path: 'kidit-quarterly-input',
+        loadComponent: () =>
+          import('./features/kidit-quarterly-input/kidit-quarterly-input.component').then(
+            (m) => m.KiditQuarterlyInputComponent
+          ),
+        canActivate: [roleGuard],
+        data: {
+          title: PAGE_ACCESS.kiditQuarterlyInput.title,
+          roles: PAGE_ACCESS.kiditQuarterlyInput.roles,
+        },
+      },
+      {
         path: 'usage-guide',
         loadComponent: () =>
           import('./features/usage-guide/usage-guide.component').then(

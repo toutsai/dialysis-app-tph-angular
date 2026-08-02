@@ -1,0 +1,325 @@
+<div class="kqi-container">
+  <!-- Header -->
+  <header class="page-header">
+    <div class="header-left">
+      <button class="back-btn" (click)="backToMyPatients()" title="回我的病人">
+        <i class="fas fa-arrow-left"></i>
+      </button>
+      <h2 class="page-title">季度病人 KiDit 輸入</h2>
+    </div>
+
+    <div class="quarter-navigator">
+      <button class="nav-btn" (click)="changeQuarter(-1)" title="上一季">
+        <i class="fas fa-chevron-left"></i>
+      </button>
+      <span class="current-quarter">
+        {{ year() }} 年 <span class="q-number">Q{{ q() }}</span>
+        <small>{{ quarterLabel() }}</small>
+      </span>
+      <button class="nav-btn" (click)="changeQuarter(1)" title="下一季">
+        <i class="fas fa-chevron-right"></i>
+      </button>
+    </div>
+
+    <div class="header-right">
+      <span class="save-state" [ngSwitch]="saveState()">
+        <span *ngSwitchCase="'saving'" class="st-saving"><i class="fas fa-circle-notch fa-spin"></i> 儲存中…</span>
+        <span *ngSwitchCase="'saved'" class="st-saved"><i class="fas fa-check"></i> 已儲存</span>
+        <span *ngSwitchCase="'error'" class="st-error"><i class="fas fa-exclamation-triangle"></i> 儲存失敗</span>
+      </span>
+
+      <select *ngIf="canPickNurse()" class="nurse-select" [ngModel]="targetNurseId()" (ngModelChange)="selectNurse($event)">
+        <option *ngFor="let a of assignments()" [value]="a.nurseId">{{ a.nurseName }}（{{ a.patientIds.length }} 人）</option>
+      </select>
+      <span *ngIf="!canPickNurse() && targetNurse()" class="nurse-label">
+        <i class="fas fa-user-nurse"></i> {{ targetNurse()!.nurseName }}
+      </span>
+    </div>
+  </header>
+
+  <p class="kqi-hint">
+    <i class="fas fa-info-circle"></i>
+    每季一筆代表值，申報日期＝當季最後一次抽血日（已自動預帶）。EPO／鐵劑／Hb·Hct／門住診／合併症由藥囑、檢驗與疾病標籤預帶，請核對修改；欄位修改後自動儲存。
+  </p>
+
+  <div *ngIf="isLoading()" class="kqi-loading">
+    <div class="spinner"></div>
+    <p>正在載入季度輸入資料...</p>
+  </div>
+
+  <div *ngIf="!isLoading() && loadError()" class="kqi-error">{{ loadError() }}</div>
+
+  <div *ngIf="!isLoading() && !loadError() && patients().length === 0" class="kqi-empty">
+    {{ canPickNurse() ? '該主護目前沒有照護清單分配病人。' : '您目前沒有照護清單分配病人；如有疑問請洽管理員（使用者管理 → 護理師分配病人照護清單）。' }}
+  </div>
+
+  <div class="kqi-body" *ngIf="!isLoading() && !loadError() && patients().length > 0">
+    <!-- 左：病人清單 -->
+    <aside class="patient-list">
+      <div
+        *ngFor="let p of patients()"
+        class="patient-item"
+        [class.active]="selectedPatientId() === p.id"
+        (click)="selectPatient(p.id)"
+      >
+        <div class="pi-main">
+          <span class="pi-name">{{ p.name }}</span>
+          <span class="pi-mrn">{{ p.medicalRecordNumber }}</span>
+        </div>
+        <div class="pi-dots" [attr.title]="'完成 ' + completedCount(p.id) + '/3'">
+          <span class="dot" [class.done]="completionOf(p.id).hdrecord" title="透析紀錄">透</span>
+          <span class="dot" [class.done]="completionOf(p.id).diagnose" title="醫療狀況評估">評</span>
+          <span class="dot" [class.done]="completionOf(p.id).comorbid" title="合併症">併</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 右：表單 -->
+    <section class="form-area" *ngIf="selectedPatient() as sp">
+      <div class="form-header">
+        <h3>
+          {{ sp.name }}
+          <span class="fh-mrn">{{ sp.medicalRecordNumber }}</span>
+          <span class="fh-mode">{{ sp.mode }}</span>
+        </h3>
+        <div class="form-tabs">
+          <button class="form-tab-btn" [class.active]="activeFormTab() === 'hdrecord'" (click)="setFormTab('hdrecord')">
+            透析紀錄 <i class="fas fa-check-circle" *ngIf="completionOf(sp.id).hdrecord"></i>
+          </button>
+          <button class="form-tab-btn" [class.active]="activeFormTab() === 'diagnose'" (click)="setFormTab('diagnose')">
+            醫療狀況評估 <i class="fas fa-check-circle" *ngIf="completionOf(sp.id).diagnose"></i>
+          </button>
+          <button class="form-tab-btn" [class.active]="activeFormTab() === 'comorbid'" (click)="setFormTab('comorbid')">
+            合併症 <i class="fas fa-check-circle" *ngIf="completionOf(sp.id).comorbid"></i>
+          </button>
+        </div>
+      </div>
+
+      <ng-container *ngIf="formData(sp.id) as fd">
+        <!-- ===== 透析紀錄 ===== -->
+        <div class="form-body" *ngIf="activeFormTab() === 'hdrecord'">
+          <div class="field-grid">
+            <label class="field">
+              <span>日期（當季最後一次抽血日）</span>
+              <input type="date" [(ngModel)]="fd.hdrecord!['date']" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+            <label class="field">
+              <span>門診／住院</span>
+              <select [(ngModel)]="fd.hdrecord!['isLiving']" (ngModelChange)="onFieldChange(sp.id)">
+                <option value=""></option>
+                <option *ngFor="let o of isLivingOptions" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>上次透析後體重 (kg)</span>
+              <input type="number" step="0.1" [(ngModel)]="fd.hdrecord!['heavyLast']" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+            <label class="field">
+              <span>透析前體重 (kg)</span>
+              <input type="number" step="0.1" [(ngModel)]="fd.hdrecord!['heavyBHD']" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+            <label class="field">
+              <span>透析後體重 (kg)</span>
+              <input type="number" step="0.1" [(ngModel)]="fd.hdrecord!['heavyAHD']" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+            <label class="field">
+              <span>理想乾體重 (kg)</span>
+              <input type="number" step="0.1" [(ngModel)]="fd.hdrecord!['dryHeavy']" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+            <label class="field">
+              <span>透析前收縮壓</span>
+              <input type="number" [(ngModel)]="fd.hdrecord!['paBHD']" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+            <label class="field">
+              <span>透析後收縮壓</span>
+              <input type="number" [(ngModel)]="fd.hdrecord!['paAHD']" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+            <label class="field">
+              <span>透析前舒張壓</span>
+              <input type="number" [(ngModel)]="fd.hdrecord!['pbBHD']" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+            <label class="field">
+              <span>透析後舒張壓</span>
+              <input type="number" [(ngModel)]="fd.hdrecord!['pbAHD']" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+            <label class="field">
+              <span>是否使用 IV 鐵劑</span>
+              <select [(ngModel)]="fd.hdrecord!['isIVFe']" (ngModelChange)="onFieldChange(sp.id)">
+                <option value=""></option>
+                <option *ngFor="let o of ynOptions" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>輸血量 (單位)</span>
+              <input type="number" [(ngModel)]="fd.hdrecord!['blood']" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+            <label class="field">
+              <span>EPO 種類</span>
+              <select [(ngModel)]="fd.hdrecord!['epoType']" (ngModelChange)="onFieldChange(sp.id)">
+                <option value=""></option>
+                <option *ngFor="let o of epoTypeOptions" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>EPO 劑量 (U)</span>
+              <input type="number" [(ngModel)]="fd.hdrecord!['epoU']" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+            <label class="field">
+              <span>EPO 劑量 (ug)</span>
+              <input type="number" step="0.1" [(ngModel)]="fd.hdrecord!['epoUG']" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+            <label class="field">
+              <span>HCT (%)</span>
+              <input type="number" step="0.1" [(ngModel)]="fd.hdrecord!['hct']" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+            <label class="field">
+              <span>Hb (g/dl)（官方欄名 HBC）</span>
+              <input type="number" step="0.1" [(ngModel)]="fd.hdrecord!['hbc']" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+            <label class="field field-wide">
+              <span>特殊狀況</span>
+              <input type="text" maxlength="100" [(ngModel)]="fd.hdrecord!['memo']" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+          </div>
+          <label class="complete-row">
+            <input type="checkbox" [(ngModel)]="fd.completed!.hdrecord" (ngModelChange)="onFieldChange(sp.id)" />
+            此病人本季「透析紀錄」填寫完成
+          </label>
+        </div>
+
+        <!-- ===== 醫療狀況評估 ===== -->
+        <div class="form-body" *ngIf="activeFormTab() === 'diagnose'">
+          <div class="field-grid">
+            <label class="field">
+              <span>日期（當季最後一次抽血日）</span>
+              <input type="date" [(ngModel)]="fd.diagnose!['date']" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+            <label class="field">
+              <span>是否使用 EPO</span>
+              <select [(ngModel)]="fd.diagnose!['isEPO']" (ngModelChange)="onFieldChange(sp.id)">
+                <option value=""></option>
+                <option *ngFor="let o of ynOptions" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>EPO 類型</span>
+              <select [(ngModel)]="fd.diagnose!['epoType']" (ngModelChange)="onFieldChange(sp.id)">
+                <option value=""></option>
+                <option *ngFor="let o of epoTypeOptions" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>是否使用活性維他命</span>
+              <select [(ngModel)]="fd.diagnose!['isVITD']" (ngModelChange)="onFieldChange(sp.id)">
+                <option value=""></option>
+                <option *ngFor="let o of ynOptions" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>是否使用降血壓劑</span>
+              <select [(ngModel)]="fd.diagnose!['isDOWNPA']" (ngModelChange)="onFieldChange(sp.id)">
+                <option value=""></option>
+                <option *ngFor="let o of ynOptions" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>是否使用鐵劑</span>
+              <select [(ngModel)]="fd.diagnose!['isFE']" (ngModelChange)="onFieldChange(sp.id)">
+                <option value=""></option>
+                <option *ngFor="let o of ynOptions" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>鐵劑型式</span>
+              <select [(ngModel)]="fd.diagnose!['feMethod']" (ngModelChange)="onFieldChange(sp.id)">
+                <option value=""></option>
+                <option *ngFor="let o of feMethodOptions" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </label>
+            <label class="field field-wide">
+              <span>生活活動評估</span>
+              <select [(ngModel)]="fd.diagnose!['lifeEvalu']" (ngModelChange)="onFieldChange(sp.id)">
+                <option value=""></option>
+                <option *ngFor="let o of lifeEvaluOptions" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </label>
+            <label class="field field-wide">
+              <span>一般狀況評估</span>
+              <select [(ngModel)]="fd.diagnose!['geneEvalu']" (ngModelChange)="onFieldChange(sp.id)">
+                <option value=""></option>
+                <option *ngFor="let o of geneEvaluOptions" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>副甲狀腺切除</span>
+              <select [(ngModel)]="fd.diagnose!['isPTX']" (ngModelChange)="onFieldChange(sp.id)">
+                <option value=""></option>
+                <option *ngFor="let o of ynOptions" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>副甲狀腺切除日期</span>
+              <input type="date" [(ngModel)]="fd.diagnose!['ptxDate']" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+            <label class="field">
+              <span>登錄等待換腎院所代號</span>
+              <input type="text" maxlength="4" [(ngModel)]="fd.diagnose!['nephHosp']" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+            <label class="field">
+              <span>首次登錄日期</span>
+              <input type="date" [(ngModel)]="fd.diagnose!['nephStartDate']" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+            <label class="field">
+              <span>最近一次回診日期</span>
+              <input type="date" [(ngModel)]="fd.diagnose!['nephLastDate']" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+          </div>
+          <p class="kqi-hint">
+            <i class="fas fa-info-circle"></i>
+            EPO 用量（U／ug）兩欄官方由系統轉入時自動計算，無需填寫。
+          </p>
+          <label class="complete-row">
+            <input type="checkbox" [(ngModel)]="fd.completed!.diagnose" (ngModelChange)="onFieldChange(sp.id)" />
+            此病人本季「醫療狀況評估」填寫完成
+          </label>
+        </div>
+
+        <!-- ===== 合併症 ===== -->
+        <div class="form-body" *ngIf="activeFormTab() === 'comorbid'">
+          <div class="field-grid">
+            <label class="field">
+              <span>日期（當季最後一次抽血日）</span>
+              <input type="date" [(ngModel)]="fd.comorbid!.date" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+          </div>
+
+          <div class="comorbid-grid">
+            <label class="comorbid-item" *ngFor="let o of comorbidOptions">
+              <input
+                type="checkbox"
+                [checked]="isComorbidChecked(sp.id, o.code)"
+                (change)="toggleComorbid(sp.id, o.code, $any($event.target).checked)"
+              />
+              <span>{{ o.code }} {{ o.label }}</span>
+            </label>
+          </div>
+
+          <div class="field-grid">
+            <label class="field field-wide">
+              <span>附註一</span>
+              <input type="text" maxlength="40" [(ngModel)]="fd.comorbid!.note1" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+            <label class="field field-wide">
+              <span>附註二</span>
+              <input type="text" maxlength="40" [(ngModel)]="fd.comorbid!.note2" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+          </div>
+          <label class="complete-row">
+            <input type="checkbox" [(ngModel)]="fd.completed!.comorbid" (ngModelChange)="onFieldChange(sp.id)" />
+            此病人本季「合併症」填寫完成
+          </label>
+        </div>
+      </ng-container>
+    </section>
+  </div>
+</div>

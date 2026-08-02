@@ -918,6 +918,11 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
     return !this.authService.isViewer();
   }
 
+  /** 季度病人 KiDit 輸入：主護為照護清單分配病人填寫每季申報表單（透析紀錄/醫療狀況評估/合併症） */
+  openKiditQuarterlyInput(): void {
+    this.router.navigate(['/kidit-quarterly-input']);
+  }
+
   /** 目前檢視對象（支援切換使用者）的 uid 與姓名，比對方式同 fetchMyPatientData */
   private async resolveTargetUser(): Promise<{ userId: string | null; userName: string }> {
     const userId = this.selectedUserId();
