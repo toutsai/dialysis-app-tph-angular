@@ -18,7 +18,7 @@
   padding-bottom: 8px;
   border-bottom: 2px solid #3498db;
   color: #2c3e50;
-  font-size: 1.26rem;
+  font-size: 1.39rem;
 }
 
 .form-grid {
@@ -42,7 +42,7 @@
 }
 
 label {
-  font-size: 0.98rem;
+  font-size: 1.08rem;
   color: #666;
   font-weight: 600;
 }
@@ -52,7 +52,7 @@ select {
   padding: 8px;
   border: 1px solid #ddd;
   border-radius: 4px;
-  font-size: 1.09rem;
+  font-size: 1.2rem;
 }
 
 input:focus,
@@ -68,7 +68,7 @@ select:focus {
 }
 
 .roc-date {
-  font-size: 0.92rem;
+  font-size: 1.01rem;
   color: #e67e22;
   text-align: right;
 }
@@ -86,7 +86,7 @@ select:focus {
   padding: 10px 25px;
   border-radius: 5px;
   cursor: pointer;
-  font-size: 1.15rem;
+  font-size: 1.26rem;
   display: inline-flex;
   align-items: center;
   gap: 8px;

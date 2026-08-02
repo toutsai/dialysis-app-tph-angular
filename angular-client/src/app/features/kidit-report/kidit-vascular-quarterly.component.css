@@ -20,7 +20,7 @@
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
   overflow: hidden;
   color: #263238;
-  font-size: 1.09rem;
+  font-size: 1.2rem;
 }
 
 /* header */
@@ -36,13 +36,13 @@
 }
 .qv-header h3 {
   margin: 0;
-  font-size: 1.38rem;
+  font-size: 1.52rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 .qv-count {
-  font-size: 1.03rem;
+  font-size: 1.13rem;
   color: #78909c;
   font-weight: 400;
 }
@@ -75,7 +75,7 @@
   background: #fff;
   color: #607d8b;
   padding: 0.4rem 0.85rem;
-  font-size: 1.09rem;
+  font-size: 1.2rem;
   font-weight: 600;
   cursor: pointer;
 }
@@ -94,7 +94,7 @@
   background: transparent;
   color: #607d8b;
   padding: 0.5rem 0.9rem;
-  font-size: 1.15rem;
+  font-size: 1.26rem;
   font-weight: 600;
   cursor: pointer;
   border-bottom: 2px solid transparent;
@@ -109,7 +109,7 @@
   background: #c92a2a;
   color: #fff;
   border-radius: 999px;
-  font-size: 0.92rem;
+  font-size: 1.01rem;
   font-weight: 700;
   padding: 0.05rem 0.45rem;
   line-height: 1.2;
@@ -124,14 +124,14 @@
   display: block;
   font-weight: 400;
   color: #90a4ae;
-  font-size: 0.92rem;
+  font-size: 1.01rem;
 }
 .qv-actions {
   display: flex;
   align-items: center;
   gap: 0.6rem;
 }
-.qv-save-state { font-size: 1.01rem; min-width: 5rem; text-align: right; }
+.qv-save-state { font-size: 1.11rem; min-width: 5rem; text-align: right; }
 .qv-saving { color: #78909c; }
 .qv-saved { color: #2e7d32; }
 .qv-save-error { color: #c62828; font-weight: 600; }
@@ -140,7 +140,7 @@
   border: 1px solid #cfd8dc;
   border-radius: 6px;
   font-weight: 600;
-  font-size: 1.06rem;
+  font-size: 1.17rem;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -159,14 +159,14 @@
   height: 2.1rem;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 1.09rem;
+  font-size: 1.2rem;
 }
 .qv-close-btn:hover { background: #eceff1; }
 
 .qv-hint {
   margin: 0;
   padding: 0.5rem 1.1rem;
-  font-size: 1.01rem;
+  font-size: 1.11rem;
   color: #78909c;
   border-bottom: 1px solid #f5f7f8;
   flex-shrink: 0;
@@ -208,7 +208,7 @@
 .qv-table {
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 1.03rem;
+  font-size: 1.13rem;
   white-space: nowrap;
 }
 .qv-table th,
@@ -263,14 +263,14 @@ th.qv-sticky-3::after {
 .qv-status-tag {
   display: inline-block;
   padding: 0.05rem 0.35rem;
-  font-size: 0.9rem;
+  font-size: 0.99rem;
   border-radius: 4px;
   background: #fff3e0;
   color: #e65100;
   border: 1px solid #ffcc80;
 }
 .qv-row-flagged .qv-status-tag { font-weight: 600; }
-.qv-warn { color: #c62828; font-size: 0.94rem; max-width: 14rem; overflow: hidden; text-overflow: ellipsis; }
+.qv-warn { color: #c62828; font-size: 1.03rem; max-width: 14rem; overflow: hidden; text-overflow: ellipsis; }
 .qv-row-excluded td { opacity: 0.45; }
 .qv-row-excluded td.qv-exclude { opacity: 1; }
 
@@ -279,7 +279,7 @@ th.qv-sticky-3::after {
   border: 1px solid #e0e6ea;
   border-radius: 4px;
   padding: 0.2rem 0.35rem;
-  font-size: 1.03rem;
+  font-size: 1.13rem;
   color: #263238;
   background: #fff;
 }
