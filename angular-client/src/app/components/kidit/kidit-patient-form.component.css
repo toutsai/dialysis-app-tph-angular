@@ -4,6 +4,16 @@
   overflow-y: auto;
 }
 
+/* 生日民國年輸入 */
+.roc-hint {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.85rem;
+  color: #78909c;
+}
+.roc-hint.roc-bad { color: #c62828; font-weight: 700; }
+input.roc-error { border-color: #c62828; background: #fdf3f3; }
+
 .form-section {
   background: #fff;
   border: 1px solid #eee;

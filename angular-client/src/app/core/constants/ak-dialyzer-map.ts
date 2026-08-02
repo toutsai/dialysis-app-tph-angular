@@ -410,7 +410,10 @@ export const AK_DIALYZER_LIST: AkDialyzerEntry[] = [
   { brand: 'Baxter', name: 'Theranova-400', code: '397' },
 ];
 
-/** 院內 AK 簡稱 → 官方對應代碼（2026-08 依現行醫囑值人工核對；17UX/17HX 無法確定對應，留給專師於工作檯選擇） */
+/** 院內 AK 簡稱 → 官方對應代碼（2026-08 依現行醫囑值人工核對）
+ *  ⚠️ 17UX/17HX＝Asahi APS-17UX/APS-17HX（2026-08-03 使用者確認），但官方對照表無 APS-17 系列
+ *  （Asahi 只有 13/15/18/21 尺寸），暫以「廠牌-型號」文字帶入（同官方樣本檔 Nipro-ELISIO-15H 格式）；
+ *  待與 KiDit 端確認代碼/文字後若需數字代碼，須請 KiDit 補建型號 */
 export const HOSPITAL_AK_ALIASES: Record<string, string> = {
   'FX80': '91', // Fresenius FX80
   'Hi23': '237', // B.Braun Xevonta Hi23
@@ -419,6 +422,10 @@ export const HOSPITAL_AK_ALIASES: Record<string, string> = {
   'Pro-19H': '303', // B.Braun Diacap Pro 19H
   '21S': '58', // Asahi APS-21S
   '15S': '56', // Asahi APS-15S
+  '17UX': 'Asahi-APS-17UX', // 官方表無此型號，暫帶文字
+  '17HX': 'Asahi-APS-17HX', // 官方表無此型號，暫帶文字
+  'CTA2000': '110', // KAWASUMI CTA-2000
+  // '13M' 刻意不對應：官方表有 Nipro ELISIO-13M(272)/NIPRO-MAXIFLUX-13M(363)/Allmed Polypure M-13M(384) 三候選，待使用者確認
 };
 
 /** 依院內 AK 名稱解析官方代碼：先查簡稱別名，再精確比對官方名稱；查無回空字串 */

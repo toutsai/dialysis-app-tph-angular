@@ -23,6 +23,10 @@ export class KiditPatientFormComponent implements OnChanges {
   isSaving = false;
   formData: any = {};
 
+  /** 生日民國年輸入框（顯示/輸入民國，儲存仍為西元 YYYY-MM-DD，匯出端 toRocDate 不受影響） */
+  rocBirthInput = '';
+  rocBirthError = false;
+
   readonly opts = KIDIT_OPTIONS;
 
   // 細類依所選大類過濾（memoize，模板每輪 CD 呼叫不重算）
@@ -83,6 +87,47 @@ export class KiditPatientFormComponent implements OnChanges {
       };
     } else {
       this.formData = {};
+    }
+    this.rocBirthInput = this.isoToRocDisplay(this.formData?.birthDate || '');
+    this.rocBirthError = false;
+  }
+
+  /** 西元 YYYY-MM-DD → 民國顯示（45/08/15）；無法解析回空字串 */
+  private isoToRocDisplay(iso: string): string {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+    if (!m) return '';
+    const y = Number(m[1]) - 1911;
+    if (y <= 0) return '';
+    return `${y}/${m[2]}/${m[3]}`;
+  }
+
+  /**
+   * 民國年輸入 → 西元存檔。接受「45/08/15」「45.8.15」「45-8-15」或連碼「450815」「0450815」。
+   * 解析成功才更新 birthDate；清空輸入＝清空生日。
+   */
+  onRocBirthChange(value: string): void {
+    this.rocBirthInput = value;
+    const t = String(value || '').trim();
+    if (!t) {
+      this.formData.birthDate = '';
+      this.rocBirthError = false;
+      return;
+    }
+    let y = 0, mo = 0, d = 0;
+    const sep = /^(\d{1,3})[\/.\-年](\d{1,2})[\/.\-月](\d{1,2})日?$/.exec(t);
+    if (sep) {
+      y = Number(sep[1]); mo = Number(sep[2]); d = Number(sep[3]);
+    } else if (/^\d{6,7}$/.test(t)) {
+      y = Number(t.slice(0, t.length - 4));
+      mo = Number(t.slice(t.length - 4, t.length - 2));
+      d = Number(t.slice(t.length - 2));
+    }
+    if (y >= 1 && y <= 200 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+      const p2 = (n: number) => String(n).padStart(2, '0');
+      this.formData.birthDate = `${y + 1911}-${p2(mo)}-${p2(d)}`;
+      this.rocBirthError = false;
+    } else {
+      this.rocBirthError = true;
     }
   }
 

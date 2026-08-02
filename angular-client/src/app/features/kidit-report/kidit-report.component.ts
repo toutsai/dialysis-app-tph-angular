@@ -472,6 +472,15 @@ export class KiditReportComponent implements OnInit {
     return basicDataStatusText(row);
   }
 
+  /** 西元 YYYY-MM-DD → 民國顯示（45/08/15），無法解析回空字串（生日欄顯示用，儲存/匯出不變） */
+  rocDisplay(dateStr: string | undefined): string {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dateStr || ''));
+    if (!m) return '';
+    const y = Number(m[1]) - 1911;
+    if (y <= 0) return '';
+    return `${y}/${m[2]}/${m[3]}`;
+  }
+
   /** 未建檔/不完整人數（比對結果提示用） */
   basicDataIncompleteCount(): number {
     return this.basicDataRows().filter((r) => !r.complete).length;

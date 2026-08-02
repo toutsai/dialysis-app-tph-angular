@@ -261,7 +261,7 @@
               <th>建檔狀態</th>
               <th>基本資料儲存日</th>
               <th>身分證號</th>
-              <th>生日</th>
+              <th>生日（民國）</th>
               <th>透析代號</th>
               <th>原發病大類</th>
             </tr>
@@ -286,7 +286,7 @@
               </td>
               <td>{{ r.profileDate || '—' }}</td>
               <td>{{ r.profile?.['idNumber'] || '—' }}</td>
-              <td>{{ r.profile?.['birthDate'] || '—' }}</td>
+              <td>{{ rocDisplay(r.profile?.['birthDate']) || '—' }}</td>
               <td>{{ r.profile?.['dialysisCode'] || '—' }}</td>
               <td>{{ r.profile?.['diagnosisCategory'] || '—' }}</td>
             </tr>

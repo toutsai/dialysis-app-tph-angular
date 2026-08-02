@@ -29,8 +29,16 @@
         </div>
 
         <div class="form-group">
-          <label>03 生日 (西元)</label>
-          <input type="date" [(ngModel)]="formData.birthDate" />
+          <label>03 生日（民國 年/月/日）</label>
+          <input
+            type="text"
+            placeholder="例：45/08/15 或 0450815"
+            [ngModel]="rocBirthInput"
+            (ngModelChange)="onRocBirthChange($event)"
+            [class.roc-error]="rocBirthError"
+          />
+          <small class="roc-hint" *ngIf="!rocBirthError && formData.birthDate">西元 {{ formData.birthDate }}</small>
+          <small class="roc-hint roc-bad" *ngIf="rocBirthError">格式無法辨識，請輸入民國年/月/日</small>
         </div>
 
         <div class="form-group">
