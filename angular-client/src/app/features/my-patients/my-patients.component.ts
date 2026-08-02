@@ -923,9 +923,12 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
     this.router.navigate(['/kidit-quarterly-input']);
   }
 
-  /** HD處方季度工作檯：預設篩選登入主護自己的照護病人，補處方缺漏 */
-  openKiditHdrx(): void {
-    this.router.navigate(['/kidit-hdrx']);
+  /** HD處方季度工作檯：帶目前檢視對象（uid+姓名）過去自動篩選其照護病人，補處方缺漏 */
+  async openKiditHdrx(): Promise<void> {
+    const target = await this.resolveTargetUser();
+    this.router.navigate(['/kidit-hdrx'], {
+      queryParams: { nurse: target.userId || '', nurseName: target.userName || '' },
+    });
   }
 
   /** 目前檢視對象（支援切換使用者）的 uid 與姓名，比對方式同 fetchMyPatientData */

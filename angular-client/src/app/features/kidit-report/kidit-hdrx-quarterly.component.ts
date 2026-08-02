@@ -1,6 +1,7 @@
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { PatientStoreService } from '@services/patient-store.service';
 import { AuthService } from '@services/auth.service';
 import { localApi } from '@/services/localApiClient';
@@ -51,6 +52,7 @@ interface HdrxRow {
 export class KiditHdrxQuarterlyComponent implements OnInit, OnDestroy {
   private readonly patientStore = inject(PatientStoreService);
   private readonly authService = inject(AuthService);
+  private readonly route = inject(ActivatedRoute);
 
   readonly modeOptions = HDRX_MODE_OPTIONS;
   readonly anticoagOptions = HDRX_ANTICOAG_OPTIONS;
@@ -118,20 +120,28 @@ export class KiditHdrxQuarterlyComponent implements OnInit, OnDestroy {
       // 照護清單：patientId → 主護姓名（排除名單者不列入，同主護反查慣例）
       const excludedNurses = new Set<string>((care as any)?.excludedNurseIds || []);
       const nurseByPatient = new Map<string, string>();
-      const nurseNames: string[] = [];
+      const assignments: { nurseId: string; nurseName: string }[] = [];
       for (const a of ((care as any)?.assignments || []) as any[]) {
         if (excludedNurses.has(a.nurseId)) continue;
         const nm = String(a.nurseName || '').trim();
         if (!nm) continue;
-        nurseNames.push(nm);
+        assignments.push({ nurseId: String(a.nurseId || ''), nurseName: nm });
         for (const pid of a.patientIds || []) nurseByPatient.set(pid, nm);
       }
-      this.nurseNames.set(nurseNames);
+      this.nurseNames.set(assignments.map((a) => a.nurseName));
 
-      // 預設篩選：登入者本人是照護清單主護時帶入自己（方便補缺漏）；否則維持現選/全部
+      // 預設篩選（僅首次載入）：優先用「我的病人」帶來的檢視對象（?nurse=uid&nurseName=），
+      // 其次比對登入者本人（uid 先、姓名 fallback，同主護反查慣例）；都對不上維持全部
       if (!this.nurseFilter()) {
-        const myName = String(this.authService.currentUser()?.name || '').trim();
-        if (myName && nurseNames.includes(myName)) this.nurseFilter.set(myName);
+        const qp = this.route.snapshot.queryParamMap;
+        const qpNurse = qp.get('nurse') || '';
+        const qpNurseName = String(qp.get('nurseName') || '').trim();
+        const cu = this.authService.currentUser();
+        const myName = String(cu?.name || '').trim();
+        const target =
+          assignments.find((a) => (qpNurse && a.nurseId === qpNurse) || (qpNurseName && a.nurseName === qpNurseName)) ||
+          assignments.find((a) => a.nurseId === cu?.uid || a.nurseId === (cu as any)?.id || (myName && a.nurseName === myName));
+        if (target) this.nurseFilter.set(target.nurseName);
       }
 
       const hdrxByPatient = new Map<string, any>();
