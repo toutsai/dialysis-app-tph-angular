@@ -119,13 +119,18 @@
         </div>
       </div>
 
-      <div class="ov-card ov-wip">
+      <div class="ov-card">
         <div class="ov-card-head">
           <i class="fas fa-hospital"></i>
           <h3>住出院</h3>
           <span class="ov-freq">依實際住出院</span>
         </div>
-        <p class="ov-desc">建置中：由病人動態自動配對住院／出院日期，補登住院原因代碼後匯出官方 CSV。</p>
+        <p class="ov-desc">由病人動態自動配對住院／出院日期，補登住院原因大類／細類代碼後匯出官方 CSV。</p>
+        <div class="ov-actions">
+          <button class="action-btn movements-btn" (click)="setTab('hosp')">
+            <i class="fas fa-arrow-right"></i> 前往住出院
+          </button>
+        </div>
       </div>
     </div>
 
@@ -560,13 +565,9 @@
     </div>
   </section>
 
-  <!-- ========== 建置中佔位（HD處方／住出院） ========== -->
-  <section class="tab-panel" *ngIf="isWipTab()">
-    <div class="wip-box">
-      <i class="fas fa-hard-hat"></i>
-      <h3>{{ wipTitle() }}</h3>
-      <p>{{ wipDesc() }}</p>
-    </div>
+  <!-- ========== 住出院季度工作檯 ========== -->
+  <section class="tab-panel" *ngIf="activeTab() === 'hosp'">
+    <app-kidit-hosp-quarterly></app-kidit-hosp-quarterly>
   </section>
 
   <!-- 季度造管 CSV 工作檯 -->

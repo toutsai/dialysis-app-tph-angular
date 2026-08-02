@@ -1,0 +1,86 @@
+<div class="hp-container">
+  <div class="hp-toolbar">
+    <div class="hp-quarter-nav">
+      <button class="hp-nav-btn" (click)="changeQuarter(-1)" title="上一季">
+        <i class="fas fa-chevron-left"></i>
+      </button>
+      <span class="hp-quarter">
+        {{ year() }} 年 <span class="hp-q">Q{{ q() }}</span>
+        <small>{{ quarterRangeLabel() }}</small>
+      </span>
+      <button class="hp-nav-btn" (click)="changeQuarter(1)" title="下一季">
+        <i class="fas fa-chevron-right"></i>
+      </button>
+    </div>
+
+    <span class="hp-save-state" [ngSwitch]="saveState()">
+      <span *ngSwitchCase="'saving'" class="hp-saving"><i class="fas fa-circle-notch fa-spin"></i> 儲存中…</span>
+      <span *ngSwitchCase="'saved'" class="hp-saved"><i class="fas fa-check"></i> 已儲存</span>
+      <span *ngSwitchCase="'error'" class="hp-error"><i class="fas fa-exclamation-triangle"></i> 儲存失敗</span>
+    </span>
+
+    <span class="hp-warn-count" *ngIf="!isLoading() && missingReasonCount() > 0">
+      <i class="fas fa-exclamation-triangle"></i> {{ missingReasonCount() }} 段未填原因
+    </span>
+
+    <button class="hp-btn hp-export-btn" (click)="exportCsv()" [disabled]="isLoading() || rows().length === 0">
+      <i class="fas fa-file-export"></i> 匯出 CSV
+    </button>
+  </div>
+
+  <p class="hp-hint">
+    <i class="fas fa-info-circle"></i>
+    名單＝季度內病人動態自動配對的住院／出院段落（病程欄供判讀），日期可修正；請補「住院原因大類→細類」（選了大類後細類只列該類）。
+    欄位修改後自動儲存；勾「排除」不列入匯出。仍在住院中（無出院日）者出院日期留空。
+  </p>
+
+  <div *ngIf="isLoading()" class="hp-loading">
+    <div class="hp-spinner"></div>
+    <p>正在配對本季住出院動態...</p>
+  </div>
+
+  <div class="hp-table-wrap" *ngIf="!isLoading() && rows().length > 0">
+    <table class="hp-table">
+      <thead>
+        <tr>
+          <th class="hp-sticky">姓名</th>
+          <th>病歷號</th>
+          <th>排除</th>
+          <th>病程（動態參考）</th>
+          <th>住院日期</th>
+          <th>出院日期</th>
+          <th>住院原因大類</th>
+          <th>住院原因細類</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let r of rows(); trackBy: trackByEpisode" [class.hp-excluded]="r.excluded">
+          <td class="hp-sticky hp-name">{{ r.name }}</td>
+          <td class="hp-muted">{{ r.medicalRecordNumber || '—' }}</td>
+          <td class="hp-center">
+            <input type="checkbox" [checked]="r.excluded" (change)="onExcludedChange(r, $any($event.target).checked)" />
+          </td>
+          <td class="hp-chain" [title]="r.chain">{{ r.chain }}</td>
+          <td><input class="hp-in hp-date" type="date" [ngModel]="r.admitDate" (ngModelChange)="onFieldChange(r, 'admitDate', $event)" /></td>
+          <td><input class="hp-in hp-date" type="date" [ngModel]="r.dischargeDate" (ngModelChange)="onFieldChange(r, 'dischargeDate', $event)" /></td>
+          <td>
+            <select class="hp-in hp-cat" [class.hp-missing]="!r.cat" [ngModel]="r.cat" (ngModelChange)="onFieldChange(r, 'cat', $event)">
+              <option value=""></option>
+              <option *ngFor="let c of categoryCodes" [value]="c.code">{{ c.code }} {{ c.label }}</option>
+            </select>
+          </td>
+          <td>
+            <select class="hp-in hp-sub" [class.hp-missing]="!r.sub" [ngModel]="r.sub" (ngModelChange)="onFieldChange(r, 'sub', $event)" [title]="subLabel(r.sub)">
+              <option value=""></option>
+              <option *ngFor="let s of subOptions(r.cat)" [value]="s.code">{{ s.code }} {{ s.label }}</option>
+            </select>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div *ngIf="!isLoading() && rows().length === 0" class="hp-empty">
+    本季病人動態中沒有住院／出院紀錄。
+  </div>
+</div>
