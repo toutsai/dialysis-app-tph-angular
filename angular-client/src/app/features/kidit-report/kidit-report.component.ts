@@ -28,6 +28,10 @@ interface DayData {
   unregistered: number;
 }
 
+/** 主頁籤：依 KiDit 申報項目分區；hdrx/qinput/hosp 為後續批次的建置中佔位 */
+type MainTab = 'overview' | 'initial' | 'vascular' | 'movement' | 'hdrx' | 'qinput' | 'hosp';
+type InitialSubTab = 'pending' | 'basic' | 'first';
+
 @Component({
   selector: 'app-kidit-report',
   standalone: true,
@@ -39,28 +43,40 @@ export class KiditReportComponent implements OnInit {
   private readonly patientStore = inject(PatientStoreService);
   private readonly route = inject(ActivatedRoute);
 
+  readonly mainTabs: { key: MainTab; label: string; icon: string; wip?: boolean }[] = [
+    { key: 'overview', label: '申報總覽', icon: 'fa-clipboard-check' },
+    { key: 'initial', label: '初次建檔', icon: 'fa-id-card' },
+    { key: 'vascular', label: '季度造管', icon: 'fa-file-csv' },
+    { key: 'movement', label: '病人動態', icon: 'fa-calendar-alt' },
+    { key: 'hdrx', label: 'HD處方', icon: 'fa-prescription', wip: true },
+    { key: 'qinput', label: '季度輸入', icon: 'fa-notes-medical', wip: true },
+    { key: 'hosp', label: '住出院', icon: 'fa-hospital', wip: true },
+  ];
+
+  readonly activeTab = signal<MainTab>('overview');
+  readonly initialSubTab = signal<InitialSubTab>('pending');
+  /** 月份導覽只在月份相關頁籤顯示（總覽與建置中頁籤用不到） */
+  readonly showMonthNav = computed(() => ['initial', 'vascular', 'movement'].includes(this.activeTab()));
+  readonly isWipTab = computed(() => ['hdrx', 'qinput', 'hosp'].includes(this.activeTab()));
+
   readonly currentYear = signal(new Date().getFullYear());
   readonly currentMonth = signal(new Date().getMonth() + 1);
   readonly daysData = signal<DayData[]>([]);
   readonly isLoading = signal(false);
-  // 血管通路事件清單彈窗
-  readonly showVascularModal = signal(false);
+  // 血管通路事件清單（季度造管頁籤內嵌）
   readonly isLoadingVascular = signal(false);
   readonly vascularRows = signal<VascularAccessRow[]>([]);
-  // 初次透析名單彈窗
-  readonly showFirstDialysisModal = signal(false);
+  // 初次透析名單（初次建檔頁籤內嵌）
   readonly isLoadingFirstDialysis = signal(false);
   readonly firstDialysisRows = signal<FirstDialysisRow[]>([]);
   // 季度造管 CSV 工作檯彈窗
   readonly showQuarterlyModal = signal(false);
   // 季度病人動態彙整彈窗（本院常規HD／新病患／外院）
   readonly showMovementsQuarterly = signal(false);
-  // KiDit 待建檔清單彈窗（本院初透/首透且基本資料未完整）
-  readonly showPendingRegModal = signal(false);
+  // KiDit 待建檔清單（初次建檔頁籤內嵌；本院初透/首透且基本資料未完整）
   readonly isLoadingPendingReg = signal(false);
   readonly pendingRegRows = signal<any[]>([]);
-  // 每月基本資料彈窗（本院初透 × 建檔基本資料，含未建檔比對）
-  readonly showBasicDataModal = signal(false);
+  // 每月基本資料（初次建檔頁籤內嵌；本院初透 × 建檔基本資料，含未建檔比對）
   readonly isLoadingBasicData = signal(false);
   readonly basicDataRows = signal<MonthlyBasicDataRow[]>([]);
   readonly weekDays = ['日', '一', '二', '三', '四', '五', '六'];
@@ -82,7 +98,7 @@ export class KiditReportComponent implements OnInit {
 
   ngOnInit(): void {
     // 從「我的今日病人・本院初透建檔」點入：?openPatient=<id>&eventDate=<YYYY-MM-DD>
-    // 切到事件日所在月份並自動開啟該病人的建檔視窗
+    // 切到事件日所在月份並自動開啟該病人的建檔視窗（背景停在初次建檔頁籤）
     const qp = this.route.snapshot.queryParamMap;
     const openPatient = qp.get('openPatient');
     const eventDate = qp.get('eventDate');
@@ -92,11 +108,34 @@ export class KiditReportComponent implements OnInit {
         this.currentYear.set(y);
         this.currentMonth.set(m);
       }
+      this.activeTab.set('initial');
       this.fetchData();
+      this.loadPendingRegList();
       this.openPendingRegTarget({ patientId: openPatient, lastEventDate: eventDate });
       return;
     }
     this.fetchData();
+  }
+
+  setTab(tab: MainTab): void {
+    if (this.activeTab() === tab) return;
+    this.activeTab.set(tab);
+    if (tab === 'initial') this.loadInitialSubTab();
+    else if (tab === 'vascular') this.loadVascularList();
+  }
+
+  setInitialSubTab(sub: InitialSubTab): void {
+    if (this.initialSubTab() === sub) return;
+    this.initialSubTab.set(sub);
+    this.loadInitialSubTab();
+  }
+
+  /** 載入初次建檔頁籤目前子頁籤的清單（切頁籤/切月份時呼叫） */
+  private loadInitialSubTab(): void {
+    const sub = this.initialSubTab();
+    if (sub === 'pending') this.loadPendingRegList();
+    else if (sub === 'basic') this.loadBasicDataList();
+    else this.loadFirstDialysisList();
   }
 
   trackByDate(_index: number, day: DayData): string {
@@ -151,6 +190,9 @@ export class KiditReportComponent implements OnInit {
     this.currentMonth.set(m);
     this.currentYear.set(y);
     this.fetchData();
+    // 月份相關的內嵌清單跟著換月重載
+    if (this.activeTab() === 'initial') this.loadInitialSubTab();
+    else if (this.activeTab() === 'vascular') this.loadVascularList();
   }
 
   openModal(day: DayData): void {
@@ -166,6 +208,8 @@ export class KiditReportComponent implements OnInit {
     this.modalInitialPatientId.set(null);
     // 彈窗內儲存不再逐次重抓整月，改為關窗時更新一次月曆彙總
     this.fetchData();
+    // 建檔完成會退出待建檔清單：停在初次建檔頁籤時同步刷新內嵌清單
+    if (this.activeTab() === 'initial') this.loadInitialSubTab();
   }
 
   exportToExcel(): void {
@@ -185,12 +229,12 @@ export class KiditReportComponent implements OnInit {
   }
 
   /**
-   * 開啟「當月血管通路事件清單」彈窗：點擊時即時彙整
+   * 載入「當月血管通路事件清單」（季度造管頁籤內嵌）：
    * ① 當月每日工作日誌的 vascularAccessLog（來源=工作日誌）
    * ② 新表 vascular_access_events 的 confirmed 事件（來源=事件填寫：主護填寫經確認或組長補登）
-   * 每次點開才查詢（月量不大），不在每日工作日誌新增時同步，避免維護同步副本。
+   * 每次進入頁籤才查詢（月量不大），不在每日工作日誌新增時同步，避免維護同步副本。
    */
-  async openVascularList(): Promise<void> {
+  async loadVascularList(): Promise<void> {
     const year = this.currentYear();
     const month = this.currentMonth();
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
@@ -199,7 +243,6 @@ export class KiditReportComponent implements OnInit {
     const lastDay = new Date(year, month, 0).getDate();
     const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
-    this.showVascularModal.set(true);
     this.isLoadingVascular.set(true);
     this.vascularRows.set([]);
     try {
@@ -250,10 +293,6 @@ export class KiditReportComponent implements OnInit {
     }
   }
 
-  closeVascularModal(): void {
-    this.showVascularModal.set(false);
-  }
-
   openQuarterlyModal(): void {
     this.showQuarterlyModal.set(true);
   }
@@ -270,7 +309,7 @@ export class KiditReportComponent implements OnInit {
     this.showMovementsQuarterly.set(false);
   }
 
-  /** 匯出彈窗內已彙整的清單 */
+  /** 匯出已彙整的血管通路事件清單 */
   exportVascularRows(): void {
     const rows = this.vascularRows();
     if (!rows.length) { alert('本月份尚無任何血管通路事件紀錄。'); return; }
@@ -286,15 +325,14 @@ export class KiditReportComponent implements OnInit {
   private readonly statusLabelMap: Record<string, string> = { opd: '門診', ipd: '住院', er: '急診' };
 
   /**
-   * 開啟「當月初次透析名單」彈窗：來源為病人資料庫的 firstDialysisDate（含已刪除病人）。
-   * 點擊時即時過濾（已載入的 allPatients），不需後端。
+   * 載入「當月初次透析名單」（初次建檔頁籤內嵌）：來源為病人資料庫的 firstDialysisDate（含已刪除病人）。
+   * 進入頁籤時即時過濾（已載入的 allPatients），不需後端。
    */
-  async openFirstDialysisList(): Promise<void> {
+  async loadFirstDialysisList(): Promise<void> {
     const year = this.currentYear();
     const month = this.currentMonth();
     const ym = `${year}-${String(month).padStart(2, '0')}`;
 
-    this.showFirstDialysisModal.set(true);
     this.isLoadingFirstDialysis.set(true);
     this.firstDialysisRows.set([]);
     try {
@@ -328,13 +366,8 @@ export class KiditReportComponent implements OnInit {
     }
   }
 
-  closeFirstDialysisModal(): void {
-    this.showFirstDialysisModal.set(false);
-  }
-
-  /** 開啟「KiDit 待建檔清單」：本院初透/首透標記且 KiDit 基本資料未完整的病人（後端即時彙整） */
-  async openPendingRegList(): Promise<void> {
-    this.showPendingRegModal.set(true);
+  /** 載入「KiDit 待建檔清單」：本院初透/首透標記且 KiDit 基本資料未完整的病人（後端即時彙整） */
+  async loadPendingRegList(): Promise<void> {
     this.isLoadingPendingReg.set(true);
     this.pendingRegRows.set([]);
     try {
@@ -345,10 +378,6 @@ export class KiditReportComponent implements OnInit {
     } finally {
       this.isLoadingPendingReg.set(false);
     }
-  }
-
-  closePendingRegModal(): void {
-    this.showPendingRegModal.set(false);
   }
 
   pendingRegFlagLabel(row: any): string {
@@ -379,7 +408,6 @@ export class KiditReportComponent implements OnInit {
       this.modalInitialTab.set('registration');
       this.selectedDate.set(row.lastEventDate);
       this.selectedEvents.set(log?.events || []);
-      this.showPendingRegModal.set(false);
       this.showModal.set(true);
     } catch (error) {
       console.error('開啟 KiDit 日誌失敗:', error);
@@ -399,9 +427,8 @@ export class KiditReportComponent implements OnInit {
     }
   }
 
-  /** 開啟「當月基本資料」：該月本院初透病人 × KiDit 建檔基本資料（後端即時彙整，含未建檔比對） */
-  async openBasicDataList(): Promise<void> {
-    this.showBasicDataModal.set(true);
+  /** 載入「當月基本資料」：該月本院初透病人 × KiDit 建檔基本資料（後端即時彙整，含未建檔比對） */
+  async loadBasicDataList(): Promise<void> {
     this.isLoadingBasicData.set(true);
     this.basicDataRows.set([]);
     try {
@@ -416,15 +443,11 @@ export class KiditReportComponent implements OnInit {
     }
   }
 
-  closeBasicDataModal(): void {
-    this.showBasicDataModal.set(false);
-  }
-
   basicDataStatus(row: MonthlyBasicDataRow): string {
     return basicDataStatusText(row);
   }
 
-  /** 未建檔/不完整人數（彈窗提示比對結果用） */
+  /** 未建檔/不完整人數（比對結果提示用） */
   basicDataIncompleteCount(): number {
     return this.basicDataRows().filter((r) => !r.complete).length;
   }
@@ -437,6 +460,28 @@ export class KiditReportComponent implements OnInit {
     } catch (error) {
       console.error('匯出失敗:', error);
       alert('匯出失敗，請稍後再試。');
+    }
+  }
+
+  /** 建置中頁籤的說明文案（後續批次逐一實作） */
+  wipTitle(): string {
+    switch (this.activeTab()) {
+      case 'hdrx': return 'HD處方（每季）';
+      case 'qinput': return '季度輸入彙整（透析紀錄／醫療狀況評估／合併症）';
+      case 'hosp': return '住出院紀錄';
+      default: return '';
+    }
+  }
+
+  wipDesc(): string {
+    switch (this.activeTab()) {
+      case 'hdrx':
+        return '規劃中：由透析醫囑自動產生本季處方快照（血流量、透析時間、透析器、抗凝劑等），逐欄可修改後匯出官方 CSV。申報日期＝當季最後一次透析日。';
+      case 'qinput':
+        return '規劃中：主護於「我的病人」開啟「季度病人 KiDit 輸入」，為分配到的病人填寫透析紀錄、醫療狀況評估與合併症；此頁彙整各主護填寫進度並匯出三支官方 CSV。申報日期＝當季最後一次抽血日。';
+      case 'hosp':
+        return '規劃中：由病人動態自動配對住院／出院日期，於此補登住院原因大類／細類代碼後匯出官方 CSV。';
+      default: return '';
     }
   }
 }

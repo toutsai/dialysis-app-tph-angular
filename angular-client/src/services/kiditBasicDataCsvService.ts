@@ -1,6 +1,6 @@
 ﻿// KiDit「每月基本資料」CSV 彙整：該月本院初透病人 × 建檔基本資料（kidit_profile），
 // 含未建檔者的建檔狀態欄，供比對病人清單標記本院初透者是否已儲存基本資料。
-// 欄位順序比照 KiDit 匯出 Excel 的病患資料 sheet（kidit-api.service.ts）；
+// 欄位順序比照 KiDit 匯出 Excel 的病患資料 sheet（kiditExportService.ts）；
 // 日期維持西元 YYYY-MM-DD（內部彙整用，非 KiDit 官方匯入格式）。
 // UTF-8 BOM 前綴供 Excel 正確辨識編碼（同 kiditVascularCsvService）。
 

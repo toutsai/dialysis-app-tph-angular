@@ -13,7 +13,7 @@
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
-  margin-bottom: 1.1rem;
+  margin-bottom: 0.85rem;
   padding-bottom: 0.85rem;
   border-bottom: 1px solid #dee2e6;
 }
@@ -79,6 +79,57 @@
   font-size: 1.3em;
 }
 
+/* 主頁籤列：依申報項目分區 */
+.main-tabs {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  border-bottom: 2px solid #eceff1;
+}
+.main-tab-btn {
+  border: none;
+  background: transparent;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #607d8b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.main-tab-btn:hover {
+  color: #37474f;
+  background: #f5f7f8;
+}
+.main-tab-btn.active {
+  color: #1565c0;
+  border-bottom-color: #1565c0;
+}
+.main-tab-btn.wip {
+  color: #b0bec5;
+}
+.main-tab-btn.wip.active {
+  color: #78909c;
+  border-bottom-color: #90a4ae;
+}
+.wip-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  background: #eceff1;
+  color: #90a4ae;
+}
+
+.tab-panel {
+  min-height: 18rem;
+}
+
 /* 動作按鈕：統一為平台的外框式風格 */
 .action-btn {
   padding: 0.45rem 0.85rem;
@@ -103,16 +154,183 @@
 .vascular-btn:hover:not(:disabled) { background: #e9f2fc; }
 .quarterly-btn { border-color: #00695c; color: #00695c; }
 .quarterly-btn:hover:not(:disabled) { background: #e0f2f1; }
-.firstdia-btn { border-color: #7b1fa2; color: #7b1fa2; }
-.firstdia-btn:hover:not(:disabled) { background: #f4e9f7; }
-.pendingreg-btn { border-color: #e65100; color: #e65100; }
-.pendingreg-btn:hover:not(:disabled) { background: #fdefe4; }
 .movements-btn { border-color: #1565c0; color: #1565c0; }
 .movements-btn:hover:not(:disabled) { background: #e3f2fd; }
 .basicdata-btn { border-color: #00695c; color: #00695c; }
 .basicdata-btn:hover:not(:disabled) { background: #e0f2f1; }
 
-/* 每月基本資料彈窗 */
+/* 申報總覽 */
+.ov-hint { margin-bottom: 0.9rem; }
+.ov-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+  gap: 0.8rem;
+}
+.ov-card {
+  background: #fff;
+  border: 1px solid #eceff1;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  padding: 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.ov-card.ov-wip {
+  background: #fafbfc;
+  border-style: dashed;
+  color: #90a4ae;
+}
+.ov-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.ov-card-head i {
+  color: #1565c0;
+  font-size: 1rem;
+}
+.ov-card.ov-wip .ov-card-head i { color: #b0bec5; }
+.ov-card-head h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.ov-freq {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.12rem 0.45rem;
+  border-radius: 10px;
+  background: #e3f2fd;
+  color: #1565c0;
+  white-space: nowrap;
+}
+.ov-card.ov-wip .ov-freq {
+  background: #eceff1;
+  color: #90a4ae;
+}
+.ov-desc {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #607d8b;
+  line-height: 1.5;
+  flex-grow: 1;
+}
+.ov-card.ov-wip .ov-desc { color: #a5b3ba; }
+.ov-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.ov-legacy {
+  margin-top: 1rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px dashed #cfd8dc;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.ov-legacy .pr-hint { margin: 0; }
+
+/* 初次建檔子頁籤 */
+.sub-tabs {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.8rem;
+}
+.sub-tab-btn {
+  padding: 0.4rem 0.8rem;
+  border: 1px solid #cfd8dc;
+  border-radius: 16px;
+  background: #fff;
+  color: #607d8b;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.sub-tab-btn:hover { background: #f5f7f8; }
+.sub-tab-btn.active {
+  background: #1565c0;
+  border-color: #1565c0;
+  color: #fff;
+}
+
+/* 內嵌清單面板（原彈窗內容搬入頁籤） */
+.list-panel {
+  background: #fff;
+  border: 1px solid #eceff1;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  padding: 0.85rem 1.1rem;
+}
+.list-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+.list-panel-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #263238;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.va-count {
+  font-size: 0.82rem;
+  color: #78909c;
+  font-weight: 400;
+}
+
+/* 頁籤頂部工具列（工作檯入口＋說明） */
+.tool-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.8rem;
+}
+.tool-hint { margin: 0; }
+
+/* 建置中佔位 */
+.wip-box {
+  background: #fafbfc;
+  border: 1px dashed #cfd8dc;
+  border-radius: 8px;
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  color: #78909c;
+}
+.wip-box i {
+  font-size: 1.8rem;
+  color: #b0bec5;
+  margin-bottom: 0.6rem;
+}
+.wip-box h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+  color: #546e7a;
+}
+.wip-box p {
+  margin: 0 auto;
+  max-width: 42rem;
+  line-height: 1.6;
+}
+
+/* 每月基本資料 */
 .bd-warn { color: #c62828; font-weight: 700; margin-left: 0.5rem; }
 .bd-ok { color: #2e7d32; font-weight: 700; margin-left: 0.5rem; }
 .bd-row-incomplete { background: #fff8e1; }
@@ -285,75 +503,16 @@
   100% { transform: rotate(360deg); }
 }
 
-/* 清單彈窗 */
-.va-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 1.25rem;
-}
-.va-modal {
-  background: #fff;
-  border-radius: 10px;
-  width: 100%;
-  max-width: 54rem;
-  max-height: 85vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
-  overflow: hidden;
-}
-.va-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.85rem 1.1rem;
-  border-bottom: 1px solid #eceff1;
-  flex-wrap: wrap;
-}
-.va-modal-header h3 {
-  margin: 0;
-  font-size: 1.1rem;
-  color: #263238;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.va-count {
-  font-size: 0.82rem;
-  color: #78909c;
-  font-weight: 400;
-}
-.va-modal-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.va-close-btn {
-  border: 1px solid #eceff1;
-  background: #f5f7f8;
-  color: #607d8b;
-  width: 2.1rem;
-  height: 2.1rem;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.95rem;
-}
-.va-close-btn:hover { background: #eceff1; }
-.va-modal-body {
-  padding: 0.85rem 1.1rem;
-  overflow: auto;
-}
+/* 內嵌清單表格（原彈窗表格樣式沿用） */
 .va-loading,
 .va-empty {
   text-align: center;
   color: #90a4ae;
   padding: 2.5rem 0;
+}
+.va-loading .spinner { margin: 0 auto 0.9rem; }
+.table-wrap {
+  overflow-x: auto;
 }
 .va-table {
   width: 100%;
@@ -413,9 +572,10 @@
   }
   .page-title { font-size: 1.3rem; }
   .header-left, .header-right, .month-navigator { justify-content: center; }
-  /* 四顆動作鈕改 2×2 緊湊排列，避免直向堆一長串 */
-  .header-right { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
-  .action-btn { justify-content: center; font-size: 0.78rem; padding: 0.45rem 0.4rem; }
+  .main-tabs { gap: 0.15rem; }
+  .main-tab-btn { padding: 0.45rem 0.55rem; font-size: 0.8rem; }
+  .ov-grid { grid-template-columns: 1fr; }
+  .action-btn { justify-content: center; font-size: 0.78rem; }
   .calendar-grid { grid-template-columns: repeat(1, 1fr); gap: 0.45rem; }
   .weekdays-header { display: none; }
   /* 單欄清單模式：月初補位空格不顯示（否則每格仍占 7rem 高，頂部大量留白） */
