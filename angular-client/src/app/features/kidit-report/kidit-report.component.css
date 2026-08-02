@@ -3,7 +3,7 @@
   width: 100%;
   padding: 0 0 1.5rem;
   color: #263238;
-  font-size: 0.85rem;
+  font-size: 0.98rem;
 }
 
 /* 頂部：與其他頁面一致的底線式標題列 */
@@ -68,7 +68,7 @@
   color: #37474f;
 }
 .current-month {
-  font-size: 1.1rem;
+  font-size: 1.26rem;
   font-weight: 700;
   color: #37474f;
   min-width: 7.5rem;
@@ -91,7 +91,7 @@
   border: none;
   background: transparent;
   padding: 0.55rem 0.9rem;
-  font-size: 0.9rem;
+  font-size: 1.03rem;
   font-weight: 600;
   color: #607d8b;
   cursor: pointer;
@@ -118,7 +118,7 @@
   border-bottom-color: #90a4ae;
 }
 .wip-badge {
-  font-size: 0.62rem;
+  font-size: 0.71rem;
   font-weight: 700;
   padding: 0.05rem 0.3rem;
   border-radius: 4px;
@@ -136,7 +136,7 @@
   border: 1px solid #cfd8dc;
   border-radius: 6px;
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: 0.98rem;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -189,17 +189,17 @@
 }
 .ov-card-head i {
   color: #1565c0;
-  font-size: 1rem;
+  font-size: 1.15rem;
 }
 .ov-card.ov-wip .ov-card-head i { color: #b0bec5; }
 .ov-card-head h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 1.15rem;
   font-weight: 700;
 }
 .ov-freq {
   margin-left: auto;
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   font-weight: 700;
   padding: 0.12rem 0.45rem;
   border-radius: 10px;
@@ -213,7 +213,7 @@
 }
 .ov-desc {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.92rem;
   color: #607d8b;
   line-height: 1.5;
   flex-grow: 1;
@@ -250,7 +250,7 @@
   border-radius: 16px;
   background: #fff;
   color: #607d8b;
-  font-size: 0.82rem;
+  font-size: 0.94rem;
   font-weight: 600;
   cursor: pointer;
   display: flex;
@@ -283,14 +283,14 @@
 }
 .list-panel-header h3 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 1.21rem;
   color: #263238;
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 .va-count {
-  font-size: 0.82rem;
+  font-size: 0.94rem;
   color: #78909c;
   font-weight: 400;
 }
@@ -321,7 +321,7 @@
 }
 .wip-box h3 {
   margin: 0 0 0.5rem;
-  font-size: 1.1rem;
+  font-size: 1.26rem;
   color: #546e7a;
 }
 .wip-box p {
@@ -338,7 +338,7 @@
   display: inline-block;
   padding: 1px 8px;
   border-radius: 10px;
-  font-size: 0.8rem;
+  font-size: 0.92rem;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -349,7 +349,7 @@
   margin-left: 4px;
   padding: 0 5px;
   border-radius: 8px;
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   font-weight: 700;
   background: #fff3e0;
   color: #e65100;
@@ -359,7 +359,7 @@
 /* 待建檔清單 */
 .pr-hint {
   margin: 0 0 0.6rem;
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   color: #78909c;
 }
 .pr-row { cursor: pointer; }
@@ -384,7 +384,7 @@
 }
 .weekday {
   font-weight: 600;
-  font-size: 0.8rem;
+  font-size: 0.92rem;
   color: #90a4ae;
 }
 .calendar-grid {
@@ -434,14 +434,14 @@
   margin-bottom: 0.5rem;
 }
 .day-number {
-  font-size: 1rem;
+  font-size: 1.15rem;
   font-weight: 700;
   color: #455a64;
 }
 .today-badge {
   background: #f9a825;
   color: #fff;
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   font-weight: 700;
   padding: 0.1rem 0.35rem;
   border-radius: 4px;
@@ -458,7 +458,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   padding: 0.25rem 0.5rem;
   border-radius: 5px;
   width: 100%;
@@ -517,7 +517,7 @@
 .va-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.82rem;
+  font-size: 0.94rem;
 }
 .va-table th,
 .va-table td {
@@ -543,7 +543,7 @@
 .va-source-tag {
   display: inline-block;
   padding: 0.05rem 0.4rem;
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   border-radius: 4px;
   background: #eceff1;
   color: #546e7a;
@@ -556,7 +556,7 @@
   display: inline-block;
   margin-left: 0.35rem;
   padding: 0.05rem 0.35rem;
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   border-radius: 4px;
   background: #d32f2f;
   color: #fff;
@@ -570,12 +570,12 @@
     margin-bottom: 0.75rem;
     padding-bottom: 0.6rem;
   }
-  .page-title { font-size: 1.3rem; }
+  .page-title { font-size: 1.5rem; }
   .header-left, .header-right, .month-navigator { justify-content: center; }
   .main-tabs { gap: 0.15rem; }
-  .main-tab-btn { padding: 0.45rem 0.55rem; font-size: 0.8rem; }
+  .main-tab-btn { padding: 0.45rem 0.55rem; font-size: 0.92rem; }
   .ov-grid { grid-template-columns: 1fr; }
-  .action-btn { justify-content: center; font-size: 0.78rem; }
+  .action-btn { justify-content: center; font-size: 0.9rem; }
   .calendar-grid { grid-template-columns: repeat(1, 1fr); gap: 0.45rem; }
   .weekdays-header { display: none; }
   /* 單欄清單模式：月初補位空格不顯示（否則每格仍占 7rem 高，頂部大量留白） */
