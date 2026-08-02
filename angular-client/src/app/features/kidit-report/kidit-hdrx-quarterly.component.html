@@ -30,7 +30,7 @@
 
   <p class="hx-hint">
     <i class="fas fa-info-circle"></i>
-    名單＝常規門診病人，欄位由透析醫囑預帶（申報日期預設季度最後一天＝當季最後一次透析日；透析方式 HD 預設 3 High flux、透析液流速 500、鹼基 2、鉀 2 為常規預設請核對）。
+    名單＝常規病人（含目前住院／急診中者，現況欄註記）。欄位由「醫囑歷史中異動日 ≤ 季末的最新一筆」預帶（處方異動日欄可核對；申報日期預設季度最後一天＝當季最後一次透析日；透析方式 HD 預設 3 High flux、透析液流速 500、鹼基 2、鉀 2 為常規預設請核對）。
     所有欄位可直接修改並自動儲存；AK 輪替病人取第一顆對應官方代碼，「透析器型號」請輸入對應代碼（可用下拉建議搜尋）。勾「排除」不列入匯出。
   </p>
 
@@ -45,9 +45,11 @@
         <tr>
           <th class="hx-sticky">姓名</th>
           <th>病歷號</th>
+          <th>現況</th>
           <th>排除</th>
           <th>警告</th>
           <th>醫囑 AK（原）</th>
+          <th>處方異動日</th>
           <th>日期</th>
           <th>透析方式</th>
           <th>血液流速</th>
@@ -70,12 +72,16 @@
           <td class="hx-sticky hx-name">{{ r.name }}</td>
           <td class="hx-muted">{{ r.medicalRecordNumber || '—' }}</td>
           <td class="hx-center">
+            <span class="hx-status-tag" *ngIf="r.statusNote">{{ r.statusNote }}</span>
+          </td>
+          <td class="hx-center">
             <input type="checkbox" [checked]="r.excluded" (change)="onExcludedChange(r, $any($event.target).checked)" />
           </td>
           <td class="hx-warn-cell">
             <i class="fas fa-exclamation-triangle" *ngIf="r.warnings.length" [title]="r.warnings.join('；')"></i>
           </td>
           <td class="hx-ak-name" [title]="r.akName">{{ r.akName || '—' }}</td>
+          <td class="hx-muted">{{ r.orderDate || '—' }}</td>
           <td><input class="hx-in hx-date" type="date" [ngModel]="r.values['date']" (ngModelChange)="onCellChange(r, 'date', $event)" /></td>
           <td>
             <select class="hx-in" [ngModel]="r.values['mode']" (ngModelChange)="onCellChange(r, 'mode', $event)">

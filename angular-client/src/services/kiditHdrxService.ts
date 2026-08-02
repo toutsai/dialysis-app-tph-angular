@@ -81,13 +81,16 @@ export interface HdrxPrefillResult {
 
 /**
  * 由透析醫囑建 HD處方預帶值。
+ * ordersSource＝醫囑歷史中「異動日期 ≤ 季末的最新一筆」的 orders（由呼叫端挑選）；
+ * 未提供時 fallback 病人檔現行醫囑。
  * 常規預設（需專師核對）：透析方式 HD→3 high flux、透析液流速 500、鹼基 2 Bicarbonate、鉀 2。
  * AK 輪替（/ 分隔多顆）取第一顆對應官方代碼。
  */
-export function buildHdrxPrefill(patient: any, quarterEnd: string): HdrxPrefillResult {
-  const o = patient?.dialysisOrders || {};
+export function buildHdrxPrefill(patient: any, quarterEnd: string, ordersSource?: any): HdrxPrefillResult {
+  const o = ordersSource || patient?.dialysisOrders || {};
   const warnings: string[] = [];
-  const mode = String(patient?.mode || o.mode || '');
+  // 模式以醫囑來源為主（歷史季度看當時處方），無值才用病人檔現況
+  const mode = String(o.mode || patient?.mode || '');
 
   const akFull = String(o.ak || o.artificialKidney || '').trim();
   const akFirst = akFull.split('/')[0]?.trim() || '';

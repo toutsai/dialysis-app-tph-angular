@@ -142,6 +142,16 @@
   color: #546e7a;
 }
 .hx-warn-cell { text-align: center; color: #e65100; }
+.hx-status-tag {
+  display: inline-block;
+  padding: 0.05rem 0.4rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: #fff3e0;
+  color: #e65100;
+  white-space: nowrap;
+}
 
 tr.hx-excluded td { opacity: 0.45; }
 tr.hx-excluded .hx-center { opacity: 1; }

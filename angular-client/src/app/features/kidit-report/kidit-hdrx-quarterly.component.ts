@@ -2,6 +2,7 @@ import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PatientStoreService } from '@services/patient-store.service';
+import { localApi } from '@/services/localApiClient';
 import { quarterRange, currentQuarter } from '@/services/kiditVascularCsvService';
 import { fetchQuarterRecords, saveQuarterRecord } from '@/services/kiditQuarterInputService';
 import {
@@ -21,6 +22,10 @@ interface HdrxRow {
   medicalRecordNumber: string;
   idNumber: string;
   akName: string;
+  /** 採用的醫囑歷史異動日（YYYY-MM-DD）；空＝季末前無歷史採病人檔現行醫囑 */
+  orderDate: string;
+  /** 常規病人目前非門診時的狀態註記（住院/急診） */
+  statusNote: string;
   warnings: string[];
   excluded: boolean;
   prefill: Record<string, string>;
@@ -89,21 +94,37 @@ export class KiditHdrxQuarterlyComponent implements OnInit, OnDestroy {
     try {
       const { endDate } = quarterRange(this.year(), this.q());
       await this.patientStore.fetchPatientsIfNeeded();
-      const records = await fetchQuarterRecords(this.quarter());
+      const [records, historyAll] = await Promise.all([
+        fetchQuarterRecords(this.quarter()),
+        // 醫囑歷史（created_at DESC）：處方可能上月/上上月開立，逐病人取「異動日 ≤ 季末」最新一筆
+        localApi.get('/orders/history'),
+      ]);
 
       const hdrxByPatient = new Map<string, any>();
       for (const r of records) {
         if (r.data && (r.data as any).hdrx) hdrxByPatient.set(r.patientId, (r.data as any).hdrx);
       }
 
+      // 逐病人挑季末前最新一筆醫囑歷史（清單已依 created_at DESC，取第一筆符合者）
+      const latestOrderByPatient = new Map<string, { orders: any; date: string }>();
+      for (const h of Array.isArray(historyAll) ? historyAll : []) {
+        if (!h?.patientId || latestOrderByPatient.has(h.patientId)) continue;
+        const d = String(h.createdAt || '').slice(0, 10);
+        if (d && d <= endDate) {
+          latestOrderByPatient.set(h.patientId, { orders: h.orders || {}, date: d });
+        }
+      }
+
+      // 名單＝常規病人（含目前住院/急診中的常規病人：季度申報仍應列入，以狀態欄註記）
+      const statusNoteMap: Record<string, string> = { ipd: '住院', er: '急診' };
       const patients = (this.patientStore.allPatients() as any[]).filter(
-        (p) =>
-          p.status === 'opd' && !p.isDeleted &&
-          (p.patientCategory == null || p.patientCategory === 'opd_regular'),
+        (p) => !p.isDeleted && (p.patientCategory == null || p.patientCategory === 'opd_regular'),
       );
 
       const built: HdrxRow[] = patients.map((p) => {
-        const { values: prefill, akName, warnings } = buildHdrxPrefill(p, endDate);
+        const hist = latestOrderByPatient.get(p.id);
+        const { values: prefill, akName, warnings } = buildHdrxPrefill(p, endDate, hist?.orders);
+        if (!hist) warnings.push('季末前無醫囑歷史，採病人檔現行醫囑');
         const saved = hdrxByPatient.get(p.id) || {};
         const overrideValues: Record<string, string> = { ...(saved.values || {}) };
         return {
@@ -112,6 +133,8 @@ export class KiditHdrxQuarterlyComponent implements OnInit, OnDestroy {
           medicalRecordNumber: p.medicalRecordNumber || '',
           idNumber: p.idNumber || '',
           akName,
+          orderDate: hist?.date || '',
+          statusNote: statusNoteMap[p.status] || '',
           warnings,
           excluded: !!saved.excluded,
           prefill,
