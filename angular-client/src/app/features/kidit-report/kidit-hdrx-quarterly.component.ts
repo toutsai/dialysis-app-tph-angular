@@ -2,6 +2,7 @@ import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PatientStoreService } from '@services/patient-store.service';
+import { AuthService } from '@services/auth.service';
 import { localApi } from '@/services/localApiClient';
 import { quarterRange, currentQuarter } from '@/services/kiditVascularCsvService';
 import { fetchQuarterRecords, saveQuarterRecord } from '@/services/kiditQuarterInputService';
@@ -21,6 +22,8 @@ interface HdrxRow {
   name: string;
   medicalRecordNumber: string;
   idNumber: string;
+  /** 照護清單主護姓名；空＝未分配 */
+  nurseName: string;
   akName: string;
   /** 採用的醫囑歷史異動日（YYYY-MM-DD）；空＝季末前無歷史採病人檔現行醫囑 */
   orderDate: string;
@@ -47,6 +50,7 @@ interface HdrxRow {
 })
 export class KiditHdrxQuarterlyComponent implements OnInit, OnDestroy {
   private readonly patientStore = inject(PatientStoreService);
+  private readonly authService = inject(AuthService);
 
   readonly modeOptions = HDRX_MODE_OPTIONS;
   readonly anticoagOptions = HDRX_ANTICOAG_OPTIONS;
@@ -59,6 +63,16 @@ export class KiditHdrxQuarterlyComponent implements OnInit, OnDestroy {
   readonly isLoading = signal(false);
   readonly rows = signal<HdrxRow[]>([]);
   readonly saveState = signal<'' | 'saving' | 'saved' | 'error'>('');
+  /** 護理師篩選：''=全部、'__none__'=未分配、其餘=主護姓名（預設帶入登入者自己，方便補缺漏） */
+  readonly nurseFilter = signal<string>('');
+  readonly nurseNames = signal<string[]>([]);
+  readonly visibleRows = computed(() => {
+    const f = this.nurseFilter();
+    const all = this.rows();
+    if (!f) return all;
+    if (f === '__none__') return all.filter((r) => !r.nurseName);
+    return all.filter((r) => r.nurseName === f);
+  });
 
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingSaves = new Set<string>();
@@ -94,11 +108,31 @@ export class KiditHdrxQuarterlyComponent implements OnInit, OnDestroy {
     try {
       const { endDate } = quarterRange(this.year(), this.q());
       await this.patientStore.fetchPatientsIfNeeded();
-      const [records, historyAll] = await Promise.all([
+      const [records, historyAll, care] = await Promise.all([
         fetchQuarterRecords(this.quarter()),
         // 醫囑歷史（created_at DESC）：處方可能上月/上上月開立，逐病人取「異動日 ≤ 季末」最新一筆
         localApi.get('/orders/history'),
+        localApi.get('/nursing/patient-care'),
       ]);
+
+      // 照護清單：patientId → 主護姓名（排除名單者不列入，同主護反查慣例）
+      const excludedNurses = new Set<string>((care as any)?.excludedNurseIds || []);
+      const nurseByPatient = new Map<string, string>();
+      const nurseNames: string[] = [];
+      for (const a of ((care as any)?.assignments || []) as any[]) {
+        if (excludedNurses.has(a.nurseId)) continue;
+        const nm = String(a.nurseName || '').trim();
+        if (!nm) continue;
+        nurseNames.push(nm);
+        for (const pid of a.patientIds || []) nurseByPatient.set(pid, nm);
+      }
+      this.nurseNames.set(nurseNames);
+
+      // 預設篩選：登入者本人是照護清單主護時帶入自己（方便補缺漏）；否則維持現選/全部
+      if (!this.nurseFilter()) {
+        const myName = String(this.authService.currentUser()?.name || '').trim();
+        if (myName && nurseNames.includes(myName)) this.nurseFilter.set(myName);
+      }
 
       const hdrxByPatient = new Map<string, any>();
       for (const r of records) {
@@ -132,6 +166,7 @@ export class KiditHdrxQuarterlyComponent implements OnInit, OnDestroy {
           name: p.name || '',
           medicalRecordNumber: p.medicalRecordNumber || '',
           idNumber: p.idNumber || '',
+          nurseName: nurseByPatient.get(p.id) || '',
           akName,
           orderDate: hist?.date || '',
           statusNote: statusNoteMap[p.status] || '',
@@ -143,7 +178,13 @@ export class KiditHdrxQuarterlyComponent implements OnInit, OnDestroy {
         };
       });
 
-      built.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh-Hant'));
+      // 依主護分組排序（未分配排最後），組內依姓名
+      built.sort(
+        (a, b) =>
+          (a.nurseName ? 0 : 1) - (b.nurseName ? 0 : 1) ||
+          a.nurseName.localeCompare(b.nurseName, 'zh-Hant') ||
+          (a.name || '').localeCompare(b.name || '', 'zh-Hant'),
+      );
       this.rows.set(built);
     } catch (error) {
       console.error('載入 HD處方季度資料失敗:', error);

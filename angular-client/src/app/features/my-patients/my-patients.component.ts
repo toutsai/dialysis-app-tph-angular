@@ -918,9 +918,14 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
     return !this.authService.isViewer();
   }
 
-  /** 季度病人 KiDit 輸入：主護為照護清單分配病人填寫每季申報表單（透析紀錄/醫療狀況評估/合併症） */
+  /** 季度病人 KiDit 輸入：主護為照護清單分配病人填寫每季申報表單（透析紀錄/醫療狀況評估/合併症) */
   openKiditQuarterlyInput(): void {
     this.router.navigate(['/kidit-quarterly-input']);
+  }
+
+  /** HD處方季度工作檯：預設篩選登入主護自己的照護病人，補處方缺漏 */
+  openKiditHdrx(): void {
+    this.router.navigate(['/kidit-hdrx']);
   }
 
   /** 目前檢視對象（支援切換使用者）的 uid 與姓名，比對方式同 fetchMyPatientData */

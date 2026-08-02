@@ -126,9 +126,19 @@
 .hx-table tbody tr:hover td { background: #fafcff; }
 .hx-sticky {
   position: sticky;
-  left: 0;
   background: #fff;
   z-index: 1;
+}
+.hx-col-nurse { left: 0; min-width: 5.6rem; }
+.hx-col-name { left: 6.5rem; }
+.hx-nurse { color: #00695c; font-weight: 600; }
+.hx-nurse-filter {
+  padding: 0.35rem 0.55rem;
+  border: 1px solid #cfd8dc;
+  border-radius: 6px;
+  font-size: 0.97rem;
+  background: #fff;
+  color: #37474f;
 }
 .hx-table thead .hx-sticky { z-index: 3; background: #f5f7f8; }
 .hx-table tbody tr:hover .hx-sticky { background: #fafcff; }

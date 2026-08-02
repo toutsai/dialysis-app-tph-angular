@@ -13,6 +13,12 @@
       </button>
     </div>
 
+    <select class="hx-nurse-filter" [ngModel]="nurseFilter()" (ngModelChange)="nurseFilter.set($event)" title="依照護護理師篩選">
+      <option value="">全部主護（{{ rows().length }} 人）</option>
+      <option *ngFor="let n of nurseNames()" [value]="n">{{ n }}</option>
+      <option value="__none__">未分配</option>
+    </select>
+
     <span class="hx-save-state" [ngSwitch]="saveState()">
       <span *ngSwitchCase="'saving'" class="hx-saving"><i class="fas fa-circle-notch fa-spin"></i> 儲存中…</span>
       <span *ngSwitchCase="'saved'" class="hx-saved"><i class="fas fa-check"></i> 已儲存</span>
@@ -30,7 +36,7 @@
 
   <p class="hx-hint">
     <i class="fas fa-info-circle"></i>
-    名單＝常規病人（含目前住院／急診中者，現況欄註記）。欄位由「醫囑歷史中異動日 ≤ 季末的最新一筆」預帶（處方異動日欄可核對；申報日期預設季度最後一天＝當季最後一次透析日；透析方式 HD 預設 3 High flux、透析液流速 500、鹼基 2、鉀 2 為常規預設請核對）。
+    名單＝常規病人（含目前住院／急診中者，現況欄註記），可依照護護理師篩選補自己病人的缺漏（匯出不受篩選影響，涵蓋全部未排除者）。欄位由「醫囑歷史中異動日 ≤ 季末的最新一筆」預帶（處方異動日欄可核對；申報日期預設季度最後一天＝當季最後一次透析日；透析方式 HD 預設 3 High flux、透析液流速 500、鹼基 2、鉀 2 為常規預設請核對）。
     所有欄位可直接修改並自動儲存；AK 輪替病人取第一顆對應官方代碼，「透析器型號」請輸入對應代碼（可用下拉建議搜尋）。勾「排除」不列入匯出。
   </p>
 
@@ -43,7 +49,8 @@
     <table class="hx-table">
       <thead>
         <tr>
-          <th class="hx-sticky">姓名</th>
+          <th class="hx-sticky hx-col-nurse">照護護理師</th>
+          <th class="hx-sticky hx-col-name">姓名</th>
           <th>病歷號</th>
           <th>現況</th>
           <th>排除</th>
@@ -68,8 +75,9 @@
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let r of rows(); trackBy: trackByPatient" [class.hx-excluded]="r.excluded">
-          <td class="hx-sticky hx-name">{{ r.name }}</td>
+        <tr *ngFor="let r of visibleRows(); trackBy: trackByPatient" [class.hx-excluded]="r.excluded">
+          <td class="hx-sticky hx-col-nurse hx-nurse">{{ r.nurseName || '—' }}</td>
+          <td class="hx-sticky hx-col-name hx-name">{{ r.name }}</td>
           <td class="hx-muted">{{ r.medicalRecordNumber || '—' }}</td>
           <td class="hx-center">
             <span class="hx-status-tag" *ngIf="r.statusNote">{{ r.statusNote }}</span>

@@ -103,6 +103,13 @@ export const PAGE_ACCESS = {
     roles: CLINICAL_ROLES,
     roleLabel: '管理員、編輯者、貢獻者',
   },
+  kiditHdrx: {
+    // HD處方季度工作檯獨立入口（我的病人 → HD處方）：主護依照護護理師篩選補自己病人的缺漏
+    path: '/kidit-hdrx',
+    title: 'HD處方（KiDit 申報）',
+    roles: CLINICAL_ROLES,
+    roleLabel: '管理員、編輯者、貢獻者',
+  },
   patients: {
     path: '/patients',
     title: '病人管理',

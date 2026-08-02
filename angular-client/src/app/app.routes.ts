@@ -297,6 +297,18 @@ export const routes: Routes = [
         },
       },
       {
+        path: 'kidit-hdrx',
+        loadComponent: () =>
+          import('./features/kidit-report/kidit-hdrx-quarterly.component').then(
+            (m) => m.KiditHdrxQuarterlyComponent
+          ),
+        canActivate: [roleGuard],
+        data: {
+          title: PAGE_ACCESS.kiditHdrx.title,
+          roles: PAGE_ACCESS.kiditHdrx.roles,
+        },
+      },
+      {
         path: 'usage-guide',
         loadComponent: () =>
           import('./features/usage-guide/usage-guide.component').then(

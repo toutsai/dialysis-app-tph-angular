@@ -66,6 +66,9 @@
     <button class="care-tool-btn kidit" (click)="openKiditQuarterlyInput()" title="為照護清單分配病人填寫每季 KiDit 申報表單">
       <i class="fas fa-file-medical"></i> 季度病人 KiDit 輸入
     </button>
+    <button class="care-tool-btn kidit" (click)="openKiditHdrx()" title="HD處方季度工作檯：依照護護理師篩選，補自己病人的處方缺漏">
+      <i class="fas fa-prescription"></i> HD處方
+    </button>
   </div>
 
   <div *ngIf="isLoading()" class="loading-state">
