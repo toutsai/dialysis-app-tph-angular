@@ -142,7 +142,10 @@
 .care-tool-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .care-tool-btn.edu { border-color: #1971c2; color: #1971c2; }
 .care-tool-btn.edu:hover:not(:disabled) { background: #e7f5ff; }
-.care-tool-btn.kidit { border-color: #868e96; color: #868e96; }
+.care-tool-btn.kidit { border-color: #7048e8; color: #7048e8; }
+.care-tool-btn.kidit:hover:not(:disabled) { background: #f3f0ff; }
+.care-tool-btn.hdrx { border-color: #2f9e44; color: #2f9e44; }
+.care-tool-btn.hdrx:hover:not(:disabled) { background: #ebfbee; }
 .care-tool-btn.firstdia { border-color: #e8590c; color: #e8590c; }
 .care-tool-btn.firstdia:hover:not(:disabled) { background: #fff4e6; }
 .care-tool-btn.va { border-color: #0c8599; color: #0c8599; }
