@@ -49,7 +49,7 @@
           <h3>初次建檔</h3>
           <span class="ov-freq">初次・每月上傳</span>
         </div>
-        <p class="ov-desc">病患資料＋病史原發病。組長於病人清單標記「本院初透」，主護於「我的病人」填寫建檔，此處核對缺漏後匯出。</p>
+        <p class="ov-desc">病患資料＋病史原發病。組長於病人清單標記「本院初透」，主護於「我的病人」填寫建檔，此處核對缺漏後匯出兩支官方 CSV 上傳。</p>
         <div class="ov-actions">
           <button class="action-btn basicdata-btn" (click)="setTab('initial')">
             <i class="fas fa-arrow-right"></i> 前往初次建檔
@@ -119,19 +119,23 @@
       </div>
     </div>
 
-    <div class="ov-legacy">
-      <span class="pr-hint">
-        <i class="fas fa-info-circle"></i>
-        暫行工具：三合一 Excel（病患資料／病史原發病／HD造管），官方逐項 CSV 上線後淘汰。
-      </span>
-      <button class="action-btn export-btn" (click)="exportToExcel()" [disabled]="isLoading()">
-        <i class="fas fa-file-export"></i> 匯出本月資料（Excel）
-      </button>
-    </div>
   </section>
 
   <!-- ========== 初次建檔 ========== -->
   <section class="tab-panel" *ngIf="activeTab() === 'initial'">
+    <div class="tool-row">
+      <button class="action-btn export-btn" (click)="exportOfficialPatientCsv()" [disabled]="isLoading()">
+        <i class="fas fa-file-csv"></i> 匯出病患資料 CSV
+      </button>
+      <button class="action-btn export-btn" (click)="exportOfficialHistoryCsv()" [disabled]="isLoading()">
+        <i class="fas fa-file-csv"></i> 匯出病史原發病 CSV
+      </button>
+      <span class="pr-hint tool-hint">
+        <i class="fas fa-info-circle"></i>
+        官方 KiDit 匯入格式（民國日期）；範圍＝本月（依上方月份）已填寫建檔資料的病人，可直接上傳 KiDit。
+      </span>
+    </div>
+
     <div class="sub-tabs">
       <button class="sub-tab-btn" [class.active]="initialSubTab() === 'pending'" (click)="setInitialSubTab('pending')">
         <i class="fas fa-user-clock"></i> 待建檔清單

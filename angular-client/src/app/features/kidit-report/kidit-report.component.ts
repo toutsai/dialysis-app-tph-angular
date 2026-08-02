@@ -5,7 +5,11 @@ import { ActivatedRoute } from '@angular/router';
 import { ApiConfigService } from '@services/api-config.service';
 import { PatientStoreService } from '@services/patient-store.service';
 import { kiditService } from '@/services/kiditService';
-import { exportKiDitExcel } from '@/services/kiditExportService';
+import {
+  buildInitialRegistrationRows,
+  downloadPatientCsv,
+  downloadHistoryCsv,
+} from '@/services/kiditInitialCsvService';
 import { exportVascularAccessExcel, VascularAccessRow } from '@/services/vascularAccessExportService';
 import { exportFirstDialysisExcel, FirstDialysisRow } from '@/services/firstDialysisExportService';
 import {
@@ -212,19 +216,29 @@ export class KiditReportComponent implements OnInit {
     if (this.activeTab() === 'initial') this.loadInitialSubTab();
   }
 
-  exportToExcel(): void {
-    const days = this.daysData();
-    if (!days.length) { alert('目前無資料可匯出'); return; }
-
-    const allEvents = days.flatMap(day => day.events);
-    if (allEvents.length === 0) { alert('本月份尚無任何事件紀錄。'); return; }
-
-    const filename = `KiDit_Export_${this.currentYear()}_${String(this.currentMonth()).padStart(2, '0')}.xlsx`;
+  /** 官方病患資料 CSV：本月事件中已填寫建檔「病患資料」的病人（民國日期、官方欄序） */
+  exportOfficialPatientCsv(): void {
+    const allEvents = this.daysData().flatMap(day => day.events);
+    const { patientRows } = buildInitialRegistrationRows(allEvents);
+    if (!patientRows.length) { alert('本月份尚無已填寫的「病患資料」建檔。'); return; }
     try {
-      exportKiDitExcel(allEvents, filename);
+      downloadPatientCsv(patientRows);
     } catch (error) {
       console.error('匯出失敗:', error);
-      alert('匯出失敗，請檢查資料格式');
+      alert('匯出失敗，請稍後再試。');
+    }
+  }
+
+  /** 官方病史原發病 CSV：本月事件中已填寫建檔「病史原發病」的病人 */
+  exportOfficialHistoryCsv(): void {
+    const allEvents = this.daysData().flatMap(day => day.events);
+    const { historyRows } = buildInitialRegistrationRows(allEvents);
+    if (!historyRows.length) { alert('本月份尚無已填寫的「病史原發病」建檔。'); return; }
+    try {
+      downloadHistoryCsv(historyRows);
+    } catch (error) {
+      console.error('匯出失敗:', error);
+      alert('匯出失敗，請稍後再試。');
     }
   }
 
