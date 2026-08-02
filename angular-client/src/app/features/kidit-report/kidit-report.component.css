@@ -219,6 +219,26 @@
   flex-grow: 1;
 }
 .ov-card.ov-wip .ov-desc { color: #a5b3ba; }
+
+/* 總覽卡片各自主色（與我的病人照護工作列按鈕色系呼應：HD處方綠/季度輸入紫） */
+.ov-card.ov-c-initial { border-top: 4px solid #1971c2; }
+.ov-card.ov-c-initial .ov-card-head i { color: #1971c2; }
+.ov-card.ov-c-initial .ov-freq { background: #1971c2; color: #fff; }
+.ov-card.ov-c-vascular { border-top: 4px solid #0c8599; }
+.ov-card.ov-c-vascular .ov-card-head i { color: #0c8599; }
+.ov-card.ov-c-vascular .ov-freq { background: #0c8599; color: #fff; }
+.ov-card.ov-c-movement { border-top: 4px solid #f08c00; }
+.ov-card.ov-c-movement .ov-card-head i { color: #f08c00; }
+.ov-card.ov-c-movement .ov-freq { background: #f08c00; color: #fff; }
+.ov-card.ov-c-hdrx { border-top: 4px solid #2f9e44; }
+.ov-card.ov-c-hdrx .ov-card-head i { color: #2f9e44; }
+.ov-card.ov-c-hdrx .ov-freq { background: #2f9e44; color: #fff; }
+.ov-card.ov-c-qinput { border-top: 4px solid #7048e8; }
+.ov-card.ov-c-qinput .ov-card-head i { color: #7048e8; }
+.ov-card.ov-c-qinput .ov-freq { background: #7048e8; color: #fff; }
+.ov-card.ov-c-hosp { border-top: 4px solid #d6336c; }
+.ov-card.ov-c-hosp .ov-card-head i { color: #d6336c; }
+.ov-card.ov-c-hosp .ov-freq { background: #d6336c; color: #fff; }
 .ov-actions {
   display: flex;
   gap: 0.5rem;
