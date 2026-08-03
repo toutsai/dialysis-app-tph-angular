@@ -133,7 +133,29 @@
     <!-- (B) 醫囑檢視頁籤（透析醫囑，每人最新一筆） -->
     <div class="tab-panel query-panel" [style.display]="activeTab() === 'dialysis' ? 'flex' : 'none'">
       <div class="search-controls">
-        <div class="individual-filters">
+        <div class="search-type-toggle">
+          <button [class.active]="dialysisViewMode() === 'group'" (click)="dialysisViewMode.set('group')">
+            群組搜尋
+          </button>
+          <button [class.active]="dialysisViewMode() === 'all'" (click)="dialysisViewMode.set('all')">
+            全部清單
+          </button>
+        </div>
+
+        <div *ngIf="dialysisViewMode() === 'group'" class="group-filters">
+          <select [ngModel]="dialysisGroupFreq()" (ngModelChange)="dialysisGroupFreq.set($event)">
+            <option value="一三五">一三五</option>
+            <option value="二四六">二四六</option>
+            <option value="other">其他</option>
+          </select>
+          <select [ngModel]="dialysisGroupShift()" (ngModelChange)="dialysisGroupShift.set($event)">
+            <option value="early">早班</option>
+            <option value="noon">午班</option>
+            <option value="late">晚班</option>
+          </select>
+        </div>
+
+        <div *ngIf="dialysisViewMode() === 'all'" class="individual-filters">
           <input
             type="text"
             [ngModel]="dialysisSearchTerm()"
@@ -154,7 +176,7 @@
         </button>
         <button
           (click)="exportDialysisOrdersToExcel()"
-          [disabled]="isDialysisLoading() || filteredDialysisRows().length === 0"
+          [disabled]="isDialysisLoading() || displayedDialysisRows().length === 0"
           class="export-btn"
         >
           <i class="fas fa-file-excel"></i> 匯出 Excel
@@ -169,12 +191,19 @@
         <div *ngIf="!isDialysisLoading() && dialysisLoaded() && dialysisRows().length === 0" class="empty-state">
           尚無透析醫囑資料，請先到「資料上傳」頁籤上傳 E1. 備藥前置作業 Excel。
         </div>
-        <div *ngIf="!isDialysisLoading() && filteredDialysisRows().length > 0" class="table-container">
-          <table>
+        <div
+          *ngIf="!isDialysisLoading() && dialysisRows().length > 0 && displayedDialysisRows().length === 0"
+          class="empty-state"
+        >
+          查無符合條件的透析醫囑資料。
+        </div>
+        <div *ngIf="!isDialysisLoading() && displayedDialysisRows().length > 0" class="table-container">
+          <table class="dialysis-table" [class.mode-group]="dialysisViewMode() === 'group'">
             <thead>
               <tr>
-                <th class="sticky-col col-bed">病歷號</th>
-                <th class="sticky-col col-name">姓名</th>
+                <th *ngIf="dialysisViewMode() === 'group'" class="sticky-col col-dbednum">床號</th>
+                <th class="sticky-col col-dmrn">病歷號</th>
+                <th class="sticky-col col-dname">姓名</th>
                 <th>模式</th>
                 <th>透析時間</th>
                 <th>乾體重</th>
@@ -190,9 +219,10 @@
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let row of filteredDialysisRows()">
-                <td class="sticky-col col-bed">{{ row.medicalRecordNumber }}</td>
-                <td class="sticky-col col-name">{{ row.patientName }}</td>
+              <tr *ngFor="let row of displayedDialysisRows()">
+                <td *ngIf="dialysisViewMode() === 'group'" class="sticky-col col-dbednum">{{ row.rule?.bedNum ?? '-' }}</td>
+                <td class="sticky-col col-dmrn">{{ row.medicalRecordNumber }}</td>
+                <td class="sticky-col col-dname">{{ row.patientName }}</td>
                 <td>{{ row.orders['mode'] || '-' }}</td>
                 <td>{{ formatDialysisTime(row.orders) }}</td>
                 <td>{{ row.orders['dryWeight'] || '-' }}</td>

@@ -244,6 +244,26 @@ th {
   min-width: 120px;
 }
 
+/* 醫囑檢視表 sticky 欄位（群組模式多一欄床號，偏移隨模式切換） */
+.dialysis-table .sticky-col.col-dbednum {
+  left: 0;
+  min-width: 70px;
+}
+.dialysis-table .sticky-col.col-dmrn {
+  left: 0;
+  min-width: 90px;
+}
+.dialysis-table .sticky-col.col-dname {
+  left: 90px;
+  min-width: 100px;
+}
+.dialysis-table.mode-group .sticky-col.col-dmrn {
+  left: 70px;
+}
+.dialysis-table.mode-group .sticky-col.col-dname {
+  left: 160px;
+}
+
 /* --- Upload Tab Styles --- */
 /* 藥囑/醫囑兩個上傳區左右並排（窄螢幕自動換行堆疊） */
 .upload-panel {

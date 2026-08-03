@@ -180,17 +180,50 @@ export class OrdersComponent implements OnInit {
   readonly dialysisSearchTerm = signal('');
   /** 預設只顯示現行病人；勾選後含已離開（軟刪除）病人 */
   readonly showDeletedDialysis = signal(false);
-  readonly filteredDialysisRows = computed(() => {
-    const term = this.dialysisSearchTerm().trim();
+  /** 檢視模式：群組（頻率+班別，床號排序，比照藥囑查詢）/ 全部清單（搜尋框） */
+  readonly dialysisViewMode = signal<'group' | 'all'>('group');
+  readonly dialysisGroupFreq = signal('一三五');
+  readonly dialysisGroupShift = signal('early');
+  /** 總表規則 patientId → {bedNum, freq, shiftIndex}（群組模式用） */
+  private readonly dialysisMasterRules = signal<Record<string, any>>({});
+  readonly displayedDialysisRows = computed(() => {
     let rows = this.dialysisRows();
+    if (this.dialysisViewMode() === 'group') {
+      const rules = this.dialysisMasterRules();
+      const shiftIndex = this.SHIFT_MAP[this.dialysisGroupShift()];
+      const freqSel = this.dialysisGroupFreq();
+      const regularFreqs = ['一三五', '二四六'];
+      return rows
+        .filter((r) => !r.isDeleted)
+        .map((r) => ({ ...r, rule: rules[r.patientId] }))
+        .filter((r) => {
+          if (!r.rule) return false;
+          const isOther = freqSel === 'other';
+          const shiftOk = isOther || r.rule.shiftIndex === shiftIndex;
+          const freqOk = isOther ? !regularFreqs.includes(r.rule.freq) : r.rule.freq === freqSel;
+          return shiftOk && freqOk;
+        })
+        .sort((a, b) => {
+          const an = parseInt(String(a.rule?.bedNum), 10);
+          const bn = parseInt(String(b.rule?.bedNum), 10);
+          if (isNaN(an) && isNaN(bn)) return String(a.rule?.bedNum).localeCompare(String(b.rule?.bedNum));
+          if (isNaN(an)) return 1;
+          if (isNaN(bn)) return -1;
+          return an - bn;
+        });
+    }
+    // 全部清單模式：搜尋 + 已離開過濾
     if (!this.showDeletedDialysis()) rows = rows.filter((r) => !r.isDeleted);
-    if (!term) return rows;
-    return rows.filter(
-      (r) =>
-        (r.patientName || '').includes(term) ||
-        (r.medicalRecordNumber || '').includes(term) ||
-        String(r.orders?.['mode'] || '').toUpperCase().includes(term.toUpperCase()),
-    );
+    const term = this.dialysisSearchTerm().trim();
+    const filtered = term
+      ? rows.filter(
+          (r) =>
+            (r.patientName || '').includes(term) ||
+            (r.medicalRecordNumber || '').includes(term) ||
+            String(r.orders?.['mode'] || '').toUpperCase().includes(term.toUpperCase()),
+        )
+      : rows;
+    return filtered.map((r) => ({ ...r, rule: undefined as any }));
   });
   readonly dialysisSelectedFile = signal<File | null>(null);
   readonly isDialysisUploading = signal(false);
@@ -638,12 +671,16 @@ export class OrdersComponent implements OnInit {
   async loadDialysisOrders(): Promise<void> {
     this.isDialysisLoading.set(true);
     try {
-      const res = await fetch(`${this.firebaseService.apiBaseUrl}/orders/dialysis-orders`, {
-        headers: this.firebaseService.getHeaders(),
-      });
+      const [res, masterScheduleDoc] = await Promise.all([
+        fetch(`${this.firebaseService.apiBaseUrl}/orders/dialysis-orders`, {
+          headers: this.firebaseService.getHeaders(),
+        }),
+        this.baseSchedulesApi.fetchById('MASTER_SCHEDULE'),
+      ]);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const rows = (await res.json()) as DialysisOrderRow[];
       this.dialysisRows.set(Array.isArray(rows) ? rows : []);
+      this.dialysisMasterRules.set((masterScheduleDoc as any)?.schedule || {});
       this.dialysisLoaded.set(true);
     } catch (error) {
       console.error('載入透析醫囑失敗:', error);
@@ -674,11 +711,16 @@ export class OrdersComponent implements OnInit {
 
   exportDialysisOrdersToExcel(): void {
     try {
-      const rows = this.filteredDialysisRows();
-      const header = ['病歷號', '姓名', '透析模式', '透析時間', '乾體重', 'AK', '藥水Ca', '血液流速', '透析液流速', '外循沖洗', '初劑量', '維持劑', '醫囑日期', '歷次筆數'];
+      const rows = this.displayedDialysisRows();
+      const isGroup = this.dialysisViewMode() === 'group';
+      const header = [
+        ...(isGroup ? ['床號'] : []),
+        '病歷號', '姓名', '透析模式', '透析時間', '乾體重', 'AK', '藥水Ca', '血液流速', '透析液流速', '外循沖洗', '初劑量', '維持劑', '醫囑日期', '歷次筆數',
+      ];
       const aoa = [header, ...rows.map((r) => {
         const o = r.orders || {};
         return [
+          ...(isGroup ? [r.rule?.bedNum ?? ''] : []),
           r.medicalRecordNumber, r.patientName, o['mode'] || '', this.formatDialysisTime(o),
           o['dryWeight'] || '', o['ak'] || '', o['dialysateCa'] || '', o['bloodFlow'] || '',
           o['dialysateFlow'] || '', o['heparinRinse'] || '', o['heparinInitial'] || '',
