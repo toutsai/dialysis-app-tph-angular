@@ -150,8 +150,13 @@ export class PatientsComponent implements OnInit, OnDestroy {
   private pendingOperationType = '';
   private pendingPatientId: string | null = null;
   /** 編輯守門：確認後要執行的存檔動作與取消時導向預約變更的類型 */
-  private pendingEditSave: (() => void) | null = null;
+  private pendingEditSave: ((nextShift: boolean) => void) | null = null;
   private pendingEditFallbackType = '';
+  /** 立即變更的生效時間視窗（下一班起 / 明天開始），確認立即變更後接續詢問 */
+  readonly isEffectiveTimingDialogVisible = signal(false);
+  private pendingTimingAction: ((nextShift: boolean) => void) | null = null;
+  /** 編輯存檔時附掛給後端的「下一班起生效」旗標（只進 API body，不進本地 store） */
+  private pendingNextShiftFlag: boolean | null = null;
   private cachedPatientHistory: any[] | null = null;
   private pendingNewStatus: string | null = null;
 
@@ -819,7 +824,13 @@ export class PatientsComponent implements OnInit, OnDestroy {
           delete dataToUpdate.firstDialysisPlan;
           dataToUpdate.updatedAt = new Date().toISOString();
 
-          const updatePromises: Promise<any>[] = [this.patientsApi.save(patientData.id, dataToUpdate)];
+          // 「下一班起生效」旗標只送 API（後端決定快照範圍），不進本地 store
+          const apiPayload =
+            this.pendingNextShiftFlag === null
+              ? dataToUpdate
+              : { ...dataToUpdate, effectiveFromNextShift: this.pendingNextShiftFlag };
+          this.pendingNextShiftFlag = null;
+          const updatePromises: Promise<any>[] = [this.patientsApi.save(patientData.id, apiPayload)];
 
           if (!wasFirstDialysis && isNowFirstDialysis) {
             updatePromises.push(this.createAutomatedTask(patientData, '衛教', creatorInfo));
@@ -867,7 +878,8 @@ export class PatientsComponent implements OnInit, OnDestroy {
         this.isTodayFrozenWindow() &&
         (await this.checkPatientInTodaySchedule(patientData.id))
       ) {
-        this.pendingEditSave = () => {
+        this.pendingEditSave = (nextShift: boolean) => {
+          this.pendingNextShiftFlag = nextShift;
           void doSave();
         };
         this.pendingEditFallbackType = identityChanges.includes('身分')
@@ -877,7 +889,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
             : 'UPDATE_BASE_SCHEDULE_RULE';
         this.showScheduleConflictDialog(
           '今日有排程 — 確認立即變更',
-          `病人「${patientData.name}」今天有排程透析，本次修改包含：${identityChanges.join('、')}。\n\n選「是」立即儲存：\n・今日排程與統計維持變更前狀態（快照保護）\n・明日起依新設定生效\n\n若變更是未來日期才發生，選「否」改用預約變更。`,
+          `病人「${patientData.name}」今天有排程透析，本次修改包含：${identityChanges.join('、')}。\n\n選「是」立即儲存，下一步再選擇生效時間（下一班起／明天開始）。\n\n若變更是未來日期才發生，選「否」改用預約變更。`,
           'edit',
           patientData.id,
           null
@@ -1109,19 +1121,40 @@ export class PatientsComponent implements OnInit, OnDestroy {
 
   async handleScheduleConflictConfirm(): Promise<void> {
     this.isScheduleConflictDialogVisible.set(false);
-    if (this.pendingOperationType === 'delete') {
-      this.patientToDeleteId.set(this.pendingPatientId);
-      this.isDeleteDialogVisible.set(true);
-    } else if (this.pendingOperationType === 'transfer') {
-      await this.executeTransferPatient(this.pendingPatientId!, this.pendingNewStatus!);
-    } else if (this.pendingOperationType === 'edit') {
-      this.pendingEditSave?.();
-    }
+    const opType = this.pendingOperationType;
+    const pid = this.pendingPatientId;
+    const newStatus = this.pendingNewStatus;
+    const editSave = this.pendingEditSave;
     this.pendingOperationType = '';
     this.pendingPatientId = null;
     this.pendingNewStatus = null;
     this.pendingEditSave = null;
     this.pendingEditFallbackType = '';
+
+    if (opType === 'delete') {
+      this.patientToDeleteId.set(pid);
+      this.isDeleteDialogVisible.set(true);
+      return;
+    }
+    // 身分/模式/頻率的立即變更：接續詢問生效時間（下一班起 / 明天開始）
+    if (opType === 'transfer') {
+      this.pendingTimingAction = (nextShift: boolean) => {
+        void this.executeTransferPatient(pid!, newStatus!, nextShift);
+      };
+      this.isEffectiveTimingDialogVisible.set(true);
+    } else if (opType === 'edit') {
+      this.pendingTimingAction = (nextShift: boolean) => {
+        editSave?.(nextShift);
+      };
+      this.isEffectiveTimingDialogVisible.set(true);
+    }
+  }
+
+  handleEffectiveTiming(nextShift: boolean): void {
+    this.isEffectiveTimingDialogVisible.set(false);
+    const action = this.pendingTimingAction;
+    this.pendingTimingAction = null;
+    action?.(nextShift);
   }
 
   handleScheduleConflictCancel(): void {
@@ -1191,7 +1224,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
       const targetStatusText: Record<string, string> = { ipd: '住院', opd: '門診', er: '急診' };
       this.showScheduleConflictDialog(
         '今日有排程 — 確認立即變更',
-        `病人「${patient.name}」今天有排程透析。\n\n選「是」立即轉為${targetStatusText[newStatus] || '未知'}：\n・今日排程維持不動（不受影響）\n・明日起排程自動依新身分更新\n（今天發生的異動請選這個）\n\n若異動是未來日期才發生，選「否」改用預約變更。`,
+        `病人「${patient.name}」今天有排程透析。\n\n選「是」立即轉為${targetStatusText[newStatus] || '未知'}，下一步再選擇生效時間（下一班起／明天開始）。\n（今天發生的異動請選這個）\n\n若異動是未來日期才發生，選「否」改用預約變更。`,
         'transfer',
         patientId,
         newStatus
@@ -1201,7 +1234,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
     }
   }
 
-  private async executeTransferPatient(patientId: string, newStatus: string): Promise<void> {
+  private async executeTransferPatient(patientId: string, newStatus: string, nextShift = false): Promise<void> {
     const allPatients = this.patientStore.allPatients();
     const patient: any = allPatients.find((p) => p.id === patientId);
     if (!patient) return;
@@ -1216,7 +1249,8 @@ export class PatientsComponent implements OnInit, OnDestroy {
           if ((patient.status === 'ipd' || patient.status === 'er') && newStatus === 'opd') {
             updateData.wardNumber = null;
           }
-          await this.patientsApi.save(patientId, updateData);
+          // 旗標只送 API（後端決定今日快照範圍），不進本地 store
+          await this.patientsApi.save(patientId, { ...updateData, effectiveFromNextShift: nextShift });
           this.patientStore.updatePatientInStore(patientId, updateData);
           await this.recalculateStatsLocally();
           window.dispatchEvent(new CustomEvent('patient-data-updated'));
@@ -1224,7 +1258,12 @@ export class PatientsComponent implements OnInit, OnDestroy {
             `轉移病人：${patient.name} 至 ${targetStatusText[newStatus] || '未知'}`,
             'patient'
           );
-          this.showAlert('轉移成功', `${patient.name} 已成功轉至${targetStatusText[newStatus] || '未知'}。\n今日排程維持不動；明日起排程將依新身分自動更新。`);
+          this.showAlert(
+            '轉移成功',
+            nextShift
+              ? `${patient.name} 已成功轉至${targetStatusText[newStatus] || '未知'}。\n今日已開始的班次維持原顯示；下一班起即顯示新身分。`
+              : `${patient.name} 已成功轉至${targetStatusText[newStatus] || '未知'}。\n今日排程維持不動；明日起排程將依新身分自動更新。`,
+          );
           this.globalSearchTerm.set('');
         } catch (err: any) {
           this.showAlert('操作失敗', err.message || '轉床失敗！');

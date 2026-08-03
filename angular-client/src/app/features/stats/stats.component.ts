@@ -980,7 +980,11 @@ export class StatsComponent implements OnInit, OnDestroy {
         const slot = record.schedule[shiftId];
         if (slot?.patientId && this.patientMap.has(slot.patientId)) {
           const patient = this.patientMap.get(slot.patientId);
-          slot.autoNote = patient ? generateAutoNote(patient) : '';
+          // 有當日快照的格子用快照身分生成 autoNote（與排程頁同步修正：底色/標記同源，
+          // 當日異動含「下一班起生效」的已開始班次整格維持變更前身分）
+          const snap = (slot as any).archivedPatientInfo;
+          const renderPatient = patient && snap?.status ? { ...patient, status: snap.status } : patient;
+          slot.autoNote = renderPatient ? generateAutoNote(renderPatient) : '';
         }
       }
     }

@@ -2154,7 +2154,13 @@ export class ScheduleComponent implements OnInit, OnDestroy {
         if (patientId && this.patientMap().has(patientId)) {
           const patient = this.patientMap().get(patientId) as Record<string, unknown>;
           const mergedSlot = { ...createEmptySlotData(shiftId), ...dbSlotData };
-          if (patient) mergedSlot['autoNote'] = generateAutoNote(patient);
+          if (patient) {
+            // 有當日快照的格子用快照身分生成 autoNote：底色與 🛏️ 標記同源，
+            // 當日異動（含「下一班起生效」）已開始的班次整格維持變更前身分
+            const snap = (dbSlotData as any)?.['archivedPatientInfo'];
+            const renderPatient = snap?.status ? { ...patient, status: snap.status } : patient;
+            mergedSlot['autoNote'] = generateAutoNote(renderPatient);
+          }
           finalSchedule[shiftId] = mergedSlot;
         } else if (patientId) {
           // 排程有病人但 patientMap 對不到（多為已刪除病人，或快取尚未就緒的競態殘留）

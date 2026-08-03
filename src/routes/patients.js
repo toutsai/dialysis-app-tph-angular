@@ -1416,6 +1416,8 @@ async function updatePatientHandler(req, res) {
     // 當日異動保護：身分/模式變更或刪除時，把「變更前」的快照寫進今天排程格的
     // archivedPatientInfo，今日的統計/身分底色/模式顯示維持變更前狀態。
     // 已有快照的格子不覆蓋（保留當天最早的狀態，多次變更以第一次為準）。
+    // 「下一班起生效」（effectiveFromNextShift=true）：只快照「已開始的班別」格，
+    // 未開始的班別無快照 → 即時渲染新身分（2026-08-04，班別開始時間為使用者定義）。
     try {
       const oldOrders = JSON.parse(existing.dialysis_orders || '{}')
       const newOrders = JSON.parse(updated.dialysis_orders || '{}')
@@ -1423,6 +1425,16 @@ async function updatePatientHandler(req, res) {
       const modeChanged = (newOrders.mode || null) !== (oldOrders.mode || null)
       const freqChanged = (newOrders.freq || null) !== (oldOrders.freq || null)
       const todayStr = getTaipeiTodayString()
+      const effectiveFromNextShift = data.effectiveFromNextShift === true
+      const SHIFT_START_TIMES = { early: '07:30', noon: '12:30', late: '17:30' }
+      const nowTaipeiHM = new Date()
+        .toLocaleTimeString('en-GB', { timeZone: 'Asia/Taipei', hour12: false })
+        .slice(0, 5)
+      // 未知班別（外圍等非標準 key 已涵蓋於 early/noon/late 尾碼；防呆保守視為已開始 → 照舊快照）
+      const isShiftStarted = (shift) => {
+        const start = SHIFT_START_TIMES[shift]
+        return start ? nowTaipeiHM >= start : true
+      }
       // 僅在今日凍結窗（06:00 起）內寫快照：凌晨的變更依既有設計本來就算今天的，
       // 不該把變更前狀態凍進今天（與 isTodayScheduleFrozen 的重建放行邊界一致）
       if (
@@ -1433,8 +1445,10 @@ async function updatePatientHandler(req, res) {
         if (todayRow) {
           const todaySchedule = JSON.parse(todayRow.schedule || '{}')
           let snapshotWritten = false
-          for (const slot of Object.values(todaySchedule)) {
+          for (const [slotKey, slot] of Object.entries(todaySchedule)) {
             if (slot?.patientId === id && !slot.archivedPatientInfo) {
+              const slotShift = slot.shiftId || String(slotKey).split('-').pop()
+              if (effectiveFromNextShift && !isShiftStarted(slotShift)) continue
               slot.archivedPatientInfo = {
                 status: existing.status || 'unknown',
                 mode: oldOrders.mode || null,
