@@ -267,6 +267,30 @@ export async function syncMasterScheduleToFuture(beforeRules, afterRules, modifi
             hasChanges = true
           }
         }
+
+        // 防禦性清掃：總表同步產生的格（帶 baseRuleId）每人每天只該有一格，
+        // 且必須在目前規則的位置上。若過去某次規則變更沒同步到未來排程
+        // （如 2026-07-14 前的預約變更 cron 漏同步），舊位置會留下 diff 引擎
+        // 再也看不見的孤兒格，這裡一併移除。帶 exceptionId 的格（調班產生，
+        // SWAP 重建時會連 baseRuleId 一起帶過來）一律不碰，交給第二階段調班整合。
+        let keepKey = null
+        let canSweep = true
+        if (isScheduled) {
+          const afterShiftCode = SHIFTS[ruleAfter.shiftIndex]
+          if (afterShiftCode && ruleAfter.bedNum !== undefined) {
+            keepKey = getScheduleKey(ruleAfter.bedNum, afterShiftCode)
+          } else {
+            canSweep = false // 規則不完整、無法確定正確位置時不清掃
+          }
+        }
+        if (canSweep) {
+          for (const [key, slot] of Object.entries(currentSchedule)) {
+            if (key !== keepKey && slot?.patientId === patientId && slot?.baseRuleId === patientId && !slot?.exceptionId) {
+              delete currentSchedule[key]
+              hasChanges = true
+            }
+          }
+        }
       })
 
       if (hasChanges) {
