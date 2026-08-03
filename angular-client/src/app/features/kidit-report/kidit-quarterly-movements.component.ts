@@ -187,24 +187,27 @@ export class KiditQuarterlyMovementsComponent implements OnInit {
   }
 
   /**
-   * 依住院/出院把同一病人的季度動態切段（手動月表一列＝一段住院歷程）：
-   * 遇到帶住院日的動態且目前段已有住院日或已出院 → 收段開新段。
+   * 依住院/出院把同一病人的季度動態切段（手動月表一列＝一段住院歷程）。
+   * ⚠️ 只有「前段已結束」（出現出院日，或刪除/轉回門診等結束訊號）後再遇到帶住院日的動態，
+   * 才收段開新段。舊規則「目前段已有住院日就開新段」會把同一次住院拆成多列——
+   * 因為轉移/手動/臨時加洗每筆動態都各自帶當次住院日（2026-08-04 修正：Q3 實測 157 列 → 104 列，
+   * 剩餘多列者皆為真實多段歷程）。
    */
   private splitEpisodes(movements: QuarterMovement[]): QuarterMovement[][] {
     const episodes: QuarterMovement[][] = [];
     let current: QuarterMovement[] = [];
-    let hasAdmission = false;
-    let discharged = false;
+    let ended = false;
     for (const m of movements) {
-      if (m.admissionDate && current.length > 0 && (hasAdmission || discharged)) {
+      if (m.admissionDate && current.length > 0 && ended) {
         episodes.push(current);
         current = [];
-        hasAdmission = false;
-        discharged = false;
+        ended = false;
       }
       current.push(m);
-      if (m.admissionDate) hasAdmission = true;
-      if (m.dischargeDate) discharged = true;
+      // 段落結束訊號：出院日、刪除、轉回門診（其後再出現住院日才是新一段歷程）
+      if (m.dischargeDate) ended = true;
+      const text = `${m.type || ''}${m.detail || ''}`;
+      if (text.includes('刪除') || text.includes('轉回門診')) ended = true;
     }
     if (current.length > 0) episodes.push(current);
     return episodes;
