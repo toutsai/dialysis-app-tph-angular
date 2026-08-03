@@ -214,8 +214,10 @@ export class KiditDetailModalComponent implements OnChanges {
   }
 
   isKiDitDataComplete(event: any): boolean {
+    // 原發病(diagnosisCategory)存於 kidit_profile，病史表單無此欄——
+    // 舊判定讀 kidit_history.diagnosisCategory 永遠 false（2026-08-04 修正；與後端兩處判定同步）
     const hasProfile = event.kidit_profile && event.kidit_profile.idNumber;
-    const hasHistory = event.kidit_history && event.kidit_history.diagnosisCategory;
+    const hasHistory = event.kidit_history && event.kidit_profile?.diagnosisCategory;
     return !!hasProfile && !!hasHistory;
   }
 

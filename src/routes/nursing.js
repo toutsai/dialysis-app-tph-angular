@@ -1431,7 +1431,8 @@ router.get('/kidit-logbook', authenticate, (req, res) => {
 /**
  * GET /api/nursing/kidit-pending-registrations
  * KiDit 待建檔清單：勾「本院初透」或「首透」狀態標記、且 KiDit 基本資料未完整的病人。
- * 完整定義＝任一 KiDit 事件已填 kidit_profile.idNumber 且 kidit_history.diagnosisCategory
+ * 完整定義＝任一 KiDit 事件已填 kidit_profile.idNumber、kidit_profile.diagnosisCategory（原發病存於病患資料）
+ * 且同事件存過病史表單（kidit_history 物件存在；病史表單本身無原發病欄位）
  * （與前端 isKiDitDataComplete 一致）。回傳含標記日期、缺項、最近事件日期與標記日照顧護理師。
  */
 router.get('/kidit-pending-registrations', authenticate, (req, res) => {
@@ -1488,10 +1489,12 @@ router.get('/kidit-pending-registrations', authenticate, (req, res) => {
       for (const e of events) {
         if (!e?.patientId) continue
         const cur = kiditByPatient.get(e.patientId) || { hasProfile: false, hasHistory: false, complete: false, lastEventDate: null }
+        // ⚠️ 原發病(diagnosisCategory)存於 kidit_profile，病史表單無此欄——
+        // 舊判定讀 kidit_history.diagnosisCategory 永遠 false，全院從未有人「完成」(2026-08-04 修正)
         if (e.kidit_profile?.idNumber) cur.hasProfile = true
-        if (e.kidit_history?.diagnosisCategory) cur.hasHistory = true
-        // 完成判定須與前端 isKiDitDataComplete 一致：同一事件內兩欄皆有值
-        if (e.kidit_profile?.idNumber && e.kidit_history?.diagnosisCategory) cur.complete = true
+        if (e.kidit_history && e.kidit_profile?.diagnosisCategory) cur.hasHistory = true
+        // 完成判定須與前端 isKiDitDataComplete 一致：同一事件內身分證+原發病+病史表單皆有
+        if (e.kidit_profile?.idNumber && e.kidit_profile?.diagnosisCategory && e.kidit_history) cur.complete = true
         cur.lastEventDate = row.date
         kiditByPatient.set(e.patientId, cur)
       }
@@ -1620,12 +1623,13 @@ router.get('/kidit-monthly-basic-data', authenticate, (req, res) => {
           cur.profile = e.kidit_profile
           cur.profileDate = row.date
         }
-        if (e.kidit_history?.diagnosisCategory) {
+        // 原發病存於 kidit_profile（病史表單無此欄），病史以「存過病史表單且有內容」認定（2026-08-04 修正）
+        if (e.kidit_history && Object.keys(e.kidit_history).length > 0) {
           cur.history = e.kidit_history
           cur.historyDate = row.date
         }
-        // 完成判定與 kidit-pending-registrations／前端 isKiDitDataComplete 一致：同一事件內兩欄皆有值
-        if (e.kidit_profile?.idNumber && e.kidit_history?.diagnosisCategory) cur.complete = true
+        // 完成判定與 kidit-pending-registrations／前端 isKiDitDataComplete 一致
+        if (e.kidit_profile?.idNumber && e.kidit_profile?.diagnosisCategory && e.kidit_history) cur.complete = true
         dataByPatient.set(e.patientId, cur)
       }
     }

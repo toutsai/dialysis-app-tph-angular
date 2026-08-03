@@ -123,8 +123,10 @@ function todayStamp(): string {
 }
 
 /**
- * 由整月 KiDit 日誌本事件萃取建檔資料（同病人取第一筆事件，同舊 Excel 匯出），
+ * 由整月 KiDit 日誌本事件萃取建檔資料（同病人取第一筆「有建檔資料」的事件），
  * 只保留實際填過建檔資料的病人（profile/history 有內容才各自成列）。
+ * ⚠️ 空事件不佔位（2026-08-04 修正）：同月先有一筆未填建檔的事件（如住院「新增」）、
+ * 建檔資料在後面的事件時，舊邏輯「取第一筆事件」會讓該病人整個從 CSV 消失（黃才芳案）。
  */
 export function buildInitialRegistrationRows(logbookEvents: any[]): {
   patientRows: string[][];
@@ -132,15 +134,25 @@ export function buildInitialRegistrationRows(logbookEvents: any[]): {
 } {
   const patientRows: string[][] = [];
   const historyRows: string[][] = [];
-  const processed = new Set<string>();
 
+  // 依病人分組（Map 保留首次出現順序，列序與舊版一致）
+  const byPatient = new Map<string, any[]>();
   logbookEvents.forEach((event) => {
-    const pid = event.patientId;
-    if (processed.has(pid)) return;
-    processed.add(pid);
+    if (!event?.patientId) return;
+    const list = byPatient.get(event.patientId) || [];
+    list.push(event);
+    byPatient.set(event.patientId, list);
+  });
 
-    const p = event.kidit_profile || {};
-    const h = event.kidit_history || {};
+  byPatient.forEach((events) => {
+    const withData = events.filter(
+      (e) => hasAnyValue(e.kidit_profile || {}) || hasAnyValue(e.kidit_history || {}),
+    );
+    if (withData.length === 0) return;
+    // 優先取「身分證已填」的事件（完整建檔），其次第一筆有資料的事件（部分填寫仍呈現）
+    const best = withData.find((e) => e.kidit_profile?.idNumber) || withData[0];
+    const p = best.kidit_profile || {};
+    const h = best.kidit_history || {};
     if (hasAnyValue(p)) patientRows.push(buildPatientRow(p));
     if (hasAnyValue(h)) historyRows.push(buildHistoryRow(p, h));
   });
