@@ -260,7 +260,7 @@
           (dragleave)="onDragLeave($event)"
           (drop)="handleFileDrop($event)"
         >
-          <div class="upload-icon">&#x1F48A;</div>
+          <div class="upload-icon"><i class="fas fa-pills"></i></div>
           <h3 *ngIf="!selectedFile()">拖曳藥囑 Excel 檔案至此，或點擊按鈕選擇</h3>
           <h3 *ngIf="selectedFile()">
             已選擇檔案：<strong>{{ selectedFile()!.name }}</strong>
@@ -313,7 +313,7 @@
           (dragleave)="onDialysisDragLeave($event)"
           (drop)="handleDialysisFileDrop($event)"
         >
-          <div class="upload-icon">&#x1FA7A;</div>
+          <div class="upload-icon"><i class="fas fa-notes-medical"></i></div>
           <h3 *ngIf="!dialysisSelectedFile()">拖曳透析醫囑 Excel 檔案至此，或點擊按鈕選擇</h3>
           <h3 *ngIf="dialysisSelectedFile()">
             已選擇檔案：<strong>{{ dialysisSelectedFile()!.name }}</strong>
