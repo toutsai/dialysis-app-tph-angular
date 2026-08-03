@@ -330,6 +330,65 @@ export class GroupAssignerService {
       };
     }
 
+    // 兩兩一組：週內同池（早/晚）字母記錄與配對評分。
+    // 目標：同一人一週的組別盡量湊成兩天一對（如 AA CC D），
+    // 月內字母分佈由 groupCounts 當決勝攤平（配對分數打平時選當月拿最少次的字母）。
+    // 每次呼叫本函式即一週（兩個呼叫端都以週為單位），跨月週的另一月天數不參與記錄，屬「盡量」可接受誤差。
+    if (!weeklyContext.nurseWeekLetters) weeklyContext.nurseWeekLetters = {};
+    const recordWeekLetter = (nurseId: string, pos: number, letter: string, pool: 'day' | 'night') => {
+      if (!weeklyContext.nurseWeekLetters[nurseId]) weeklyContext.nurseWeekLetters[nurseId] = [];
+      weeklyContext.nurseWeekLetters[nurseId].push({ pos, letter, pool });
+    };
+    const weekLetterCount = (nurseId: string, letter: string, pool: 'day' | 'night'): number =>
+      (weeklyContext.nurseWeekLetters[nurseId] || []).filter((e: any) => e.pool === pool && e.letter === letter).length;
+    const prevPoolLetter = (nurseId: string, pos: number, pool: 'day' | 'night'): string | null => {
+      const entries = (weeklyContext.nurseWeekLetters[nurseId] || []).filter((e: any) => e.pool === pool && e.pos < pos);
+      if (entries.length === 0) return null;
+      return entries.reduce((a: any, b: any) => (a.pos >= b.pos ? a : b)).letter;
+    };
+    // 分數越低越優先：本週已拿 2 天 → 強烈避免第 3 天；已拿 1 天 → 強烈優先湊成對（上一個工作日同字母再加碼）
+    const pairScore = (nurseId: string, pos: number, group: string, pool: 'day' | 'night'): number => {
+      const c = weekLetterCount(nurseId, group, pool);
+      if (c >= 2) return 1000;
+      if (c === 1) return prevPoolLetter(nurseId, pos, pool) === group ? -1200 : -1000;
+      return 0;
+    };
+
+    // 貪婪初配＋兩兩交換改善（2-opt）：純貪婪排到尾端會被迫拿「已兩天的字母」或「當月已很多次的字母」，
+    // 交換改善能在不破壞湊對的前提下修掉這些尾端劣化（成本函數 = 月次數 + pairScore）。
+    // 只在此函式回傳配置、由呼叫端 commit（寫 groups / 計數 / 週記錄），成本評估期間狀態不變。
+    const assignPoolWithSwaps = (
+      nurseIds: string[], groups: string[],
+      canTake: (nurseId: string, group: string) => boolean,
+      cost: (nurseId: string, group: string) => number,
+    ): Array<{ nurseId: string; group: string }> => {
+      const entries: { nurseId: string; group: string; c: number }[] = [];
+      nurseIds.forEach(id => groups.forEach(g => {
+        if (canTake(id, g)) entries.push({ nurseId: id, group: g, c: cost(id, g) });
+      }));
+      entries.sort((a, b) => a.c - b.c);
+      const byNurse = new Map<string, string>();
+      const usedG = new Set<string>();
+      entries.forEach(e => {
+        if (!byNurse.has(e.nurseId) && !usedG.has(e.group)) { byNurse.set(e.nurseId, e.group); usedG.add(e.group); }
+      });
+      const assigned = Array.from(byNurse.entries()).map(([nurseId, group]) => ({ nurseId, group }));
+      for (let pass = 0; pass < 3; pass++) {
+        let improved = false;
+        for (let i = 0; i < assigned.length; i++) {
+          for (let j = i + 1; j < assigned.length; j++) {
+            const a = assigned[i], b = assigned[j];
+            if (!canTake(a.nurseId, b.group) || !canTake(b.nurseId, a.group)) continue;
+            const cur = cost(a.nurseId, a.group) + cost(b.nurseId, b.group);
+            const swp = cost(a.nurseId, b.group) + cost(b.nurseId, a.group);
+            if (swp < cur) { const t = a.group; a.group = b.group; b.group = t; improved = true; }
+          }
+        }
+        if (!improved) break;
+      }
+      return assigned;
+    };
+
     let next75GroupIndex = 0;
     if (baseAvailable75Groups.length > 0) {
       for (let i = dayIndices[0] - 1; i >= 0; i--) {
@@ -351,6 +410,7 @@ export class GroupAssignerService {
     dayIndices.forEach((dayIndex: number) => {
       const date = new Date(year, month - 1, dayIndex + 1);
       const dayOfWeek = date.getDay();
+      const weekPos = (dayOfWeek + 6) % 7; // 週一=0 … 週六=5（配對記錄用的週內序）
       const dayShiftGroups = getDayShiftGroupsForDay(dayOfWeek);
       const available74Groups = dayShiftGroups.groups74;
       const available75Groups = dayShiftGroups.groups75;
@@ -382,12 +442,16 @@ export class GroupAssignerService {
 
       // 74/L -> A group
       nurses74L.forEach(id => {
-        schedule.scheduleByNurse[id].groups[dayIndex] = fixedAssignments['74/L'] || 'A';
+        const g = fixedAssignments['74/L'] || 'A';
+        schedule.scheduleByNurse[id].groups[dayIndex] = g;
+        recordWeekLetter(id, weekPos, g, 'day');
       });
 
       // 816 -> perimeter group
       nurses816.forEach(id => {
-        schedule.scheduleByNurse[id].groups[dayIndex] = fixedAssignments['816'] || '\u5916\u570d';
+        const g = fixedAssignments['816'] || '\u5916\u570d';
+        schedule.scheduleByNurse[id].groups[dayIndex] = g;
+        recordWeekLetter(id, weekPos, g, 'day');
       });
 
       // 75-shift grouping
@@ -400,6 +464,7 @@ export class GroupAssignerService {
             if (!allowed.includes(group)) group = allowed[0]; // 輪替組被限制 → 改用可排組
             schedule.scheduleByNurse[id].groups[dayIndex] = group;
             groupCounts[id]['75'][group] = (groupCounts[id]['75'][group] || 0) + 1;
+            recordWeekLetter(id, weekPos, group, 'day');
             next75GroupIndex = (next75GroupIndex + 1) % baseAvailable75Groups.length;
           }
           // 無可排組別 → 留空白（保底B）
@@ -417,6 +482,7 @@ export class GroupAssignerService {
             if (bestNurse) {
               schedule.scheduleByNurse[bestNurse].groups[dayIndex] = group;
               groupCounts[bestNurse]['75'][group] = (groupCounts[bestNurse]['75'][group] || 0) + 1;
+              recordWeekLetter(bestNurse, weekPos, group, 'day');
               assignedNurses75.add(bestNurse);
             }
           });
@@ -431,6 +497,7 @@ export class GroupAssignerService {
               });
               schedule.scheduleByNurse[id].groups[dayIndex] = minGroup;
               groupCounts[id]['75'][minGroup] = (groupCounts[id]['75'][minGroup] || 0) + 1;
+              recordWeekLetter(id, weekPos, minGroup, 'day');
             }
           });
           next75GroupIndex = (next75GroupIndex + 1) % baseAvailable75Groups.length;
@@ -444,6 +511,8 @@ export class GroupAssignerService {
         const assignedNurses74 = new Set<string>();
 
         // Assign hospital groups first
+        // 醫院組不湊對（使用者裁定 2026-08-03）：照整月配比分散、每週上限 2 天、
+        // 「本週有 816 者排除」照舊（816 整週排除比「前後一天不接」更嚴，涵蓋加護病房前後不接外圍的要求）
         if (hospitalGroupsToday.length > 0) {
           const hospitalCandidates = nurses74
             .filter(id => {
@@ -466,6 +535,7 @@ export class GroupAssignerService {
               groupCounts[candidate.nurseId]['74'][group] = (groupCounts[candidate.nurseId]['74'][group] || 0) + 1;
               usedGroups74.add(group);
               assignedNurses74.add(candidate.nurseId);
+              recordWeekLetter(candidate.nurseId, weekPos, group, 'day');
               if (!weeklyContext.nurseHospitalDays[candidate.nurseId]) weeklyContext.nurseHospitalDays[candidate.nurseId] = [];
               weeklyContext.nurseHospitalDays[candidate.nurseId].push(dayIndex);
             }
@@ -476,21 +546,18 @@ export class GroupAssignerService {
         const rem74Nurses = nurses74.filter(id => !assignedNurses74.has(id));
         const rem74Groups = available74Groups.filter((g: string) => !usedGroups74.has(g));
         if (rem74Nurses.length > 0 && rem74Groups.length > 0) {
-          const pairs: { nurseId: string; group: string; count: number }[] = [];
-          rem74Nurses.forEach(id => {
-            rem74Groups.forEach((g: string) => {
-              if (isDayRestricted(id, g)) return; // 白班限制：跳過該護理師被排除的組
-              pairs.push({ nurseId: id, group: g, count: groupCounts[id]?.['74']?.[g] || 0 });
-            });
-          });
-          pairs.sort((a, b) => a.count - b.count);
-          pairs.forEach(({ nurseId, group }) => {
-            if (!assignedNurses74.has(nurseId) && !usedGroups74.has(group)) {
-              schedule.scheduleByNurse[nurseId].groups[dayIndex] = group;
-              groupCounts[nurseId]['74'][group] = (groupCounts[nurseId]['74'][group] || 0) + 1;
-              usedGroups74.add(group);
-              assignedNurses74.add(nurseId);
-            }
+          // 兩兩一組：pairScore 主導（湊對/避免三連），月內次數當決勝攤平，2-opt 修尾端
+          const assigned = assignPoolWithSwaps(
+            rem74Nurses, rem74Groups,
+            (id, g) => !isDayRestricted(id, g), // 白班限制：跳過該護理師被排除的組
+            (id, g) => (groupCounts[id]?.['74']?.[g] || 0) + pairScore(id, weekPos, g, 'day'),
+          );
+          assigned.forEach(({ nurseId, group }) => {
+            schedule.scheduleByNurse[nurseId].groups[dayIndex] = group;
+            groupCounts[nurseId]['74'][group] = (groupCounts[nurseId]['74'][group] || 0) + 1;
+            usedGroups74.add(group);
+            assignedNurses74.add(nurseId);
+            recordWeekLetter(nurseId, weekPos, group, 'day');
           });
         }
       }
@@ -510,13 +577,16 @@ export class GroupAssignerService {
           }
           schedule.scheduleByNurse[id].groups[dayIndex] = letter;
           usedDayLetters.add(letter);
+          recordWeekLetter(id, weekPos, letter, 'day');
         });
       }
 
       // 311C -> C group
       nurses311C.forEach(id => {
-        schedule.scheduleByNurse[id].groups[dayIndex] = fixedAssignments['311C'] || 'C';
+        const g = fixedAssignments['311C'] || 'C';
+        schedule.scheduleByNurse[id].groups[dayIndex] = g;
         groupCounts[id]['311']['C'] = (groupCounts[id]['311']['C'] || 0) + 1;
+        recordWeekLetter(id, weekPos, g, 'night');
       });
 
       // Night shift grouping
@@ -565,6 +635,7 @@ export class GroupAssignerService {
           if (selLeader) {
             schedule.scheduleByNurse[selLeader].groups[dayIndex] = 'A';
             groupCounts[selLeader]['311']['A'] = (groupCounts[selLeader]['311']['A'] || 0) + 1;
+            recordWeekLetter(selLeader, weekPos, 'A', 'night');
             canBeLeader.splice(canBeLeader.indexOf(selLeader), 1);
             groupIdx = 1;
           }
@@ -580,6 +651,7 @@ export class GroupAssignerService {
           const assignedG = new Set<string>();
 
           // Hospital groups first
+          // 醫院組不湊對（使用者裁定 2026-08-03）：照整月配比分散、每週上限 2 天、816/連日排除照舊
           if (hospNightGroups.length > 0) {
             const cands = remNightNurses
               .filter(id => getAvailNight(id, hospNightGroups).length > 0)
@@ -598,6 +670,7 @@ export class GroupAssignerService {
                 groupCounts[c.nurseId]['311'][group] = (groupCounts[c.nurseId]['311'][group] || 0) + 1;
                 assignedN.add(c.nurseId);
                 assignedG.add(group);
+                recordWeekLetter(c.nurseId, weekPos, group, 'night');
                 if (!weeklyContext.nurseHospitalDays[c.nurseId]) weeklyContext.nurseHospitalDays[c.nurseId] = [];
                 weeklyContext.nurseHospitalDays[c.nurseId].push(dayIndex);
               }
@@ -608,21 +681,20 @@ export class GroupAssignerService {
           const stillN = remNightNurses.filter(id => !assignedN.has(id));
           const stillG = remNightGroups.filter((g: string) => !assignedG.has(g));
           if (stillN.length > 0 && stillG.length > 0) {
-            const pairs: { nurseId: string; group: string; count: number }[] = [];
-            stillN.forEach(id => {
-              const avail = getAvailNight(id, stillG, true);
-              avail.forEach((g: string) => {
-                pairs.push({ nurseId: id, group: g, count: groupCounts[id]?.['311']?.[g] || 0 });
-              });
-            });
-            pairs.sort((a, b) => a.count - b.count);
-            pairs.forEach(({ nurseId, group }) => {
-              if (!assignedN.has(nurseId) && !assignedG.has(group)) {
-                schedule.scheduleByNurse[nurseId].groups[dayIndex] = group;
-                groupCounts[nurseId]['311'][group] = (groupCounts[nurseId]['311'][group] || 0) + 1;
-                assignedN.add(nurseId);
-                assignedG.add(group);
-              }
+            // 兩兩一組：pairScore 主導（湊對/避免三連），月內次數當決勝攤平，2-opt 修尾端
+            const availMap = new Map<string, Set<string>>();
+            stillN.forEach(id => availMap.set(id, new Set(getAvailNight(id, stillG, true))));
+            const assigned = assignPoolWithSwaps(
+              stillN, stillG,
+              (id, g) => (availMap.get(id) || new Set()).has(g),
+              (id, g) => (groupCounts[id]?.['311']?.[g] || 0) + pairScore(id, weekPos, g, 'night'),
+            );
+            assigned.forEach(({ nurseId, group }) => {
+              schedule.scheduleByNurse[nurseId].groups[dayIndex] = group;
+              groupCounts[nurseId]['311'][group] = (groupCounts[nurseId]['311'][group] || 0) + 1;
+              assignedN.add(nurseId);
+              assignedG.add(group);
+              recordWeekLetter(nurseId, weekPos, group, 'night');
             });
           }
         }
