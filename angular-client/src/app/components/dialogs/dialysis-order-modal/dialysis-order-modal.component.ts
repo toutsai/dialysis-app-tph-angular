@@ -32,6 +32,14 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
   readonly vascAccessOptions = ['D/L', 'Perm', 'AVF', 'AVG'];
   readonly needleSizeOptions = ['15G', '16G', '17G'];
 
+  /** AK 週欄位（0=週一…5=週六，與 HIS 備藥前置作業 Excel 同模型；輪替字串由此自動產生） */
+  readonly akWeekdayLabels = ['一', '二', '三', '四', '五', '六'];
+  private readonly FREQ_MAP_TO_DAY_INDEX: Record<string, number[]> = {
+    '一三五': [0, 2, 4], '二四六': [1, 3, 5], '一四': [0, 3], '二五': [1, 4],
+    '三六': [2, 5], '一五': [0, 4], '二六': [1, 5], '每日': [0, 1, 2, 3, 4, 5],
+    '每周一': [0], '每周二': [1], '每周三': [2], '每周四': [3], '每周五': [4], '每周六': [5],
+  };
+
   localOrderData: any = this.createFormState();
 
   constructor() {
@@ -41,7 +49,7 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
   private createFormState(): any {
     return {
       effectiveDate: getToday(),
-      aks: [''],
+      akWeekly: ['', '', '', '', '', ''],
       dialysateCa: '',
       dryWeight: '',
       bloodFlow: '',
@@ -74,8 +82,15 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
       const orders = this.patientData.dialysisOrders || {};
       const patient = this.patientData;
 
-      const akValue = orders.ak || '';
-      this.localOrderData.aks = akValue && typeof akValue === 'string' ? akValue.split('/') : [''];
+      // AK：akWeekly（週一~六）為權威；舊資料沒有時由輪替字串+頻率反推預填
+      if (Array.isArray(orders.akWeekly) && orders.akWeekly.length === 6) {
+        this.localOrderData.akWeekly = orders.akWeekly.map((v: any) => String(v || ''));
+      } else {
+        this.localOrderData.akWeekly = this.deriveAkWeeklyFromRotation(
+          typeof orders.ak === 'string' ? orders.ak : '',
+          this.patientFreq(),
+        );
+      }
 
       const heparinLM = orders.heparinLM
         ? String(orders.heparinLM).split('/')
@@ -261,15 +276,64 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
       });
   }
 
-  addAkSelect(): void {
-    if (this.localOrderData.aks.length < 3) {
-      this.localOrderData.aks.push('');
-    }
+  /** 病人透析頻率（總表規則優先，其次醫囑/病人欄位） */
+  private patientFreq(): string {
+    return (
+      this.patientData?.scheduleRule?.freq ||
+      this.patientData?.dialysisOrders?.freq ||
+      this.patientData?.freq ||
+      ''
+    );
   }
 
-  removeAkSelect(index: number): void {
-    if (this.localOrderData.aks.length > 1) {
-      this.localOrderData.aks.splice(index, 1);
+  /** 舊資料反推：單值 → 六天全填；多段 → 依透析日序展開（其餘天留空） */
+  private deriveAkWeeklyFromRotation(akString: string, freq: string): string[] {
+    const weekly = ['', '', '', '', '', ''];
+    const segments = (akString || '').split('/').map((s) => s.trim()).filter(Boolean);
+    if (segments.length === 0) return weekly;
+    if (segments.length === 1) return weekly.map(() => segments[0]);
+    const days = this.FREQ_MAP_TO_DAY_INDEX[freq] || [];
+    if (days.length > 0) {
+      days.forEach((d, i) => {
+        weekly[d] = segments[i % segments.length];
+      });
+    } else {
+      segments.forEach((seg, i) => {
+        if (i < 6) weekly[i] = seg;
+      });
+    }
+    return weekly;
+  }
+
+  /** 週欄位 → 輪替字串（與後端 Excel 匯入同邏輯）：
+   *  有頻率取透析日對應值依序串接（全同 → 單值）；無頻率取六天非空去重 */
+  akRotationString(): string {
+    const weekly: string[] = this.localOrderData.akWeekly || [];
+    const days = this.FREQ_MAP_TO_DAY_INDEX[this.patientFreq()] || [];
+    const sessionValues = days.map((d) => weekly[d]).filter((v) => v);
+    if (sessionValues.length > 0) {
+      return new Set(sessionValues).size === 1 ? sessionValues[0] : sessionValues.join('/');
+    }
+    const uniq = [...new Set(weekly.filter((v) => v))];
+    return uniq.join('/');
+  }
+
+  /** 下拉選項：固定清單 + 現有資料裡清單外的型號（HIS 匯入可能帶入 APS21S、HI:23 等拼法），避免顯示空白 */
+  akOptionsWithCurrent(): string[] {
+    const extras = (this.localOrderData.akWeekly || []).filter(
+      (v: string) => v && !this.akOptions.includes(v),
+    );
+    return [...this.akOptions, ...[...new Set(extras)] as string[]];
+  }
+
+  /** 常見情境快捷：其餘五天皆空時，選一格自動整週帶入同值 */
+  onAkWeeklyChange(index: number): void {
+    const weekly: string[] = this.localOrderData.akWeekly;
+    const value = weekly[index];
+    if (!value) return;
+    const othersEmpty = weekly.every((v, i) => i === index || !v);
+    if (othersEmpty) {
+      this.localOrderData.akWeekly = weekly.map(() => value);
     }
   }
 
@@ -281,7 +345,8 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
   }
 
   handleSave(): void {
-    const formattedAk = this.localOrderData.aks.filter((ak: string) => ak).join('/');
+    const formattedAk = this.akRotationString();
+    const akWeekly: string[] = (this.localOrderData.akWeekly || []).map((v: string) => v || '');
     const formattedHeparinLM = `${this.localOrderData.heparinInitial || '0'}/${this.localOrderData.heparinMaintenance || '0'}`;
     const dialysisTime = this.buildDialysisTimeForSave();
 
@@ -289,6 +354,8 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
       effectiveDate: this.localOrderData.effectiveDate,
       ak: formattedAk,
       artificialKidney: formattedAk,
+      aks: formattedAk ? formattedAk.split('/') : [],
+      akWeekly: akWeekly.some((v) => v) ? akWeekly : undefined,
       dialysateCa: this.localOrderData.dialysateCa,
       dialysate: this.localOrderData.dialysateCa,
       dryWeight: this.localOrderData.dryWeight,

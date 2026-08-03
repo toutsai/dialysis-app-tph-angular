@@ -292,6 +292,14 @@ export async function createDialysisOrderAndUpdatePatient(
     },
   };
 
+  // AK 週欄位（一~六）為資料權威；輪替字串 ak 由 modal 依頻率自動產生
+  if (Array.isArray(orderData.akWeekly) && orderData.akWeekly.length === 6) {
+    historyRecord.orders.akWeekly = orderData.akWeekly.map((v: any) => String(v || ''));
+  }
+  if (Array.isArray(orderData.aks)) {
+    historyRecord.orders.aks = orderData.aks;
+  }
+
   if (orderData.mode === 'PP' || orderData.mode === 'DFPP') {
     historyRecord.orders.bw = orderData.bw;
     historyRecord.orders.hct = orderData.hct;

@@ -6,6 +6,7 @@ import { getDatabase } from '../db/init.js'
 import { authenticate, isContributor, isEditor, logAudit, requireAnyRole } from '../middleware/auth.js'
 import { getTaipeiMonthString, getTaipeiTodayString } from '../utils/dateUtils.js'
 import { normalizeDialysisMode, normalizeDialysisOrdersMode } from '../utils/dialysisMode.js'
+import { FREQ_MAP_TO_DAY_INDEX } from '../utils/scheduleUtils.js'
 
 const router = Router()
 const isDoctorRole = isContributor
@@ -2081,6 +2082,28 @@ router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
     const WEEKDAY_HEADERS = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
     const cellStr = (row, name) => (col[name] !== undefined ? String(row[col[name]] ?? '').trim() : '')
 
+    // 總表頻率（輪替字串生成用）：ak 的 '/' 慣例 = 依透析日序每次一段（勿去重、勿錯序）
+    let masterRules = {}
+    try {
+      const masterDoc = db.prepare(`SELECT schedule FROM base_schedules WHERE id = 'MASTER_SCHEDULE'`).get()
+      masterRules = masterDoc ? JSON.parse(masterDoc.schedule || '{}') : {}
+    } catch {
+      masterRules = {}
+    }
+
+    // akWeekly（索引 0=週一…5=週六）+ freq → 輪替字串：
+    // 有頻率：取透析日對應值依序串接，全同 → 單值；
+    // 無頻率（非常規病人）：取六天非空去重，全同 → 單值，否則依日序串接
+    const buildAkRotation = (akWeekly, freq) => {
+      const days = FREQ_MAP_TO_DAY_INDEX[freq] || []
+      const sessionValues = days.map((d) => akWeekly[d]).filter((v) => v)
+      if (sessionValues.length > 0) {
+        return new Set(sessionValues).size === 1 ? sessionValues[0] : sessionValues.join('/')
+      }
+      const uniq = [...new Set(akWeekly.filter((v) => v))]
+      return uniq.join('/')
+    }
+
     for (let i = headerRowIndex + 1; i < dataRows.length; i++) {
       const row = dataRows[i]
       if (!row || row.every((cell) => String(cell).trim() === '')) continue
@@ -2112,10 +2135,9 @@ router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
       const timeH = Math.floor(totalMinutes / 60)
       const timeM = totalMinutes % 60
 
-      // AK：六天各一欄；全相同 → 單值，不同 → 依出現順序以 / 串接（AK 輪替慣例）
+      // AK：六天各一欄（akWeekly 為權威）；輪替字串依病人總表頻率換算
       const akWeekly = WEEKDAY_HEADERS.map((h) => cellStr(row, h))
-      const akDistinct = [...new Set(akWeekly.filter((v) => v))]
-      const akString = akDistinct.join('/')
+      const akString = buildAkRotation(akWeekly, masterRules[patient.id]?.freq)
 
       const heparinInitial = cellStr(row, '初劑量')
       const heparinMaintenance = cellStr(row, '維持劑')
@@ -2147,7 +2169,7 @@ router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
       if (akString) {
         orders.ak = akString
         orders.artificialKidney = akString
-        orders.aks = akDistinct
+        orders.aks = akString.split('/')
         orders.akWeekly = akWeekly
       }
       normalizeDialysisOrdersMode(orders)

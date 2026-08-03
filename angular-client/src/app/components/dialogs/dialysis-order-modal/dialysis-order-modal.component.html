@@ -63,23 +63,25 @@
 
             <!-- Group 3: 核心醫囑 -->
             <div class="form-group ak-dynamic-group">
-              <label>人工腎臟 (AK)</label>
-              @for (ak of localOrderData.aks; track $index; let index = $index) {
-                <div class="ak-select-wrapper">
-                  <select [(ngModel)]="localOrderData.aks[index]" [name]="'ak_' + index">
-                    <option disabled value="">請選擇...</option>
-                    @for (option of akOptions; track option) {
-                      <option [value]="option">{{ option }}</option>
-                    }
-                  </select>
-                  @if (localOrderData.aks.length > 1) {
-                    <button type="button" class="btn-ak-action remove" (click)="removeAkSelect(index)">–</button>
-                  }
-                </div>
-              }
-              @if (localOrderData.aks.length < 3) {
-                <button type="button" class="btn-ak-action add" (click)="addAkSelect()">+</button>
-              }
+              <label>人工腎臟 (AK)（星期一～六，第一格選定後其餘空格自動帶入）</label>
+              <div class="ak-weekly-grid">
+                @for (day of akWeekdayLabels; track $index; let i = $index) {
+                  <div class="ak-weekly-cell">
+                    <span class="ak-weekly-day">{{ day }}</span>
+                    <select
+                      [(ngModel)]="localOrderData.akWeekly[i]"
+                      [name]="'ak_weekly_' + i"
+                      (ngModelChange)="onAkWeeklyChange(i)"
+                    >
+                      <option value="">—</option>
+                      @for (option of akOptionsWithCurrent(); track option) {
+                        <option [value]="option">{{ option }}</option>
+                      }
+                    </select>
+                  </div>
+                }
+              </div>
+              <div class="ak-rotation-preview">輪替（自動產生）：{{ akRotationString() || '–' }}</div>
             </div>
             <div class="form-group">
               <label for="dialysateCa">透析液鈣離子 (Ca)</label>

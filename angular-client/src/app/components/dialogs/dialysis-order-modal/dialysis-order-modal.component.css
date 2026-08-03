@@ -235,7 +235,34 @@ tr.pending-order td:nth-child(2) {
   font-weight: bold;
 }
 .form-group.ak-dynamic-group {
-  grid-column: span 1;
+  grid-column: span 2;
+}
+/* AK 週欄位（一~六）：與 HIS 備藥前置作業同模型，輪替字串自動產生 */
+.ak-weekly-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+}
+.ak-weekly-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.ak-weekly-day {
+  font-size: 0.75rem;
+  color: #6c757d;
+  text-align: center;
+  margin-bottom: 2px;
+}
+.ak-weekly-cell select {
+  width: 100%;
+  min-width: 0;
+  font-size: 0.85rem;
+}
+.ak-rotation-preview {
+  margin-top: 6px;
+  font-size: 0.85rem;
+  color: #495057;
 }
 .ak-select-wrapper {
   display: flex;
