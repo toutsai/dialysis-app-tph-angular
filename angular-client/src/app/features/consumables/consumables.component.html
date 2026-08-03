@@ -119,7 +119,7 @@
           (dragleave)="onDragLeave($event)"
           (drop)="handleFileDrop($event)"
         >
-          <div class="upload-icon">&#x1F4E4;</div>
+          <div class="upload-icon"><i class="fas fa-box-open"></i></div>
           <h3 *ngIf="!selectedFile()">拖曳 Excel 檔案至此，或點擊按鈕選擇</h3>
           <h3 *ngIf="selectedFile()">
             已選擇檔案：<strong>{{ selectedFile()!.name }}</strong>
