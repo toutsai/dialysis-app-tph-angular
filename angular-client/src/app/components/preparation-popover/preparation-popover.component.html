@@ -15,6 +15,7 @@
                 <th>Ca</th>
                 <th>Heparin</th>
                 <th>BF</th>
+                <th>乾體重</th>
                 <th>通路/穿刺針</th>
               </tr>
             </thead>
@@ -30,6 +31,7 @@
                     {{ patient.dialysisOrders?.heparinInitial ?? '–' }}/{{ patient.dialysisOrders?.heparinMaintenance ?? '–' }}
                   </td>
                   <td>{{ patient.dialysisOrders?.bloodFlow ?? '–' }}</td>
+                  <td>{{ patient.dialysisOrders?.dryWeight || '–' }}</td>
                   <td>
                     {{ patient.dialysisOrders?.vascAccess || '–' }}
                     @if (
