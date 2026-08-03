@@ -5,8 +5,8 @@
 // UTF-8 BOM 前綴 + CRLF 換行，同 kiditVascularCsvService 慣例。
 import { toRocDate } from '@/utils/kiditHelpers';
 
-/** 官方病患資料 CSV 表頭（23 欄，逐字複製官方樣本檔） */
-const PATIENT_CSV_HEADERS = [
+/** 官方病患資料 CSV 表頭（23 欄，逐字複製官方樣本檔）；每月基本資料 CSV 亦重用此格式 */
+export const PATIENT_CSV_HEADERS = [
   '姓名', '病患類別', '生日', '身份證號', '性別', '婚姻', '電話', '病歷號', '透析代號', '地址',
   '教育程度', '職業', '連絡人', '關係', '血型', '重大傷病卡號', '是否為原住民', '是否具福保身分',
   '狀態', '首次治療日期', '本院開始治療日期', '原發病大類', '原發病細類',
@@ -49,8 +49,8 @@ function hasAnyValue(obj: any): boolean {
   });
 }
 
-/** 值順序對應 PATIENT_CSV_HEADERS（同舊 Excel 病患資料 sheet 的欄位對應） */
-function buildPatientRow(p: any): string[] {
+/** 值順序對應 PATIENT_CSV_HEADERS（同舊 Excel 病患資料 sheet 的欄位對應）；每月基本資料 CSV 亦重用 */
+export function buildPatientRow(p: any): string[] {
   return [
     p.name || '', p.patientCategory || '', toRocDate(p.birthDate), p.idNumber || '',
     p.gender || '', p.maritalStatus || '', p.phone || '', p.medicalRecordNumber || '',
