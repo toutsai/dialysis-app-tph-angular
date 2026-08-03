@@ -567,6 +567,24 @@ CREATE INDEX IF NOT EXISTS idx_injection_orders_patient ON injection_orders(pati
 CREATE INDEX IF NOT EXISTS idx_injection_orders_month ON injection_orders(upload_month);
 CREATE INDEX IF NOT EXISTS idx_injection_orders_type ON injection_orders(order_type);
 
+-- 透析醫囑（HIS「備藥前置作業」Excel 匯入）。全數保留歷次醫囑；
+-- 同病人 + 同醫囑日期(effective_date) 視為同一筆（UNIQUE，重傳更新不重複累積）
+CREATE TABLE IF NOT EXISTS dialysis_order_uploads (
+    id TEXT PRIMARY KEY,
+    patient_id TEXT NOT NULL,
+    patient_name TEXT,
+    medical_record_number TEXT NOT NULL,
+    effective_date TEXT NOT NULL,
+    orders TEXT NOT NULL,           -- JSON，key 對齊 DialysisOrderModal（mode/dialysisTimeHours…）
+    source_file TEXT,
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+    UNIQUE(medical_record_number, effective_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_dialysis_order_uploads_patient ON dialysis_order_uploads(patient_id);
+CREATE INDEX IF NOT EXISTS idx_dialysis_order_uploads_date ON dialysis_order_uploads(effective_date);
+
 CREATE TABLE IF NOT EXISTS medication_drafts (
     id TEXT PRIMARY KEY,
     author_id TEXT NOT NULL,

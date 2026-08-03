@@ -5,7 +5,7 @@ import XLSX from 'xlsx'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isContributor, isEditor, logAudit, requireAnyRole } from '../middleware/auth.js'
 import { getTaipeiMonthString, getTaipeiTodayString } from '../utils/dateUtils.js'
-import { normalizeDialysisOrdersMode } from '../utils/dialysisMode.js'
+import { normalizeDialysisMode, normalizeDialysisOrdersMode } from '../utils/dialysisMode.js'
 
 const router = Router()
 const isDoctorRole = isContributor
@@ -201,6 +201,25 @@ function ensureTablesExist(db) {
     CREATE INDEX IF NOT EXISTS idx_injection_orders_patient ON injection_orders(patient_id);
     CREATE INDEX IF NOT EXISTS idx_injection_orders_month ON injection_orders(upload_month);
     CREATE INDEX IF NOT EXISTS idx_injection_orders_type ON injection_orders(order_type);
+  `)
+
+  // 確保 dialysis_order_uploads 表存在（HIS「備藥前置作業」透析醫囑 Excel 匯入；
+  // 全數保留歷次醫囑，同病人+同醫囑日期視為同一筆）
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS dialysis_order_uploads (
+      id TEXT PRIMARY KEY,
+      patient_id TEXT NOT NULL,
+      patient_name TEXT,
+      medical_record_number TEXT NOT NULL,
+      effective_date TEXT NOT NULL,
+      orders TEXT NOT NULL,
+      source_file TEXT,
+      created_at TEXT DEFAULT (datetime('now', 'localtime')),
+      updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+      UNIQUE(medical_record_number, effective_date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_dialysis_order_uploads_patient ON dialysis_order_uploads(patient_id);
+    CREATE INDEX IF NOT EXISTS idx_dialysis_order_uploads_date ON dialysis_order_uploads(effective_date);
   `)
 
   // 確保 consumables_reports 有 patient_id 欄位
@@ -1957,6 +1976,381 @@ router.post('/medications/upload', ...isDoctorRole, async (req, res) => {
       error: true,
       message: `處理 Excel 檔案時發生錯誤: ${error.message}`,
     })
+  }
+})
+
+// ========================================
+// 透析醫囑 Excel 上傳（HIS「備藥前置作業」）
+// ========================================
+
+/**
+ * POST /api/orders/dialysis-orders/upload
+ * 上傳 HIS「備藥前置作業」Excel。每列 = 一筆透析醫囑（同病人多列 = 歷次醫囑）。
+ * 儲存策略：全數保留（歷次可查）；同病人 + 同醫囑日期視為同一筆，重傳更新不重複累積。
+ * 回寫策略：每人取醫囑日期最新一筆，合併進 patients.dialysis_orders（只覆蓋 Excel 提供的欄位，
+ * 血管通路/針頭/頻率等欄位保留現值）；病人現行醫囑 effectiveDate 較新（月中手動修改過）則跳過；
+ * 內容有變動才寫入 dialysis_orders_history。
+ */
+router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
+  try {
+    const { fileName, fileContent } = req.body
+    if (!fileName || !fileContent) {
+      return res.status(400).json({ error: true, message: '請求中缺少檔案名稱或內容。' })
+    }
+    console.log(`[DialysisOrders] 接收到檔案 ${fileName}，開始解析...`)
+
+    const buffer = Buffer.from(fileContent, 'base64')
+    const workbook = XLSX.read(buffer, { type: 'buffer' })
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]]
+    const dataRows = XLSX.utils.sheet_to_json(worksheet, {
+      header: 1,
+      defval: '',
+      raw: false,
+      dateNF: 'YYYY-MM-DD',
+    })
+
+    // 尋找標題行
+    let headerRowIndex = -1
+    let headers = []
+    for (let i = 0; i < dataRows.length; i++) {
+      const row = dataRows[i].map((h) => String(h).trim())
+      if (row.includes('病歷號') && row.includes('透析模式') && row.includes('醫囑日期')) {
+        headerRowIndex = i
+        headers = row
+        break
+      }
+    }
+    if (headerRowIndex === -1) {
+      return res.status(400).json({
+        error: true,
+        message: "找不到有效的標題行 (需包含 '病歷號', '透析模式', '醫囑日期')。",
+      })
+    }
+    const col = {}
+    headers.forEach((h, idx) => {
+      if (h) col[h] = idx
+    })
+
+    // 日期解析：YYYYMMDD…（取前8碼）→ YYYY-MM-DD；無效回 ''
+    const parseExcelDate = (raw) => {
+      if (raw === undefined || raw === null) return ''
+      const dateStr = String(raw).trim()
+      if (!dateStr) return ''
+      if (/^\d{8,}/.test(dateStr)) {
+        const year = dateStr.substring(0, 4)
+        const month = dateStr.substring(4, 6)
+        const day = dateStr.substring(6, 8)
+        if (parseInt(month) >= 1 && parseInt(month) <= 12 && parseInt(day) >= 1 && parseInt(day) <= 31) {
+          return `${year}-${month}-${day}`
+        }
+      }
+      try {
+        const dateObj = new Date(dateStr)
+        if (!isNaN(dateObj.getTime())) {
+          const year = dateObj.getUTCFullYear()
+          const month = (dateObj.getUTCMonth() + 1).toString().padStart(2, '0')
+          const day = dateObj.getUTCDate().toString().padStart(2, '0')
+          return `${year}-${month}-${day}`
+        }
+      } catch (e) {
+        /* 忽略解析錯誤 */
+      }
+      return ''
+    }
+
+    const db = getDatabase()
+    ensureTablesExist(db)
+
+    // 預先載入所有病人（含已刪除：一年份 Excel 涵蓋已離開的病人，其歷次醫囑照存、
+    // 復原後可查；但回寫現行醫囑只針對未刪除者）
+    const patientCache = new Map()
+    const patientsById = new Map()
+    db.prepare(`SELECT id, name, medical_record_number, dialysis_orders, is_deleted FROM patients`)
+      .all()
+      .forEach((p) => {
+        patientsById.set(p.id, p)
+        if (p.medical_record_number) {
+          patientCache.set(String(p.medical_record_number).replace(/^0+/, ''), p)
+        }
+      })
+
+    const errors = []
+    const rowsToUpsert = []
+    const touchedPatientIds = new Set()
+    let deletedRowCount = 0
+    const WEEKDAY_HEADERS = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
+    const cellStr = (row, name) => (col[name] !== undefined ? String(row[col[name]] ?? '').trim() : '')
+
+    for (let i = headerRowIndex + 1; i < dataRows.length; i++) {
+      const row = dataRows[i]
+      if (!row || row.every((cell) => String(cell).trim() === '')) continue
+      const rowNumber = i + 1
+      const mrnRaw = cellStr(row, '病歷號')
+      const mrn = mrnRaw.replace(/^0+/, '')
+      const name = cellStr(row, '姓名')
+      const effectiveDate = parseExcelDate(cellStr(row, '醫囑日期'))
+      if (!mrn) {
+        errors.push({ rowNumber, reason: '缺少病歷號' })
+        continue
+      }
+      if (!effectiveDate) {
+        errors.push({ rowNumber, reason: `醫囑日期無法解析: ${cellStr(row, '醫囑日期')}` })
+        continue
+      }
+      const patient = patientCache.get(mrn)
+      if (!patient) {
+        errors.push({ rowNumber, reason: `病歷號 ${mrnRaw}（${name}）系統查無此病人` })
+        continue
+      }
+      if (patient.is_deleted) deletedRowCount++
+
+      // 透析時間：時/分兩欄，滿 60 分進位（DFPP 等無時間的列保留空白）
+      const thRaw = parseInt(cellStr(row, '透析時間(時)'), 10)
+      const tmRaw = parseInt(cellStr(row, '透析時間(分)'), 10)
+      const hasTime = !isNaN(thRaw) || !isNaN(tmRaw)
+      const totalMinutes = (isNaN(thRaw) ? 0 : thRaw) * 60 + (isNaN(tmRaw) ? 0 : tmRaw)
+      const timeH = Math.floor(totalMinutes / 60)
+      const timeM = totalMinutes % 60
+
+      // AK：六天各一欄；全相同 → 單值，不同 → 依出現順序以 / 串接（AK 輪替慣例）
+      const akWeekly = WEEKDAY_HEADERS.map((h) => cellStr(row, h))
+      const akDistinct = [...new Set(akWeekly.filter((v) => v))]
+      const akString = akDistinct.join('/')
+
+      const heparinInitial = cellStr(row, '初劑量')
+      const heparinMaintenance = cellStr(row, '維持劑')
+      const rinseRaw = cellStr(row, '外循').toUpperCase()
+
+      // ⚠️ 空欄不帶 key：回寫是 { ...current, ...orders } 合併，帶空字串會把病人現值洗掉
+      //（例：乾體重/透析時間在不少列是空的）。只有 Excel 有值的欄位才覆蓋。
+      const orders = { effectiveDate, importSource: 'HIS_EXCEL' }
+      const setIf = (key, val) => {
+        if (val !== '' && val !== undefined && val !== null) orders[key] = val
+      }
+      setIf('mode', cellStr(row, '透析模式'))
+      if (hasTime) {
+        orders.dialysisTimeHours = String(timeH)
+        orders.dialysisTimeMinutes = String(timeM)
+        orders.dialysisHours = String(totalMinutes / 60)
+        orders.dialysisTimeText = `${timeH}時${timeM}分`
+      }
+      setIf('dryWeight', cellStr(row, '乾體重'))
+      if (rinseRaw === 'Y' || rinseRaw === 'N') orders.heparinRinse = rinseRaw === 'Y' ? '可' : '不可'
+      setIf('heparinInitial', heparinInitial)
+      setIf('heparinMaintenance', heparinMaintenance)
+      if (heparinInitial || heparinMaintenance) {
+        orders.heparinLM = `${heparinInitial || '0'}/${heparinMaintenance || '0'}`
+      }
+      setIf('bloodFlow', cellStr(row, '血液流速'))
+      setIf('dialysateFlow', cellStr(row, '透析液流速'))
+      setIf('dialysateCa', cellStr(row, '透析藥水CA'))
+      if (akString) {
+        orders.ak = akString
+        orders.artificialKidney = akString
+        orders.aks = akDistinct
+        orders.akWeekly = akWeekly
+      }
+      normalizeDialysisOrdersMode(orders)
+
+      touchedPatientIds.add(patient.id)
+      rowsToUpsert.push({
+        patientId: patient.id,
+        patientName: patient.name || name,
+        mrn: patient.medical_record_number,
+        effectiveDate,
+        orders,
+      })
+    }
+
+    // 既有 (病歷號, 醫囑日期) 鍵，用於統計新增/更新
+    const existingKeys = new Set(
+      db
+        .prepare(`SELECT medical_record_number || '|' || effective_date AS k FROM dialysis_order_uploads`)
+        .all()
+        .map((r) => r.k),
+    )
+    let insertedCount = 0
+    let updatedCount = 0
+
+    const upsert = db.prepare(`
+      INSERT INTO dialysis_order_uploads (id, patient_id, patient_name, medical_record_number, effective_date, orders, source_file)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(medical_record_number, effective_date) DO UPDATE SET
+        patient_id = excluded.patient_id,
+        patient_name = excluded.patient_name,
+        orders = excluded.orders,
+        source_file = excluded.source_file,
+        updated_at = datetime('now', 'localtime')
+    `)
+    db.transaction(() => {
+      for (const r of rowsToUpsert) {
+        upsert.run(uuidv4(), r.patientId, r.patientName, r.mrn, r.effectiveDate, JSON.stringify(r.orders), fileName)
+        if (existingKeys.has(`${r.mrn}|${r.effectiveDate}`)) updatedCount++
+        else insertedCount++
+      }
+    })()
+
+    // 回寫病人現行醫囑：本次上傳觸及的病人，各取全表最新一筆
+    const stableStringify = (obj) =>
+      JSON.stringify(
+        Object.keys(obj)
+          .sort()
+          .reduce((acc, k) => {
+            acc[k] = obj[k]
+            return acc
+          }, {}),
+      )
+
+    let writtenBackCount = 0
+    let skippedNewerCount = 0
+    let unchangedCount = 0
+
+    const latestStmt = db.prepare(`
+      SELECT patient_id, patient_name, effective_date, orders FROM (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY patient_id ORDER BY effective_date DESC, updated_at DESC) AS rn
+        FROM dialysis_order_uploads
+      ) WHERE rn = 1
+    `)
+    const historyInsert = db.prepare(`
+      INSERT INTO dialysis_orders_history (id, patient_id, patient_name, operation_type, orders)
+      VALUES (?, ?, ?, 'UPDATE', ?)
+    `)
+    const patientUpdate = db.prepare(`
+      UPDATE patients SET dialysis_orders = ?, updated_at = datetime('now', 'localtime') WHERE id = ?
+    `)
+
+    db.transaction(() => {
+      for (const r of latestStmt.all()) {
+        if (!touchedPatientIds.has(r.patient_id)) continue
+        const patient = patientsById.get(r.patient_id)
+        if (!patient || patient.is_deleted) continue // 已刪除病人只存檔不回寫
+        let current = {}
+        try {
+          current = JSON.parse(patient.dialysis_orders || '{}') || {}
+        } catch {
+          current = {}
+        }
+        // 月中手動修改保護：現行醫囑生效日比 Excel 最新一筆晚 → 不覆蓋
+        if (current.effectiveDate && String(current.effectiveDate) > r.effective_date) {
+          skippedNewerCount++
+          continue
+        }
+        const merged = normalizeDialysisOrdersMode({ ...current, ...JSON.parse(r.orders) })
+        if (stableStringify(merged) === stableStringify(current)) {
+          unchangedCount++
+          continue
+        }
+        patientUpdate.run(JSON.stringify(merged), r.patient_id)
+        historyInsert.run(uuidv4(), r.patient_id, r.patient_name || patient.name || '', JSON.stringify(merged))
+        writtenBackCount++
+      }
+    })()
+
+    invalidateListCache()
+
+    await logAudit('DIALYSIS_ORDERS_UPLOAD', req.user.id, req.user.name, 'dialysis_order_uploads', fileName, {
+      processedCount: rowsToUpsert.length,
+      insertedCount,
+      updatedCount,
+      writtenBackCount,
+      skippedNewerCount,
+      errorCount: errors.length,
+    })
+
+    console.log(
+      `[DialysisOrders] 處理完成：儲存 ${rowsToUpsert.length} 筆（新增 ${insertedCount}／更新 ${updatedCount}），` +
+        `回寫病人醫囑 ${writtenBackCount} 人、無變動 ${unchangedCount} 人、手動較新跳過 ${skippedNewerCount} 人，問題 ${errors.length} 列。`,
+    )
+
+    res.json({
+      success: true,
+      message:
+        `處理完成！儲存 ${rowsToUpsert.length} 筆醫囑（新增 ${insertedCount}、更新 ${updatedCount}，其中已刪除病人 ${deletedRowCount} 筆僅存檔）；` +
+        `回寫病人現行醫囑 ${writtenBackCount} 人、內容無變動 ${unchangedCount} 人、系統醫囑較新未覆蓋 ${skippedNewerCount} 人；` +
+        `${errors.length} 個問題列。`,
+      deletedRowCount,
+      processedCount: rowsToUpsert.length,
+      insertedCount,
+      updatedCount,
+      writtenBackCount,
+      unchangedCount,
+      skippedNewerCount,
+      errorCount: errors.length,
+      errors: errors.slice(0, 50),
+    })
+  } catch (error) {
+    console.error('[DialysisOrders] 處理檔案時發生錯誤:', error)
+    res.status(500).json({
+      error: true,
+      message: `處理 Excel 檔案時發生錯誤: ${error.message}`,
+    })
+  }
+})
+
+/**
+ * GET /api/orders/dialysis-orders
+ * 透析醫囑檢視：預設每人最新一筆；?patientId= 查單人歷次；?all=true 全部
+ */
+router.get('/dialysis-orders', authenticate, (req, res) => {
+  try {
+    const { patientId, all } = req.query
+    const db = getDatabase()
+    ensureTablesExist(db)
+
+    let rows
+    if (patientId) {
+      rows = db
+        .prepare(`SELECT * FROM dialysis_order_uploads WHERE patient_id = ? ORDER BY effective_date DESC`)
+        .all(patientId)
+    } else if (all === 'true') {
+      rows = db.prepare(`SELECT * FROM dialysis_order_uploads ORDER BY effective_date DESC`).all()
+    } else {
+      rows = db
+        .prepare(
+          `SELECT * FROM (
+             SELECT *, ROW_NUMBER() OVER (PARTITION BY patient_id ORDER BY effective_date DESC, updated_at DESC) AS rn
+             FROM dialysis_order_uploads
+           ) WHERE rn = 1
+           ORDER BY medical_record_number`,
+        )
+        .all()
+    }
+
+    const counts = new Map(
+      db
+        .prepare(`SELECT patient_id, COUNT(*) AS c FROM dialysis_order_uploads GROUP BY patient_id`)
+        .all()
+        .map((r) => [r.patient_id, r.c]),
+    )
+    const deletedMap = new Map(
+      db.prepare(`SELECT id, is_deleted FROM patients`).all().map((p) => [p.id, !!p.is_deleted]),
+    )
+
+    res.json(
+      rows.map((r) => {
+        let orders = {}
+        try {
+          orders = JSON.parse(r.orders || '{}')
+        } catch {
+          orders = {}
+        }
+        return {
+          id: r.id,
+          patientId: r.patient_id,
+          patientName: r.patient_name,
+          medicalRecordNumber: r.medical_record_number,
+          effectiveDate: r.effective_date,
+          orders,
+          sourceFile: r.source_file,
+          recordCount: counts.get(r.patient_id) || 1,
+          isDeleted: deletedMap.get(r.patient_id) === true,
+          updatedAt: r.updated_at,
+        }
+      }),
+    )
+  } catch (error) {
+    console.error('取得透析醫囑列表錯誤:', error)
+    res.status(500).json({ error: true, message: '取得透析醫囑列表失敗' })
   }
 })
 

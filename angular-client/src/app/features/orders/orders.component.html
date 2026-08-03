@@ -1,12 +1,15 @@
 <div class="page-container">
   <header class="page-header">
-    <h1 class="page-title">藥囑管理</h1>
-    <p>上傳並查詢病患的口服藥與針劑藥囑紀錄。每月從報表產生器 護理&gt;洗腎中心&gt;D1.1 洗腎醫囑(含停止日)抓取檔案上傳。</p>
+    <h1 class="page-title">醫囑藥囑管理</h1>
+    <p>上傳並查詢病患的透析醫囑與口服藥/針劑藥囑紀錄。藥囑：報表產生器 護理&gt;洗腎中心&gt;D1.1 洗腎醫囑(含停止日)；透析醫囑：E1. 備藥前置作業。</p>
   </header>
 
   <div class="tabs-navigation">
     <button [class.active]="activeTab() === 'query'" (click)="activeTab.set('query')">
       藥囑查詢
+    </button>
+    <button [class.active]="activeTab() === 'dialysis'" (click)="openDialysisTab()">
+      醫囑檢視
     </button>
     <button [class.active]="activeTab() === 'upload'" (click)="activeTab.set('upload')">
       資料上傳
@@ -127,10 +130,92 @@
       </div>
     </div>
 
-    <!-- (B) 資料上傳頁籤 -->
+    <!-- (B) 醫囑檢視頁籤（透析醫囑，每人最新一筆） -->
+    <div class="tab-panel query-panel" [style.display]="activeTab() === 'dialysis' ? 'flex' : 'none'">
+      <div class="search-controls">
+        <div class="individual-filters">
+          <input
+            type="text"
+            [ngModel]="dialysisSearchTerm()"
+            (ngModelChange)="dialysisSearchTerm.set($event)"
+            placeholder="搜尋姓名 / 病歷號 / 模式..."
+          />
+          <label style="display: flex; align-items: center; gap: 4px; white-space: nowrap;">
+            <input
+              type="checkbox"
+              [ngModel]="showDeletedDialysis()"
+              (ngModelChange)="showDeletedDialysis.set($event)"
+            />
+            含已離開病人
+          </label>
+        </div>
+        <button (click)="loadDialysisOrders()" [disabled]="isDialysisLoading()" class="search-btn">
+          <i class="fas fa-rotate"></i> {{ isDialysisLoading() ? '載入中...' : '重新整理' }}
+        </button>
+        <button
+          (click)="exportDialysisOrdersToExcel()"
+          [disabled]="isDialysisLoading() || filteredDialysisRows().length === 0"
+          class="export-btn"
+        >
+          <i class="fas fa-file-excel"></i> 匯出 Excel
+        </button>
+      </div>
+
+      <div class="results-display">
+        <div *ngIf="isDialysisLoading()" class="loading-state">
+          <div class="loading-spinner"></div>
+          正在載入透析醫囑資料...
+        </div>
+        <div *ngIf="!isDialysisLoading() && dialysisLoaded() && dialysisRows().length === 0" class="empty-state">
+          尚無透析醫囑資料，請先到「資料上傳」頁籤上傳 E1. 備藥前置作業 Excel。
+        </div>
+        <div *ngIf="!isDialysisLoading() && filteredDialysisRows().length > 0" class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th class="sticky-col col-bed">病歷號</th>
+                <th class="sticky-col col-name">姓名</th>
+                <th>模式</th>
+                <th>透析時間</th>
+                <th>乾體重</th>
+                <th>AK</th>
+                <th>藥水Ca</th>
+                <th>血液流速</th>
+                <th>透析液流速</th>
+                <th>外循沖洗</th>
+                <th>初劑量</th>
+                <th>維持劑</th>
+                <th>醫囑日期</th>
+                <th>歷次</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of filteredDialysisRows()">
+                <td class="sticky-col col-bed">{{ row.medicalRecordNumber }}</td>
+                <td class="sticky-col col-name">{{ row.patientName }}</td>
+                <td>{{ row.orders['mode'] || '-' }}</td>
+                <td>{{ formatDialysisTime(row.orders) }}</td>
+                <td>{{ row.orders['dryWeight'] || '-' }}</td>
+                <td [title]="akWeeklyTitle(row.orders)">{{ row.orders['ak'] || '-' }}</td>
+                <td>{{ row.orders['dialysateCa'] || '-' }}</td>
+                <td>{{ row.orders['bloodFlow'] || '-' }}</td>
+                <td>{{ row.orders['dialysateFlow'] || '-' }}</td>
+                <td>{{ row.orders['heparinRinse'] || '-' }}</td>
+                <td>{{ row.orders['heparinInitial'] || '-' }}</td>
+                <td>{{ row.orders['heparinMaintenance'] || '-' }}</td>
+                <td>{{ row.effectiveDate }}</td>
+                <td>{{ row.recordCount }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- (C) 資料上傳頁籤 -->
     <div class="tab-panel upload-panel" [style.display]="activeTab() === 'upload' ? 'flex' : 'none'">
       <div class="upload-core-panel">
-        <h4>批次上傳藥囑 Excel</h4>
+        <h4>藥囑上傳（D1.1 洗腎醫囑）</h4>
         <div class="upload-month-selector">
           <label>目標月份</label>
           <input type="month" [ngModel]="uploadTargetMonth()" (ngModelChange)="uploadTargetMonth.set($event)" />
@@ -181,6 +266,60 @@
           <p>{{ uploadResult()!.message }}</p>
           <ul *ngIf="uploadResult()!.errors && uploadResult()!.errors!.length > 0">
             <li *ngFor="let error of uploadResult()!.errors">
+              第 {{ error.rowNumber }} 行: {{ error.reason }}
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="upload-core-panel">
+        <h4>醫囑上傳（E1. 備藥前置作業）</h4>
+        <div
+          class="upload-drop-zone"
+          [class.is-dragover]="isDialysisDragOver()"
+          (dragover)="onDialysisDragOver($event)"
+          (dragleave)="onDialysisDragLeave($event)"
+          (drop)="handleDialysisFileDrop($event)"
+        >
+          <div class="upload-icon">&#x1FA7A;</div>
+          <h3 *ngIf="!dialysisSelectedFile()">拖曳透析醫囑 Excel 檔案至此，或點擊按鈕選擇</h3>
+          <h3 *ngIf="dialysisSelectedFile()">
+            已選擇檔案：<strong>{{ dialysisSelectedFile()!.name }}</strong>
+          </h3>
+          <p class="upload-hint">
+            支援 .xlsx, .xls 格式。請確保檔案包含 '病歷號', '透析模式', '醫囑日期' 等欄位（E1. 備藥前置作業）。
+          </p>
+          <p class="upload-hint upload-warning">
+            ⚠️ 歷次醫囑全數保留（同病人同醫囑日期重傳會更新）；上傳後每人最新一筆會回寫病人清單的現行醫囑，
+            但若病人現行醫囑日期較新（月中手動修改過）則不覆蓋。
+          </p>
+          <input
+            id="dialysis-file-input"
+            type="file"
+            (change)="handleDialysisFileSelect($event)"
+            accept=".xlsx, .xls"
+            [disabled]="isDialysisUploading()"
+          />
+          <label for="dialysis-file-input" class="file-input-label">{{
+            dialysisSelectedFile() ? '重新選擇檔案' : '選擇檔案'
+          }}</label>
+        </div>
+        <button
+          class="upload-btn-main"
+          (click)="handleDialysisUpload()"
+          [disabled]="!dialysisSelectedFile() || isDialysisUploading()"
+        >
+          {{ isDialysisUploading() ? '處理中...' : '開始上傳' }}
+        </button>
+        <div
+          *ngIf="dialysisUploadResult()"
+          class="upload-result-toast"
+          [class.has-error]="dialysisUploadResult()!.errorCount > 0"
+          [class.is-success]="dialysisUploadResult()!.errorCount === 0"
+        >
+          <p>{{ dialysisUploadResult()!.message }}</p>
+          <ul *ngIf="dialysisUploadResult()!.errors && dialysisUploadResult()!.errors!.length > 0">
+            <li *ngFor="let error of dialysisUploadResult()!.errors">
               第 {{ error.rowNumber }} 行: {{ error.reason }}
             </li>
           </ul>

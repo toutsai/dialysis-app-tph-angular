@@ -63,6 +63,20 @@ interface UploadResult {
   processedCount?: number;
 }
 
+/** 透析醫囑檢視列（GET /orders/dialysis-orders 回傳，orders key 對齊 DialysisOrderModal） */
+interface DialysisOrderRow {
+  id: string;
+  patientId: string;
+  patientName: string;
+  medicalRecordNumber: string;
+  effectiveDate: string;
+  orders: Record<string, any>;
+  sourceFile?: string;
+  recordCount: number;
+  isDeleted?: boolean;
+  updatedAt?: string;
+}
+
 @Component({
   selector: 'app-orders',
   standalone: true,
@@ -80,7 +94,7 @@ export class OrdersComponent implements OnInit {
   private readonly ordersApi: ApiManager<OrderRecord>;
 
   // --- Component State ---
-  readonly activeTab = signal<'query' | 'upload'>('query');
+  readonly activeTab = signal<'query' | 'dialysis' | 'upload'>('query');
   readonly isLoading = signal(false);
   readonly searchPerformed = signal(false);
   readonly searchType = signal<'group' | 'individual'>('group');
@@ -158,6 +172,30 @@ export class OrdersComponent implements OnInit {
   readonly uploadResult = signal<UploadResult | null>(null);
   readonly isDragOver = signal(false);
   readonly uploadTargetMonth = signal(formatDateToYYYYMM(new Date()));
+
+  // --- 透析醫囑（檢視 + 上傳）State ---
+  readonly dialysisRows = signal<DialysisOrderRow[]>([]);
+  readonly isDialysisLoading = signal(false);
+  readonly dialysisLoaded = signal(false);
+  readonly dialysisSearchTerm = signal('');
+  /** 預設只顯示現行病人；勾選後含已離開（軟刪除）病人 */
+  readonly showDeletedDialysis = signal(false);
+  readonly filteredDialysisRows = computed(() => {
+    const term = this.dialysisSearchTerm().trim();
+    let rows = this.dialysisRows();
+    if (!this.showDeletedDialysis()) rows = rows.filter((r) => !r.isDeleted);
+    if (!term) return rows;
+    return rows.filter(
+      (r) =>
+        (r.patientName || '').includes(term) ||
+        (r.medicalRecordNumber || '').includes(term) ||
+        String(r.orders?.['mode'] || '').toUpperCase().includes(term.toUpperCase()),
+    );
+  });
+  readonly dialysisSelectedFile = signal<File | null>(null);
+  readonly isDialysisUploading = signal(false);
+  readonly dialysisUploadResult = signal<UploadResult | null>(null);
+  readonly isDialysisDragOver = signal(false);
 
   // --- Helper Maps ---
   private readonly SHIFT_MAP: Record<string, number> = {
@@ -586,6 +624,137 @@ export class OrdersComponent implements OnInit {
       });
     } finally {
       this.isUploading.set(false);
+    }
+  }
+
+  // --- 透析醫囑檢視 ---
+  openDialysisTab(): void {
+    this.activeTab.set('dialysis');
+    if (!this.dialysisLoaded()) {
+      void this.loadDialysisOrders();
+    }
+  }
+
+  async loadDialysisOrders(): Promise<void> {
+    this.isDialysisLoading.set(true);
+    try {
+      const res = await fetch(`${this.firebaseService.apiBaseUrl}/orders/dialysis-orders`, {
+        headers: this.firebaseService.getHeaders(),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const rows = (await res.json()) as DialysisOrderRow[];
+      this.dialysisRows.set(Array.isArray(rows) ? rows : []);
+      this.dialysisLoaded.set(true);
+    } catch (error) {
+      console.error('載入透析醫囑失敗:', error);
+      this.dialysisRows.set([]);
+    } finally {
+      this.isDialysisLoading.set(false);
+    }
+  }
+
+  formatDialysisTime(orders: Record<string, any>): string {
+    if (orders?.['dialysisTimeText']) return orders['dialysisTimeText'];
+    const h = orders?.['dialysisTimeHours'];
+    const m = orders?.['dialysisTimeMinutes'];
+    if (h === '' || h === undefined || h === null) return '-';
+    return `${h}時${m || 0}分`;
+  }
+
+  /** AK 六天明細（滑鼠提示用） */
+  akWeeklyTitle(orders: Record<string, any>): string {
+    const weekly = orders?.['akWeekly'];
+    if (!Array.isArray(weekly)) return '';
+    const labels = ['一', '二', '三', '四', '五', '六'];
+    return weekly
+      .map((v: string, i: number) => (v ? `${labels[i]}:${v}` : ''))
+      .filter(Boolean)
+      .join('　');
+  }
+
+  exportDialysisOrdersToExcel(): void {
+    try {
+      const rows = this.filteredDialysisRows();
+      const header = ['病歷號', '姓名', '透析模式', '透析時間', '乾體重', 'AK', '藥水Ca', '血液流速', '透析液流速', '外循沖洗', '初劑量', '維持劑', '醫囑日期', '歷次筆數'];
+      const aoa = [header, ...rows.map((r) => {
+        const o = r.orders || {};
+        return [
+          r.medicalRecordNumber, r.patientName, o['mode'] || '', this.formatDialysisTime(o),
+          o['dryWeight'] || '', o['ak'] || '', o['dialysateCa'] || '', o['bloodFlow'] || '',
+          o['dialysateFlow'] || '', o['heparinRinse'] || '', o['heparinInitial'] || '',
+          o['heparinMaintenance'] || '', r.effectiveDate, r.recordCount,
+        ];
+      })];
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, '透析醫囑');
+      XLSX.writeFile(wb, `透析醫囑檢視_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (error) {
+      console.error('匯出透析醫囑失敗:', error);
+      alert('匯出 Excel 時發生錯誤，請檢查主控台。');
+    }
+  }
+
+  // --- 透析醫囑上傳 ---
+  handleDialysisFileSelect(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      this.dialysisSelectedFile.set(input.files[0]);
+      this.dialysisUploadResult.set(null);
+    }
+  }
+
+  handleDialysisFileDrop(event: DragEvent): void {
+    event.preventDefault();
+    this.isDialysisDragOver.set(false);
+    const files = event.dataTransfer?.files;
+    if (files && files.length > 0) {
+      this.dialysisSelectedFile.set(files[0]);
+      this.dialysisUploadResult.set(null);
+    }
+  }
+
+  onDialysisDragOver(event: DragEvent): void {
+    event.preventDefault();
+    this.isDialysisDragOver.set(true);
+  }
+
+  onDialysisDragLeave(event: DragEvent): void {
+    event.preventDefault();
+    this.isDialysisDragOver.set(false);
+  }
+
+  async handleDialysisUpload(): Promise<void> {
+    const file = this.dialysisSelectedFile();
+    if (!file) {
+      alert('請先選擇一個檔案！');
+      return;
+    }
+    this.isDialysisUploading.set(true);
+    this.dialysisUploadResult.set(null);
+    try {
+      const fileContentBase64 = await this.toBase64(file);
+      const res = await fetch(`${this.firebaseService.apiBaseUrl}/dialysis-orders/process`, {
+        method: 'POST',
+        headers: this.firebaseService.getHeaders(),
+        body: JSON.stringify({ fileName: file.name, fileContent: fileContentBase64 }),
+      });
+      const resultData = (await res.json()) as UploadResult;
+      this.dialysisUploadResult.set(resultData);
+      if (resultData && resultData.success) {
+        // 檢視清單重載 + 病人快取刷新（上傳會回寫 patients.dialysis_orders）
+        this.dialysisLoaded.set(false);
+        void this.patientStore.forceRefreshPatients();
+      }
+    } catch (error: any) {
+      console.error('透析醫囑上傳失敗:', error);
+      this.dialysisUploadResult.set({
+        message: `上傳失敗: ${error.message}`,
+        errorCount: 1,
+        errors: [],
+      });
+    } finally {
+      this.isDialysisUploading.set(false);
     }
   }
 }

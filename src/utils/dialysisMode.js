@@ -6,6 +6,7 @@ export const CANONICAL_DIALYSIS_MODES = ['HD', 'SLED', 'CVVHDF', 'PP', 'DFPP', '
 const DIALYSIS_MODE_ALIASES = {
   SLEDD: 'SLED',
   SLEDF: 'SLED',
+  SLEDDF: 'SLED', // HIS 備藥前置作業 Excel 出現過 SLEDDf 拼法
 }
 
 /**

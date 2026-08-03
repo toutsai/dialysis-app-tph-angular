@@ -245,10 +245,14 @@ th {
 }
 
 /* --- Upload Tab Styles --- */
+/* 藥囑/醫囑兩個上傳區左右並排（窄螢幕自動換行堆疊） */
 .upload-panel {
   display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
   justify-content: center;
   align-items: flex-start;
+  gap: 1.5rem;
   padding: 1.5rem;
 }
 .upload-core-panel {
@@ -257,7 +261,8 @@ th {
   gap: 1.5rem;
   align-items: center;
   padding: 2rem;
-  width: 100%;
+  flex: 1 1 460px;
+  min-width: 380px;
   max-width: 600px;
 }
 .upload-month-selector {

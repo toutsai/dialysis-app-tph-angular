@@ -136,7 +136,7 @@ export const PAGE_ACCESS = {
   },
   orders: {
     path: '/orders',
-    title: '藥囑管理',
+    title: '醫囑藥囑管理',
     roles: DOCTOR_ROLES,
     roleLabel: '管理員、貢獻者',
   },

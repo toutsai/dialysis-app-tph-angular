@@ -261,7 +261,7 @@ export class UsageGuideComponent {
       ],
     },
     orders: {
-      name: '藥囑管理',
+      name: '醫囑藥囑管理',
       path: '/orders',
       roles: PAGE_ACCESS.orders.roleLabel,
       icon: 'fa-pills',

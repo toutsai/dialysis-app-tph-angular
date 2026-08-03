@@ -129,6 +129,12 @@ app.use('/api/orders/process', (req, res, next) => {
   ordersRoutes(req, res, next)
 })
 
+// POST /api/dialysis-orders/process → orders 路由的 /dialysis-orders/upload（透析醫囑 Excel）
+app.use('/api/dialysis-orders/process', (req, res, next) => {
+  req.url = '/dialysis-orders/upload'
+  ordersRoutes(req, res, next)
+})
+
 // POST /api/lab-reports/process → orders 路由的 /lab-reports/upload
 app.use('/api/lab-reports/process', (req, res, next) => {
   req.url = '/lab-reports/upload'
