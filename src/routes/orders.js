@@ -2322,8 +2322,17 @@ router.get('/dialysis-orders', authenticate, (req, res) => {
         .all()
         .map((r) => [r.patient_id, r.c]),
     )
-    const deletedMap = new Map(
-      db.prepare(`SELECT id, is_deleted FROM patients`).all().map((p) => [p.id, !!p.is_deleted]),
+    // 血管通路不在 HIS Excel 內，由病人現行醫囑帶出（手動維護欄位）
+    const patientMetaMap = new Map(
+      db.prepare(`SELECT id, is_deleted, dialysis_orders FROM patients`).all().map((p) => {
+        let vascAccess = ''
+        try {
+          vascAccess = (JSON.parse(p.dialysis_orders || '{}') || {}).vascAccess || ''
+        } catch {
+          vascAccess = ''
+        }
+        return [p.id, { isDeleted: !!p.is_deleted, vascAccess }]
+      }),
     )
 
     res.json(
@@ -2343,7 +2352,8 @@ router.get('/dialysis-orders', authenticate, (req, res) => {
           orders,
           sourceFile: r.source_file,
           recordCount: counts.get(r.patient_id) || 1,
-          isDeleted: deletedMap.get(r.patient_id) === true,
+          isDeleted: patientMetaMap.get(r.patient_id)?.isDeleted === true,
+          vascAccess: patientMetaMap.get(r.patient_id)?.vascAccess || '',
           updatedAt: r.updated_at,
         }
       }),

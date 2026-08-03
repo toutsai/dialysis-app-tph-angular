@@ -74,6 +74,8 @@ interface DialysisOrderRow {
   sourceFile?: string;
   recordCount: number;
   isDeleted?: boolean;
+  /** 病人現行醫囑的血管通路（HIS Excel 無此欄，手動維護） */
+  vascAccess?: string;
   updatedAt?: string;
 }
 
@@ -715,13 +717,13 @@ export class OrdersComponent implements OnInit {
       const isGroup = this.dialysisViewMode() === 'group';
       const header = [
         ...(isGroup ? ['床號'] : []),
-        '病歷號', '姓名', '透析模式', '透析時間', '乾體重', 'AK', '藥水Ca', '血液流速', '透析液流速', '外循沖洗', '初劑量', '維持劑', '醫囑日期', '歷次筆數',
+        '病歷號', '姓名', '血管通路', '透析模式', '透析時間', '乾體重', 'AK', '藥水Ca', '血液流速', '透析液流速', '外循沖洗', '初劑量', '維持劑', '醫囑日期', '歷次筆數',
       ];
       const aoa = [header, ...rows.map((r) => {
         const o = r.orders || {};
         return [
           ...(isGroup ? [r.rule?.bedNum ?? ''] : []),
-          r.medicalRecordNumber, r.patientName, o['mode'] || '', this.formatDialysisTime(o),
+          r.medicalRecordNumber, r.patientName, r.vascAccess || '', o['mode'] || '', this.formatDialysisTime(o),
           o['dryWeight'] || '', o['ak'] || '', o['dialysateCa'] || '', o['bloodFlow'] || '',
           o['dialysateFlow'] || '', o['heparinRinse'] || '', o['heparinInitial'] || '',
           o['heparinMaintenance'] || '', r.effectiveDate, r.recordCount,

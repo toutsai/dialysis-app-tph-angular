@@ -204,6 +204,7 @@
                 <th *ngIf="dialysisViewMode() === 'group'" class="sticky-col col-dbednum">床號</th>
                 <th class="sticky-col col-dmrn">病歷號</th>
                 <th class="sticky-col col-dname">姓名</th>
+                <th>血管通路</th>
                 <th>模式</th>
                 <th>透析時間</th>
                 <th>乾體重</th>
@@ -223,6 +224,7 @@
                 <td *ngIf="dialysisViewMode() === 'group'" class="sticky-col col-dbednum">{{ row.rule?.bedNum ?? '-' }}</td>
                 <td class="sticky-col col-dmrn">{{ row.medicalRecordNumber }}</td>
                 <td class="sticky-col col-dname">{{ row.patientName }}</td>
+                <td>{{ row.vascAccess || '-' }}</td>
                 <td>{{ row.orders['mode'] || '-' }}</td>
                 <td>{{ formatDialysisTime(row.orders) }}</td>
                 <td>{{ row.orders['dryWeight'] || '-' }}</td>
