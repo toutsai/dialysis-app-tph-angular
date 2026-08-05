@@ -84,7 +84,7 @@ router.get('/overview', ...isOverviewRole, (req, res) => {
     }
 
     const expiryMap = new Map(
-      db.prepare('SELECT patient_id, expiry_date, renewal_registered_date, renewal_form_date, renewal_docs_date FROM catastrophic_illness_expiry').all()
+      db.prepare('SELECT patient_id, expiry_date, renewal_registered_date, renewal_form_date, renewal_docs_date, updated_at FROM catastrophic_illness_expiry').all()
         .map((r) => [r.patient_id, r])
     )
 
@@ -127,6 +127,27 @@ router.get('/overview', ...isOverviewRole, (req, res) => {
         latestUpdatedAt: entry.latestUpdatedAt
       }
     })
+
+    // 只有到期日、沒有申請紀錄的病人也要列出（舊病人在系統外已辦過重大傷病，書記手動補到期日追蹤續辦）
+    // 醫師（contributor）視角維持只列自己建立的申請，不混入
+    if (req.user.role !== 'contributor') {
+      const patientNameStmt = db.prepare('SELECT name FROM patients WHERE id = ?')
+      for (const [patientId, expiry] of expiryMap) {
+        if (byPatient.has(patientId)) continue
+        if (!expiry.expiry_date && !expiry.renewal_registered_date && !expiry.renewal_form_date && !expiry.renewal_docs_date) continue
+        result.push({
+          patientId,
+          patientName: patientNameStmt.get(patientId)?.name || '(查無病人)',
+          physicianName: '',
+          applications: [null],
+          expiryDate: expiry.expiry_date || '',
+          renewalRegisteredDate: expiry.renewal_registered_date || '',
+          renewalFormDate: expiry.renewal_form_date || '',
+          renewalDocsDate: expiry.renewal_docs_date || '',
+          latestUpdatedAt: expiry.updated_at || ''
+        })
+      }
+    }
     result.sort((a, b) => b.latestUpdatedAt.localeCompare(a.latestUpdatedAt))
 
     res.json(result)

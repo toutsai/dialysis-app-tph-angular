@@ -98,6 +98,14 @@ export class CatastrophicIllnessComponent implements OnInit {
   filteredPatients: Patient[] = []; // 模板勿用 getter 重算（CD 週期效能）
   selectedPatient = signal<Patient | null>(null);
 
+  // 書記新增到期日（舊病人在系統外已辦過重大傷病、無申請紀錄，直接補到期日進入追蹤）
+  expirySearchText = '';
+  expiryShowDropdown = false;
+  expiryFilteredPatients: Patient[] = [];
+  expiryPickedPatient: Patient | null = null;
+  newExpiryDate = '';
+  addingExpiry = false;
+
   // 頁籤與紀錄
   activeTab: AppType = 'initial';
   applications = signal<CiApplication[]>([]);
@@ -130,7 +138,8 @@ export class CatastrophicIllnessComponent implements OnInit {
     this.isClerk = role === 'admin' || role === 'viewer';
     this.canWrite = role === 'admin' || role === 'contributor';
     await Promise.all([
-      this.canWrite ? this.patientStore.fetchPatientsIfNeeded() : Promise.resolve(),
+      // 書記（isClerk）也要病人清單：總覽「新增到期日」入口選病人用
+      this.canWrite || this.isClerk ? this.patientStore.fetchPatientsIfNeeded() : Promise.resolve(),
       this.loadOverview(),
     ]);
   }
@@ -270,13 +279,53 @@ export class CatastrophicIllnessComponent implements OnInit {
   }
 
   // ---------------------------------------------------------------
+  // 書記新增到期日（無申請紀錄的舊病人補進總覽與到期提醒）
+  // ---------------------------------------------------------------
+
+  onExpirySearchFocus(): void {
+    this.expiryFilteredPatients = this.searchPatients(this.expirySearchText);
+    this.expiryShowDropdown = true;
+  }
+
+  onExpirySearchBlur(): void {
+    // mousedown 先於 blur 觸發，選取不受影響
+    this.expiryShowDropdown = false;
+  }
+
+  pickExpiryPatient(p: Patient): void {
+    this.expiryPickedPatient = p;
+    this.expirySearchText = this.patientLabel(p);
+    this.expiryShowDropdown = false;
+  }
+
+  async addExpiry(): Promise<void> {
+    const patient = this.expiryPickedPatient;
+    if (!patient || !this.newExpiryDate) return;
+    const existing = this.overviewRows().find((r) => r.patientId === patient['id']);
+    if (existing?.expiryDate && !confirm(`${patient['name']} 已有到期日 ${existing.expiryDate}，要改成 ${this.newExpiryDate} 嗎？`)) return;
+    this.addingExpiry = true;
+    try {
+      await firstValueFrom(this.api.put(`/catastrophic-illness/expiry/${patient['id']}`, { expiryDate: this.newExpiryDate }));
+      this.expiryPickedPatient = null;
+      this.expirySearchText = '';
+      this.newExpiryDate = '';
+      await this.loadOverview(); // 重新載入：新列與到期提醒卡立即出現
+    } catch (err) {
+      console.error('新增重大傷病到期日失敗:', err);
+      alert('新增到期日失敗，請重試');
+    } finally {
+      this.addingExpiry = false;
+    }
+  }
+
+  // ---------------------------------------------------------------
   // 病人搜尋與選擇
   // ---------------------------------------------------------------
 
-  updateFilter(): void {
-    const kw = this.searchText.trim().toLowerCase();
+  private searchPatients(keyword: string): Patient[] {
+    const kw = keyword.trim().toLowerCase();
     const all = this.patientStore.allPatients().filter((p) => !p['isDeleted'] && p['status'] !== 'deleted');
-    this.filteredPatients = (!kw
+    return (!kw
       ? all
       : all.filter((p) => {
           const name = String(p['name'] || '').toLowerCase();
@@ -285,6 +334,10 @@ export class CatastrophicIllnessComponent implements OnInit {
           return name.includes(kw) || mrn.includes(kw) || idNo.includes(kw);
         })
     ).slice(0, 30);
+  }
+
+  updateFilter(): void {
+    this.filteredPatients = this.searchPatients(this.searchText);
   }
 
   onSearchFocus(): void {

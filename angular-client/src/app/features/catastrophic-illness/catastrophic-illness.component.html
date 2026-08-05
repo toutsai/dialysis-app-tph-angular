@@ -25,6 +25,39 @@
       }
     </button>
     @if (!overviewCollapsed) {
+    @if (isClerk) {
+      <!-- 舊病人在系統外已辦過重大傷病、無申請紀錄：書記直接補到期日進入總覽與到期提醒 -->
+      <div class="expiry-add-bar">
+        <span class="expiry-add-label">補登到期日（無申請紀錄的舊病人）：</span>
+        <div class="picker-box expiry-add-picker">
+          <input
+            type="text"
+            [(ngModel)]="expirySearchText"
+            (focus)="onExpirySearchFocus()"
+            (input)="onExpirySearchFocus()"
+            (blur)="onExpirySearchBlur()"
+            placeholder="輸入姓名 / 病歷號 / 身分證搜尋"
+            class="picker-input"
+          />
+          @if (expiryShowDropdown) {
+            <div class="picker-dropdown">
+              @for (p of expiryFilteredPatients; track p.id) {
+                <div class="picker-item" (mousedown)="pickExpiryPatient(p)">
+                  <span class="picker-name">{{ p.name }}</span>
+                  <span class="picker-mrn">{{ p.medicalRecordNumber }}</span>
+                </div>
+              } @empty {
+                <div class="picker-empty">查無符合病人</div>
+              }
+            </div>
+          }
+        </div>
+        <input type="date" class="clerk-input expiry-add-date" [(ngModel)]="newExpiryDate" />
+        <button type="button" class="expiry-add-btn" [disabled]="!expiryPickedPatient || !newExpiryDate || addingExpiry" (click)="addExpiry()">
+          {{ addingExpiry ? '新增中…' : '新增' }}
+        </button>
+      </div>
+    }
     <div class="overview-body">
     <div class="overview-scroll">
       <table class="overview-table">

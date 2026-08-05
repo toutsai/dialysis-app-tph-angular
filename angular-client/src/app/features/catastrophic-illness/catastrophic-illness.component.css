@@ -58,6 +58,15 @@
 .picker-mrn { color: #868e96; font-size: 0.85em; }
 .picker-status { margin-left: auto; color: #1971c2; font-size: 0.8em; }
 .picker-empty { padding: 10px; color: #868e96; text-align: center; }
+
+/* 書記補登到期日（無申請紀錄的舊病人） */
+.expiry-add-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.expiry-add-label { font-size: 0.9em; color: #495057; font-weight: 600; }
+.expiry-add-picker { width: 280px; }
+.expiry-add-date { padding: 5px 8px; border: 1px solid #c5dbf0; border-radius: 4px; }
+.expiry-add-btn { padding: 6px 14px; border: none; border-radius: 4px; background: #1971c2; color: #fff; cursor: pointer; }
+.expiry-add-btn:hover:not(:disabled) { background: #1864ab; }
+.expiry-add-btn:disabled { background: #adb5bd; cursor: not-allowed; }
 .loading-hint { color: #868e96; }
 
 /* 頁籤 */
