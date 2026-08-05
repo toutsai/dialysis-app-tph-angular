@@ -28,6 +28,8 @@
 .patient-link:hover { color: #1864ab; }
 .slot-edit-btn { border: 1px solid #ced4da; background: #fff; color: #1971c2; cursor: pointer; border-radius: 4px; padding: 0 4px; margin-left: 4px; font-size: 0.8rem; line-height: 1.4; }
 .slot-edit-btn:hover { background: #e7f5ff; border-color: #74c0fc; }
+.slot-del-btn { border: 1px solid #ced4da; background: #fff; cursor: pointer; border-radius: 4px; padding: 0 4px; margin-left: 2px; font-size: 0.8rem; line-height: 1.4; }
+.slot-del-btn:hover { background: #fff5f5; border-color: #ffa8a8; }
 .overview-body { display: flex; gap: 12px; align-items: flex-start; }
 .overview-body .overview-scroll { flex: 1; min-width: 0; }
 .overview-table .col-prep { background: #f3f0ff; }
@@ -80,8 +82,6 @@
 .record-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid #c5dbf0; border-radius: 14px; background: #f8fbff; cursor: pointer; }
 .record-chip.open { background: #1971c2; color: #fff; border-color: #1971c2; }
 .record-by { font-size: 0.8em; opacity: 0.75; }
-.record-del { margin-left: 2px; color: #e03131; font-weight: 700; }
-.record-chip.open .record-del { color: #ffc9c9; }
 .record-empty { color: #868e96; }
 .btn-new { margin-left: auto; padding: 5px 14px; border: none; border-radius: 4px; background: #2f9e44; color: #fff; cursor: pointer; font-size: 0.95em; }
 .btn-new:hover { background: #2b8a3e; }

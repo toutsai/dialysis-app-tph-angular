@@ -98,6 +98,7 @@
                     {{ slot.physicianDate || '—' }}
                     @if (canWrite) {
                       <button type="button" class="slot-edit-btn" title="編輯這筆申請" (click)="editFromOverview(row, slot, $event)">✎</button>
+                      <button type="button" class="slot-del-btn" title="刪除這筆申請" (click)="deleteFromOverview(row, slot, label, $event)">🗑</button>
                     }
                   } @else {
                     —
@@ -204,10 +205,10 @@
     <div class="record-bar">
       <span class="record-label">{{ activeTab === 'initial' ? '初次' : '再次' }}申請紀錄：</span>
       @for (app of tabApplications; track app.id) {
+        <!-- 刪除鈕移至總覽表格（誤刪案 2026-08-05）：此處緊貼開啟紀錄的點擊區，易誤觸 -->
         <button class="record-chip" [class.open]="currentId === app.id" (click)="openApplication(app)">
           {{ (app.updatedAt || app.createdAt || '').slice(0, 10) }}
           <span class="record-by">{{ app.updatedBy?.name || app.createdBy?.name }}</span>
-          <span class="record-del" (click)="deleteApplication(app, $event)" title="刪除">✕</span>
         </button>
       } @empty {
         <span class="record-empty">尚無紀錄</span>

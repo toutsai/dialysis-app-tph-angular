@@ -664,16 +664,23 @@ export class CatastrophicIllnessComponent implements OnInit {
     }
   }
 
-  async deleteApplication(app: CiApplication, event: Event): Promise<void> {
+  /** 總覽列的刪除鈕（唯一刪除入口；紀錄按鈕區的 ✕ 因易誤觸已移除，2026-08-05 誤刪案） */
+  async deleteFromOverview(row: CiOverviewRow, slot: CiOverviewSlot, columnLabel: string, event: Event): Promise<void> {
     event.stopPropagation();
-    if (!confirm(`確定刪除這筆${app.applicationType === 'initial' ? '初次' : '再次'}申請紀錄？（${(app.updatedAt || '').slice(0, 10)}）`)) return;
+    if (!this.canWrite) return;
+    const dateText = slot.physicianDate ? `（完成日期 ${slot.physicianDate}）` : '';
+    if (!confirm(`確定要刪除「${row.patientName}」的${columnLabel}紀錄${dateText}嗎？\n刪除後無法復原！`)) return;
     try {
-      await firstValueFrom(this.api.delete(`/catastrophic-illness/${app.id}`));
-      if (this.currentId === app.id) {
+      await firstValueFrom(this.api.delete(`/catastrophic-illness/${slot.id}`));
+      if (this.currentId === slot.id) {
         this.currentId = null;
         this.formLoaded = false;
       }
-      await Promise.all([this.loadApplications(), this.loadOverview()]);
+      const sel = this.selectedPatient();
+      await Promise.all([
+        this.loadOverview(),
+        sel && String(sel['id']) === row.patientId ? this.loadApplications() : Promise.resolve(),
+      ]);
     } catch (err) {
       console.error('刪除重大傷病申請失敗:', err);
       alert('刪除失敗，請重試');
