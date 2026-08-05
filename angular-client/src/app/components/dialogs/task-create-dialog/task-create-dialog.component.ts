@@ -75,7 +75,7 @@ export class TaskCreateDialogComponent implements OnChanges, OnInit {
   readonly akOptions = ['13M', '15S', '17UX', '17HX', 'FX80', 'BG-1.8U', 'Pro-19H', '21S', 'Hi23', '25S', 'CTA2000'];
   readonly aLiquidOptions = ['2.5', '3.0', '3.5'];
   readonly bLiquidOptions = ['5L B液', '罐裝B粉', '袋裝B粉'];
-  readonly medicalSuppliesOptions = ['傷口照護包', '住院包', 'EKG貼片', 'OP site(每周)', 'OP site(每三天)', '鼻導管'];
+  readonly medicalSuppliesOptions = ['傷口照護包', '住院包', 'EKG貼片', 'OP site(每周)', 'OP site(每三天)', '鼻導管', '輸血set'];
 
   supplyTypeOptions = [
     { value: 'AK', label: 'AK' },
