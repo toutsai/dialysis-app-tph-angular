@@ -79,7 +79,30 @@
                     <td class="saved-col" [class.saved-diff]="sv.diff">{{ sv.text }}</td>
                   }
                   <td class="adjust-cell">
-                    <input class="adjust-input" [(ngModel)]="adjustNotes[row.key]" (ngModelChange)="markDirty()" placeholder="" />
+                    @if (row.key === 'time') {
+                      <div class="adjust-time-inputs">
+                        <input type="number" min="0" step="1" class="adjust-time-input" [(ngModel)]="adjustTimeHours" (ngModelChange)="onAdjustTimeChange()" placeholder="時" />
+                        <span class="adjust-time-unit">時</span>
+                        <input type="number" min="0" max="59" step="1" class="adjust-time-input" [(ngModel)]="adjustTimeMinutes" (ngModelChange)="onAdjustTimeChange()" placeholder="分" />
+                        <span class="adjust-time-unit">分</span>
+                      </div>
+                    } @else if (row.key === 'ak') {
+                      <div class="adjust-ak-grid">
+                        @for (day of akWeekdayLabels; track $index; let i = $index) {
+                          <div class="adjust-ak-cell">
+                            <span class="adjust-ak-day">{{ day }}</span>
+                            <select class="adjust-ak-select" [(ngModel)]="adjustAkWeekly[i]" (ngModelChange)="onAdjustAkChange(i)">
+                              <option value="">—</option>
+                              @for (option of akOptionsCurrent; track option) {
+                                <option [value]="option">{{ option }}</option>
+                              }
+                            </select>
+                          </div>
+                        }
+                      </div>
+                    } @else {
+                      <input class="adjust-input" [(ngModel)]="adjustNotes[row.key]" (ngModelChange)="markDirty()" placeholder="" />
+                    }
                   </td>
                 </tr>
               }

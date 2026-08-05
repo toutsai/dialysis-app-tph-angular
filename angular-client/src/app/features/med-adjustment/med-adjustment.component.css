@@ -59,6 +59,19 @@ thead .sticky-col { z-index: 3; }
 .adjust-cell { background: #f8fbff; padding: 2px 4px; }
 .adjust-input { width: 100%; min-width: 170px; border: 1px solid #c5dbf0; border-radius: 3px; padding: 4px 6px; font-size: 1em; }
 .adjust-input:focus { outline: none; border-color: #1971c2; }
+
+/* 修正欄「透析時間」時/分兩欄 */
+.adjust-time-inputs { display: flex; align-items: center; gap: 4px; }
+.adjust-time-input { width: 56px; border: 1px solid #c5dbf0; border-radius: 3px; padding: 4px 6px; font-size: 1em; text-align: center; }
+.adjust-time-input:focus { outline: none; border-color: #1971c2; }
+.adjust-time-unit { color: #495057; }
+
+/* 修正欄「AK」週一〜六六格（比照開醫囑視窗） */
+.adjust-ak-grid { display: grid; grid-template-columns: repeat(6, minmax(56px, 1fr)); gap: 3px; }
+.adjust-ak-cell { display: flex; flex-direction: column; align-items: stretch; gap: 1px; }
+.adjust-ak-day { font-size: 0.75em; color: #868e96; text-align: center; }
+.adjust-ak-select { width: 100%; border: 1px solid #c5dbf0; border-radius: 3px; padding: 2px 1px; font-size: 0.88em; }
+.adjust-ak-select:focus { outline: none; border-color: #1971c2; }
 .empty-state { padding: 40px; text-align: center; color: #868e96; }
 
 /* 依上半頁籤強化下半報告的對應檢驗欄位 */
