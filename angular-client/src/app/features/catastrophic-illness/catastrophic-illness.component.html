@@ -208,7 +208,8 @@
         <!-- 刪除鈕移至總覽表格（誤刪案 2026-08-05）：此處緊貼開啟紀錄的點擊區，易誤觸 -->
         <button class="record-chip" [class.open]="currentId === app.id" (click)="openApplication(app)">
           {{ (app.updatedAt || app.createdAt || '').slice(0, 10) }}
-          <span class="record-by">{{ app.updatedBy?.name || app.createdBy?.name }}</span>
+          <!-- 顯示表單存的負責醫師（非存檔帳號）；未填才退回存檔者 -->
+          <span class="record-by">{{ app.formData?.physicianName || app.updatedBy?.name || app.createdBy?.name }}</span>
         </button>
       } @empty {
         <span class="record-empty">尚無紀錄</span>
