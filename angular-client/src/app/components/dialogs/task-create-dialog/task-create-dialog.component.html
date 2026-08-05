@@ -56,7 +56,15 @@
               }
             </div>
 
-            @if (formData.assigneeRole && formData.assigneeRole !== 'nurse_leader') {
+            @if (formData.assigneeRole === 'nurse_leader') {
+              <div class="assignee-info-text">
+                <i class="fas fa-info-circle"></i> 此任務將發送給所有護理師（組長），由當值人員處理。
+              </div>
+            } @else if (formData.assigneeRole === 'clerk') {
+              <div class="assignee-info-text">
+                <i class="fas fa-info-circle"></i> 此任務將發送給所有書記，由當班人員處理。
+              </div>
+            } @else if (formData.assigneeRole) {
               <div class="assignee-select-wrapper">
                 <label class="select-label">選擇成員</label>
                 <select [(ngModel)]="formData.assigneeUserId" class="form-control">
@@ -65,10 +73,6 @@
                     <option [value]="user.uid">{{ user.name }}@if (user.title) {（{{ user.title }}）}</option>
                   }
                 </select>
-              </div>
-            } @else if (formData.assigneeRole === 'nurse_leader') {
-              <div class="assignee-info-text">
-                <i class="fas fa-info-circle"></i> 此任務將發送給所有護理師（組長），由當值人員處理。
               </div>
             }
           </div>

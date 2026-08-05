@@ -100,7 +100,8 @@ export class TaskCreateDialogComponent implements OnChanges, OnInit {
   }
 
   get filteredAssigneeUsers(): DirectoryUser[] {
-    if (!this.formData.assigneeRole || this.formData.assigneeRole === 'nurse_leader') return [];
+    // clerk 與 nurse_leader 走職務廣播，不選個人
+    if (!this.formData.assigneeRole || this.formData.assigneeRole === 'nurse_leader' || this.formData.assigneeRole === 'clerk') return [];
     return this.userDirectoryService.users()
       .filter((user: DirectoryUser) => this.titleToRoleValue[user.title] === this.formData.assigneeRole)
       .sort((a: DirectoryUser, b: DirectoryUser) => (a.name || '').localeCompare(b.name || ''));
@@ -128,7 +129,7 @@ export class TaskCreateDialogComponent implements OnChanges, OnInit {
       return allItemsValid;
     }
     if (this.formData.category === 'task') {
-      if (this.formData.assigneeRole === 'nurse_leader') return true;
+      if (this.formData.assigneeRole === 'nurse_leader' || this.formData.assigneeRole === 'clerk') return true;
       if (!this.formData.assigneeRole || !this.formData.assigneeUserId) return false;
     }
     return true;
@@ -146,8 +147,9 @@ export class TaskCreateDialogComponent implements OnChanges, OnInit {
         this.formData.id = item.id;
         this.formData.category = item.assignee ? 'task' : 'message';
         if (item.assignee) {
-          if (item.assignee.type === 'role' && item.assignee.role === 'editor') {
-            this.formData.assigneeRole = 'nurse_leader';
+          if (item.assignee.type === 'role') {
+            // 職務廣播：editor=護理師組長，其餘（如 clerk）直接對應職務值
+            this.formData.assigneeRole = item.assignee.role === 'editor' ? 'nurse_leader' : (item.assignee.role || '');
             this.formData.assigneeUserId = '';
           } else if (item.assignee.type === 'user' && item.assignee.role === 'editor') {
             this.formData.assigneeRole = 'nurse_individual';
@@ -274,6 +276,8 @@ export class TaskCreateDialogComponent implements OnChanges, OnInit {
       if (dataToSave.category === 'task') {
         if (this.formData.assigneeRole === 'nurse_leader') {
           dataToSave.assignee = { type: 'role', role: 'editor', value: 'editor', name: '護理師組長', title: '職務指派' };
+        } else if (this.formData.assigneeRole === 'clerk') {
+          dataToSave.assignee = { type: 'role', role: 'clerk', value: 'clerk', name: '書記', title: '職務指派' };
         } else if (this.formData.assigneeRole === 'nurse_individual') {
           dataToSave.assignee = { type: 'user', role: 'editor', value: this.formData.assigneeUserId, name: this.selectedAssigneeUser?.name || '', title: this.selectedAssigneeUser?.title || '' };
         } else {
