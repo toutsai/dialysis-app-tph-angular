@@ -824,6 +824,16 @@ export class PatientsComponent implements OnInit, OnDestroy {
           delete dataToUpdate.firstDialysisPlan;
           dataToUpdate.updatedAt = new Date().toISOString();
 
+          // 頻率權威在總表（base_schedules）：PUT /patients 只寫已淘汰的 dialysis_orders.freq。
+          // 表單夾帶的 scheduleRule 是舊值 clone，改頻率時先對齊 freq，
+          // 避免舊值被原樣寫回 schedule_rule、畫面又顯示回舊頻率
+          const newFreq = (patientData.freq ?? patientData.dialysisOrders?.freq) || null;
+          const oldFreq = (originalPatient.freq ?? originalPatient.dialysisOrders?.freq) || null;
+          const freqChanged = !!newFreq && newFreq !== oldFreq;
+          if (freqChanged && dataToUpdate.scheduleRule) {
+            dataToUpdate.scheduleRule = { ...dataToUpdate.scheduleRule, freq: newFreq };
+          }
+
           // 「下一班起生效」旗標只送 API（後端決定快照範圍），不進本地 store
           const apiPayload =
             this.pendingNextShiftFlag === null
@@ -840,6 +850,17 @@ export class PatientsComponent implements OnInit, OnDestroy {
           }
 
           await Promise.all(updatePromises);
+          if (freqChanged) {
+            // 有總表規則者一併改規則 freq（觸發後端明天起 60 天同步）；無規則者為 no-op
+            try {
+              await this.patientStore.updateRuleFreqInMasterSchedule(patientData.id, newFreq);
+            } catch {
+              this.showAlert(
+                '部分成功',
+                '病人資料已更新，但總表頻率同步失敗，請至總床位表確認該病人的頻率。'
+              );
+            }
+          }
           if (firstDialysisPlan) {
             await this.applyFirstDialysisPlan(patientData.id, firstDialysisPlan);
           }

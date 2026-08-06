@@ -384,6 +384,23 @@ async function applyScheduledPatientUpdates() {
   const db = getDatabase()
 
   try {
+    // 殭屍單清掃：生效日已過仍 pending 的單（多半是生效日填了當天、建立時 01:00 已跑完）
+    // 永遠不會再被套用，標記 failed 讓預約變更頁亮紅色 [!]，避免無聲失效。
+    // 刻意不補跑（過期單不即時套用是既定設計，由組長人工重建）。
+    const expiredSweep = db
+      .prepare(
+        `
+      UPDATE scheduled_patient_updates
+      SET status = 'failed',
+          error_message = '生效日已過但未套用（預約變更僅在生效日凌晨 01:00 執行一次）；若仍需變更請重新建立'
+      WHERE status = 'pending' AND effective_date < ?
+    `,
+      )
+      .run(todayStr)
+    if (expiredSweep.changes > 0) {
+      console.warn(`[Scheduler] ⚠️ 有 ${expiredSweep.changes} 筆生效日已過的預約變更未曾套用，已標記為 failed`)
+    }
+
     // 查詢今天待處理的預約變更
     const pendingUpdates = db
       .prepare(

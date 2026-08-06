@@ -159,6 +159,32 @@ export class PatientStoreService {
   }
 
   /**
+   * Update the freq of a patient's existing MASTER_SCHEDULE rule and save the
+   * whole document (the backend PUT triggers the 60-day future sync).
+   * No-op if the patient has no rule — top-level freq fallback then applies.
+   */
+  async updateRuleFreqInMasterSchedule(patientId: string, freq: string): Promise<void> {
+    try {
+      const masterDoc = await this.baseScheduleApi.fetchById('MASTER_SCHEDULE');
+      const schedule = { ...((masterDoc as any)?.['schedule'] as Record<string, unknown> || {}) };
+      const rule = schedule[patientId] as Record<string, unknown> | undefined;
+      if (!rule || rule['freq'] === freq) return;
+      const newRule = { ...rule, freq };
+      schedule[patientId] = newRule;
+      await this.baseScheduleApi.update('MASTER_SCHEDULE', { schedule } as any);
+
+      this.masterScheduleRules.update((rules) => ({ ...rules, [patientId]: newRule }));
+      this.updatePatientInStore(patientId, { scheduleRule: newRule as any });
+    } catch (error) {
+      console.error(
+        '[PatientStoreService] Error updating rule freq in MASTER_SCHEDULE:',
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Reset all state to defaults.
    */
   reset(): void {

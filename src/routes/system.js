@@ -3,6 +3,7 @@ import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isAdmin, isEditor, isContributor, logAudit, requireAnyRole } from '../middleware/auth.js'
+import { getTaipeiTodayString } from '../utils/dateUtils.js'
 
 const router = Router()
 const isInventoryRole = [authenticate, requireAnyRole('admin', 'viewer')]
@@ -1880,6 +1881,15 @@ router.post('/scheduled-updates', ...isContributor, async (req, res) => {
     // 前端（Angular 預約變更對話框）以 `payload` 傳送變更內容，舊路徑用 `changeData`；兩者皆相容
     const changeData = req.body.changeData ?? req.body.payload
 
+    // 生效日必須在未來：套用 cron 只在生效日凌晨 01:00 跑一次，
+    // 生效日填今天/過去的單永遠不會被套用（永久 pending 殭屍）
+    if (!effectiveDate || String(effectiveDate) <= getTaipeiTodayString()) {
+      return res.status(400).json({
+        error: true,
+        message: '生效日期必須是明天（含）以後；當天的變更請改用病人編輯的「立即變更」',
+      })
+    }
+
     const id = uuidv4()
     const db = getDatabase()
 
@@ -1943,6 +1953,14 @@ router.put('/scheduled-updates/:id', ...isEditor, async (req, res) => {
     const { effectiveDate, notes } = req.body
     // 前端以 `payload` 傳送變更內容，舊路徑用 `changeData`；兩者皆相容
     const changeData = req.body.changeData ?? req.body.payload
+
+    // 同 POST：生效日必須在未來，否則改出殭屍單
+    if (!effectiveDate || String(effectiveDate) <= getTaipeiTodayString()) {
+      return res.status(400).json({
+        error: true,
+        message: '生效日期必須是明天（含）以後；當天的變更請改用病人編輯的「立即變更」',
+      })
+    }
 
     const db = getDatabase()
 

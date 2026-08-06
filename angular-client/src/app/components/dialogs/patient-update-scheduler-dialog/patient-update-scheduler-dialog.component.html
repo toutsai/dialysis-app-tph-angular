@@ -17,7 +17,7 @@
             <label for="effectiveDate">
               {{ changeType === 'DELETE_PATIENT' ? '生效日期（出院日）' : '生效日期' }}
             </label>
-            <input type="date" id="effectiveDate" [(ngModel)]="formData.effectiveDate" />
+            <input type="date" id="effectiveDate" [min]="minEffectiveDate" [(ngModel)]="formData.effectiveDate" />
           </div>
 
           @if (changeType === 'UPDATE_STATUS' || changeType === 'RESTORE_PATIENT') {

@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import ApiManager from '@/services/api_manager';
 import { ORDERED_SHIFT_CODES } from '@/constants/scheduleConstants';
 import { AuthService } from '@services/auth.service';
-import { getTomorrow } from '@/utils/dateUtils';
+import { getToday, getTomorrow } from '@/utils/dateUtils';
 import { escapeHtml } from '@/utils/sanitize';
 import { BedAssignmentDialogComponent } from '../bed-assignment-dialog/bed-assignment-dialog.component';
 
@@ -89,12 +89,15 @@ export class PatientUpdateSchedulerDialogComponent implements OnChanges {
     return '\u9EDE\u64CA\u4EE5\u8A2D\u5B9A\u65B0\u898F\u5247...';
   }
 
+  get minEffectiveDate(): string {
+    return getTomorrow();
+  }
+
   get isFormValid(): boolean {
     if (!this.formData.effectiveDate) return false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const effective = new Date(this.formData.effectiveDate);
-    if (effective <= today) return false;
+    // 字串比較（YYYY-MM-DD）；new Date('YYYY-MM-DD') 走 UTC 解析，會讓「今天」通過驗證，
+    // 而 cron 只在生效日凌晨 01:00 套用，同日單會變成永久 pending
+    if (this.formData.effectiveDate <= getToday()) return false;
 
     switch (this.changeType) {
       case 'UPDATE_STATUS': return !!this.formData.payload.status;
