@@ -437,20 +437,10 @@
     *ngIf="isScheduleConflictDialogVisible()"
     [title]="scheduleConflictTitle()"
     [message]="scheduleConflictMessage()"
-    confirmText="是，立即變更"
-    cancelText="否，改用預約變更"
+    confirmText="是，當天變更"
+    cancelText="否，預約未來日期"
     (confirm)="handleScheduleConflictConfirm()"
     (cancel)="handleScheduleConflictCancel()"
-  ></app-confirm-dialog>
-
-  <app-confirm-dialog
-    *ngIf="isEffectiveTimingDialogVisible()"
-    title="立即變更 — 選擇生效時間"
-    [message]="'「下一班起生效」：今天已開始的班次維持原顯示，下一班（早07:30／午12:30／晚17:30）起即顯示新身分。\n\n「明天開始生效」：今天整天維持原顯示，明天起依新設定生效。'"
-    confirmText="下一班起生效"
-    cancelText="明天開始生效"
-    (confirm)="handleEffectiveTiming(true)"
-    (cancel)="handleEffectiveTiming(false)"
   ></app-confirm-dialog>
 
   <app-patient-update-scheduler-dialog

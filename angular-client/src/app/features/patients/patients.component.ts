@@ -153,8 +153,6 @@ export class PatientsComponent implements OnInit, OnDestroy {
   private pendingEditSave: ((nextShift: boolean) => void) | null = null;
   private pendingEditFallbackType = '';
   /** 立即變更的生效時間視窗（下一班起 / 明天開始），確認立即變更後接續詢問 */
-  readonly isEffectiveTimingDialogVisible = signal(false);
-  private pendingTimingAction: ((nextShift: boolean) => void) | null = null;
   /** 編輯存檔時附掛給後端的「下一班起生效」旗標（只進 API body，不進本地 store） */
   private pendingNextShiftFlag: boolean | null = null;
   private cachedPatientHistory: any[] | null = null;
@@ -910,7 +908,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
             : 'UPDATE_BASE_SCHEDULE_RULE';
         this.showScheduleConflictDialog(
           '今日有排程 — 確認立即變更',
-          `病人「${patientData.name}」今天有排程透析，本次修改包含：${identityChanges.join('、')}。\n\n選「是」立即儲存，下一步再選擇生效時間（下一班起／明天開始）。\n\n若變更是未來日期才發生，選「否」改用預約變更。`,
+          `病人「${patientData.name}」今天有排程透析，本次修改包含：${identityChanges.join('、')}。\n\n選「是」＝當天變更：立即生效，下一班（早07:30／午12:30／晚17:30）起顯示新資料；已開始的班次維持原顯示到當班結束。\n\n選「否」＝預約變更：指定明天以後的日期生效。`,
           'edit',
           patientData.id,
           null
@@ -1157,25 +1155,13 @@ export class PatientsComponent implements OnInit, OnDestroy {
       this.isDeleteDialogVisible.set(true);
       return;
     }
-    // 身分/模式/頻率的立即變更：接續詢問生效時間（下一班起 / 明天開始）
+    // 當天變更一律「下一班起生效」：已開始班次維持原顯示到當班結束；
+    // 「明天開始」的需求走「否」→ 預約變更（生效日=明天）
     if (opType === 'transfer') {
-      this.pendingTimingAction = (nextShift: boolean) => {
-        void this.executeTransferPatient(pid!, newStatus!, nextShift);
-      };
-      this.isEffectiveTimingDialogVisible.set(true);
+      void this.executeTransferPatient(pid!, newStatus!, true);
     } else if (opType === 'edit') {
-      this.pendingTimingAction = (nextShift: boolean) => {
-        editSave?.(nextShift);
-      };
-      this.isEffectiveTimingDialogVisible.set(true);
+      editSave?.(true);
     }
-  }
-
-  handleEffectiveTiming(nextShift: boolean): void {
-    this.isEffectiveTimingDialogVisible.set(false);
-    const action = this.pendingTimingAction;
-    this.pendingTimingAction = null;
-    action?.(nextShift);
   }
 
   handleScheduleConflictCancel(): void {
@@ -1245,7 +1231,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
       const targetStatusText: Record<string, string> = { ipd: '住院', opd: '門診', er: '急診' };
       this.showScheduleConflictDialog(
         '今日有排程 — 確認立即變更',
-        `病人「${patient.name}」今天有排程透析。\n\n選「是」立即轉為${targetStatusText[newStatus] || '未知'}，下一步再選擇生效時間（下一班起／明天開始）。\n（今天發生的異動請選這個）\n\n若異動是未來日期才發生，選「否」改用預約變更。`,
+        `病人「${patient.name}」今天有排程透析。\n\n選「是」＝當天轉為${targetStatusText[newStatus] || '未知'}：立即生效，下一班起顯示新身分；已開始的班次維持原顯示到當班結束。\n\n選「否」＝預約變更：指定明天以後的日期生效。`,
         'transfer',
         patientId,
         newStatus
