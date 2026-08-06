@@ -734,6 +734,35 @@
         <div class="notes-panel">
           <h2>國定假日管理 (本月)</h2>
           <div class="holiday-manager">
+            <div class="holiday-sync-row" *ngIf="canManagePhysicianSchedule">
+              <button
+                (click)="syncGovernmentHolidays()"
+                [disabled]="isSyncingHolidays()"
+                class="add-holiday-btn"
+              >
+                {{ isSyncingHolidays() ? '同步中…' : '同步政府行事曆' }}
+              </button>
+              <button (click)="addCurrentMonthHolidays()" class="add-holiday-btn">
+                帶入本月假日
+              </button>
+              <input
+                type="file"
+                accept=".csv"
+                hidden
+                #holidayCsvInputDesktop
+                (change)="onHolidayCsvSelected($event)"
+              />
+              <button
+                (click)="holidayCsvInputDesktop.click()"
+                [disabled]="isImportingHolidayCsv()"
+                class="add-holiday-btn"
+              >
+                {{ isImportingHolidayCsv() ? '匯入中…' : '匯入 CSV' }}
+              </button>
+            </div>
+            <p class="holiday-sync-meta" *ngIf="currentYearHolidayMeta() as meta">
+              {{ selectedYear() }} 年假日主檔：{{ meta.holidays.length }} 天（{{ meta.source }}，{{ meta.syncedAt }}）
+            </p>
             <div class="holiday-add-form">
               <select
                 [disabled]="!canManagePhysicianSchedule"
@@ -1024,6 +1053,35 @@
             </button>
             <div class="panel-content" [style.display]="activeMobilePanel() === 'holidays' ? '' : 'none'">
               <div class="holiday-manager">
+                <div class="holiday-sync-row" *ngIf="canManagePhysicianSchedule">
+                  <button
+                    (click)="syncGovernmentHolidays()"
+                    [disabled]="isSyncingHolidays()"
+                    class="add-holiday-btn"
+                  >
+                    {{ isSyncingHolidays() ? '同步中…' : '同步政府行事曆' }}
+                  </button>
+                  <button (click)="addCurrentMonthHolidays()" class="add-holiday-btn">
+                    帶入本月假日
+                  </button>
+                  <input
+                    type="file"
+                    accept=".csv"
+                    hidden
+                    #holidayCsvInputMobile
+                    (change)="onHolidayCsvSelected($event)"
+                  />
+                  <button
+                    (click)="holidayCsvInputMobile.click()"
+                    [disabled]="isImportingHolidayCsv()"
+                    class="add-holiday-btn"
+                  >
+                    {{ isImportingHolidayCsv() ? '匯入中…' : '匯入 CSV' }}
+                  </button>
+                </div>
+                <p class="holiday-sync-meta" *ngIf="currentYearHolidayMeta() as meta">
+                  {{ selectedYear() }} 年假日主檔：{{ meta.holidays.length }} 天（{{ meta.source }}，{{ meta.syncedAt }}）
+                </p>
                 <div class="holiday-add-form">
                   <select
                     [disabled]="!canManagePhysicianSchedule"

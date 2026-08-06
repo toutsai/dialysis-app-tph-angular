@@ -1818,6 +1818,243 @@ router.put('/physician-schedules/:date', ...isContributor, async (req, res) => {
 })
 
 // ========================================
+// 國定假日主檔 API（同步政府行政機關辦公日曆表）
+// 存放：site_config id='holiday_calendar'，config_data = { "2026": { holidays:[{date,name}], syncedAt, source } }
+// 資料來源：政府資料開放平臺 dataset 14718（人事行政總處，每年公告一次）
+// ========================================
+
+const HOLIDAY_CONFIG_ID = 'holiday_calendar'
+const GOV_CALENDAR_DATASET_API = 'https://data.gov.tw/api/v2/rest/dataset/14718'
+
+function readHolidayCalendarMap(db) {
+  const row = db.prepare(`SELECT config_data FROM site_config WHERE id = ?`).get(HOLIDAY_CONFIG_ID)
+  if (!row) return {}
+  try {
+    return JSON.parse(row.config_data || '{}')
+  } catch {
+    return {}
+  }
+}
+
+function saveHolidayCalendarYear(db, year, entry) {
+  const map = readHolidayCalendarMap(db)
+  map[String(year)] = entry
+  db.prepare(`
+    INSERT INTO site_config (id, config_data, updated_at)
+    VALUES (?, ?, datetime('now', 'localtime'))
+    ON CONFLICT(id) DO UPDATE SET
+      config_data = excluded.config_data,
+      updated_at = datetime('now', 'localtime')
+  `).run(HOLIDAY_CONFIG_ID, JSON.stringify(map))
+}
+
+// 政府 CSV 可能是 UTF-8(BOM) 或 Big5；先照提示解碼，出現亂碼替換字元再換另一套
+function decodeGovCsvBuffer(buffer, encodingHint) {
+  const tryDecode = (encoding) => {
+    try {
+      return new TextDecoder(encoding).decode(buffer)
+    } catch {
+      return null
+    }
+  }
+  const candidates = []
+  const hint = (encodingHint || '').toLowerCase()
+  if (hint.includes('big5')) candidates.push('big5', 'utf-8')
+  else candidates.push('utf-8', 'big5')
+  for (const encoding of candidates) {
+    const text = tryDecode(encoding)
+    if (text && !text.includes('�')) return text
+  }
+  return tryDecode('utf-8') || ''
+}
+
+// 解析辦公日曆表 CSV：西元日期(yyyymmdd),星期,是否放假(0/2),備註
+// 回傳指定年份的國定假日（放假且備註非空 → 含補假；週末備註為空自然排除）
+function parseGovCalendarCsv(csvText, year) {
+  const holidays = []
+  const lines = csvText.replace(/^\uFEFF/, '').split(/\r?\n/)
+  for (const line of lines) {
+    if (!line.trim()) continue
+    const fields = line.split(',').map((f) => f.trim().replace(/^"|"$/g, ''))
+    const m = /^(\d{4})(\d{2})(\d{2})$/.exec(fields[0] || '')
+    if (!m) continue // 表頭或格式不符的列
+    if (Number(m[1]) !== year) continue
+    const isDayOff = (fields[2] || '') === '2'
+    const note = (fields[3] || '').trim()
+    if (isDayOff && note) {
+      holidays.push({ date: `${m[1]}-${m[2]}-${m[3]}`, name: note })
+    }
+  }
+  holidays.sort((a, b) => a.date.localeCompare(b.date))
+  return holidays
+}
+
+async function fetchWithTimeout(url, timeoutMs) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * GET /api/system/holidays/:year
+ * 取得某年度的國定假日主檔（未同步過回空陣列）
+ */
+router.get('/holidays/:year', authenticate, (req, res) => {
+  try {
+    const year = Number(req.params.year)
+    if (!/^\d{4}$/.test(req.params.year)) {
+      return res.status(400).json({ error: true, message: '年份格式錯誤' })
+    }
+    const db = getDatabase()
+    const entry = readHolidayCalendarMap(db)[String(year)] || {}
+    res.json({
+      year,
+      holidays: Array.isArray(entry.holidays) ? entry.holidays : [],
+      syncedAt: entry.syncedAt || null,
+      source: entry.source || null,
+    })
+  } catch (error) {
+    console.error('取得國定假日主檔錯誤:', error)
+    res.status(500).json({ error: true, message: '取得國定假日主檔失敗' })
+  }
+})
+
+/**
+ * POST /api/system/holidays/:year/sync
+ * 從政府資料開放平臺抓取該年度辦公日曆表 CSV，解析後存入主檔
+ */
+router.post('/holidays/:year/sync', ...isContributor, async (req, res) => {
+  try {
+    const year = Number(req.params.year)
+    if (!/^\d{4}$/.test(req.params.year)) {
+      return res.status(400).json({ error: true, message: '年份格式錯誤' })
+    }
+
+    // 下載網址每年變動（隨機檔名），需先查 dataset API 找當年度檔案
+    let dataset
+    try {
+      const metaRes = await fetchWithTimeout(GOV_CALENDAR_DATASET_API, 15000)
+      if (!metaRes.ok) throw new Error(`dataset API HTTP ${metaRes.status}`)
+      dataset = await metaRes.json()
+    } catch (err) {
+      console.error('查詢政府資料平臺失敗:', err)
+      return res.status(502).json({
+        error: true,
+        message: '無法連線政府資料開放平臺，請稍後再試或改用「匯入 CSV」',
+      })
+    }
+
+    const rocYear = year - 1911
+    const wantedDescription = `${rocYear}年中華民國政府行政機關辦公日曆表`
+    const distributions = dataset?.result?.distribution || []
+    const target = distributions.find(
+      (d) =>
+        (d.resourceFormat || '').toUpperCase() === 'CSV' &&
+        (d.resourceDescription || '').trim() === wantedDescription,
+    )
+    if (!target || !target.resourceDownloadUrl) {
+      return res.status(404).json({
+        error: true,
+        message: `政府平臺尚未提供 ${year} 年（民國 ${rocYear} 年）辦公日曆表，通常於前一年 6~7 月公告`,
+      })
+    }
+
+    let csvText
+    try {
+      const csvRes = await fetchWithTimeout(target.resourceDownloadUrl, 20000)
+      if (!csvRes.ok) throw new Error(`CSV 下載 HTTP ${csvRes.status}`)
+      const buffer = await csvRes.arrayBuffer()
+      csvText = decodeGovCsvBuffer(buffer, target.resourceCharacterEncoding)
+    } catch (err) {
+      console.error('下載辦公日曆表 CSV 失敗:', err)
+      return res.status(502).json({
+        error: true,
+        message: '下載辦公日曆表檔案失敗，請稍後再試或改用「匯入 CSV」',
+      })
+    }
+
+    const holidays = parseGovCalendarCsv(csvText, year)
+    if (holidays.length === 0) {
+      return res.status(422).json({ error: true, message: '解析結果為空，檔案格式可能已變更，請改用「匯入 CSV」或回報管理者' })
+    }
+
+    const db = getDatabase()
+    const entry = {
+      holidays,
+      syncedAt: new Date().toLocaleString('sv-SE'),
+      source: 'data.gov.tw',
+    }
+    saveHolidayCalendarYear(db, year, entry)
+
+    await logAudit('HOLIDAY_CALENDAR_SYNC', req.user.id, req.user.name, 'site_config', HOLIDAY_CONFIG_ID, {
+      year,
+      count: holidays.length,
+      source: 'data.gov.tw',
+    })
+
+    res.json({ success: true, year, count: holidays.length, ...entry })
+  } catch (error) {
+    console.error('同步國定假日錯誤:', error)
+    res.status(500).json({ error: true, message: '同步國定假日失敗' })
+  }
+})
+
+/**
+ * POST /api/system/holidays/:year/import
+ * 手動上傳辦公日曆表 CSV（base64），格式同政府檔案；外網不通時的備援
+ */
+router.post('/holidays/:year/import', ...isContributor, async (req, res) => {
+  try {
+    const year = Number(req.params.year)
+    if (!/^\d{4}$/.test(req.params.year)) {
+      return res.status(400).json({ error: true, message: '年份格式錯誤' })
+    }
+    const { csvBase64 } = req.body || {}
+    if (!csvBase64 || typeof csvBase64 !== 'string') {
+      return res.status(400).json({ error: true, message: '缺少 CSV 檔案內容' })
+    }
+
+    let buffer
+    try {
+      buffer = Buffer.from(csvBase64, 'base64')
+    } catch {
+      return res.status(400).json({ error: true, message: 'CSV 檔案內容格式錯誤' })
+    }
+    const csvText = decodeGovCsvBuffer(buffer, null)
+    const holidays = parseGovCalendarCsv(csvText, year)
+    if (holidays.length === 0) {
+      return res.status(422).json({
+        error: true,
+        message: `檔案中找不到 ${year} 年的國定假日，請確認上傳的是該年度「政府行政機關辦公日曆表」CSV`,
+      })
+    }
+
+    const db = getDatabase()
+    const entry = {
+      holidays,
+      syncedAt: new Date().toLocaleString('sv-SE'),
+      source: '手動匯入',
+    }
+    saveHolidayCalendarYear(db, year, entry)
+
+    await logAudit('HOLIDAY_CALENDAR_IMPORT', req.user.id, req.user.name, 'site_config', HOLIDAY_CONFIG_ID, {
+      year,
+      count: holidays.length,
+      source: '手動匯入',
+    })
+
+    res.json({ success: true, year, count: holidays.length, ...entry })
+  } catch (error) {
+    console.error('匯入國定假日錯誤:', error)
+    res.status(500).json({ error: true, message: '匯入國定假日失敗' })
+  }
+})
+
+// ========================================
 // 預約變更 API
 // ========================================
 

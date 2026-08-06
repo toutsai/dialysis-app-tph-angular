@@ -2,8 +2,10 @@
 import { Component, inject, signal, computed, OnInit, OnDestroy, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { firstValueFrom } from 'rxjs';
 import * as XLSX from 'xlsx';
 import { ApiConfigService } from '@services/api-config.service';
+import { ApiService } from '@app/core/services/api.service';
 import { AuthService } from '@app/core/services/auth.service';
 import { ApiManagerService, type ApiManager } from '@app/core/services/api-manager.service';
 import { PatientStoreService } from '@app/core/services/patient-store.service';
@@ -26,6 +28,7 @@ import { exportRoundingWordDoc } from '@app/core/utils/physician-rounding-word';
 })
 export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   private readonly firebaseService = inject(ApiConfigService);
+  private readonly apiService = inject(ApiService);
   private readonly authService = inject(AuthService);
   private readonly apiManagerService = inject(ApiManagerService);
   private readonly patientStore = inject(PatientStoreService);
@@ -68,6 +71,12 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   reportDate2 = '';
   managedHolidays: any[] = [];
   holidayForm = { name: '', customName: '', date: '' };
+
+  // 年度假日主檔（後端同步的政府行政機關辦公日曆表；key = 西元年）
+  holidayMasterCache = signal<Record<number, { holidays: { name: string; date: string }[]; syncedAt: string | null; source: string | null }>>({});
+  isSyncingHolidays = signal(false);
+  isImportingHolidayCsv = signal(false);
+  private holidayMasterRequested = new Set<number>();
 
   // Dialog state
   isAlertDialogVisible = signal(false);
@@ -233,6 +242,9 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   });
 
   currentYearHolidays = computed(() => {
+    // 優先用同步下來的假日主檔；沒有才退回寫死的 2025/2026 清單
+    const master = this.holidayMasterCache()[this.selectedYear()];
+    if (master && master.holidays.length > 0) return master.holidays;
     switch (this.selectedYear()) {
       case 2025: return this.holidays2025;
       case 2026: return this.holidays2026;
@@ -240,7 +252,20 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
     }
   });
 
+  currentYearHolidayMeta = computed(() => {
+    const master = this.holidayMasterCache()[this.selectedYear()];
+    return master && master.holidays.length > 0 ? master : null;
+  });
+
   private previousYearMonth = '';
+
+  constructor() {
+    // 年度切換時載入該年的假日主檔（供下拉選單與「帶入本月假日」）
+    effect(() => {
+      const year = this.selectedYear();
+      void this.ensureHolidayMaster(year);
+    });
+  }
 
   ngOnInit(): void {
     this.usersApi = this.apiManagerService.create('users');
@@ -555,6 +580,100 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
 
   removeHoliday(index: number): void {
     this.managedHolidays.splice(index, 1);
+  }
+
+  private async ensureHolidayMaster(year: number): Promise<void> {
+    if (this.holidayMasterRequested.has(year)) return;
+    this.holidayMasterRequested.add(year);
+    try {
+      const result = await firstValueFrom(this.apiService.get<any>(`/system/holidays/${year}`));
+      this.holidayMasterCache.update((cache) => ({
+        ...cache,
+        [year]: {
+          holidays: Array.isArray(result?.holidays) ? result.holidays : [],
+          syncedAt: result?.syncedAt || null,
+          source: result?.source || null,
+        },
+      }));
+    } catch (error) {
+      console.error(`讀取 ${year} 年假日主檔失敗:`, error);
+      this.holidayMasterRequested.delete(year); // 失敗時允許之後重試
+    }
+  }
+
+  private applyHolidayMasterResult(year: number, result: any): void {
+    this.holidayMasterCache.update((cache) => ({
+      ...cache,
+      [year]: {
+        holidays: Array.isArray(result?.holidays) ? result.holidays : [],
+        syncedAt: result?.syncedAt || null,
+        source: result?.source || null,
+      },
+    }));
+    this.holidayMasterRequested.add(year);
+  }
+
+  async syncGovernmentHolidays(): Promise<void> {
+    if (this.isSyncingHolidays()) return;
+    const year = this.selectedYear();
+    this.isSyncingHolidays.set(true);
+    try {
+      const result = await firstValueFrom(this.apiService.post<any>(`/system/holidays/${year}/sync`, {}));
+      this.applyHolidayMasterResult(year, result);
+      this.showAlert('同步成功', `已從政府資料開放平臺同步 ${year} 年國定假日，共 ${result?.count ?? 0} 天。可用「帶入本月假日」快速加入清單。`);
+    } catch (error: any) {
+      console.error('同步政府行事曆失敗:', error);
+      this.showAlert('同步失敗', error?.error?.message || '同步政府行事曆時發生錯誤，請稍後再試。');
+    } finally {
+      this.isSyncingHolidays.set(false);
+    }
+  }
+
+  async onHolidayCsvSelected(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file || this.isImportingHolidayCsv()) return;
+    const year = this.selectedYear();
+    this.isImportingHolidayCsv.set(true);
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      const result = await firstValueFrom(
+        this.apiService.post<any>(`/system/holidays/${year}/import`, { csvBase64: btoa(binary) })
+      );
+      this.applyHolidayMasterResult(year, result);
+      this.showAlert('匯入成功', `已匯入 ${year} 年國定假日，共 ${result?.count ?? 0} 天。可用「帶入本月假日」快速加入清單。`);
+    } catch (error: any) {
+      console.error('匯入行事曆 CSV 失敗:', error);
+      this.showAlert('匯入失敗', error?.error?.message || '匯入 CSV 時發生錯誤，請確認檔案為政府辦公日曆表格式。');
+    } finally {
+      this.isImportingHolidayCsv.set(false);
+    }
+  }
+
+  addCurrentMonthHolidays(): void {
+    const monthPrefix = `${this.selectedYearMonth()}-`;
+    const candidates = this.currentYearHolidays().filter((h: any) => (h.date || '').startsWith(monthPrefix));
+    if (candidates.length === 0) {
+      this.showAlert('本月無國定假日', '假日主檔中本月沒有國定假日；若尚未同步，請先按「同步政府行事曆」。');
+      return;
+    }
+    let addedCount = 0;
+    candidates.forEach((h: any) => {
+      if (!this.managedHolidays.some((existing: any) => existing.date === h.date)) {
+        this.managedHolidays.push({ name: h.name, date: h.date });
+        addedCount++;
+      }
+    });
+    if (addedCount === 0) {
+      this.showAlert('無需帶入', '本月的國定假日皆已在清單中。');
+      return;
+    }
+    this.managedHolidays.sort((a: any, b: any) => a.date.localeCompare(b.date));
+    this.markUnsaved();
+    this.showAlert('帶入完成', `已帶入 ${addedCount} 個本月國定假日，請記得按「儲存」。`);
   }
 
   checkClinicConflict(event: Event, day: any, shift: string): void {

@@ -667,6 +667,21 @@ tr.date-row {
   border-radius: 4px;
   font-size: 0.85rem;
 }
+.holiday-sync-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 0.5rem;
+}
+.holiday-sync-row .add-holiday-btn:disabled {
+  background-color: #9bbfe3;
+  cursor: default;
+}
+.holiday-sync-meta {
+  font-size: 0.8rem;
+  color: #6c757d;
+  margin: 0 0 0.75rem;
+}
 .holiday-add-form {
   display: flex;
   flex-wrap: wrap;
