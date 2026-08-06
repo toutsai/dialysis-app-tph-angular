@@ -147,7 +147,14 @@
                         </div>
                         <div class="patient-ward-note">
                           @if (cell.wardNumber) {
-                            <span class="ward-number ward-number-badge">{{ cell.wardNumber }}</span>
+                            <a
+                              class="ward-number ward-number-badge ward-number-mvas"
+                              [href]="MVAS_URL"
+                              target="_blank"
+                              rel="noopener"
+                              title="開啟 MVAS 病歷系統並複製病歷號（於歷次住院貼上查詢）"
+                              (click)="$event.stopPropagation(); copyMedicalRecordNumber(cell.medicalRecordNumber)"
+                            >{{ cell.wardNumber }}</a>
                           }
                           @if (cell.note) {
                             <span class="patient-note">{{ cell.note }}</span>

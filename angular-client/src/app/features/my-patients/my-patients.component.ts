@@ -244,6 +244,8 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
   readonly rawSchedule = signal<Record<string, any>>({});
   readonly copiedMrn = signal('');
   private copiedTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 院內 MVAS 病歷系統入口（點病房號開新分頁；跨網站無法自動登入/填號，僅複製病歷號供貼上） */
+  readonly MVAS_URL = 'http://192.168.24.217/mvas/web/init.htm';
   readonly isDetailModalVisible = signal(false);
   readonly selectedPatientForDetail = signal<Record<string, unknown> | null>(null);
   readonly sortedSlotsForModal = signal<Record<string, unknown>[]>([]);

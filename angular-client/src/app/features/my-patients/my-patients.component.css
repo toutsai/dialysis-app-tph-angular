@@ -791,6 +791,15 @@
   border-radius: 4px;
   font-size: 0.8rem;
 }
+/* 病房號徽章＝開啟 MVAS 病歷系統的連結；覆蓋 <a> 預設藍字底線 */
+.clinical-view-wrapper a.ward-number-mvas {
+  text-decoration: none;
+  color: #333;
+  cursor: pointer;
+}
+.clinical-view-wrapper a.ward-number-mvas:hover {
+  outline: 1px solid #b8860b;
+}
 .clinical-view-wrapper .patient-note {
   font-size: 0.85rem;
   color: #dc3545;
