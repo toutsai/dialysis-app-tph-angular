@@ -29,7 +29,7 @@ import {
   fetchNurseAssignmentRevisions,
   restoreNurseAssignmentRevision,
 } from '@/services/nurseAssignmentsService';
-import { createDialysisOrderAndUpdatePatient } from '@/services/optimizedApiService';
+import { createDialysisOrderAndUpdatePatient, updatePatient as optimizedUpdatePatient } from '@/services/optimizedApiService';
 import {
   extractVersionConflict,
   formatVersionConflictMessage,
@@ -51,6 +51,7 @@ import { ExceptionCreateDialogComponent } from '@app/components/dialogs/exceptio
 import { BedAssignmentDialogComponent } from '@app/components/dialogs/bed-assignment-dialog/bed-assignment-dialog.component';
 import { NewUpdateTypeDialogComponent } from '@app/components/dialogs/new-update-type-dialog/new-update-type-dialog.component';
 import { PatientUpdateSchedulerDialogComponent } from '@app/components/dialogs/patient-update-scheduler-dialog/patient-update-scheduler-dialog.component';
+import { WardNumberDialogComponent } from '@app/components/dialogs/ward-number-dialog/ward-number-dialog.component';
 
 // Display components
 import { PreparationPopoverComponent } from '@app/components/preparation-popover/preparation-popover.component';
@@ -111,6 +112,7 @@ const dutyAssignments: Record<string, Record<string, string | string[]>> = {
     BedAssignmentDialogComponent,
     NewUpdateTypeDialogComponent,
     PatientUpdateSchedulerDialogComponent,
+    WardNumberDialogComponent,
     PreparationPopoverComponent,
     PatientMessagesIconComponent,
     DailyStaffDisplayComponent,
@@ -1629,6 +1631,38 @@ export class StatsComponent implements OnInit, OnDestroy {
   handleCancel(): void {
     this.isConfirmDialogVisible = false;
     this.onConfirmAction = null;
+  }
+
+  // --- 病房號（床號）編輯：點護理分組病人的病房號徽章可設定/修改，比照每日排程 ---
+  isWardDialogVisible = false;
+  currentWardNumber = '';
+  private currentWardEditPatientId: string | null = null;
+
+  promptWardNumber(patient: any): void {
+    if (this.isPageLocked) return;
+    if (patient?.status !== 'ipd' && patient?.status !== 'er') {
+      this.showAlert('提示', '只有住院或急診病人才能設定床號');
+      return;
+    }
+    this.currentWardEditPatientId = patient.id;
+    this.currentWardNumber = patient.wardNumber || '';
+    this.isWardDialogVisible = true;
+  }
+
+  async handleWardNumberConfirm(value: string): Promise<void> {
+    const patientId = this.currentWardEditPatientId;
+    if (!patientId) return;
+    try {
+      await optimizedUpdatePatient(patientId, { wardNumber: value });
+      await this.patientStore.forceRefreshPatients();
+      this.showAlert('操作成功', '床號已更新');
+    } catch (error: unknown) {
+      console.error('更新床號失敗:', error);
+      this.showAlert('操作失敗', '更新床號失敗');
+    }
+    this.isWardDialogVisible = false;
+    this.currentWardEditPatientId = null;
+    this.currentWardNumber = '';
   }
 
   showAlert(title: string, message: string): void {

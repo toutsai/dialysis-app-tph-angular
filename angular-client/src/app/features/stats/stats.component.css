@@ -595,6 +595,13 @@
   margin-right: 4px;
   vertical-align: middle;
 }
+/* 可點擊設定/修改床號 */
+.ward-number-display.ward-number-editable {
+  cursor: pointer;
+}
+.ward-number-display.ward-number-editable:hover {
+  background-color: #357abd;
+}
 
 /* ================================== */
 /* === Collapsible === */

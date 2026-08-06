@@ -165,7 +165,7 @@
                         </span>
                       </div>
                       <div class="patient-line-two">
-                        <span *ngIf="patient.wardNumber" class="ward-number-display">{{ patient.wardNumber }}</span>
+                        <span *ngIf="patient.wardNumber || patient.status === 'ipd' || patient.status === 'er'" class="ward-number-display ward-number-editable" title="點擊設定/修改床號" (click)="$event.stopPropagation(); promptWardNumber(patient)">{{ patient.wardNumber || '設床號' }}</span>
                         <span *ngIf="patient.mode && patient.mode !== 'HD'" class="stats-special-mode">({{ patient.mode }})</span>
                         <span *ngIf="patient.finalTags" class="note-display">{{ patient.finalTags }}</span>
                       </div>
@@ -197,7 +197,7 @@
                         </span>
                       </div>
                       <div class="patient-line-two">
-                        <span *ngIf="patient.wardNumber" class="ward-number-display">{{ patient.wardNumber }}</span>
+                        <span *ngIf="patient.wardNumber || patient.status === 'ipd' || patient.status === 'er'" class="ward-number-display ward-number-editable" title="點擊設定/修改床號" (click)="$event.stopPropagation(); promptWardNumber(patient)">{{ patient.wardNumber || '設床號' }}</span>
                         <span *ngIf="patient.mode && patient.mode !== 'HD'" class="stats-special-mode">({{ patient.mode }})</span>
                         <span *ngIf="patient.finalTags" class="note-display">{{ patient.finalTags }}</span>
                       </div>
@@ -237,7 +237,7 @@
                         </span>
                       </div>
                       <div class="patient-line-two">
-                        <span *ngIf="patient.wardNumber" class="ward-number-display">{{ patient.wardNumber }}</span>
+                        <span *ngIf="patient.wardNumber || patient.status === 'ipd' || patient.status === 'er'" class="ward-number-display ward-number-editable" title="點擊設定/修改床號" (click)="$event.stopPropagation(); promptWardNumber(patient)">{{ patient.wardNumber || '設床號' }}</span>
                         <span *ngIf="patient.mode && patient.mode !== 'HD'" class="stats-special-mode">({{ patient.mode }})</span>
                         <span *ngIf="patient.finalTags" class="note-display">{{ patient.finalTags }}</span>
                       </div>
@@ -297,7 +297,7 @@
                         </span>
                       </div>
                       <div class="patient-line-two">
-                        <span *ngIf="patient.wardNumber" class="ward-number-display">{{ patient.wardNumber }}</span>
+                        <span *ngIf="patient.wardNumber || patient.status === 'ipd' || patient.status === 'er'" class="ward-number-display ward-number-editable" title="點擊設定/修改床號" (click)="$event.stopPropagation(); promptWardNumber(patient)">{{ patient.wardNumber || '設床號' }}</span>
                         <span *ngIf="patient.mode && patient.mode !== 'HD'" class="stats-special-mode">({{ patient.mode }})</span>
                         <span *ngIf="patient.finalTags" class="note-display">{{ patient.finalTags }}</span>
                       </div>
@@ -326,7 +326,7 @@
                         </span>
                       </div>
                       <div class="patient-line-two">
-                        <span *ngIf="patient.wardNumber" class="ward-number-display">{{ patient.wardNumber }}</span>
+                        <span *ngIf="patient.wardNumber || patient.status === 'ipd' || patient.status === 'er'" class="ward-number-display ward-number-editable" title="點擊設定/修改床號" (click)="$event.stopPropagation(); promptWardNumber(patient)">{{ patient.wardNumber || '設床號' }}</span>
                         <span *ngIf="patient.mode && patient.mode !== 'HD'" class="stats-special-mode">({{ patient.mode }})</span>
                         <span *ngIf="patient.finalTags" class="note-display">{{ patient.finalTags }}</span>
                       </div>
@@ -387,7 +387,7 @@
                         </span>
                       </div>
                       <div class="patient-line-two">
-                        <span *ngIf="patient.wardNumber" class="ward-number-display">{{ patient.wardNumber }}</span>
+                        <span *ngIf="patient.wardNumber || patient.status === 'ipd' || patient.status === 'er'" class="ward-number-display ward-number-editable" title="點擊設定/修改床號" (click)="$event.stopPropagation(); promptWardNumber(patient)">{{ patient.wardNumber || '設床號' }}</span>
                         <span *ngIf="patient.mode && patient.mode !== 'HD'" class="stats-special-mode">({{ patient.mode }})</span>
                         <span *ngIf="patient.finalTags" class="note-display">{{ patient.finalTags }}</span>
                       </div>
@@ -429,7 +429,7 @@
                         </span>
                       </div>
                       <div class="patient-line-two">
-                        <span *ngIf="patient.wardNumber" class="ward-number-display">{{ patient.wardNumber }}</span>
+                        <span *ngIf="patient.wardNumber || patient.status === 'ipd' || patient.status === 'er'" class="ward-number-display ward-number-editable" title="點擊設定/修改床號" (click)="$event.stopPropagation(); promptWardNumber(patient)">{{ patient.wardNumber || '設床號' }}</span>
                         <span *ngIf="patient.mode && patient.mode !== 'HD'" class="stats-special-mode">({{ patient.mode }})</span>
                         <span *ngIf="patient.finalTags" class="note-display">{{ patient.finalTags }}</span>
                       </div>
@@ -447,7 +447,7 @@
                         </span>
                       </div>
                       <div class="patient-line-two">
-                        <span *ngIf="patient.wardNumber" class="ward-number-display">{{ patient.wardNumber }}</span>
+                        <span *ngIf="patient.wardNumber || patient.status === 'ipd' || patient.status === 'er'" class="ward-number-display ward-number-editable" title="點擊設定/修改床號" (click)="$event.stopPropagation(); promptWardNumber(patient)">{{ patient.wardNumber || '設床號' }}</span>
                         <span *ngIf="patient.mode && patient.mode !== 'HD'" class="stats-special-mode">({{ patient.mode }})</span>
                         <span *ngIf="patient.finalTags" class="note-display">{{ patient.finalTags }}</span>
                       </div>
@@ -469,7 +469,7 @@
                         </span>
                       </div>
                       <div class="patient-line-two">
-                        <span *ngIf="patient.wardNumber" class="ward-number-display">{{ patient.wardNumber }}</span>
+                        <span *ngIf="patient.wardNumber || patient.status === 'ipd' || patient.status === 'er'" class="ward-number-display ward-number-editable" title="點擊設定/修改床號" (click)="$event.stopPropagation(); promptWardNumber(patient)">{{ patient.wardNumber || '設床號' }}</span>
                         <span *ngIf="patient.mode && patient.mode !== 'HD'" class="stats-special-mode">({{ patient.mode }})</span>
                         <span *ngIf="patient.finalTags" class="note-display">{{ patient.finalTags }}</span>
                       </div>
@@ -510,7 +510,7 @@
                         </span>
                       </div>
                       <div class="patient-line-two">
-                        <span *ngIf="patient.wardNumber" class="ward-number-display">{{ patient.wardNumber }}</span>
+                        <span *ngIf="patient.wardNumber || patient.status === 'ipd' || patient.status === 'er'" class="ward-number-display ward-number-editable" title="點擊設定/修改床號" (click)="$event.stopPropagation(); promptWardNumber(patient)">{{ patient.wardNumber || '設床號' }}</span>
                         <span *ngIf="patient.mode && patient.mode !== 'HD'" class="stats-special-mode">({{ patient.mode }})</span>
                         <span *ngIf="patient.finalTags" class="note-display">{{ patient.finalTags }}</span>
                       </div>
@@ -529,7 +529,7 @@
                         </span>
                       </div>
                       <div class="patient-line-two">
-                        <span *ngIf="patient.wardNumber" class="ward-number-display">{{ patient.wardNumber }}</span>
+                        <span *ngIf="patient.wardNumber || patient.status === 'ipd' || patient.status === 'er'" class="ward-number-display ward-number-editable" title="點擊設定/修改床號" (click)="$event.stopPropagation(); promptWardNumber(patient)">{{ patient.wardNumber || '設床號' }}</span>
                         <span *ngIf="patient.mode && patient.mode !== 'HD'" class="stats-special-mode">({{ patient.mode }})</span>
                         <span *ngIf="patient.finalTags" class="note-display">{{ patient.finalTags }}</span>
                       </div>
@@ -565,7 +565,7 @@
                         </span>
                       </div>
                       <div class="patient-line-two">
-                        <span *ngIf="patient.wardNumber" class="ward-number-display">{{ patient.wardNumber }}</span>
+                        <span *ngIf="patient.wardNumber || patient.status === 'ipd' || patient.status === 'er'" class="ward-number-display ward-number-editable" title="點擊設定/修改床號" (click)="$event.stopPropagation(); promptWardNumber(patient)">{{ patient.wardNumber || '設床號' }}</span>
                         <span *ngIf="patient.mode && patient.mode !== 'HD'" class="stats-special-mode">({{ patient.mode }})</span>
                         <span *ngIf="patient.finalTags" class="note-display">{{ patient.finalTags }}</span>
                       </div>
@@ -630,6 +630,15 @@
     [message]="alertDialogMessage"
     (confirm)="isAlertDialogVisible = false"
   ></app-alert-dialog>
+
+  <app-ward-number-dialog
+    *ngIf="isWardDialogVisible"
+    title="設定床號"
+    message="請輸入病房床號"
+    [currentValue]="currentWardNumber"
+    (confirm)="handleWardNumberConfirm($event)"
+    (cancel)="isWardDialogVisible = false"
+  ></app-ward-number-dialog>
 
   <app-confirm-dialog
     [isVisible]="isConfirmDialogVisible"
