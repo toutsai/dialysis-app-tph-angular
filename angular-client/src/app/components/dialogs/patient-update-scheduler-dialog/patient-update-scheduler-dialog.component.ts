@@ -26,6 +26,8 @@ export class PatientUpdateSchedulerDialogComponent implements OnChanges {
   @Input() allPatients: any[] = [];
   @Input() isEditing = false;
   @Input() initialData: any = null;
+  /** 非編輯模式的預帶內容（例如病人清單改頻率選好的 bedNum/shiftIndex/freq） */
+  @Input() seedPayload: any = null;
   @Output() close = new EventEmitter<void>();
   @Output() submit = new EventEmitter<any>();
 
@@ -129,7 +131,9 @@ export class PatientUpdateSchedulerDialogComponent implements OnChanges {
             this.formData.payload = { freq: this.patient.freq || '\u4E00\u4E09\u4E94' };
             break;
           case 'UPDATE_BASE_SCHEDULE_RULE':
-            this.formData.payload = {};
+            this.formData.payload = this.seedPayload
+              ? JSON.parse(JSON.stringify(this.seedPayload))
+              : {};
             break;
           case 'DELETE_PATIENT':
             this.formData.payload = { deleteReason: '\u8F49\u5916\u9662\u900F\u6790', remarks: '' };

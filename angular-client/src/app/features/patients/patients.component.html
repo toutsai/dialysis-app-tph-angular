@@ -447,9 +447,23 @@
     *ngIf="isSchedulerDialogVisible()"
     [patient]="schedulerPatient()"
     [changeType]="schedulerChangeType()"
-    (close)="isSchedulerDialogVisible.set(false)"
+    [seedPayload]="schedulerSeedPayload()"
+    (close)="isSchedulerDialogVisible.set(false); schedulerSeedPayload.set(null)"
     (submit)="handleSchedulerSubmit($event)"
   ></app-patient-update-scheduler-dialog>
+
+  <app-bed-assignment-dialog
+    *ngIf="isBedAssignDialogVisible()"
+    [isVisible]="isBedAssignDialogVisible()"
+    [allPatients]="bedDialogPatients()"
+    [bedLayout]="BED_LAYOUT"
+    [scheduleData]="bedDialogScheduleData()"
+    [shifts]="SHIFTS"
+    [freqMap]="FREQ_MAP_TO_DAY_INDEX"
+    [context]="bedAssignContext()"
+    (close)="handleBedDialogClose()"
+    (assignBed)="handleBedDialogAssigned($event)"
+  ></app-bed-assignment-dialog>
 
   <app-education-record-dialog
     *ngIf="showEducationDialog() && educationPatient()"

@@ -148,6 +148,11 @@ export class PatientStoreService {
       }
 
       // Update local store: clear the patient's scheduleRule
+      this.masterScheduleRules.update((rules) => {
+        const next = { ...rules };
+        delete next[patientId];
+        return next;
+      });
       this.updatePatientInStore(patientId, { scheduleRule: null });
     } catch (error) {
       console.error(
@@ -159,17 +164,19 @@ export class PatientStoreService {
   }
 
   /**
-   * Update the freq of a patient's existing MASTER_SCHEDULE rule and save the
-   * whole document (the backend PUT triggers the 60-day future sync).
-   * No-op if the patient has no rule — top-level freq fallback then applies.
+   * Upsert a patient's rule (bedNum/shiftIndex/freq...) in MASTER_SCHEDULE and
+   * save the whole document (the backend PUT triggers the 60-day future sync).
+   * Existing rule fields (manualNote/autoNote) are preserved unless overridden.
    */
-  async updateRuleFreqInMasterSchedule(patientId: string, freq: string): Promise<void> {
+  async upsertRuleInMasterSchedule(
+    patientId: string,
+    ruleData: Record<string, unknown>,
+  ): Promise<void> {
     try {
       const masterDoc = await this.baseScheduleApi.fetchById('MASTER_SCHEDULE');
       const schedule = { ...((masterDoc as any)?.['schedule'] as Record<string, unknown> || {}) };
-      const rule = schedule[patientId] as Record<string, unknown> | undefined;
-      if (!rule || rule['freq'] === freq) return;
-      const newRule = { ...rule, freq };
+      const existing = (schedule[patientId] as Record<string, unknown>) || {};
+      const newRule = { ...existing, ...ruleData };
       schedule[patientId] = newRule;
       await this.baseScheduleApi.update('MASTER_SCHEDULE', { schedule } as any);
 
@@ -177,7 +184,7 @@ export class PatientStoreService {
       this.updatePatientInStore(patientId, { scheduleRule: newRule as any });
     } catch (error) {
       console.error(
-        '[PatientStoreService] Error updating rule freq in MASTER_SCHEDULE:',
+        '[PatientStoreService] Error upserting rule in MASTER_SCHEDULE:',
         error,
       );
       throw error;

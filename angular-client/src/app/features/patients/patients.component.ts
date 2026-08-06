@@ -23,6 +23,8 @@ import {
 import { ApiService } from '@services/api.service';
 import { firstValueFrom } from 'rxjs';
 import { formatDateToYYYYMMDD, parseFirestoreTimestamp, getToday } from '@/utils/dateUtils';
+import { generateAutoNote, hasFrequencyConflict } from '@/utils/scheduleUtils';
+import { ORDERED_SHIFT_CODES } from '@/constants/scheduleConstants';
 import { doNotMoveRangeText } from '@/utils/doNotMove';
 import { escapeHtml } from '@/utils/sanitize';
 import { createDialysisOrderAndUpdatePatient } from '@/services/optimizedApiService';
@@ -38,6 +40,7 @@ import { DialysisOrderModalComponent } from '@app/components/dialogs/dialysis-or
 import { PatientHistoryModalComponent } from '@app/components/dialogs/patient-history-modal/patient-history-modal.component';
 import { WardNumberDialogComponent } from '@app/components/dialogs/ward-number-dialog/ward-number-dialog.component';
 import { PatientUpdateSchedulerDialogComponent } from '@app/components/dialogs/patient-update-scheduler-dialog/patient-update-scheduler-dialog.component';
+import { BedAssignmentDialogComponent } from '@app/components/dialogs/bed-assignment-dialog/bed-assignment-dialog.component';
 import { PatientSummaryComponent } from './patient-summary/patient-summary.component';
 import { EducationRecordDialogComponent } from '@app/components/dialogs/education-record-dialog/education-record-dialog.component';
 
@@ -68,6 +71,7 @@ interface PatientStats {
     PatientHistoryModalComponent,
     WardNumberDialogComponent,
     PatientUpdateSchedulerDialogComponent,
+    BedAssignmentDialogComponent,
     PatientSummaryComponent,
     EducationRecordDialogComponent,
   ],
@@ -155,6 +159,53 @@ export class PatientsComponent implements OnInit, OnDestroy {
   /** 立即變更的生效時間視窗（下一班起 / 明天開始），確認立即變更後接續詢問 */
   /** 編輯存檔時附掛給後端的「下一班起生效」旗標（只進 API body，不進本地 store） */
   private pendingNextShiftFlag: boolean | null = null;
+
+  // --- 頻率變更 → 床位指派（存檔攔截，共用總表的變更頻率/床位元件） ---
+  readonly SHIFTS = ORDERED_SHIFT_CODES;
+  readonly BED_LAYOUT: any[] = [
+    1, 2, 3, 5, 6, 7, 8, 9, 11, 12, 13, 15, 16, 17, 18, 19,
+    21, 22, 23, 25, 26, 27, 28, 29, 31, 32, 33, 35, 36, 37, 38, 39,
+    51, 52, 53, 55, 56, 57, 58, 59, 61, 62, 63, 65,
+    ...Array.from({ length: 6 }, (_, i) => `peripheral-${i + 1}`),
+  ];
+  readonly FREQ_MAP_TO_DAY_INDEX: Record<string, number[]> = {
+    '一三五': [0, 2, 4], '二四六': [1, 3, 5], '一四': [0, 3], '二五': [1, 4],
+    '三六': [2, 5], '一五': [0, 4], '二六': [1, 5], '每日': [0, 1, 2, 3, 4, 5],
+    '每周一': [0], '每周二': [1], '每周三': [2], '每周四': [3], '每周五': [4], '每周六': [5],
+  };
+  readonly isBedAssignDialogVisible = signal(false);
+  readonly bedAssignContext = signal<any>(null);
+  readonly schedulerSeedPayload = signal<any>(null);
+  readonly bedDialogPatients = computed(() => this.patientStore.allPatients());
+  /** 由總表規則展開成週格線（與總表頁 weekScheduleMap 同構，供床位元件算空床） */
+  readonly bedDialogScheduleData = computed(() => {
+    const combined: Record<string, any> = {};
+    const rules = this.patientStore.masterScheduleRules() as Record<string, any>;
+    const pMap = this.patientStore.patientMap();
+    for (const patientId in rules) {
+      const patient: any = pMap.get(patientId);
+      if (!patient || patient.isDeleted) continue;
+      const ruleData = rules[patientId];
+      const dayIndices = this.FREQ_MAP_TO_DAY_INDEX[ruleData?.freq] || [];
+      const { bedNum, shiftIndex } = ruleData || {};
+      if (bedNum === undefined || shiftIndex === undefined || isNaN(shiftIndex)) continue;
+      for (const dayIndex of dayIndices) {
+        combined[`${bedNum}-${shiftIndex}-${dayIndex}`] = {
+          ...ruleData,
+          patientId,
+          shiftId: this.SHIFTS[shiftIndex],
+        };
+      }
+    }
+    return combined;
+  });
+  private pendingRuleDecision:
+    | { type: 'assign'; rule: any }
+    | { type: 'remove' }
+    | { type: 'none' }
+    | null = null;
+  private bedDialogMode: 'edit-save' | 'new-patient' | null = null;
+  private bedDialogSavePayload: any = null;
   private cachedPatientHistory: any[] | null = null;
   private pendingNewStatus: string | null = null;
 
@@ -814,6 +865,47 @@ export class PatientsComponent implements OnInit, OnDestroy {
         return;
       }
 
+      // 頻率變更攔截：頻率通常連動床位，存檔前先開總表的「變更頻率/床位」元件
+      // 讓組長選定常規床位（pendingRuleDecision 決定後重入本函式續存）
+      const pickFreq = (obj: any): string | null =>
+        (obj?.freq ?? obj?.dialysisOrders?.freq ?? null) || null;
+      const formFreq = pickFreq(patientData);
+      const origFreq = pickFreq(originalPatient);
+      if (formFreq && formFreq !== origFreq && !this.pendingRuleDecision) {
+        const hasRule = !!(this.patientStore.masterScheduleRules() as any)[patientData.id];
+        if (formFreq === '臨時') {
+          if (hasRule) {
+            this.showConfirm(
+              '改為臨時 — 移除固定排班',
+              `「${patientData.name}」的頻率將改為「臨時」，並自總床位表移除固定排班。\n\n・今日排程不受影響，明日起不再自動產生\n・之後由組長以加洗方式排入當日排程\n\n確定嗎？`,
+              () => {
+                this.pendingRuleDecision = { type: 'remove' };
+                void this.handleSavePatient(patientData);
+              }
+            );
+            return;
+          }
+          // 本來就沒有固定排班：只更新頻率標籤，直接續存
+          this.pendingRuleDecision = { type: 'none' };
+        } else {
+          this.showConfirm(
+            '頻率變更 — 需安排常規床位',
+            `本次存檔包含頻率變更（${origFreq || '無'} → ${formFreq}）。\n\n接下來將開啟床位安排視窗，請為「${patientData.name}」選擇新頻率的常規床位後完成存檔。`,
+            () => {
+              this.bedDialogMode = 'edit-save';
+              this.bedDialogSavePayload = patientData;
+              this.bedAssignContext.set({
+                mode: 'change_freq_and_bed',
+                patient: { ...originalPatient, freq: origFreq },
+                presetFreq: formFreq,
+              });
+              this.isBedAssignDialogVisible.set(true);
+            }
+          );
+          return;
+        }
+      }
+
       // Normal edit
       const doSave = async (): Promise<void> => {
         try {
@@ -822,14 +914,15 @@ export class PatientsComponent implements OnInit, OnDestroy {
           delete dataToUpdate.firstDialysisPlan;
           dataToUpdate.updatedAt = new Date().toISOString();
 
-          // 頻率權威在總表（base_schedules）：PUT /patients 只寫已淘汰的 dialysis_orders.freq。
-          // 表單夾帶的 scheduleRule 是舊值 clone，改頻率時先對齊 freq，
-          // 避免舊值被原樣寫回 schedule_rule、畫面又顯示回舊頻率
-          const newFreq = (patientData.freq ?? patientData.dialysisOrders?.freq) || null;
-          const oldFreq = (originalPatient.freq ?? originalPatient.dialysisOrders?.freq) || null;
-          const freqChanged = !!newFreq && newFreq !== oldFreq;
-          if (freqChanged && dataToUpdate.scheduleRule) {
-            dataToUpdate.scheduleRule = { ...dataToUpdate.scheduleRule, freq: newFreq };
+          // 頻率權威在總表（base_schedules）：頻率變更經存檔攔截決定規則後，
+          // PUT 前對齊 scheduleRule（避免表單夾帶舊值原樣回寫 schedule_rule），
+          // PUT 後同步總表（觸發明天起 60 天同步）
+          const ruleDecision = this.pendingRuleDecision;
+          this.pendingRuleDecision = null;
+          if (ruleDecision?.type === 'assign') {
+            dataToUpdate.scheduleRule = { ...(dataToUpdate.scheduleRule || {}), ...ruleDecision.rule };
+          } else if (ruleDecision?.type === 'remove') {
+            dataToUpdate.scheduleRule = null;
           }
 
           // 「下一班起生效」旗標只送 API（後端決定快照範圍），不進本地 store
@@ -848,14 +941,22 @@ export class PatientsComponent implements OnInit, OnDestroy {
           }
 
           await Promise.all(updatePromises);
-          if (freqChanged) {
-            // 有總表規則者一併改規則 freq（觸發後端明天起 60 天同步）；無規則者為 no-op
+          if (ruleDecision?.type === 'assign') {
             try {
-              await this.patientStore.updateRuleFreqInMasterSchedule(patientData.id, newFreq);
+              await this.patientStore.upsertRuleInMasterSchedule(patientData.id, ruleDecision.rule);
             } catch {
               this.showAlert(
                 '部分成功',
-                '病人資料已更新，但總表頻率同步失敗，請至總床位表確認該病人的頻率。'
+                '病人資料已更新，但總表規則同步失敗，請至總床位表確認該病人的頻率/床位。'
+              );
+            }
+          } else if (ruleDecision?.type === 'remove') {
+            try {
+              await this.patientStore.removeRuleFromMasterSchedule(patientData.id);
+            } catch {
+              this.showAlert(
+                '部分成功',
+                '病人資料已更新，但自總表移除固定排班失敗，請至總床位表手動移除。'
               );
             }
           }
@@ -994,6 +1095,26 @@ export class PatientsComponent implements OnInit, OnDestroy {
         'patient'
       );
       this.closeModal();
+
+      // 新增病人：提示安排常規床位（首透計畫已含規則者不重複問）
+      if (!firstDialysisPlan) {
+        const createdId = (savedPatient as any).id;
+        const createdFreq =
+          (dataToCreate.freq ?? dataToCreate.dialysisOrders?.freq ?? null) || null;
+        this.showConfirm(
+          '安排常規床位',
+          `病人「${dataToCreate.name}」已新增${createdFreq ? `（頻率：${createdFreq}）` : '（未設定頻率）'}。\n\n是否現在排入總床位表？\n\n臨時／不排常規床位者請按「取消」，之後由組長以加洗方式排入當日排程。`,
+          () => {
+            this.bedDialogMode = 'new-patient';
+            this.bedAssignContext.set({
+              mode: 'change_freq_and_bed',
+              patient: { ...dataToCreate, id: createdId },
+              presetFreq: createdFreq && createdFreq !== '臨時' ? createdFreq : '',
+            });
+            this.isBedAssignDialogVisible.set(true);
+          }
+        );
+      }
     } catch (err: any) {
       this.showAlert('操作失敗', `新增病人失敗！${err.message}`);
     }
@@ -1176,6 +1297,14 @@ export class PatientsComponent implements OnInit, OnDestroy {
       this.schedulerChangeType.set('UPDATE_STATUS');
     } else if (this.pendingOperationType === 'edit') {
       this.schedulerChangeType.set(this.pendingEditFallbackType || 'UPDATE_MODE');
+      // 頻率變更已在床位元件選好規則 → 預帶進預約變更表單（僅總表規則類型會用到）
+      const decision = this.pendingRuleDecision;
+      this.pendingRuleDecision = null;
+      this.schedulerSeedPayload.set(
+        decision?.type === 'assign'
+          ? { bedNum: decision.rule.bedNum, shiftIndex: decision.rule.shiftIndex, freq: decision.rule.freq }
+          : null
+      );
       this.closeModal();
     }
 
@@ -1188,11 +1317,113 @@ export class PatientsComponent implements OnInit, OnDestroy {
     this.pendingEditFallbackType = '';
   }
 
+  /** 床位元件確認：依模式續存（編輯攔截）或直接排入總表（新增病人） */
+  async handleBedDialogAssigned(event: {
+    patientId: string;
+    bedNum: any;
+    shiftCode: string;
+    newFreq?: string;
+  }): Promise<void> {
+    const { patientId, bedNum, shiftCode, newFreq } = event;
+    const shiftIndex = this.SHIFTS.indexOf(shiftCode as any);
+    if (shiftIndex === -1) return;
+    const finalFreq = newFreq || null;
+    if (!finalFreq) {
+      this.showAlert('操作提示', '請先在視窗中選擇新頻率。');
+      return;
+    }
+    // 衝突雙重檢查（與總表頁 handleBedAssigned 相同）
+    const rules = this.patientStore.masterScheduleRules() as Record<string, any>;
+    for (const pId in rules) {
+      if (pId === patientId) continue;
+      const rule = rules[pId];
+      if (
+        String(rule.bedNum) === String(bedNum) &&
+        Number(rule.shiftIndex) === Number(shiftIndex) &&
+        hasFrequencyConflict(finalFreq, rule.freq)
+      ) {
+        const conflictPatient: any = this.patientStore.patientMap().get(pId);
+        this.showAlert(
+          '排班衝突',
+          `此床位已有 ${conflictPatient?.name || '其他病人'} (${rule.freq})，與您選擇的頻率 (${finalFreq}) 有時間衝突。`
+        );
+        return;
+      }
+    }
+    const patient: any = this.patientStore.patientMap().get(patientId);
+    const existingRule = rules[patientId] || {};
+    const ruleData = {
+      ...existingRule,
+      bedNum,
+      shiftIndex,
+      freq: finalFreq,
+      autoNote: generateAutoNote({ ...(patient || {}), freq: finalFreq }),
+      manualNote: existingRule.manualNote || patient?.baseNote || '',
+    };
+    this.isBedAssignDialogVisible.set(false);
+    this.bedAssignContext.set(null);
+
+    if (this.bedDialogMode === 'edit-save') {
+      const payload = this.bedDialogSavePayload;
+      this.bedDialogMode = null;
+      this.bedDialogSavePayload = null;
+      if (!payload) return;
+      // 以床位元件選定的頻率為準（可能與表單選的不同）
+      payload.freq = finalFreq;
+      if (payload.dialysisOrders) {
+        payload.dialysisOrders = { ...payload.dialysisOrders, freq: finalFreq };
+      }
+      this.pendingRuleDecision = { type: 'assign', rule: ruleData };
+      await this.handleSavePatient(payload);
+      return;
+    }
+
+    if (this.bedDialogMode === 'new-patient') {
+      this.bedDialogMode = null;
+      const bedText = String(bedNum).startsWith('peripheral')
+        ? `外圍 ${String(bedNum).split('-')[1]}`
+        : `${bedNum}床`;
+      const shiftText = ({ early: '早', noon: '午', late: '晚' } as Record<string, string>)[shiftCode] || shiftCode;
+      try {
+        if (patient && patient.freq !== finalFreq) {
+          await this.patientsApi.save(patientId, { freq: finalFreq });
+          this.patientStore.updatePatientInStore(patientId, { freq: finalFreq } as any);
+        }
+        await this.patientStore.upsertRuleInMasterSchedule(patientId, ruleData);
+        await this.recalculateStatsLocally();
+        this.showAlert(
+          '排班完成',
+          `${patient?.name || ''} 已排入總床位表（${bedText}／${shiftText}班／${finalFreq}），明日起自動產生排程。`
+        );
+      } catch (err: any) {
+        this.showAlert('操作失敗', `排入總表失敗：${err.message || ''}。請至總床位表重試。`);
+      }
+    }
+  }
+
+  /** 床位元件取消：編輯攔截=中止本次存檔；新增病人=不排常規床位（臨時走這條） */
+  handleBedDialogClose(): void {
+    this.isBedAssignDialogVisible.set(false);
+    this.bedAssignContext.set(null);
+    if (this.bedDialogMode === 'edit-save') {
+      this.bedDialogMode = null;
+      this.bedDialogSavePayload = null;
+      this.showAlert('已取消', '已取消本次存檔（頻率變更需選定床位）。可調整表單後重新存檔。');
+    } else if (this.bedDialogMode === 'new-patient') {
+      this.bedDialogMode = null;
+      this.showAlert(
+        '未排入常規床位',
+        '病人已新增，尚未排入總床位表；之後可於總床位表排入，或由組長以加洗方式排入當日排程。'
+      );
+    }
+  }
+
   async handleSchedulerSubmit(dataToSubmit: any): Promise<void> {
     try {
       await this.scheduledChangesApi.save(dataToSubmit);
       this.isSchedulerDialogVisible.set(false);
       this.schedulerPatient.set(null);
+      this.schedulerSeedPayload.set(null);
       this.schedulerChangeType.set('');
 
       const changeTypeText: Record<string, string> = {

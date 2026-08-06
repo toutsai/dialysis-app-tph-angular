@@ -245,7 +245,8 @@ export class BedAssignmentDialogComponent implements OnChanges, OnInit, OnDestro
         this.localAssignedPatientIds = ids;
         if (this.isEditMode) {
           this.selectedPatientId = this.currentPatient?.id || null;
-          this.newFreqSelection = '';
+          // 呼叫端可用 context.presetFreq 預帶新頻率（例如病人清單存檔攔截已在表單選好）
+          this.newFreqSelection = this.context?.presetFreq || '';
         } else {
           this.selectedFreq = 'all';
           this.selectedPatientId = null;
