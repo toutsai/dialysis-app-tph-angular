@@ -209,6 +209,14 @@
               </select>
             </label>
             <label class="field">
+              <span>口服 Vadadustat 150mg（TAB/月）</span>
+              <input type="number" min="0" [(ngModel)]="fd.diagnose!['vadadustat150']" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+            <label class="field">
+              <span>口服 Vadadustat 300mg（TAB/月）</span>
+              <input type="number" min="0" [(ngModel)]="fd.diagnose!['vadadustat300']" (ngModelChange)="onFieldChange(sp.id)" />
+            </label>
+            <label class="field">
               <span>是否使用活性維他命</span>
               <select [(ngModel)]="fd.diagnose!['isVITD']" (ngModelChange)="onFieldChange(sp.id)">
                 <option value=""></option>
@@ -277,6 +285,7 @@
           <p class="kqi-hint">
             <i class="fas fa-info-circle"></i>
             EPO 用量（U／ug）兩欄官方由系統轉入時自動計算，無需填寫。
+            Vadadustat 兩欄僅供站內紀錄（官方匯入格式尚無此欄，不隨 CSV 匯出，需申報時請至 KiDit 網站醫療評估頁手動填寫）。
           </p>
           <label class="complete-row">
             <input type="checkbox" [(ngModel)]="fd.completed!.diagnose" (ngModelChange)="onFieldChange(sp.id)" />

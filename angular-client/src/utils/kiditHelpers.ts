@@ -44,6 +44,8 @@ export const KIDIT_OPTIONS: Record<string, KiditOption[]> = {
     { value: '2', label: '未婚' },
     { value: '3', label: '分居' },
     { value: '4', label: '配偶死亡' },
+    // 5 離婚：官方匯入格式說明(舊)無此碼，KiDit 網站 UI 有（2026-08-06 依官網代碼補）
+    { value: '5', label: '離婚' },
     { value: '9', label: '未明' },
   ],
   // 11 教育程度
@@ -69,6 +71,7 @@ export const KIDIT_OPTIONS: Record<string, KiditOption[]> = {
     { value: '11', label: '學生' },
     { value: '12', label: '自由業' },
     { value: '13', label: '家管' },
+    { value: '14', label: '無' },
   ],
   // 14 關係
   relation: [
