@@ -592,7 +592,8 @@ button:disabled {
   z-index: 20;
   padding: 1rem;
   overflow-y: auto;
-  backdrop-filter: blur(4px);
+  /* 移除 backdrop-filter: blur：背景已 97% 不透明看不出模糊，卻會在更新橫幅倒數(每秒全站變更偵測)時
+     不斷重算而造成整個簡表閃爍（見 update-banner tick 每秒 zone.run 的取捨） */
   animation: fadeIn 0.3s ease;
 }
 @keyframes fadeIn {
