@@ -656,6 +656,15 @@ button:disabled {
   padding: 0 4px;
   border-radius: 4px;
 }
+/* 臨床查閱簡表病房號徽章＝開啟 MVAS 病歷系統的連結；覆蓋 <a> 預設藍字底線 */
+a.ward-number-mvas {
+  text-decoration: none;
+  color: #333;
+  cursor: pointer;
+}
+a.ward-number-mvas:hover {
+  outline: 1px solid #b8860b;
+}
 .patient-name-wrapper {
   display: flex;
   align-items: center;

@@ -327,6 +327,8 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   readonly isVersionConflictDialogVisible = signal(false);
   readonly versionConflictMessage = signal('');
   readonly isSimplifiedViewVisible = signal(false);
+  /** 院內 MVAS 病歷系統入口（臨床查閱簡表點病房號開新分頁；跨網站無法自動登入/填號，僅複製病歷號供貼上） */
+  readonly MVAS_URL = 'http://192.168.24.217/mvas/web/init.htm';
   readonly isMemoDialogVisible = signal(false);
   readonly isConditionRecordDialogVisible = signal(false);
   readonly isDetailModalVisible = signal(false);
