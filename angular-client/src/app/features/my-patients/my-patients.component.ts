@@ -1024,7 +1024,8 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
         kiditService.fetchPendingRegistrations(),
       ]);
       const rows = ((pending as any[]) || [])
-        .filter((r) => r.hospitalFirstDialysisDate)
+        // excluded＝KiDit 工作站待建檔清單按「排除」者，各消費端一律隱藏
+        .filter((r) => r.hospitalFirstDialysisDate && !r.excluded)
         .map((r) => ({ ...r, mine: String(r.firstNurse?.nurse || '').trim() === target.userName }))
         .sort(
           (a, b) =>
@@ -1088,7 +1089,10 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
   private async loadPendingRegistrations(): Promise<void> {
     try {
       const pending = await kiditService.fetchPendingRegistrations();
-      const rows = ((pending as any[]) || []).filter((r) => r.hospitalFirstDialysisDate != null);
+      // excluded＝KiDit 工作站待建檔清單按「排除」者，病人卡書籤同樣隱藏
+      const rows = ((pending as any[]) || []).filter(
+        (r) => r.hospitalFirstDialysisDate != null && !r.excluded,
+      );
       this.pendingRegMap = new Map(rows.map((r) => [r.patientId, r]));
       this.pendingRegPatientIds.set(new Set(this.pendingRegMap.keys()));
     } catch (error) {

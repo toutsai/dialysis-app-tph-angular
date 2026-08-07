@@ -19,6 +19,9 @@ export interface MonthlyBasicDataRow {
   complete: boolean;
   profileDate: string | null;
   historyDate: string | null;
+  /** 建檔者/建檔時間：儲存基本資料表單時後端蓋章（2026-08-08 起），舊資料為 null */
+  profileSavedBy?: string | null;
+  profileSavedAt?: string | null;
   profile: Record<string, string> | null;
   history: Record<string, unknown> | null;
 }

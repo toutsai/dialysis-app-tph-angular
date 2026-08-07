@@ -169,8 +169,13 @@
         <h3>
           <i class="fas fa-user-clock"></i>
           KiDit 待建檔清單
-          <span class="va-count" *ngIf="!isLoadingPendingReg()">（{{ pendingRegRows().length }} 人）</span>
+          <span class="va-count" *ngIf="!isLoadingPendingReg()">（{{ visiblePendingRegRows().length }} 人）</span>
         </h3>
+        <button class="action-btn" *ngIf="!isLoadingPendingReg() && excludedPendingRegRows().length > 0"
+                (click)="showExcludedReg.set(!showExcludedReg())">
+          <i class="fas" [class.fa-eye]="!showExcludedReg()" [class.fa-eye-slash]="showExcludedReg()"></i>
+          已排除（{{ excludedPendingRegRows().length }}）
+        </button>
       </div>
 
       <p class="pr-hint">
@@ -183,11 +188,11 @@
         <p>正在彙整待建檔名單...</p>
       </div>
 
-      <div *ngIf="!isLoadingPendingReg() && pendingRegRows().length === 0" class="va-empty">
+      <div *ngIf="!isLoadingPendingReg() && visiblePendingRegRows().length === 0" class="va-empty">
         目前沒有待建檔的病人。
       </div>
 
-      <div class="table-wrap" *ngIf="!isLoadingPendingReg() && pendingRegRows().length > 0">
+      <div class="table-wrap" *ngIf="!isLoadingPendingReg() && visiblePendingRegRows().length > 0">
         <table class="va-table">
           <thead>
             <tr>
@@ -199,10 +204,11 @@
               <th>缺項</th>
               <th>最近事件日</th>
               <th>首接護理師</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let r of pendingRegRows()" class="pr-row" (click)="openPendingRegTarget(r)">
+            <tr *ngFor="let r of visiblePendingRegRows()" class="pr-row" (click)="openPendingRegTarget(r)">
               <td>{{ r.name || '—' }}</td>
               <td>{{ r.medicalRecordNumber || '—' }}</td>
               <td>{{ pendingRegFlagLabel(r) }}</td>
@@ -211,6 +217,46 @@
               <td class="pr-missing">{{ pendingRegMissingLabel(r) }}</td>
               <td>{{ r.lastEventDate || '尚無事件' }}</td>
               <td>{{ r.firstNurse ? (r.firstNurse.nurse || r.firstNurse.team) : '—' }}</td>
+              <td>
+                <button class="pr-exclude-btn" title="排除此病人（不再列入待建檔清單與我的病人頁提醒，可復原）"
+                        (click)="setPendingRegExclusion(r, true, $event)">
+                  排除
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 已排除病人（點「已排除」展開；復原後重回待建檔清單） -->
+      <div class="table-wrap pr-excluded-wrap" *ngIf="showExcludedReg() && !isLoadingPendingReg() && excludedPendingRegRows().length > 0">
+        <h4 class="pr-excluded-title"><i class="fas fa-user-slash"></i> 已排除病人</h4>
+        <table class="va-table">
+          <thead>
+            <tr>
+              <th>姓名</th>
+              <th>病歷號</th>
+              <th>標記</th>
+              <th>標記日期</th>
+              <th>排除者</th>
+              <th>排除時間</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let r of excludedPendingRegRows()" class="pr-row pr-row-excluded">
+              <td>{{ r.name || '—' }}</td>
+              <td>{{ r.medicalRecordNumber || '—' }}</td>
+              <td>{{ pendingRegFlagLabel(r) }}</td>
+              <td>{{ r.hospitalFirstDialysisDate || r.firstDialysisDate || '—' }}</td>
+              <td>{{ r.excludedBy || '—' }}</td>
+              <td>{{ (r.excludedAt || '').slice(0, 16) || '—' }}</td>
+              <td>
+                <button class="pr-restore-btn" title="復原此病人（重新列入待建檔清單）"
+                        (click)="setPendingRegExclusion(r, false, $event)">
+                  復原
+                </button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -259,6 +305,8 @@
               <th>病歷號</th>
               <th>本院初透日</th>
               <th>建檔狀態</th>
+              <th>建檔者</th>
+              <th>建檔日期</th>
               <th>基本資料儲存日</th>
               <th>身分證號</th>
               <th>生日（民國）</th>
@@ -284,6 +332,9 @@
                   {{ basicDataStatus(r) }}
                 </span>
               </td>
+              <!-- 建檔者/建檔日期＝實際儲存基本資料表單的人與時間（2026-08-08 起記錄，舊資料無戳記顯示 — ） -->
+              <td>{{ r.profileSavedBy || '—' }}</td>
+              <td>{{ (r.profileSavedAt || '').slice(0, 10) || '—' }}</td>
               <td>{{ r.profileDate || '—' }}</td>
               <td>{{ r.profile?.['idNumber'] || '—' }}</td>
               <td>{{ rocDisplay(r.profile?.['birthDate']) || '—' }}</td>

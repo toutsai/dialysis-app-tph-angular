@@ -90,6 +90,10 @@ export class KiditReportComponent implements OnInit {
   // KiDit 待建檔清單（初次建檔頁籤內嵌；本院初透/首透且基本資料未完整）
   readonly isLoadingPendingReg = signal(false);
   readonly pendingRegRows = signal<any[]>([]);
+  // 排除功能：已排除者隱藏於主清單（含我的病人頁書籤/彈窗），工作站可展開檢視並復原
+  readonly showExcludedReg = signal(false);
+  readonly visiblePendingRegRows = computed(() => this.pendingRegRows().filter((r) => !r.excluded));
+  readonly excludedPendingRegRows = computed(() => this.pendingRegRows().filter((r) => r.excluded));
   // 每月基本資料（初次建檔頁籤內嵌；本院初透 × 建檔基本資料，含未建檔比對）
   readonly isLoadingBasicData = signal(false);
   readonly basicDataRows = signal<MonthlyBasicDataRow[]>([]);
@@ -419,6 +423,20 @@ export class KiditReportComponent implements OnInit {
     // 兩欄各自填在不同事件上：單一事件內不完整，仍列入名單
     if (missing.length === 0) return '資料分散於不同事件';
     return missing.join('、');
+  }
+
+  /** 排除/復原待建檔病人：排除後主清單與我的病人頁書籤/彈窗都不再顯示（可於「已排除」區復原） */
+  async setPendingRegExclusion(row: any, excluded: boolean, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    const action = excluded ? '排除' : '復原';
+    if (!window.confirm(`確定${action}「${row.name || ''}」？${excluded ? '排除後將不在待建檔清單與我的病人頁顯示。' : ''}`)) return;
+    try {
+      await localApi.put(`/nursing/kidit-pending-exclusions/${row.patientId}`, { excluded });
+      await this.loadPendingRegList();
+    } catch (error) {
+      console.error(`${action}待建檔病人失敗:`, error);
+      alert(`${action}失敗，請稍後再試。`);
+    }
   }
 
   /** 點列直接開該病人最近 KiDit 事件所在日期的詳情視窗補建檔 */

@@ -1428,6 +1428,46 @@ router.get('/kidit-logbook', authenticate, (req, res) => {
   }
 })
 
+// 待建檔清單排除名單：site_config 單筆 JSON map { patientId: { by, at } }
+const KIDIT_PENDING_EXCLUSIONS_ID = 'kidit_pending_exclusions'
+
+function readKiditPendingExclusions(db) {
+  const row = db.prepare('SELECT config_data FROM site_config WHERE id = ?').get(KIDIT_PENDING_EXCLUSIONS_ID)
+  try {
+    const parsed = JSON.parse(row?.config_data || '{}')
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * PUT /api/nursing/kidit-pending-exclusions/:patientId
+ * 待建檔清單排除/復原。body: { excluded: boolean }
+ * 排除者仍在清單回傳（excluded=true），由各消費端隱藏；工作站可檢視已排除並復原。
+ */
+router.put('/kidit-pending-exclusions/:patientId', ...isEditor, (req, res) => {
+  try {
+    const { patientId } = req.params
+    const excluded = !!req.body?.excluded
+    const db = getDatabase()
+    const map = readKiditPendingExclusions(db)
+    if (excluded) {
+      map[patientId] = { by: req.user?.name || '', at: new Date().toLocaleString('sv-SE') }
+    } else {
+      delete map[patientId]
+    }
+    db.prepare(
+      `INSERT INTO site_config (id, config_data, updated_at) VALUES (?, ?, datetime('now','localtime'))
+       ON CONFLICT(id) DO UPDATE SET config_data = excluded.config_data, updated_at = datetime('now','localtime')`
+    ).run(KIDIT_PENDING_EXCLUSIONS_ID, JSON.stringify(map))
+    res.json({ success: true, excluded })
+  } catch (error) {
+    console.error('更新 KiDit 待建檔排除名單錯誤:', error)
+    res.status(500).json({ error: true, message: '更新待建檔排除名單失敗' })
+  }
+})
+
 /**
  * GET /api/nursing/kidit-pending-registrations
  * KiDit 待建檔清單：勾「本院初透」或「首透」狀態標記、且 KiDit 基本資料未完整的病人。
@@ -1552,6 +1592,15 @@ router.get('/kidit-pending-registrations', authenticate, (req, res) => {
       f.firstNurse = lookupNurse(f.patientId, flagDate) || lookupNurse(f.patientId, f.lastEventDate) || null
     }
 
+    // 5. 附上排除旗標（不在後端過濾：工作站要能檢視已排除者並復原，其他消費端自行隱藏）
+    const exclusions = readKiditPendingExclusions(db)
+    for (const f of pending) {
+      const ex = exclusions[f.patientId]
+      f.excluded = !!ex
+      f.excludedBy = ex?.by || null
+      f.excludedAt = ex?.at || null
+    }
+
     // 標記日期新 → 舊（使用者指定）
     pending.sort((a, b) =>
       String(b.hospitalFirstDialysisDate || b.firstDialysisDate || '').localeCompare(
@@ -1618,10 +1667,14 @@ router.get('/kidit-monthly-basic-data', authenticate, (req, res) => {
         if (!e?.patientId || !idSet.has(e.patientId)) continue
         const cur =
           dataByPatient.get(e.patientId) ||
-          { profile: null, history: null, profileDate: null, historyDate: null, complete: false }
+          { profile: null, history: null, profileDate: null, historyDate: null, complete: false,
+            profileSavedBy: null, profileSavedAt: null }
         if (e.kidit_profile?.idNumber) {
           cur.profile = e.kidit_profile
           cur.profileDate = row.date
+          // 建檔者/建檔時間＝事件層戳記（PUT events 時後端比對蓋章）；舊資料無戳記回 null
+          cur.profileSavedBy = e.kidit_profile_saved_by || null
+          cur.profileSavedAt = e.kidit_profile_saved_at || null
         }
         // 原發病存於 kidit_profile（病史表單無此欄），病史以「存過病史表單且有內容」認定（2026-08-04 修正）
         if (e.kidit_history && Object.keys(e.kidit_history).length > 0) {
@@ -1652,6 +1705,8 @@ router.get('/kidit-monthly-basic-data', authenticate, (req, res) => {
           complete: !!k?.complete,
           profileDate: k?.profileDate || null,
           historyDate: k?.historyDate || null,
+          profileSavedBy: k?.profileSavedBy || null,
+          profileSavedAt: k?.profileSavedAt || null,
           profile: k?.profile || null,
           history: k?.history || null,
         }
@@ -1709,6 +1764,39 @@ router.put('/kidit-logbook/:date/events/:eventId', ...isEditor, async (req, res)
 })
 
 /**
+ * 建檔者/建檔時間戳記：與 DB 現況逐事件比對，kidit_profile/kidit_history 有變動的事件
+ * 蓋上事件層 `<欄位>_saved_by` / `<欄位>_saved_at`；未變動者沿用 DB 既有戳記
+ * （前端是整包 events 覆寫，戳記不能信任 client 回傳）。鍵在事件層而非 kidit_profile 內，
+ * 官方 CSV 匯出（逐欄取值）不受影響；kiditSync 重建以 {...existing, ...current} 合併會保留。
+ */
+function stampKiditSavedMeta(date, events, user) {
+  const db = getDatabase()
+  const row = db.prepare('SELECT events FROM kidit_logbook WHERE date = ?').get(date)
+  let oldEvents = []
+  try {
+    oldEvents = JSON.parse(row?.events || '[]')
+  } catch {}
+  const oldById = new Map(oldEvents.filter((e) => e?.id).map((e) => [e.id, e]))
+  const now = new Date().toLocaleString('sv-SE')
+  for (const e of events) {
+    if (!e || !e.id) continue
+    const old = oldById.get(e.id)
+    for (const field of ['kidit_profile', 'kidit_history']) {
+      const byKey = `${field}_saved_by`
+      const atKey = `${field}_saved_at`
+      if (e[field] && JSON.stringify(e[field]) !== JSON.stringify(old?.[field] ?? null)) {
+        e[byKey] = user?.name || ''
+        e[atKey] = now
+      } else {
+        if (old?.[byKey] != null) e[byKey] = old[byKey]
+        if (old?.[atKey] != null) e[atKey] = old[atKey]
+      }
+    }
+  }
+  return events
+}
+
+/**
  * PUT /api/nursing/kidit-logbook/:date/events
  * 取代整日的 Kidit 事件列表
  */
@@ -1717,7 +1805,7 @@ router.put('/kidit-logbook/:date/events', ...isEditor, (req, res) => {
     const { date } = req.params
     const { events } = req.body
 
-    const result = updateKiditEvents(date, events || [])
+    const result = updateKiditEvents(date, stampKiditSavedMeta(date, events || [], req.user))
 
     res.json({
       success: true,

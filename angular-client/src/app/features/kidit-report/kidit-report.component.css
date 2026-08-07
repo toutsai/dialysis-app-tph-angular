@@ -432,6 +432,30 @@ tr.qi-untouched .qi-flag { background: #eceff1; color: #90a4ae; }
 .pr-row:hover td { background: #fafcff; }
 .pr-missing { color: #c62828; font-weight: 600; }
 
+/* 待建檔清單：排除/復原 */
+.pr-exclude-btn,
+.pr-restore-btn {
+  padding: 0.25rem 0.7rem;
+  border-radius: 5px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  background: #fff;
+  white-space: nowrap;
+}
+.pr-exclude-btn { border: 1px solid #b0bec5; color: #607d8b; }
+.pr-exclude-btn:hover { background: #eceff1; border-color: #78909c; }
+.pr-restore-btn { border: 1px solid #2e7d32; color: #2e7d32; }
+.pr-restore-btn:hover { background: #e8f5e9; }
+.pr-excluded-wrap { margin-top: 1.1rem; }
+.pr-excluded-title {
+  margin: 0 0 0.45rem;
+  font-size: 1.02rem;
+  color: #78909c;
+}
+.pr-row-excluded { cursor: default; }
+.pr-row-excluded td { color: #90a4ae; }
+
 /* 月曆 */
 .calendar-wrapper {
   background: #fff;
