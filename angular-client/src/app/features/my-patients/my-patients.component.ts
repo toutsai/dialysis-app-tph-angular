@@ -148,7 +148,7 @@ interface MyPatientItem {
   // 是否為「初透衛教對象」（沿用 openEduModal 同一 predicate，非主護簽核完成者），
   // 於 fetchMyPatientData 建卡時一併算好存欄位，模板不重算。
   isEduTarget?: boolean;
-  // 待辦抽血留言（type='抽血'）：不列留言區，改以「需抽血」書籤呈現
+  // 待辦抽血留言（type='抽血'）：僅目標日當天納入，同時驅動「需抽血」書籤與留言區顯示
   bloodMemos: { id: string; content: string }[];
 }
 
@@ -1523,13 +1523,22 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
             m.status !== 'resolved' &&
             m.status !== 'cancelled'
         );
-        // 抽血留言不列留言區，改以卡片「需抽血」書籤呈現（點書籤確認完成＝標記已讀）
+        // 抽血留言僅目標日當天顯示（未填目標日視為長期提醒，比照簡表規則）；
+        // 當天同時出現在「需抽血」書籤與留言區，護理師看得到內容避免抽錯日
+        const isBloodMemoDueToday = (m: (typeof patientTasks)[number]) => {
+          const d = String((m as any).targetDate || '').slice(0, 10);
+          return !d || d === targetDate;
+        };
         const bloodMemos = patientTasks
-          .filter((m) => m.type === '抽血')
+          .filter((m) => m.type === '抽血' && isBloodMemoDueToday(m))
           .map((m) => ({ id: m.id, content: m.content }));
         const patientMemos = patientTasks
           // 調班申請自動產生的交班留言不在卡片顯示（調班管理/留言板仍看得到）＝使用者指定精簡
-          .filter((m) => m.type !== '調班' && m.type !== '抽血')
+          .filter(
+            (m) =>
+              m.type !== '調班' &&
+              (m.type !== '抽血' || isBloodMemoDueToday(m))
+          )
           .map((m) => ({
             id: m.id,
             content: m.content,
