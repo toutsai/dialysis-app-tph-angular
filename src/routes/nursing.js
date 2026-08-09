@@ -224,6 +224,52 @@ router.get('/schedules/:id', ...isEditor, (req, res) => {
  * PUT /api/nursing/schedules/:id
  * 更新護理排班，並同步護理師姓名到 nurse_assignments
  */
+/**
+ * 存檔時自動帶入固定組別（816=外圍、74/L=A）：這兩種班別在 UI 沒有組別下拉可手填，
+ * 全手動排班（不跑自動分配）或已確認週會漏帶（2026-08 week3 實際發生，曾手動修補）。
+ * 只補空白格、不動任何已有值；分組排除名單(excludedNurses)的人不補（與自動分配一致）。
+ * 只補今天(台北)以後的日子——過去日期保持實況不改寫歷史，與 nurse_assignments 同步規則一致。
+ * 刻意不含 311C：其固定組 C 與夜班字母池共用可能撞手動選的 C，且 UI 本來就可手填。
+ * 固定值優先讀當月 nursing_group_config 的 fixedAssignments，查無用預設。
+ */
+function fillFixedShiftGroups(db, yearMonth, scheduleByNurse) {
+  if (!scheduleByNurse) return 0
+  let fixed = { '816': '外圍', '74/L': 'A' }
+  let excluded = new Set()
+  try {
+    const cfgRow = db.prepare('SELECT config FROM nursing_group_config WHERE id = ?').get(yearMonth)
+    const cfg = JSON.parse(cfgRow?.config || '{}')
+    if (cfg?.fixedAssignments) {
+      fixed = {
+        '816': cfg.fixedAssignments['816'] || '外圍',
+        '74/L': cfg.fixedAssignments['74/L'] || 'A',
+      }
+    }
+    if (Array.isArray(cfg?.excludedNurses)) excluded = new Set(cfg.excludedNurses)
+  } catch {}
+
+  const today = getTaipeiTodayString() // YYYY-MM-DD
+  const todayMonth = today.slice(0, 7)
+  if (yearMonth < todayMonth) return 0
+  const startIndex = yearMonth === todayMonth ? Number(today.slice(8, 10)) - 1 : 0
+
+  let count = 0
+  for (const [nurseId, n] of Object.entries(scheduleByNurse)) {
+    if (excluded.has(nurseId) || !n || !Array.isArray(n.shifts)) continue
+    if (!Array.isArray(n.groups)) n.groups = []
+    for (let i = startIndex; i < n.shifts.length; i++) {
+      const g = fixed[String(n.shifts[i] || '').trim()]
+      if (!g) continue
+      if (!String(n.groups[i] || '').trim()) {
+        while (n.groups.length <= i) n.groups.push('')
+        n.groups[i] = g
+        count++
+      }
+    }
+  }
+  return count
+}
+
 router.put('/schedules/:id', ...isAdmin, async (req, res) => {
   try {
     const { id } = req.params // id 格式: YYYY-MM
@@ -266,6 +312,10 @@ router.put('/schedules/:id', ...isAdmin, async (req, res) => {
       }
       mergedData.scheduleByNurse = mergedScheduleByNurse
     }
+
+    // 自動帶入 816/74L 固定組別（只補空白，見 fillFixedShiftGroups 說明）
+    const fixedFilled = fillFixedShiftGroups(db, id, mergedData.scheduleByNurse)
+    if (fixedFilled > 0) console.log(`[NursingSchedule] 自動帶入固定組別 ${fixedFilled} 格 (${id})`)
 
     // 儲存護理班表
     db.prepare(
@@ -634,6 +684,10 @@ async function handleNursingScheduleUpload(req, res) {
       lastUpdatedAt: new Date().toISOString(),
       updatedBy: { uid: req.user.id, name: req.user.name },
     }
+
+    // 自動帶入 816/74L 固定組別（Excel 匯入通常只有班別沒有組別）
+    const fixedFilled = fillFixedShiftGroups(db, yearMonth, scheduleByNurse)
+    if (fixedFilled > 0) console.log(`[NursingSchedule] 自動帶入固定組別 ${fixedFilled} 格 (${yearMonth})`)
 
     db.prepare(
       `
