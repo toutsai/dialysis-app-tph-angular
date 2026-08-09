@@ -599,8 +599,8 @@
   left: 180px;
   background-color: #f8f9fa;
   z-index: 1;
-  min-width: 170px;
-  max-width: 220px;
+  min-width: 200px;
+  max-width: 260px;
   font-size: 0.98rem;
   color: #455a64;
   text-align: left;
@@ -617,36 +617,39 @@
 /* 組別小徽章：沿用 .group-badge.group-X 配色（單一 class 低特異性，字母色會蓋過此底色） */
 .cum-chip {
   display: inline-block;
-  padding: 0 0.42rem;
-  margin: 1px 2px 1px 0;
-  font-size: 0.88rem;
-  line-height: 1.45;
-  border-radius: 9px;
+  padding: 0.08rem 0.55rem;
+  margin: 2px 3px 2px 0;
+  font-size: 1.12rem;
+  line-height: 1.4;
+  border-radius: 12px;
   background-color: #78909c; /* 無對應色字母（如 128 的 L/M）的後備色 */
 }
 sup.cum-chip-count {
-  margin-left: 1px;
-  font-size: 0.7em;
+  margin-left: 2px;
+  font-size: 0.82em;
   font-weight: 800;
 }
 .cum-hosp-label {
   display: inline-block;
-  margin: 0 2px 0 4px;
-  padding-left: 6px;
+  margin: 0 3px 0 5px;
+  padding-left: 7px;
   border-left: 2px solid #cfd8dc;
   color: #78909c;
-  font-size: 0.85rem;
+  font-size: 0.95rem;
 }
 .cum-standby {
-  margin-left: 4px;
-  font-size: 0.9rem;
+  margin-left: 5px;
+  font-size: 1.1rem;
+}
+.cum-standby sup.cum-chip-count {
+  color: #e65100;
 }
 .cum-tag {
   display: inline-block;
-  padding: 0 0.32rem;
-  margin-right: 0.32rem;
+  padding: 0.05rem 0.4rem;
+  margin-right: 0.35rem;
   border-radius: 4px;
-  font-size: 0.85em;
+  font-size: 1rem;
   font-weight: 700;
 }
 .cum-day {
