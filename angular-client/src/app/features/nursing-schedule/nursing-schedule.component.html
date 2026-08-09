@@ -373,11 +373,30 @@
                         class="cumulative-weekly"
                       >
                         <ng-container *ngIf="cumulativeGroupsByNurse().get(nurseEntry[0]) as cum; else noCum">
-                          <div class="cum-line" *ngIf="cum.day">
-                            <span class="cum-tag cum-day">白</span>{{ cum.day }}
+                          <!-- 組別彩色徽章（沿用組別配色），次數≥2 右上角小數字；住院組以分隔小標隔開 -->
+                          <ng-template #cumChips let-list>
+                            <span
+                              *ngFor="let e of list"
+                              class="group-badge cum-chip"
+                              [ngClass]="getGroupClass(e.label)"
+                            >{{ e.label }}<sup class="cum-chip-count" *ngIf="e.count > 1">{{ e.count }}</sup></span>
+                          </ng-template>
+                          <div class="cum-line" *ngIf="cum.hasDay">
+                            <span class="cum-tag cum-day">白</span>
+                            <ng-container *ngTemplateOutlet="cumChips; context: { $implicit: cum.day.norm }"></ng-container>
+                            <ng-container *ngIf="cum.day.hosp.length">
+                              <span class="cum-hosp-label">住院</span>
+                              <ng-container *ngTemplateOutlet="cumChips; context: { $implicit: cum.day.hosp }"></ng-container>
+                            </ng-container>
+                            <span *ngIf="cum.day.standby" class="cum-standby" title="預備75">&#11088;<sup class="cum-chip-count" *ngIf="cum.day.standby > 1">{{ cum.day.standby }}</sup></span>
                           </div>
-                          <div class="cum-line" *ngIf="cum.night">
-                            <span class="cum-tag cum-night">晚</span>{{ cum.night }}
+                          <div class="cum-line" *ngIf="cum.hasNight">
+                            <span class="cum-tag cum-night">晚</span>
+                            <ng-container *ngTemplateOutlet="cumChips; context: { $implicit: cum.night.norm }"></ng-container>
+                            <ng-container *ngIf="cum.night.hosp.length">
+                              <span class="cum-hosp-label">住院</span>
+                              <ng-container *ngTemplateOutlet="cumChips; context: { $implicit: cum.night.hosp }"></ng-container>
+                            </ng-container>
                           </div>
                         </ng-container>
                         <ng-template #noCum>—</ng-template>

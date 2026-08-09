@@ -610,9 +610,36 @@
   box-shadow: 2px 0 3px -1px rgba(0, 0, 0, 0.08);
 }
 .cum-line + .cum-line {
-  margin-top: 0.2rem;
-  padding-top: 0.2rem;
+  margin-top: 0.25rem;
+  padding-top: 0.25rem;
   border-top: 1px dashed #e0e4e8;
+}
+/* 組別小徽章：沿用 .group-badge.group-X 配色（單一 class 低特異性，字母色會蓋過此底色） */
+.cum-chip {
+  display: inline-block;
+  padding: 0 0.42rem;
+  margin: 1px 2px 1px 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  border-radius: 9px;
+  background-color: #78909c; /* 無對應色字母（如 128 的 L/M）的後備色 */
+}
+sup.cum-chip-count {
+  margin-left: 1px;
+  font-size: 0.7em;
+  font-weight: 800;
+}
+.cum-hosp-label {
+  display: inline-block;
+  margin: 0 2px 0 4px;
+  padding-left: 6px;
+  border-left: 2px solid #cfd8dc;
+  color: #78909c;
+  font-size: 0.85rem;
+}
+.cum-standby {
+  margin-left: 4px;
+  font-size: 0.9rem;
 }
 .cum-tag {
   display: inline-block;

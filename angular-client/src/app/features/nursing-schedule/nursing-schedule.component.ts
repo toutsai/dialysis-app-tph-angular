@@ -364,14 +364,15 @@ export class NursingScheduleComponent implements OnInit {
   /** 分組下拉/預備75 直接改 temp 物件（ngModel），signal 偵測不到，變更時 bump 讓累積欄重算 */
   readonly groupEditStatsVersion = signal(0);
 
-  /** 分組編輯模式姓名旁「累積組別」欄：本週開始前＋本週已選的合併計數，統一格式 A(2)。
-   *  白班/夜班各一列，普通組與住院組（hospitalGroups 配置）分開統計＝使用者指定；
+  /** 分組編輯模式姓名旁「累積組別」欄：本週開始前＋本週已選的合併計數。
+   *  彩色徽章呈現（沿用組別徽章配色），次數1不顯數字、≥2 右上角小數字；
+   *  白班/夜班各一列，普通組與住院組（hospitalGroups 配置）分開＝使用者指定；
    *  本週下拉選取即時反映，本週之後的未來週不計。 */
-  readonly cumulativeGroupsByNurse = computed<Map<string, { day: string; night: string }>>(() => {
+  readonly cumulativeGroupsByNurse = computed<Map<string, any>>(() => {
     this._scheduleVersion();
     this.groupEditStatsVersion();
     const tab = this.activeWeekTab();
-    const map = new Map<string, { day: string; night: string }>();
+    const map = new Map<string, any>();
     if (!this.isGroupEditMode() || tab < 1) return map;
     const source = this.tempScheduleWithGroups || this.monthlySchedule;
     const weekData = this.weeklyData[tab - 1];
@@ -402,19 +403,19 @@ export class NursingScheduleComponent implements OnInit {
       for (const d of nurseData.standby75Days || []) {
         if (d < weekStart || weekSet.has(d)) standby++;
       }
-      const buildLine = (counts: Map<string, number>, hosp: Set<string>, extra = ''): string => {
+      const toEntries = (counts: Map<string, number>, hosp: Set<string>) => {
         const labels = [...counts.keys()].sort((a, b) => a.localeCompare(b));
-        const norm = labels.filter((l) => !hosp.has(l)).map((l) => `${l}(${counts.get(l)})`);
-        const inHosp = labels.filter((l) => hosp.has(l)).map((l) => `${l}(${counts.get(l)})`);
-        const segs: string[] = [];
-        if (norm.length) segs.push(norm.join(', '));
-        if (inHosp.length) segs.push(`住院 ${inHosp.join(', ')}`);
-        if (extra) segs.push(extra);
-        return segs.join('｜');
+        const entry = (l: string) => ({ label: l, count: counts.get(l) });
+        return {
+          norm: labels.filter((l) => !hosp.has(l)).map(entry),
+          hosp: labels.filter((l) => hosp.has(l)).map(entry),
+        };
       };
-      const day = buildLine(dayCounts, hospDay, standby ? `預備75(${standby})` : '');
-      const night = buildLine(nightCounts, hospNight);
-      if (day || night) map.set(nurseId, { day, night });
+      const day = { ...toEntries(dayCounts, hospDay), standby };
+      const night = toEntries(nightCounts, hospNight);
+      const hasDay = day.norm.length || day.hosp.length || standby;
+      const hasNight = night.norm.length || night.hosp.length;
+      if (hasDay || hasNight) map.set(nurseId, { day, night, hasDay, hasNight });
     }
     return map;
   });
