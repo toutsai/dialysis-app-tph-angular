@@ -193,6 +193,14 @@
         </div>
 
         <div class="controls-right">
+          <!-- 狀態訊息與編輯按鈕同列（使用者指定不佔獨立列）；失敗紅、其餘綠 -->
+          <span
+            *ngIf="uploadStatus()"
+            [ngClass]="['status-inline', uploadStatus().includes('失敗') ? 'error' : 'success']"
+            [title]="uploadStatus()"
+          >
+            {{ uploadStatus() }}
+          </span>
           <!-- 權限控制：將所有編輯相關的按鈕都包在 admin 判斷中 -->
           <ng-container *ngIf="auth.isAdmin()">
             <!-- 班別編輯按鈕 -->
@@ -247,14 +255,6 @@
           </ng-container>
         </div>
       </section>
-
-      <!-- 上傳狀態訊息 -->
-      <div
-        *ngIf="uploadStatus()"
-        [ngClass]="['status-message', uploadStatus().includes('成功') ? 'success' : 'error']"
-      >
-        {{ uploadStatus() }}
-      </div>
 
       <!-- 週班表顯示區域 -->
       <div *ngIf="isLoadingSchedule()" class="loading-schedule">
