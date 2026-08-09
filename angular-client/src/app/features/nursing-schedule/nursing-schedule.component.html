@@ -5,82 +5,14 @@
       <p class="page-description">原始Excel班表請刪除第2、3、5列後，再執行上傳功能。</p>
     </div>
     <div class="header-actions">
-      <!-- 週班表的篩選/狀態/編輯按鈕整併於標題列（使用者指定省一列） -->
-      <ng-container *ngIf="activeTab() === 'weekly'">
-        <span
-          *ngIf="uploadStatus()"
-          [ngClass]="['status-inline', uploadStatus().includes('失敗') ? 'error' : 'success']"
-          [title]="uploadStatus()"
-        >
-          {{ uploadStatus() }}
-        </span>
-        <div class="shift-filter-group">
-          <button
-            [ngClass]="['filter-btn', shiftFilter() === 'all' ? 'active' : '']"
-            (click)="shiftFilter.set('all')"
-          >
-            全部
-          </button>
-          <button
-            [ngClass]="['filter-btn', shiftFilter() === 'day' ? 'active' : '']"
-            (click)="shiftFilter.set('day')"
-          >
-            只看白班
-          </button>
-          <button
-            [ngClass]="['filter-btn', shiftFilter() === 'night' ? 'active' : '']"
-            (click)="shiftFilter.set('night')"
-          >
-            只看夜班
-          </button>
-        </div>
-        <!-- 權限控制：編輯相關按鈕限 admin -->
-        <ng-container *ngIf="auth.isAdmin()">
-          <button
-            *ngIf="!isShiftEditMode() && !isGroupEditMode()"
-            (click)="enterShiftEditMode()"
-            class="btn-edit"
-          >
-            編輯班別
-          </button>
-          <ng-container *ngIf="isShiftEditMode()">
-            <button (click)="saveShiftChanges()" [disabled]="isUploading()" class="btn-primary">
-              {{ isUploading() ? '儲存中...' : '儲存班別' }}
-            </button>
-            <button (click)="cancelShiftEditMode()" class="btn-secondary">取消</button>
-          </ng-container>
-          <button
-            *ngIf="!isGroupEditMode() && !isShiftEditMode()"
-            (click)="enterGroupEditMode()"
-            class="btn-primary"
-          >
-            編輯組別
-          </button>
-          <ng-container *ngIf="isGroupEditMode()">
-            <ng-container *ngIf="activeWeekTab() > 0">
-              <button
-                (click)="saveCurrentWeek()"
-                [disabled]="isUploading()"
-                class="btn-success"
-                title="只儲存本週的分組設定"
-              >
-                {{ isUploading() ? '儲存中...' : '儲存第' + activeWeekTab() + '週' }}
-              </button>
-              <button
-                (click)="redistributeRemainingWeeks()"
-                class="btn-warning"
-                title="重新分配未確認週次的組別（若無已確認週次則重新產生整月）"
-              >
-                重新分配剩餘週次
-              </button>
-            </ng-container>
-            <button (click)="saveGroupAssignments()" [disabled]="isUploading()" class="btn-primary">
-              {{ isUploading() ? '儲存中...' : '儲存整月分組' }}
-            </button>
-            <button (click)="cancelGroupEditMode()" class="btn-secondary">取消編輯</button>
-          </ng-container>
-        </ng-container>
-      </ng-container>
+      <!-- 週班表狀態訊息（篩選/編輯按鈕在週次頁籤列右側） -->
+      <span
+        *ngIf="activeTab() === 'weekly' && uploadStatus()"
+        [ngClass]="['status-inline', uploadStatus().includes('失敗') ? 'error' : 'success']"
+        [title]="uploadStatus()"
+      >
+        {{ uploadStatus() }}
+      </span>
 
       <!-- 匯出本週 Excel（僅週班表頁籤顯示，置於組別配置左側） -->
       <button
@@ -275,14 +207,83 @@
               </span>
               <span *ngIf="!getWeekConfirmed(i)" class="unscheduled-badge"> 未安排 </span>
             </button>
-            <!-- 上/下一週快速導航：跨出本月自動接上月最後一週/下月第1週 -->
-            <div class="week-nav-arrows">
-              <button (click)="shiftWeek(-1)" title="上一週（第 1 週再按會接到上個月最後一週）">
-                <i class="fas fa-chevron-left"></i> 上一週
-              </button>
-              <button (click)="shiftWeek(1)" title="下一週（最後一週再按會接到下個月第 1 週）">
-                下一週 <i class="fas fa-chevron-right"></i>
-              </button>
+            <!-- 右側工具群：班別篩選＋編輯按鈕＋上/下一週（使用者指定放同一處） -->
+            <div class="tabs-right-tools">
+              <div class="shift-filter-group">
+                <button
+                  [ngClass]="['filter-btn', shiftFilter() === 'all' ? 'active' : '']"
+                  (click)="shiftFilter.set('all')"
+                >
+                  全部
+                </button>
+                <button
+                  [ngClass]="['filter-btn', shiftFilter() === 'day' ? 'active' : '']"
+                  (click)="shiftFilter.set('day')"
+                >
+                  只看白班
+                </button>
+                <button
+                  [ngClass]="['filter-btn', shiftFilter() === 'night' ? 'active' : '']"
+                  (click)="shiftFilter.set('night')"
+                >
+                  只看夜班
+                </button>
+              </div>
+              <!-- 權限控制：編輯相關按鈕限 admin -->
+              <ng-container *ngIf="auth.isAdmin()">
+                <button
+                  *ngIf="!isShiftEditMode() && !isGroupEditMode()"
+                  (click)="enterShiftEditMode()"
+                  class="btn-edit"
+                >
+                  編輯班別
+                </button>
+                <ng-container *ngIf="isShiftEditMode()">
+                  <button (click)="saveShiftChanges()" [disabled]="isUploading()" class="btn-primary">
+                    {{ isUploading() ? '儲存中...' : '儲存班別' }}
+                  </button>
+                  <button (click)="cancelShiftEditMode()" class="btn-secondary">取消</button>
+                </ng-container>
+                <button
+                  *ngIf="!isGroupEditMode() && !isShiftEditMode()"
+                  (click)="enterGroupEditMode()"
+                  class="btn-primary"
+                >
+                  編輯組別
+                </button>
+                <ng-container *ngIf="isGroupEditMode()">
+                  <ng-container *ngIf="activeWeekTab() > 0">
+                    <button
+                      (click)="saveCurrentWeek()"
+                      [disabled]="isUploading()"
+                      class="btn-success"
+                      title="只儲存本週的分組設定"
+                    >
+                      {{ isUploading() ? '儲存中...' : '儲存第' + activeWeekTab() + '週' }}
+                    </button>
+                    <button
+                      (click)="redistributeRemainingWeeks()"
+                      class="btn-warning"
+                      title="重新分配未確認週次的組別（若無已確認週次則重新產生整月）"
+                    >
+                      重新分配剩餘週次
+                    </button>
+                  </ng-container>
+                  <button (click)="saveGroupAssignments()" [disabled]="isUploading()" class="btn-primary">
+                    {{ isUploading() ? '儲存中...' : '儲存整月分組' }}
+                  </button>
+                  <button (click)="cancelGroupEditMode()" class="btn-secondary">取消編輯</button>
+                </ng-container>
+              </ng-container>
+              <!-- 上/下一週快速導航：跨出本月自動接上月最後一週/下月第1週 -->
+              <div class="week-nav-arrows">
+                <button (click)="shiftWeek(-1)" title="上一週（第 1 週再按會接到上個月最後一週）">
+                  <i class="fas fa-chevron-left"></i> 上一週
+                </button>
+                <button (click)="shiftWeek(1)" title="下一週（最後一週再按會接到下個月第 1 週）">
+                  下一週 <i class="fas fa-chevron-right"></i>
+                </button>
+              </div>
             </div>
           </ng-container>
         </nav>

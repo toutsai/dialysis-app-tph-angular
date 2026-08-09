@@ -490,12 +490,20 @@
   margin-bottom: 1rem;
   margin-top: 0.75rem;
 }
-/* 上/下一週快速導航（靠右） */
-.week-nav-arrows {
+/* 右側工具群：篩選＋編輯按鈕＋上/下一週（靠右，過寬換行） */
+.tabs-right-tools {
   margin-left: auto;
   display: flex;
-  gap: 0.35rem;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   padding-bottom: 0.25rem;
+  row-gap: 0.35rem;
+}
+.week-nav-arrows {
+  display: flex;
+  gap: 0.35rem;
 }
 .weekly-tabs-nav .week-nav-arrows button {
   border: 1px solid #b6d4fe;
@@ -536,7 +544,8 @@
 .month-nav-group .month-nav-btn:hover {
   background: #f5f7f8;
 }
-.weekly-tabs-nav button {
+/* 直屬子按鈕限定（>）：右側工具群（篩選/編輯/上一下週）的按鈕不吃頁籤樣式 */
+.weekly-tabs-nav > button {
   padding: 0.6rem 1.2rem;
   font-size: 0.95rem;
   font-weight: 600;
@@ -548,10 +557,10 @@
   margin-bottom: -2px;
   transition: all 0.2s ease-in-out;
 }
-.weekly-tabs-nav button:hover {
+.weekly-tabs-nav > button:hover {
   background-color: #e9ecef;
 }
-.weekly-tabs-nav button.active {
+.weekly-tabs-nav > button.active {
   color: #0056b3;
   background-color: #fff;
   border: 2px solid #007bff;
@@ -559,7 +568,7 @@
 }
 
 /* 已確認週次的樣式 */
-.weekly-tabs-nav button.confirmed {
+.weekly-tabs-nav > button.confirmed {
   background-color: #d4edda;
 }
 .confirmed-badge {
@@ -569,7 +578,7 @@
 }
 
 /* 未安排週次的樣式 */
-.weekly-tabs-nav button.unscheduled {
+.weekly-tabs-nav > button.unscheduled {
   background-color: #fff3cd;
 }
 .unscheduled-badge {
