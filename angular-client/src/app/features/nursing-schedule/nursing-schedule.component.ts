@@ -364,8 +364,9 @@ export class NursingScheduleComponent implements OnInit {
   /** 分組下拉/預備75 直接改 temp 物件（ngModel），signal 偵測不到，變更時 bump 讓累積欄重算 */
   readonly groupEditStatsVersion = signal(0);
 
-  /** 分組編輯模式姓名旁「累積(至上週)」欄：本週開始前的累積組別次數＋本週已選以 (+n) 疊加。
-   *  白班/夜班各一列，普通組與住院組（hospitalGroups 配置）分開統計＝使用者指定。 */
+  /** 分組編輯模式姓名旁「累積組別」欄：本週開始前＋本週已選的合併計數，統一格式 A(2)。
+   *  白班/夜班各一列，普通組與住院組（hospitalGroups 配置）分開統計＝使用者指定；
+   *  本週下拉選取即時反映，本週之後的未來週不計。 */
   readonly cumulativeGroupsByNurse = computed<Map<string, { day: string; night: string }>>(() => {
     this._scheduleVersion();
     this.groupEditStatsVersion();
@@ -385,46 +386,34 @@ export class NursingScheduleComponent implements OnInit {
     const hospNight = new Set<string>(this.groupConfig?.hospitalGroups?.nightShift || []);
 
     for (const [nurseId, nurseData] of Object.entries<any>(source.scheduleByNurse)) {
-      const prior: Record<string, number> = {};
-      const current: Record<string, number> = {};
+      // 統一格式 A(2)：前幾週＋本週已選合併計數；同字母（含白前綴與無前綴鍵）合併不重複
+      const dayCounts = new Map<string, number>();
+      const nightCounts = new Map<string, number>();
+      let standby = 0;
       (nurseData.groups || []).forEach((group: string, idx: number) => {
         if (!group) return;
-        const bucket = idx < weekStart ? prior : weekSet.has(idx) ? current : null;
-        if (!bucket) return; // 本週之後的未來週不計
+        if (!(idx < weekStart || weekSet.has(idx))) return; // 本週之後的未來週不計
         const key = this.statKeyForGroup(nurseData, idx, group);
-        bucket[key] = (bucket[key] || 0) + 1;
+        const isNight = key.startsWith('晚');
+        const label = key.startsWith('白') || isNight ? key.slice(1) : key;
+        const counts = isNight ? nightCounts : dayCounts;
+        counts.set(label, (counts.get(label) || 0) + 1);
       });
       for (const d of nurseData.standby75Days || []) {
-        if (d < weekStart) prior['預備75'] = (prior['預備75'] || 0) + 1;
-        else if (weekSet.has(d)) current['預備75'] = (current['預備75'] || 0) + 1;
+        if (d < weekStart || weekSet.has(d)) standby++;
       }
-      const keys = [...new Set([...Object.keys(prior), ...Object.keys(current)])].sort(
-        (a, b) => this.statKeyOrder(a) - this.statKeyOrder(b) || a.localeCompare(b)
-      );
-      const dayNorm: string[] = [];
-      const dayHosp: string[] = [];
-      const nightNorm: string[] = [];
-      const nightHosp: string[] = [];
-      let standby = '';
-      for (const k of keys) {
-        const p = prior[k] || 0;
-        const c = current[k] || 0;
-        const isNight = k.startsWith('晚');
-        const label = k === '預備75' ? k : k.startsWith('白') || isNight ? k.slice(1) : k;
-        const text = `${label}${p ? '×' + p : ''}${c ? `(+${c})` : ''}`;
-        if (k === '預備75') standby = text;
-        else if (isNight) (hospNight.has(label) ? nightHosp : nightNorm).push(text);
-        else (hospDay.has(label) ? dayHosp : dayNorm).push(text);
-      }
-      const daySegs: string[] = [];
-      if (dayNorm.length) daySegs.push(dayNorm.join(' '));
-      if (dayHosp.length) daySegs.push(`住院 ${dayHosp.join(' ')}`);
-      if (standby) daySegs.push(standby);
-      const nightSegs: string[] = [];
-      if (nightNorm.length) nightSegs.push(nightNorm.join(' '));
-      if (nightHosp.length) nightSegs.push(`住院 ${nightHosp.join(' ')}`);
-      const day = daySegs.join('｜');
-      const night = nightSegs.join('｜');
+      const buildLine = (counts: Map<string, number>, hosp: Set<string>, extra = ''): string => {
+        const labels = [...counts.keys()].sort((a, b) => a.localeCompare(b));
+        const norm = labels.filter((l) => !hosp.has(l)).map((l) => `${l}(${counts.get(l)})`);
+        const inHosp = labels.filter((l) => hosp.has(l)).map((l) => `${l}(${counts.get(l)})`);
+        const segs: string[] = [];
+        if (norm.length) segs.push(norm.join(', '));
+        if (inHosp.length) segs.push(`住院 ${inHosp.join(', ')}`);
+        if (extra) segs.push(extra);
+        return segs.join('｜');
+      };
+      const day = buildLine(dayCounts, hospDay, standby ? `預備75(${standby})` : '');
+      const night = buildLine(nightCounts, hospNight);
       if (day || night) map.set(nurseId, { day, night });
     }
     return map;
@@ -1075,19 +1064,25 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   redistributeRemainingWeeks(): void {
-    if (
-      !this.tempScheduleWithGroups ||
-      !confirm('這將重新分配所有未確認的週次，確定要繼續嗎？')
-    ) {
+    if (!this.tempScheduleWithGroups) return;
+    // 只會重新分配「未確認」的週次；先算清單，全部已確認就直接說明，避免看起來沒反應
+    const confirmed = this.tempScheduleWithGroups.weekConfirmed || {};
+    const pendingWeeks = this.weeklyData
+      .map((w: any, i: number) => (confirmed[`week${i + 1}`] === true ? null : w.weekNumber))
+      .filter((n: number | null) => n !== null);
+    if (pendingWeeks.length === 0) {
+      alert('所有週次皆已按「儲存」確認，沒有可重新分配的週次。\n若要重排某一週，請直接在該週調整下拉選單後再儲存。');
+      return;
+    }
+    if (!confirm(`這將重新分配未確認的第 ${pendingWeeks.join('、')} 週（已確認週次不變），確定要繼續嗎？`)) {
       return;
     }
     this.uploadStatus.set('正在重新分配剩餘週次...');
     try {
-      // Note: The actual redistribute logic from useGroupAssigner composable
-      // would need to be implemented here or in a separate service
       const assigner = new GroupAssignerService(this.groupConfig, this.prevMonthSchedule, this.nextMonthSchedule);
       this.tempScheduleWithGroups = assigner.redistributeRemainingWeeks(this.tempScheduleWithGroups, this.weeklyData);
       this._scheduleVersion.update(v => v + 1);
+      this.uploadStatus.set(`已重新分配第 ${pendingWeeks.join('、')} 週（已確認週次維持不變），請檢視後儲存。`);
     } catch (error: any) {
       console.error('重新分配失敗:', error);
       this.uploadStatus.set(`重新分配失敗：${error.message}`);

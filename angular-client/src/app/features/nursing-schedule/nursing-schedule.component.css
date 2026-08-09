@@ -591,9 +591,10 @@
   width: 100px;
 }
 
-/* 分組編輯：姓名旁累積欄（隨姓名欄 sticky，橫向捲動天數時仍可見）；白/晚各一列 */
-.cumulative-col-weekly,
-.cumulative-weekly {
+/* 分組編輯：姓名旁累積欄（隨姓名欄 sticky，橫向捲動天數時仍可見）；白/晚各一列。
+   選擇器帶 .week-table 前綴壓過 .week-table td 的 text-align:center，兩列靠左 */
+.week-table th.cumulative-col-weekly,
+.week-table td.cumulative-weekly {
   position: sticky;
   left: 180px;
   background-color: #f8f9fa;

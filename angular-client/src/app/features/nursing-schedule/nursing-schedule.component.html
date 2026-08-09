@@ -345,13 +345,13 @@
                     <tr>
                       <th class="employee-id-col-weekly">員工編號</th>
                       <th class="nurse-name-col-weekly">護理師</th>
-                      <!-- 分組編輯：姓名旁累積欄（本週開始前的累積組別，本週已選以 +n 疊加） -->
+                      <!-- 分組編輯：姓名旁累積欄（前幾週＋本週已選的合併計數，統一格式 A(2)） -->
                       <th
                         *ngIf="isGroupEditMode() && tempScheduleWithGroups"
                         class="cumulative-col-weekly"
-                        title="本週開始前的累積組別次數；(+n)=本週已選"
+                        title="本週開始前＋本週已選的累積組別次數，選取時即時更新"
                       >
-                        累積(至上週)
+                        累積組別
                       </th>
                       <th
                         *ngFor="let dayInfo of weekData.days; let dayIdx = index"
