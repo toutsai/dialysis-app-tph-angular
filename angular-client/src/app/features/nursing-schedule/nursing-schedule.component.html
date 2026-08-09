@@ -151,24 +151,8 @@
 
     <!-- 2. 當月週班表 -->
     <div *ngIf="activeTab() === 'weekly'" class="tab-pane weekly-tab-layout">
-      <!-- 控制按鈕 -->
+      <!-- 控制按鈕（月份導航已整併至週次頁籤列） -->
       <section class="controls-section">
-        <div class="controls-left">
-          <label for="schedule-month-weekly">月份：</label>
-          <button class="month-nav-btn" (click)="shiftMonth(-1)" title="上個月">
-            <i class="fas fa-chevron-left"></i>
-          </button>
-          <input
-            type="month"
-            id="schedule-month-weekly"
-            [(ngModel)]="selectedMonth"
-            (change)="onMonthChange()"
-          />
-          <button class="month-nav-btn" (click)="shiftMonth(1)" title="下個月">
-            <i class="fas fa-chevron-right"></i>
-          </button>
-        </div>
-
         <div class="controls-center">
           <div class="shift-filter-group">
             <button
@@ -261,49 +245,66 @@
         <div class="spinner"></div>
         <span>正在載入班表資料...</span>
       </div>
-      <div *ngIf="!isLoadingSchedule() && !monthlySchedule" class="no-schedule">
-        <i class="fas fa-calendar-times"></i>
-        <p>本月尚無班表資料，請至「當月總班表」頁籤上傳</p>
-      </div>
 
-      <!-- 統一的頁籤化佈局 (只要有資料就顯示) -->
-      <div *ngIf="!isLoadingSchedule() && monthlySchedule" class="weekly-content-wrapper">
-        <!-- 週次頁籤導覽列 (常駐) -->
+      <div *ngIf="!isLoadingSchedule()" class="weekly-content-wrapper">
+        <!-- 月份導航＋週次頁籤同一列（使用者指定整併）；無資料月份也要能切換月份 -->
         <nav class="weekly-tabs-nav">
-          <button [class.active]="activeWeekTab() === 0" (click)="activeWeekTab.set(0)">
-            分組統計
-          </button>
-          <button
-            *ngFor="let week of weeklyData; let i = index; trackBy: trackByWeekNumber"
-            [ngClass]="{
-              'active': activeWeekTab() === i + 1,
-              'confirmed': getWeekConfirmed(i),
-              'unscheduled': !getWeekConfirmed(i)
-            }"
-            (click)="activeWeekTab.set(i + 1)"
-          >
-            第 {{ week.weekNumber }} 週
-            <span
-              *ngIf="getWeekConfirmed(i)"
-              class="confirmed-badge"
-            >
-              &#10003;
-            </span>
-            <span *ngIf="!getWeekConfirmed(i)" class="unscheduled-badge"> 未安排 </span>
-          </button>
-          <!-- 上/下一週快速導航：跨出本月自動接上月最後一週/下月第1週 -->
-          <div class="week-nav-arrows">
-            <button (click)="shiftWeek(-1)" title="上一週（第 1 週再按會接到上個月最後一週）">
-              <i class="fas fa-chevron-left"></i> 上一週
+          <div class="month-nav-group">
+            <button class="month-nav-btn" (click)="shiftMonth(-1)" title="上個月">
+              <i class="fas fa-chevron-left"></i>
             </button>
-            <button (click)="shiftWeek(1)" title="下一週（最後一週再按會接到下個月第 1 週）">
-              下一週 <i class="fas fa-chevron-right"></i>
+            <input
+              type="month"
+              id="schedule-month-weekly"
+              title="月份"
+              [(ngModel)]="selectedMonth"
+              (change)="onMonthChange()"
+            />
+            <button class="month-nav-btn" (click)="shiftMonth(1)" title="下個月">
+              <i class="fas fa-chevron-right"></i>
             </button>
           </div>
+          <ng-container *ngIf="monthlySchedule">
+            <button [class.active]="activeWeekTab() === 0" (click)="activeWeekTab.set(0)">
+              分組統計
+            </button>
+            <button
+              *ngFor="let week of weeklyData; let i = index; trackBy: trackByWeekNumber"
+              [ngClass]="{
+                'active': activeWeekTab() === i + 1,
+                'confirmed': getWeekConfirmed(i),
+                'unscheduled': !getWeekConfirmed(i)
+              }"
+              (click)="activeWeekTab.set(i + 1)"
+            >
+              第 {{ week.weekNumber }} 週
+              <span
+                *ngIf="getWeekConfirmed(i)"
+                class="confirmed-badge"
+              >
+                &#10003;
+              </span>
+              <span *ngIf="!getWeekConfirmed(i)" class="unscheduled-badge"> 未安排 </span>
+            </button>
+            <!-- 上/下一週快速導航：跨出本月自動接上月最後一週/下月第1週 -->
+            <div class="week-nav-arrows">
+              <button (click)="shiftWeek(-1)" title="上一週（第 1 週再按會接到上個月最後一週）">
+                <i class="fas fa-chevron-left"></i> 上一週
+              </button>
+              <button (click)="shiftWeek(1)" title="下一週（最後一週再按會接到下個月第 1 週）">
+                下一週 <i class="fas fa-chevron-right"></i>
+              </button>
+            </div>
+          </ng-container>
         </nav>
 
+        <div *ngIf="!monthlySchedule" class="no-schedule">
+          <i class="fas fa-calendar-times"></i>
+          <p>本月尚無班表資料，請至「當月總班表」頁籤上傳</p>
+        </div>
+
         <!-- 分組儀表板 (頁籤 0 被選中時顯示) -->
-        <section *ngIf="activeWeekTab() === 0" class="dashboard-section">
+        <section *ngIf="monthlySchedule && activeWeekTab() === 0" class="dashboard-section">
           <h3 class="dashboard-title">護理師分組統計</h3>
           <div class="dashboard-table-wrapper">
             <table class="dashboard-table">
@@ -341,7 +342,7 @@
         </section>
 
         <!-- 週班表內容 (根據頁籤切換顯示) -->
-        <div class="weekly-schedule-container">
+        <div class="weekly-schedule-container" *ngIf="monthlySchedule">
           <ng-container *ngFor="let weekData of weeklyData; let weekIndex = index; trackBy: trackByWeekNumber">
             <div *ngIf="activeWeekTab() === weekIndex + 1" class="week-section">
               <h4 class="week-title">

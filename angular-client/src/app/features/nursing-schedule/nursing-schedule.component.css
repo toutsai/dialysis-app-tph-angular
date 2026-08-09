@@ -504,16 +504,30 @@
 .weekly-tabs-nav .week-nav-arrows button:hover {
   background: #dbeafe;
 }
-/* 月份 ◀▶ */
-.month-nav-btn {
+/* 月份導航群組（整併於週次頁籤列左端）；選擇器帶 .month-nav-group 壓過 .weekly-tabs-nav button 通用樣式 */
+.month-nav-group {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-right: 0.9rem;
+  padding-bottom: 0.25rem;
+}
+.month-nav-group input[type='month'] {
+  padding: 0.35rem 0.6rem;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  font-size: 0.92rem;
+}
+.month-nav-group .month-nav-btn {
   border: 1px solid #cfd8dc;
   border-radius: 6px;
   background: #fff;
   color: #546e7a;
   padding: 0.35rem 0.6rem;
+  margin-bottom: 0;
   cursor: pointer;
 }
-.month-nav-btn:hover {
+.month-nav-group .month-nav-btn:hover {
   background: #f5f7f8;
 }
 .weekly-tabs-nav button {
