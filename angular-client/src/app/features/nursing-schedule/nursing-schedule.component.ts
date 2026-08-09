@@ -3,6 +3,8 @@ import {
   inject,
   signal,
   computed,
+  effect,
+  HostListener,
   OnInit,
   ViewChild,
   ElementRef,
@@ -472,6 +474,33 @@ export class NursingScheduleComponent implements OnInit {
   // ========================================
   // Lifecycle
   // ========================================
+
+  constructor() {
+    // 週班表內容區高度＝視窗剩餘高度（取消頁面層捲動，只捲表格內容）。
+    // 追蹤會改變表格上方版面的 signals（換週/編輯模式/狀態列/資料重載），變化後重量測
+    effect(() => {
+      this.activeWeekTab();
+      this.isGroupEditMode();
+      this.isShiftEditMode();
+      this.uploadStatus();
+      this.isLoadingSchedule();
+      this._scheduleVersion();
+      setTimeout(() => this.updateWeekTableHeight(), 0);
+    });
+  }
+
+  @HostListener('window:resize')
+  onWindowResize(): void {
+    this.updateWeekTableHeight();
+  }
+
+  /** 表格區 max-height=視窗底-元素頂-邊距（CSS 的 max-height 為未量測前的後備值） */
+  private updateWeekTableHeight(): void {
+    const el = document.querySelector('.week-table-wrapper') as HTMLElement | null;
+    if (!el) return;
+    const top = el.getBoundingClientRect().top;
+    el.style.maxHeight = `${Math.max(window.innerHeight - top - 16, 320)}px`;
+  }
 
   ngOnInit(): void {
     this.loadGroupConfig();
@@ -1236,8 +1265,12 @@ export class NursingScheduleComponent implements OnInit {
       this.monthlySchedule = schedule || null;
       this._scheduleVersion.update(v => v + 1);
       if (!preserveWeek || this.activeWeekTab() > this.weeklyData.length) {
-        this.activeWeekTab.set(1);
+        // 跨月「上一週」導航要停在上月最後一週，其餘回第 1 週
+        this.activeWeekTab.set(
+          this.pendingWeekAfterLoad === 'last' ? Math.max(this.weeklyData.length, 1) : 1
+        );
       }
+      this.pendingWeekAfterLoad = null;
 
       this.loadAdjacentMonthSchedules(documentId);
     } catch (error) {
@@ -1458,6 +1491,51 @@ export class NursingScheduleComponent implements OnInit {
   onMonthChange(): void {
     this.loadGroupConfig();
     this.loadMonthlySchedule();
+  }
+
+  // --- 月份/週次快速導航（◀▶）---
+
+  /** 載入完成後要停的週：'last'=最後一週（上一週跨月用），null=第 1 週 */
+  private pendingWeekAfterLoad: 'last' | null = null;
+
+  private addMonths(ym: string, delta: number): string {
+    const [y, m] = ym.split('-').map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  /** 編輯中有未存變更時，跨月導航先確認（loadMonthlySchedule 會取消編輯模式） */
+  private confirmDiscardEditsForNav(): boolean {
+    const editing =
+      (this.isGroupEditMode() && this.tempScheduleWithGroups) ||
+      (this.isShiftEditMode() && this.hasUnsavedShiftChanges());
+    return !editing || confirm('編輯中的變更尚未儲存，切換月份將放棄變更，確定要繼續嗎？');
+  }
+
+  shiftMonth(delta: number): void {
+    if (!this.confirmDiscardEditsForNav()) return;
+    this.selectedMonth = this.addMonths(this.selectedMonth, delta);
+    this.onMonthChange();
+  }
+
+  /** 上一週/下一週：跨出本月自動接到上月最後一週／下月第 1 週 */
+  shiftWeek(delta: number): void {
+    const weeks = this.weeklyData.length;
+    const cur = this.activeWeekTab();
+    if (cur === 0) {
+      // 從統計頁按導航＝進入第一週/最後一週
+      this.activeWeekTab.set(delta > 0 ? 1 : Math.max(weeks, 1));
+      return;
+    }
+    const target = cur + delta;
+    if (target >= 1 && target <= weeks) {
+      this.activeWeekTab.set(target);
+      return;
+    }
+    if (!this.confirmDiscardEditsForNav()) return;
+    this.pendingWeekAfterLoad = target < 1 ? 'last' : null;
+    this.selectedMonth = this.addMonths(this.selectedMonth, target < 1 ? -1 : 1);
+    this.onMonthChange();
   }
 
   onTabChange(tab: 'master' | 'weekly' | 'responsibilities'): void {

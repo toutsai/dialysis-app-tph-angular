@@ -155,12 +155,18 @@
       <section class="controls-section">
         <div class="controls-left">
           <label for="schedule-month-weekly">月份：</label>
+          <button class="month-nav-btn" (click)="shiftMonth(-1)" title="上個月">
+            <i class="fas fa-chevron-left"></i>
+          </button>
           <input
             type="month"
             id="schedule-month-weekly"
             [(ngModel)]="selectedMonth"
             (change)="onMonthChange()"
           />
+          <button class="month-nav-btn" (click)="shiftMonth(1)" title="下個月">
+            <i class="fas fa-chevron-right"></i>
+          </button>
         </div>
 
         <div class="controls-center">
@@ -285,6 +291,15 @@
             </span>
             <span *ngIf="!getWeekConfirmed(i)" class="unscheduled-badge"> 未安排 </span>
           </button>
+          <!-- 上/下一週快速導航：跨出本月自動接上月最後一週/下月第1週 -->
+          <div class="week-nav-arrows">
+            <button (click)="shiftWeek(-1)" title="上一週（第 1 週再按會接到上個月最後一週）">
+              <i class="fas fa-chevron-left"></i> 上一週
+            </button>
+            <button (click)="shiftWeek(1)" title="下一週（最後一週再按會接到下個月第 1 週）">
+              下一週 <i class="fas fa-chevron-right"></i>
+            </button>
+          </div>
         </nav>
 
         <!-- 分組儀表板 (頁籤 0 被選中時顯示) -->
