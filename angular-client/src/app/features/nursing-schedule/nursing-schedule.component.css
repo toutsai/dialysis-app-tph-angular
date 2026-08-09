@@ -591,21 +591,43 @@
   width: 100px;
 }
 
-/* 分組編輯：姓名旁累積欄（隨姓名欄 sticky，橫向捲動天數時仍可見） */
+/* 分組編輯：姓名旁累積欄（隨姓名欄 sticky，橫向捲動天數時仍可見）；白/晚各一列 */
 .cumulative-col-weekly,
 .cumulative-weekly {
   position: sticky;
   left: 180px;
   background-color: #f8f9fa;
   z-index: 1;
-  min-width: 120px;
-  max-width: 150px;
-  font-size: 0.8rem;
-  color: #546e7a;
+  min-width: 170px;
+  max-width: 220px;
+  font-size: 0.98rem;
+  color: #455a64;
   text-align: left;
-  line-height: 1.35;
+  line-height: 1.45;
   white-space: normal;
+  word-break: keep-all; /* 「住院」等詞不折斷，只在空格處換行 */
   box-shadow: 2px 0 3px -1px rgba(0, 0, 0, 0.08);
+}
+.cum-line + .cum-line {
+  margin-top: 0.2rem;
+  padding-top: 0.2rem;
+  border-top: 1px dashed #e0e4e8;
+}
+.cum-tag {
+  display: inline-block;
+  padding: 0 0.32rem;
+  margin-right: 0.32rem;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-weight: 700;
+}
+.cum-day {
+  background: #fff3e0;
+  color: #e65100;
+}
+.cum-night {
+  background: #e8eaf6;
+  color: #283593;
 }
 
 .week-table .weekend {

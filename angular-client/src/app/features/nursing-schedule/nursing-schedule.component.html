@@ -372,7 +372,15 @@
                         *ngIf="isGroupEditMode() && tempScheduleWithGroups"
                         class="cumulative-weekly"
                       >
-                        {{ cumulativeGroupsByNurse().get(nurseEntry[0]) || '—' }}
+                        <ng-container *ngIf="cumulativeGroupsByNurse().get(nurseEntry[0]) as cum; else noCum">
+                          <div class="cum-line" *ngIf="cum.day">
+                            <span class="cum-tag cum-day">白</span>{{ cum.day }}
+                          </div>
+                          <div class="cum-line" *ngIf="cum.night">
+                            <span class="cum-tag cum-night">晚</span>{{ cum.night }}
+                          </div>
+                        </ng-container>
+                        <ng-template #noCum>—</ng-template>
                       </td>
                       <td
                         *ngFor="let dayInfo of weekData.days; let dayIdx = index"

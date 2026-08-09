@@ -364,12 +364,13 @@ export class NursingScheduleComponent implements OnInit {
   /** 分組下拉/預備75 直接改 temp 物件（ngModel），signal 偵測不到，變更時 bump 讓累積欄重算 */
   readonly groupEditStatsVersion = signal(0);
 
-  /** 分組編輯模式姓名旁「累積(至上週)」欄：本週開始前的累積組別次數＋本週已選以 (+n) 疊加 */
-  readonly cumulativeGroupsByNurse = computed<Map<string, string>>(() => {
+  /** 分組編輯模式姓名旁「累積(至上週)」欄：本週開始前的累積組別次數＋本週已選以 (+n) 疊加。
+   *  白班/夜班各一列，普通組與住院組（hospitalGroups 配置）分開統計＝使用者指定。 */
+  readonly cumulativeGroupsByNurse = computed<Map<string, { day: string; night: string }>>(() => {
     this._scheduleVersion();
     this.groupEditStatsVersion();
     const tab = this.activeWeekTab();
-    const map = new Map<string, string>();
+    const map = new Map<string, { day: string; night: string }>();
     if (!this.isGroupEditMode() || tab < 1) return map;
     const source = this.tempScheduleWithGroups || this.monthlySchedule;
     const weekData = this.weeklyData[tab - 1];
@@ -380,6 +381,8 @@ export class NursingScheduleComponent implements OnInit {
     if (weekIdxs.length === 0) return map;
     const weekStart = Math.min(...weekIdxs);
     const weekSet = new Set(weekIdxs);
+    const hospDay = new Set<string>(this.groupConfig?.hospitalGroups?.dayShift || []);
+    const hospNight = new Set<string>(this.groupConfig?.hospitalGroups?.nightShift || []);
 
     for (const [nurseId, nurseData] of Object.entries<any>(source.scheduleByNurse)) {
       const prior: Record<string, number> = {};
@@ -398,12 +401,31 @@ export class NursingScheduleComponent implements OnInit {
       const keys = [...new Set([...Object.keys(prior), ...Object.keys(current)])].sort(
         (a, b) => this.statKeyOrder(a) - this.statKeyOrder(b) || a.localeCompare(b)
       );
-      const parts = keys.map((k) => {
+      const dayNorm: string[] = [];
+      const dayHosp: string[] = [];
+      const nightNorm: string[] = [];
+      const nightHosp: string[] = [];
+      let standby = '';
+      for (const k of keys) {
         const p = prior[k] || 0;
         const c = current[k] || 0;
-        return `${k}${p ? '×' + p : ''}${c ? `(+${c})` : ''}`;
-      });
-      map.set(nurseId, parts.join(' '));
+        const isNight = k.startsWith('晚');
+        const label = k === '預備75' ? k : k.startsWith('白') || isNight ? k.slice(1) : k;
+        const text = `${label}${p ? '×' + p : ''}${c ? `(+${c})` : ''}`;
+        if (k === '預備75') standby = text;
+        else if (isNight) (hospNight.has(label) ? nightHosp : nightNorm).push(text);
+        else (hospDay.has(label) ? dayHosp : dayNorm).push(text);
+      }
+      const daySegs: string[] = [];
+      if (dayNorm.length) daySegs.push(dayNorm.join(' '));
+      if (dayHosp.length) daySegs.push(`住院 ${dayHosp.join(' ')}`);
+      if (standby) daySegs.push(standby);
+      const nightSegs: string[] = [];
+      if (nightNorm.length) nightSegs.push(nightNorm.join(' '));
+      if (nightHosp.length) nightSegs.push(`住院 ${nightHosp.join(' ')}`);
+      const day = daySegs.join('｜');
+      const night = nightSegs.join('｜');
+      if (day || night) map.set(nurseId, { day, night });
     }
     return map;
   });
@@ -1433,6 +1455,7 @@ export class NursingScheduleComponent implements OnInit {
   onGroupConfigSaved(newConfig: any): void {
     this.groupConfig = newConfig;
     this.configSourceMonth = this.selectedMonth;
+    this.groupEditStatsVersion.update((v) => v + 1); // groupConfig 非 signal，累積欄需手動重算
     this.uploadStatus.set(`${this.selectedMonth} 組別配置已更新`);
   }
 
