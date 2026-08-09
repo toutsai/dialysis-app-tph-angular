@@ -14,10 +14,16 @@
   flex-shrink: 0;
 }
 .header-actions {
-  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  /* 週班表的篩選/狀態/編輯按鈕整併在此，過寬時換行靠右 */
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 0.4rem;
+}
+.header-actions .status-inline {
+  max-width: 26rem;
 }
 .page-title {
   font-size: 32px;
