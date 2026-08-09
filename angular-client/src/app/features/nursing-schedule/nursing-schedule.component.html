@@ -345,6 +345,14 @@
                     <tr>
                       <th class="employee-id-col-weekly">員工編號</th>
                       <th class="nurse-name-col-weekly">護理師</th>
+                      <!-- 分組編輯：姓名旁累積欄（本週開始前的累積組別，本週已選以 +n 疊加） -->
+                      <th
+                        *ngIf="isGroupEditMode() && tempScheduleWithGroups"
+                        class="cumulative-col-weekly"
+                        title="本週開始前的累積組別次數；(+n)=本週已選"
+                      >
+                        累積(至上週)
+                      </th>
                       <th
                         *ngFor="let dayInfo of weekData.days; let dayIdx = index"
                         [ngClass]="{
@@ -360,6 +368,12 @@
                     <tr *ngFor="let nurseEntry of objectEntries(filteredSortedSchedule); trackBy: trackByNurseId">
                       <td class="employee-id-weekly">{{ nurseEntry[1].nurseUsername || '-' }}</td>
                       <td class="nurse-name-weekly">{{ nurseEntry[1].nurseName }}</td>
+                      <td
+                        *ngIf="isGroupEditMode() && tempScheduleWithGroups"
+                        class="cumulative-weekly"
+                      >
+                        {{ cumulativeGroupsByNurse().get(nurseEntry[0]) || '—' }}
+                      </td>
                       <td
                         *ngFor="let dayInfo of weekData.days; let dayIdx = index"
                         [ngClass]="{

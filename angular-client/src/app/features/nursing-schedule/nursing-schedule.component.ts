@@ -344,6 +344,70 @@ export class NursingScheduleComponent implements OnInit {
     this.activeWeekTab.set(weekIndex + 1);
   }
 
+  /** 組別 → 統計鍵：加白/晚前綴（128 半早半晚：組別直接卡入白班欄，不設獨立午欄） */
+  private statKeyForGroup(nurseData: any, idx: number, group: string): string {
+    if (group.startsWith('白') || group.startsWith('晚')) return group;
+    if (this.isDayShift(nurseData.shifts?.[idx]) || this.is128Shift(nurseData.shifts?.[idx])) {
+      return `白${group}`;
+    }
+    if (this.isNightShift(nurseData.shifts?.[idx])) return `晚${group}`;
+    return group;
+  }
+
+  private statKeyOrder(g: string): number {
+    if (g.startsWith('白')) return 0;
+    if (g.startsWith('晚')) return 1;
+    if (g === '預備75') return 2;
+    return 3;
+  }
+
+  /** 分組下拉/預備75 直接改 temp 物件（ngModel），signal 偵測不到，變更時 bump 讓累積欄重算 */
+  readonly groupEditStatsVersion = signal(0);
+
+  /** 分組編輯模式姓名旁「累積(至上週)」欄：本週開始前的累積組別次數＋本週已選以 (+n) 疊加 */
+  readonly cumulativeGroupsByNurse = computed<Map<string, string>>(() => {
+    this._scheduleVersion();
+    this.groupEditStatsVersion();
+    const tab = this.activeWeekTab();
+    const map = new Map<string, string>();
+    if (!this.isGroupEditMode() || tab < 1) return map;
+    const source = this.tempScheduleWithGroups || this.monthlySchedule;
+    const weekData = this.weeklyData[tab - 1];
+    if (!source?.scheduleByNurse || !weekData) return map;
+    const weekIdxs: number[] = weekData.days
+      .filter((d: any) => d.isCurrentMonth)
+      .map((d: any) => d.dayIndex);
+    if (weekIdxs.length === 0) return map;
+    const weekStart = Math.min(...weekIdxs);
+    const weekSet = new Set(weekIdxs);
+
+    for (const [nurseId, nurseData] of Object.entries<any>(source.scheduleByNurse)) {
+      const prior: Record<string, number> = {};
+      const current: Record<string, number> = {};
+      (nurseData.groups || []).forEach((group: string, idx: number) => {
+        if (!group) return;
+        const bucket = idx < weekStart ? prior : weekSet.has(idx) ? current : null;
+        if (!bucket) return; // 本週之後的未來週不計
+        const key = this.statKeyForGroup(nurseData, idx, group);
+        bucket[key] = (bucket[key] || 0) + 1;
+      });
+      for (const d of nurseData.standby75Days || []) {
+        if (d < weekStart) prior['預備75'] = (prior['預備75'] || 0) + 1;
+        else if (weekSet.has(d)) current['預備75'] = (current['預備75'] || 0) + 1;
+      }
+      const keys = [...new Set([...Object.keys(prior), ...Object.keys(current)])].sort(
+        (a, b) => this.statKeyOrder(a) - this.statKeyOrder(b) || a.localeCompare(b)
+      );
+      const parts = keys.map((k) => {
+        const p = prior[k] || 0;
+        const c = current[k] || 0;
+        return `${k}${p ? '×' + p : ''}${c ? `(+${c})` : ''}`;
+      });
+      map.set(nurseId, parts.join(' '));
+    }
+    return map;
+  });
+
   // groupCountsDashboard - uses GroupAssignerService for config-based groups
   get groupCountsDashboard(): { header: string[]; nurses: any[] } {
     const source = this.isGroupEditMode()
@@ -362,15 +426,7 @@ export class NursingScheduleComponent implements OnInit {
         if (nurseData.groups) {
           nurseData.groups.forEach((group: string, idx: number) => {
             if (group) {
-              // 128 半早半晚：組別直接卡入白班欄（白K/白L），不設獨立午欄
-              const key = group.startsWith('白') || group.startsWith('晚')
-                ? group
-                : this.isDayShift(nurseData.shifts?.[idx]) ||
-                    this.is128Shift(nurseData.shifts?.[idx])
-                  ? `白${group}`
-                  : this.isNightShift(nurseData.shifts?.[idx])
-                    ? `晚${group}`
-                    : group;
+              const key = this.statKeyForGroup(nurseData, idx, group);
               groupSet.add(key);
               counts[key] = (counts[key] || 0) + 1;
             }
@@ -390,16 +446,10 @@ export class NursingScheduleComponent implements OnInit {
       }
     );
 
-    const sortedGroups = Array.from(groupSet).sort((a, b) => {
-      // Put day shifts first, then night shifts, then standby
-      const order = (g: string) => {
-        if (g.startsWith('白')) return 0;
-        if (g.startsWith('晚')) return 1;
-        if (g === '預備75') return 2;
-        return 3;
-      };
-      return order(a) - order(b) || a.localeCompare(b);
-    });
+    // Put day shifts first, then night shifts, then standby
+    const sortedGroups = Array.from(groupSet).sort(
+      (a, b) => this.statKeyOrder(a) - this.statKeyOrder(b) || a.localeCompare(b)
+    );
 
     return {
       header: ['護理師', ...sortedGroups],
@@ -594,6 +644,7 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   handleGroupChange(nurseId: string, dayIndex: number, event: Event): void {
+    this.groupEditStatsVersion.update((v) => v + 1); // 累積欄即時重算（含清空選擇）
     const newGroup = (event.target as HTMLSelectElement).value;
     if (!newGroup || !this.tempScheduleWithGroups) return;
 
@@ -794,7 +845,7 @@ export class NursingScheduleComponent implements OnInit {
       );
       this.isShiftEditMode.set(false);
       this.hasUnsavedShiftChanges.set(false);
-      await this.loadMonthlySchedule();
+      await this.loadMonthlySchedule(true);
     } catch (error: any) {
       console.error('儲存護理班別失敗:', error);
       this.uploadStatus.set(`儲存失敗：${error.message}`);
@@ -924,8 +975,7 @@ export class NursingScheduleComponent implements OnInit {
       );
       this.isGroupEditMode.set(false);
       this.tempScheduleWithGroups = null;
-      await this.loadMonthlySchedule();
-      this.activeWeekTab.set(1);
+      await this.loadMonthlySchedule(true);
     } catch (error: any) {
       console.error('儲存護理分組失敗:', error);
       this.uploadStatus.set(`儲存失敗：${error.message}`);
@@ -937,6 +987,7 @@ export class NursingScheduleComponent implements OnInit {
   // --- 班別與分組管理 ---
   toggleStandby75(nurseId: string, dayIndex: number): void {
     if (!this.isGroupEditMode() || !this.tempScheduleWithGroups) return;
+    this.groupEditStatsVersion.update((v) => v + 1); // 累積欄即時重算
 
     const weekData = this.weeklyData[this.activeWeekTab() - 1];
     const dayInfo = weekData?.days.find(
@@ -1036,7 +1087,7 @@ export class NursingScheduleComponent implements OnInit {
       if (confirm('您有未儲存的班別修改，確定要放棄嗎？')) {
         this.isShiftEditMode.set(false);
         this.hasUnsavedShiftChanges.set(false);
-        this.loadMonthlySchedule();
+        this.loadMonthlySchedule(true);
       }
     } else {
       this.isShiftEditMode.set(false);
@@ -1072,7 +1123,8 @@ export class NursingScheduleComponent implements OnInit {
           week5: false,
         };
     }
-    this.activeWeekTab.set(0);
+    // 停留在使用者已選的週（原本強制跳統計頁=0，組長得再點一次週次，使用者要求移除）
+    if (this.activeWeekTab() === 0) this.activeWeekTab.set(1);
     this.isGroupEditMode.set(true);
     this._scheduleVersion.update(v => v + 1);
   }
@@ -1081,7 +1133,6 @@ export class NursingScheduleComponent implements OnInit {
     this.isGroupEditMode.set(false);
     this.tempScheduleWithGroups = null;
     this.uploadStatus.set('');
-    this.activeWeekTab.set(1);
     this._scheduleVersion.update(v => v + 1);
   }
 
@@ -1154,7 +1205,8 @@ export class NursingScheduleComponent implements OnInit {
     return { prevYearMonth, nextYearMonth };
   }
 
-  async loadMonthlySchedule(): Promise<void> {
+  /** @param preserveWeek 存檔/取消後的重載傳 true：停留在原本檢視的週，不跳回第 1 週 */
+  async loadMonthlySchedule(preserveWeek = false): Promise<void> {
     this.isLoadingSchedule.set(true);
     this.uploadStatus.set('');
     this.cancelGroupEditMode();
@@ -1165,7 +1217,9 @@ export class NursingScheduleComponent implements OnInit {
       const schedule = await this.nursingSchedulesApi.fetchById(documentId);
       this.monthlySchedule = schedule || null;
       this._scheduleVersion.update(v => v + 1);
-      this.activeWeekTab.set(1);
+      if (!preserveWeek || this.activeWeekTab() > this.weeklyData.length) {
+        this.activeWeekTab.set(1);
+      }
 
       this.loadAdjacentMonthSchedules(documentId);
     } catch (error) {

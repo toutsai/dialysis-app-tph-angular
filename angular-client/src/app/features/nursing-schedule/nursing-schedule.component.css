@@ -591,6 +591,23 @@
   width: 100px;
 }
 
+/* 分組編輯：姓名旁累積欄（隨姓名欄 sticky，橫向捲動天數時仍可見） */
+.cumulative-col-weekly,
+.cumulative-weekly {
+  position: sticky;
+  left: 180px;
+  background-color: #f8f9fa;
+  z-index: 1;
+  min-width: 120px;
+  max-width: 150px;
+  font-size: 0.8rem;
+  color: #546e7a;
+  text-align: left;
+  line-height: 1.35;
+  white-space: normal;
+  box-shadow: 2px 0 3px -1px rgba(0, 0, 0, 0.08);
+}
+
 .week-table .weekend {
   background-color: #fff5f5;
 }
