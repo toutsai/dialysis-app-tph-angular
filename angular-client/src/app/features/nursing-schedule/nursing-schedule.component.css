@@ -549,19 +549,43 @@
   font-size: 1.2rem;
   border-bottom: 1px solid #e0e0e0;
 }
+/* 只捲動週班表內容、表頭（日期列）固定＝使用者指定；高度=視窗扣掉上方區塊，小螢幕保底 420px */
 .week-table-wrapper {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: max(calc(100vh - 340px), 420px);
 }
 .week-table {
   width: 100%;
-  border-collapse: collapse;
+  /* ⚠️ sticky 表頭 + border-collapse:collapse 會被捲動內容穿透（Chromium 繪製缺陷），
+     改 separate + 單邊框模擬原本的格線，勿改回 collapse */
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.week-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+/* 左上角三格（員編/姓名/累積）同時凍結上與左，壓過一般表頭與資料列凍結欄 */
+.week-table thead th.employee-id-col-weekly,
+.week-table thead th.nurse-name-col-weekly,
+.week-table thead th.cumulative-col-weekly {
+  z-index: 4;
 }
 .week-table th,
 .week-table td {
-  border: 1px solid #e9ecef;
+  border-right: 1px solid #e9ecef;
+  border-bottom: 1px solid #e9ecef;
   padding: 0.6rem;
   text-align: center;
   min-width: 120px;
+}
+.week-table th:first-child,
+.week-table td:first-child {
+  border-left: 1px solid #e9ecef;
+}
+.week-table thead th {
+  border-top: 1px solid #e9ecef;
 }
 .week-table th {
   background-color: #f1f3f5;
