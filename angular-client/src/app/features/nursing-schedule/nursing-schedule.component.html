@@ -207,8 +207,17 @@
               </span>
               <span *ngIf="!getWeekConfirmed(i)" class="unscheduled-badge"> 未安排 </span>
             </button>
-            <!-- 右側工具群：班別篩選＋編輯按鈕＋上/下一週（使用者指定放同一處） -->
+            <!-- 右側工具群：上/下一週＋班別篩選＋編輯按鈕（使用者指定順序：上下週在前） -->
             <div class="tabs-right-tools">
+              <!-- 上/下一週快速導航：跨出本月自動接上月最後一週/下月第1週 -->
+              <div class="week-nav-arrows">
+                <button (click)="shiftWeek(-1)" title="上一週（第 1 週再按會接到上個月最後一週）">
+                  <i class="fas fa-chevron-left"></i> 上一週
+                </button>
+                <button (click)="shiftWeek(1)" title="下一週（最後一週再按會接到下個月第 1 週）">
+                  下一週 <i class="fas fa-chevron-right"></i>
+                </button>
+              </div>
               <div class="shift-filter-group">
                 <button
                   [ngClass]="['filter-btn', shiftFilter() === 'all' ? 'active' : '']"
@@ -275,15 +284,6 @@
                   <button (click)="cancelGroupEditMode()" class="btn-secondary">取消編輯</button>
                 </ng-container>
               </ng-container>
-              <!-- 上/下一週快速導航：跨出本月自動接上月最後一週/下月第1週 -->
-              <div class="week-nav-arrows">
-                <button (click)="shiftWeek(-1)" title="上一週（第 1 週再按會接到上個月最後一週）">
-                  <i class="fas fa-chevron-left"></i> 上一週
-                </button>
-                <button (click)="shiftWeek(1)" title="下一週（最後一週再按會接到下個月第 1 週）">
-                  下一週 <i class="fas fa-chevron-right"></i>
-                </button>
-              </div>
             </div>
           </ng-container>
         </nav>
