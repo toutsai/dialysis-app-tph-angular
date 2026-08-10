@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ViewEncapsulation } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { QuillModule } from 'ngx-quill';
@@ -8,7 +8,9 @@ import { QuillModule } from 'ngx-quill';
   standalone: true,
   imports: [CommonModule, FormsModule, QuillModule],
   templateUrl: './marquee-edit-dialog.component.html',
-  styleUrl: './marquee-edit-dialog.component.css'
+  styleUrl: './marquee-edit-dialog.component.css',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  encapsulation: ViewEncapsulation.None,
 })
 export class MarqueeEditDialogComponent implements OnChanges {
   @Input() isVisible = false;

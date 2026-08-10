@@ -132,7 +132,7 @@ export class NotificationService implements OnDestroy {
 
     // Start periodic polling
     this.pollTimer = setInterval(() => {
-      this.fetchNotifications();
+      if (!document.hidden) this.fetchNotifications();
     }, POLL_INTERVAL);
 
     console.log('[NotificationService] Polling for notifications');

@@ -34,7 +34,6 @@ import {
   extractVersionConflict,
   formatVersionConflictMessage,
 } from '@/utils/versionConflict';
-import * as XLSX from 'xlsx';
 
 // Dialog components
 import { BedChangeDialogComponent } from '@app/components/dialogs/bed-change-dialog/bed-change-dialog.component';
@@ -1965,7 +1964,8 @@ export class StatsComponent implements OnInit, OnDestroy {
 
   // --- Excel Export ---
 
-  exportAssignmentsToExcel(): void {
+  async exportAssignmentsToExcel(): Promise<void> {
+    const XLSX = await import('xlsx');
     if (this.isLoading) {
       this.showAlert('提示', '資料仍在載入中，請稍後再試。');
       return;

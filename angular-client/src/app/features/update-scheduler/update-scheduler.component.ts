@@ -128,7 +128,9 @@ export class UpdateSchedulerComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.patientStore.fetchPatientsIfNeeded().then(() => {
       this.fetchScheduledUpdates();
-      this.pollTimer = setInterval(() => this.fetchScheduledUpdates(), 15_000);
+      this.pollTimer = setInterval(() => {
+        if (!document.hidden) this.fetchScheduledUpdates();
+      }, 15_000);
     });
   }
 

@@ -1,6 +1,5 @@
 // src/services/vascularAccessExportService.ts
 // 當月血管通路事件清單匯出（彙整自每日工作日誌的 vascularAccessLog ＋ 主護填寫的 confirmed 事件）
-import * as XLSX from 'xlsx';
 
 export interface VascularAccessRow {
   name: string;
@@ -12,10 +11,11 @@ export interface VascularAccessRow {
   source: string;
 }
 
-export function exportVascularAccessExcel(
+export async function exportVascularAccessExcel(
   rows: VascularAccessRow[],
   filename: string = 'VascularAccess_Export.xlsx',
-): void {
+): Promise<void> {
+  const XLSX = await import('xlsx');
   const sheetData = rows.map((r) => ({
     姓名: r.name || '',
     病歷號: r.medicalRecordNumber || '',

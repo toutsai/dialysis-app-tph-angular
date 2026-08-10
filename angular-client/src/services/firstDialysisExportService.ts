@@ -1,6 +1,5 @@
 // src/services/firstDialysisExportService.ts
 // 當月初次透析名單匯出（來源：病人資料庫 first_dialysis_date）
-import * as XLSX from 'xlsx';
 
 export interface FirstDialysisRow {
   name: string;
@@ -14,10 +13,11 @@ export interface FirstDialysisRow {
   deletedDate: string;
 }
 
-export function exportFirstDialysisExcel(
+export async function exportFirstDialysisExcel(
   rows: FirstDialysisRow[],
   filename: string = 'FirstDialysis_Export.xlsx',
-): void {
+): Promise<void> {
+  const XLSX = await import('xlsx');
   const sheetData = rows.map((r) => ({
     姓名: r.name || '',
     病歷號: r.medicalRecordNumber || '',

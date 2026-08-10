@@ -355,6 +355,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   private startPatientRefreshTimer(): void {
     if (this.patientRefreshTimer) return;
     this.patientRefreshTimer = setInterval(() => {
+      if (document.hidden) return;
       // 錯誤已在 store 內記錄；背景輪詢失敗不打擾使用者，等下一輪再試
       this.patientStoreService.forceRefreshPatients().catch(() => {});
     }, this.PATIENT_REFRESH_INTERVAL);
@@ -376,7 +377,9 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     if (!(this.authService.isAdmin() || this.authService.isEditor())) return;
     if (this.conflictPollTimer) return;
     this.fetchConflictCount();
-    this.conflictPollTimer = setInterval(() => this.fetchConflictCount(), this.CONFLICT_POLL_INTERVAL);
+    this.conflictPollTimer = setInterval(() => {
+      if (!document.hidden) this.fetchConflictCount();
+    }, this.CONFLICT_POLL_INTERVAL);
     // 事件驅動：調班/例外異動即觸發（輕度 debounce 防連發）；SSE 斷線恢復後也補刷一次。
     this.conflictSseSubscriptions.push(
       this.sseEvents.exception$.subscribe(() => this.debouncedFetchConflictCount()),

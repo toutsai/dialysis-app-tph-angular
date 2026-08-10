@@ -60,7 +60,7 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
     });
 
     this.refreshTimer = setInterval(() => {
-      if (!this.needsPin()) void this.loadDashboard(false);
+      if (!document.hidden && !this.needsPin()) void this.loadDashboard(false);
     }, 30_000);
   }
 

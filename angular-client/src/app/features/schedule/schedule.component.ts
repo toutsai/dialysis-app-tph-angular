@@ -15,7 +15,6 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { firstValueFrom, Subscription } from 'rxjs';
-import * as XLSX from 'xlsx';
 
 import { AuthService } from '@app/core/services/auth.service';
 import { SseEventsService, type ScheduleSavedPayload } from '@app/core/services/sse-events.service';
@@ -1616,7 +1615,8 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     }
   }
 
-  exportScheduleToExcel(): void {
+  async exportScheduleToExcel(): Promise<void> {
+    const XLSX = await import('xlsx');
     if (this.isLoading()) {
       this.showAlert('提示', '資料正在載入中，請稍後再試。');
       return;

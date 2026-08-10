@@ -1,13 +1,14 @@
 // 前端版本更新橫幅
 // 輪詢後端 /api/version（讀 index.html mtime，每次 ng build 會變），
 // 偵測到新部署 → 倒數後自動 location.reload()；若有彈窗/表單開著則暫停倒數，待關閉再續。
-import { Component, OnInit, OnDestroy, inject, signal, NgZone } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, OnDestroy, inject, signal, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 @Component({
   selector: 'app-update-banner',
   standalone: true,
   imports: [CommonModule],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (visible()) {
       <div class="update-banner" role="alert">

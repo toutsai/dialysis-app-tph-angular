@@ -11,7 +11,6 @@ import { queryWithInChunks } from '@/utils/firestoreUtils';
 import { LAB_ITEM_DISPLAY_NAMES } from '@/constants/labAlertConstants';
 import { formatDateToYYYYMM, formatDateToYYYYMMDD } from '@/utils/dateUtils';
 import { escapeHtml } from '@/utils/sanitize';
-import * as XLSX from 'xlsx';
 
 @Component({
   selector: 'app-lab-reports',
@@ -583,7 +582,8 @@ export class LabReportsComponent implements OnInit, OnDestroy {
     }
   }
 
-  exportAlertToExcel(): void {
+  async exportAlertToExcel(): Promise<void> {
+    const XLSX = await import('xlsx');
     if (this.groupedAlerts().length === 0) {
       alert('\u76ee\u524d\u6c92\u6709\u53ef\u532f\u51fa\u7684\u8b66\u793a\u5831\u544a\u8cc7\u6599\u3002');
       return;
@@ -990,6 +990,7 @@ export class LabReportsComponent implements OnInit, OnDestroy {
   }
 
   async generateAndUploadManualData(): Promise<void> {
+    const XLSX = await import('xlsx');
     if (!this.manualReportDate()) {
       alert('\u8acb\u9078\u64c7\u6240\u6709\u88dc\u767b\u5831\u544a\u7684\u7d71\u4e00\u5831\u544a\u65e5\u3002');
       return;
@@ -1035,7 +1036,8 @@ export class LabReportsComponent implements OnInit, OnDestroy {
 
   // ---- Group Report Excel Export ----
 
-  exportGroupReportToExcel(): void {
+  async exportGroupReportToExcel(): Promise<void> {
+    const XLSX = await import('xlsx');
     if (this.searchType() !== 'group' || this.reportData().length === 0) {
       alert('\u76ee\u524d\u6c92\u6709\u53ef\u532f\u51fa\u7684\u7fa4\u7d44\u5831\u544a\u8cc7\u6599\u3002');
       return;

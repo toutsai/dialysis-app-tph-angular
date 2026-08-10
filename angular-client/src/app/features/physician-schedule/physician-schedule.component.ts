@@ -3,7 +3,6 @@ import { Component, inject, signal, computed, OnInit, OnDestroy, effect } from '
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
-import * as XLSX from 'xlsx';
 import { ApiConfigService } from '@services/api-config.service';
 import { ApiService } from '@app/core/services/api.service';
 import { AuthService } from '@app/core/services/auth.service';
@@ -866,7 +865,8 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
     else this.activeMobilePanel.set(panelName);
   }
 
-  exportEmergencyRecords(): void {
+  async exportEmergencyRecords(): Promise<void> {
+    const XLSX = await import('xlsx');
     if (this.emergencyRecords.length === 0) { this.showAlert('提示', '沒有緊急出勤紀錄可供匯出。'); return; }
     const aoa: any[][] = [];
     const title = `${this.selectedMonth()}月 腎臟科醫師緊急出勤名單`;

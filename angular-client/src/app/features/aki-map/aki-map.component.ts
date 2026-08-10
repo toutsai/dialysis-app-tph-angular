@@ -1,7 +1,6 @@
 import { Component, computed, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import * as XLSX from 'xlsx';
 import {
   AkiApiService,
   AkiCareItem,
@@ -535,7 +534,8 @@ export class AkiMapComponent implements OnInit {
     return '';
   }
 
-  exportCareExcel(): void {
+  async exportCareExcel(): Promise<void> {
+    const XLSX = await import('xlsx');
     const discharged = this.isDischargedView();
     const ckdView = this.isCkdView();
     const rows = this.displayCareItems().map((it) => {

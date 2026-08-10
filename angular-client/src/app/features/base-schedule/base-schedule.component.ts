@@ -2,7 +2,6 @@ import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular
 import { CommonModule } from '@angular/common';
 import { nameWithModeFreq } from '@/utils/patientDisplay';
 import { FormsModule } from '@angular/forms';
-import * as XLSX from 'xlsx';
 import { AuthService } from '@app/core/services/auth.service';
 import { ApiManagerService, type ApiManager } from '@app/core/services/api-manager.service';
 import { PatientStoreService } from '@app/core/services/patient-store.service';
@@ -513,7 +512,8 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
     (event.target as HTMLElement).closest('.schedule-slot')?.classList.remove('drag-over');
   }
 
-  exportBaseScheduleToExcel(): void {
+  async exportBaseScheduleToExcel(): Promise<void> {
+    const XLSX = await import('xlsx');
     const record = this.masterRecord();
     if (!record || !record.schedule) {
       this.showAlert('提示', '沒有總表資料可匯出。');

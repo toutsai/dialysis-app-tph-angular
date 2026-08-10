@@ -534,7 +534,9 @@ export class CollaborationComponent implements OnInit, OnDestroy {
     });
 
     // Poll for bulletin updates every 30 seconds
-    this.bulletinPollingTimer = setInterval(() => this.refreshBulletin(dateStr), 30000);
+    this.bulletinPollingTimer = setInterval(() => {
+      if (!document.hidden) this.refreshBulletin(dateStr);
+    }, 30000);
   }
 
   private async refreshBulletin(dateStr: string): Promise<void> {

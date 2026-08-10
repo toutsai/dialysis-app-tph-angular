@@ -1,3 +1,5 @@
+@import 'quill/dist/quill.snow.css';
+
 .dialog-overlay {
   position: fixed;
   inset: 0;

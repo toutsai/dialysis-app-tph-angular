@@ -55,7 +55,6 @@ import { DailyInjectionListDialogComponent } from '@app/components/dialogs/daily
 import { IcuOrdersDialogComponent } from '@app/components/dialogs/icu-orders-dialog/icu-orders-dialog.component';
 import { CrrtOrderModalComponent } from '@app/components/dialogs/crrt-order-modal/crrt-order-modal.component';
 import type { VascularAccessEvent } from '@app/core/constants/vascular-access-codes';
-import * as XLSX from 'xlsx';
 
 // 臨床查閱的檢驗異常判定：沿用藥檢關聯視圖同一組參考範圍（min/max 為字面上下限）
 const CLINICAL_LAB_RANGES: Record<string, { min?: number; max?: number }> = {
@@ -526,7 +525,8 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
   }
 
   /** 臨床查閱簡表匯出 Excel（矩陣型：列＝床號、欄＝三班） */
-  exportClinicalExcel(): void {
+  async exportClinicalExcel(): Promise<void> {
+    const XLSX = await import('xlsx');
     const rows = this.clinicalRows();
     if (rows.length === 0) return;
     const data: unknown[][] = [];

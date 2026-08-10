@@ -24,7 +24,9 @@ export class MarqueeBannerComponent implements OnInit, OnDestroy {
   async ngOnInit(): Promise<void> {
     await this.fetchMarquee();
     // Poll every 30 seconds for updates
-    this.pollingTimer = setInterval(() => this.fetchMarquee(), 30000);
+    this.pollingTimer = setInterval(() => {
+      if (!document.hidden) this.fetchMarquee();
+    }, 30000);
   }
 
   private async fetchMarquee(): Promise<void> {
@@ -50,4 +52,3 @@ export class MarqueeBannerComponent implements OnInit, OnDestroy {
     }
   }
 }
-

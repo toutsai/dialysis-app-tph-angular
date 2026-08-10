@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, OnChanges, SimpleChanges } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Input, Output, EventEmitter, ViewChild, ElementRef, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
@@ -7,7 +7,8 @@ import { FormsModule } from '@angular/forms';
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './ward-number-badge.component.html',
-  styleUrl: './ward-number-badge.component.css'
+  styleUrl: './ward-number-badge.component.css',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class WardNumberBadgeComponent implements OnChanges {
   @Input() value = '';

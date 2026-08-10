@@ -9,7 +9,6 @@ import {
   type FirestoreRecord,
 } from '@services/api-manager.service';
 // Standalone 版：已移除 Firebase
-import * as XLSX from 'xlsx';
 import { formatDateToYYYYMM } from '@/utils/dateUtils';
 
 const SHIFT_MAP: Record<string, number> = { early: 0, noon: 1, late: 2 };
@@ -189,7 +188,8 @@ export class ConsumablesComponent implements OnInit {
     }
   }
 
-  exportConsumablesToExcel(): void {
+  async exportConsumablesToExcel(): Promise<void> {
+    const XLSX = await import('xlsx');
     const data = this.processedData();
     if (!data || data.length === 0) {
       alert('沒有可匯出的資料。');

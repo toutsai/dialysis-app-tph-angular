@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 @Component({
@@ -6,7 +6,8 @@ import { CommonModule } from '@angular/common';
   standalone: true,
   imports: [CommonModule],
   templateUrl: './patient-messages-icon.component.html',
-  styleUrl: './patient-messages-icon.component.css'
+  styleUrl: './patient-messages-icon.component.css',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PatientMessagesIconComponent {
   @Input() patientId = '';

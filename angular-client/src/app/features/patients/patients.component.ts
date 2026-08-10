@@ -10,7 +10,6 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 // Standalone 版：已移除 Firebase
-import * as XLSX from 'xlsx';
 import { ApiConfigService } from '@services/api-config.service';
 import { AuthService } from '@services/auth.service';
 import { PatientStoreService, type Patient } from '@services/patient-store.service';
@@ -1766,7 +1765,8 @@ export class PatientsComponent implements OnInit, OnDestroy {
   }
 
   // --- Export ---
-  exportDeletedPatients(): void {
+  async exportDeletedPatients(): Promise<void> {
+    const XLSX = await import('xlsx');
     const allPatients = this.patientStore.allPatients();
     const deletedPatients = allPatients.filter((p: any) => p.isDeleted);
     if (deletedPatients.length === 0) {

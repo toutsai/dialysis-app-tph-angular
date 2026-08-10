@@ -15,7 +15,6 @@ import {
 } from '@services/api-manager.service';
 // Standalone 版：已移除 Firebase
 import { queryWithInChunks } from '@/utils/firestoreUtils';
-import * as XLSX from 'xlsx';
 
 const CATEGORY_NAMES: Record<string, string> = {
   artificialKidney: '人工腎臟',
@@ -909,7 +908,8 @@ export class InventoryComponent implements OnInit {
     }
   }
 
-  exportConsumablesToExcel(): void {
+  async exportConsumablesToExcel(): Promise<void> {
+    const XLSX = await import('xlsx');
     const data = this.processedConsumptionData();
     if (!data || data.length === 0) {
       this.showAlert('提示', '沒有可匯出的資料。');
@@ -1295,7 +1295,8 @@ export class InventoryComponent implements OnInit {
     return Object.values(data).reduce((sum, count) => sum + (count || 0), 0);
   }
 
-  exportMonthlySummary(): void {
+  async exportMonthlySummary(): Promise<void> {
+    const XLSX = await import('xlsx');
     const rows: any[][] = [['類別', '品項', '每箱數量', '當月消耗(個)', '當月消耗(箱)']];
 
     for (const category of Object.keys(CATEGORY_NAMES)) {
@@ -1831,7 +1832,8 @@ export class InventoryComponent implements OnInit {
     this.showOrderPreview.set(true);
   }
 
-  confirmExportOrder(): void {
+  async confirmExportOrder(): Promise<void> {
+    const XLSX = await import('xlsx');
     const rows: any[][] = [];
 
     // Row 1: Order date

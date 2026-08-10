@@ -12,7 +12,6 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 // Standalone 版：已移除 Firebase
-import * as XLSX from 'xlsx';
 import { AuthService } from '@app/core/services/auth.service';
 import { ApiConfigService } from '@services/api-config.service';
 import { ApiManagerService } from '@app/core/services/api-manager.service';
@@ -762,7 +761,8 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   // --- Excel 匯出 ---
-  exportWeeklyScheduleToExcel(): void {
+  async exportWeeklyScheduleToExcel(): Promise<void> {
+    const XLSX = await import('xlsx');
     if (!this.monthlySchedule || this.activeWeekTab() === 0) {
       alert(
         !this.monthlySchedule

@@ -8,7 +8,6 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import * as XLSX from 'xlsx';
 import { ApiConfigService } from '@services/api-config.service';
 import {
   ApiManagerService,
@@ -483,7 +482,8 @@ export class OrdersComponent implements OnInit {
   }
 
   // --- Excel Export ---
-  exportOrdersToExcel(): void {
+  async exportOrdersToExcel(): Promise<void> {
+    const XLSX = await import('xlsx');
     const results = this.searchResult();
     if (!results || results.length === 0) {
       alert('沒有可匯出的資料。');
@@ -711,7 +711,8 @@ export class OrdersComponent implements OnInit {
       .join('　');
   }
 
-  exportDialysisOrdersToExcel(): void {
+  async exportDialysisOrdersToExcel(): Promise<void> {
+    const XLSX = await import('xlsx');
     try {
       const rows = this.displayedDialysisRows();
       const isGroup = this.dialysisViewMode() === 'group';

@@ -187,7 +187,7 @@ export class TaskStoreService implements OnDestroy {
 
     // Start periodic polling
     this.pollTimer = setInterval(() => {
-      this.pollAllData(uid);
+      if (!document.hidden) this.pollAllData(uid);
     }, POLL_INTERVAL);
 
     console.log(

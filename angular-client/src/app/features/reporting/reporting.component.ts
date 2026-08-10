@@ -4,7 +4,6 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@services/api-manager.service';
 import { SHIFT_CODES, getShiftDisplayName } from '@/constants/scheduleConstants';
-import * as XLSX from 'xlsx';
 import { formatDateToYYYYMMDD, formatDateToYYYYMM } from '@/utils/dateUtils';
 import { Chart, registerables } from 'chart.js';
 
@@ -475,7 +474,8 @@ export class ReportingComponent implements AfterViewInit {
 
   // --- Excel Export ---
 
-  exportToExcel(): void {
+  async exportToExcel(): Promise<void> {
+    const XLSX = await import('xlsx');
     if (this.noData()) return;
     let headers!: string[];
     let dataRows!: any[][];

@@ -3,7 +3,6 @@ import { Component, inject, signal, computed, OnInit, OnDestroy, DestroyRef } fr
 import { CommonModule } from '@angular/common';
 import { nameWithModeFreq } from '@/utils/patientDisplay';
 import { FormsModule } from '@angular/forms';
-import * as XLSX from 'xlsx';
 import { ApiConfigService } from '@services/api-config.service';
 import { AuthService } from '@app/core/services/auth.service';
 import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@app/core/services/api-manager.service';
@@ -777,7 +776,8 @@ export class WeeklyComponent implements OnInit, OnDestroy {
 
   openBedAssignmentDialog(): void { if (!this.isPageLocked()) this.isProblemSolverDialogVisible.set(true); }
 
-  exportWeeklyScheduleToExcel(): void {
+  async exportWeeklyScheduleToExcel(): Promise<void> {
+    const XLSX = await import('xlsx');
     if (this.patientStore.isLoading()) { this.showAlert('提示', '資料正在載入中，請稍後再試。'); return; }
     const data: any[][] = [['部立台北醫院 週排班總表'], [`週別: ${this.weekDisplay()}`], []];
     const headers = ['床號', ...this.weekDates().map((d: any) => `${d.weekday} ${d.date}`)];

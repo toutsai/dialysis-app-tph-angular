@@ -14,8 +14,6 @@ import { ApiConfigService } from '@services/api-config.service';
 import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@app/core/services/api-manager.service';
 import { PatientStoreService } from '@services/patient-store.service';
 import { updatePatient as optimizedUpdatePatient } from '@/services/optimizedApiService';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import { WardNumberDialogComponent } from '@app/components/dialogs/ward-number-dialog/ward-number-dialog.component';
 import { ConfirmDialogComponent } from '@app/components/dialogs/confirm-dialog/confirm-dialog.component';
 import { AlertDialogComponent } from '@app/components/dialogs/alert-dialog/alert-dialog.component';
@@ -246,7 +244,9 @@ export class DailyLogComponent implements OnInit, OnDestroy {
     await this.loadDailyLog(this.selectedDate());
     // Fetch marquee content and start polling (replaces Firebase onSnapshot)
     this.fetchMarqueeContent();
-    this.marqueePollTimer = setInterval(() => this.fetchMarqueeContent(), 30_000);
+    this.marqueePollTimer = setInterval(() => {
+      if (!document.hidden) this.fetchMarqueeContent();
+    }, 30_000);
   }
 
   ngOnDestroy(): void {
@@ -766,6 +766,10 @@ export class DailyLogComponent implements OnInit, OnDestroy {
     await new Promise(resolve => setTimeout(resolve, 0));
 
     try {
+      const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
+        import('jspdf'),
+        import('html2canvas'),
+      ]);
       const exportArea = document.getElementById('pdf-export-area');
       if (!exportArea) {
         this.showAlert('錯誤', '找不到要匯出的內容！');

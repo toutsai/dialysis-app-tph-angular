@@ -8,7 +8,6 @@ import { FormsModule } from '@angular/forms';
 import { PatientStoreService } from '@services/patient-store.service';
 import { ORDERED_SHIFT_CODES, getShiftDisplayName } from '@/constants/scheduleConstants';
 import { getUnifiedCellStyle } from '@/utils/scheduleUtils';
-import * as XLSX from 'xlsx';
 
 // 與總表頁 (base-schedule) 同一份前端頻率對照：0=週一 … 5=週六
 const FREQ_MAP_TO_DAY_INDEX: Record<string, number[]> = {
@@ -195,7 +194,8 @@ export class ClerkRegistrationComponent implements OnInit {
     }
   }
 
-  exportExcel(): void {
+  async exportExcel(): Promise<void> {
+    const XLSX = await import('xlsx');
     const flat: RegCell[] = [];
     for (const cells of this.dayCellMap().values()) flat.push(...cells);
     if (flat.length === 0) return;

@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 interface ShiftInfo {
@@ -16,7 +16,8 @@ interface PatientCountPart {
   standalone: true,
   imports: [CommonModule],
   templateUrl: './stats-toolbar.component.html',
-  styleUrl: './stats-toolbar.component.css'
+  styleUrl: './stats-toolbar.component.css',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class StatsToolbarComponent {
   @Input() statsData: any[] = [];
