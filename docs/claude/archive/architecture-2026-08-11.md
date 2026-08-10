@@ -104,33 +104,9 @@ CLAUDE.md 放的是不變式與陷阱；本檔放子系統細節。**動到哪�
 - 防抖：儲存 10 秒、搜尋 300ms。
 - `@/` 路徑別名指向 `angular-client/src/`。
 
-### 前端效能優化接續計畫（2026-08-11 基準）
-
-**第一階段已完成**（commit `87f9039`）：XLSX、jsPDF、html2canvas 改為操作時才 dynamic import；Quill CSS 移出全域首包；5 個低風險元件改用 OnPush；主要網路輪詢在 `document.hidden` 時暫停。Production build 與 `npm run smoke:tph-angular`（69/69）通過。
-
-量測基準（`npm run build:angular`）：initial 由 525.24 kB 降至 501.00 kB（傳輸估計 137.67 → 134.68 kB）；全域 CSS 88.70 → 64.47 kB；daily-log chunk 543.23 → 156.13 kB（傳輸估計 136.36 → 27.26 kB）。XLSX/PDF/Canvas 現為獨立 lazy chunks；CommonJS 警告仍存在但不再阻塞首屏。
-
-**第二階段（下一優先）**：
-
-1. 拆分大型頁面容器：依序處理 `schedule`（TS 約 121 kB）、`stats`、`patients`、`inventory`、`my-patients`，分離 toolbar/table/dialog 與資料存取責任。
-2. 排程表建立預先計算的 cell view model；template 不得在床位 × 班別熱路徑重複呼叫 `getPatientCellStyle`、`getPatientMode`、`getPatientWardNumber`、`getCombinedNote` 等方法。
-3. 大型 dialog/次要區塊採 `@defer` 或動態建立，避免進入 route 時一併解析未開啟的 dialog。
-4. 將 polling、SSE 與 API refresh 收斂到單一 store；加入 in-flight request deduplication，SSE 為主、低頻 polling 只作容錯，並避免上一個請求未完成時重送。
-
-**第三階段（第二階段穩定後）**：
-
-1. 漸進啟用 TypeScript/Angular strict：新程式先禁新增 `any`，再依序處理 `noImplicitReturns`、`strictNullChecks`、`strictTemplates`；不得一次全開後大量 `$any()` 掩蓋問題。
-2. 建立 bundle regression gate：initial budget 維持 500 kB 並逐步下修；處理目前超過 16 kB 的 component CSS，而不是提高 budget。
-3. 建立瀏覽器效能基準（Lighthouse/Performance）：記錄登入後首頁、schedule、daily-log 的 LCP、INP、長任務與 API 次數，優化前後用相同資料與裝置比較。
-4. 對大型病人/報表清單評估 CDK virtual scroll 或分頁；只有實測 DOM 數量與捲動成本達瓶頸才導入。
-
-每一階段完成條件：`npm run build:angular`、`npm run smoke:tph-angular`、手動驗證 Excel 匯出／Daily Log PDF／跑馬燈編輯器，並記錄修改前後 chunk 數據。純前端 build 不需重啟 PM2。
-
 ## 部署
 
-- **Angular 正式環境**：本 repo `D:\dialysis-app-angular\`，PM2 程序 `dialysis-server-angular`，port 3000，Express 直接服務本 repo 的 `dist/browser`。`D:\dialysis-app\` 是舊 Vue 站（PM2 `dialysis-server`，port 3001），不得拿來部署 Angular 修改。
-- **前端建置**：`npm run build:angular` → `dist/browser`；純 `.ts/.html/.css` 修改 build 後即可由正式 Express 提供，**不需重啟 PM2**。以 `/` 回傳的 `main-*.js` hash 核對是否為最新 build。
-- **後端部署**：修改 `src/**` 才執行 `pm2 restart dialysis-server-angular --update-env`，之後檢查 `pm2 list` 與 `http://localhost:3000/api/health`。
-- **隔離開發驗證**：worktree `D:\dialysis-app-angular-dev\`、branch `dev`、port 3002、測試 DB；smoke test 必須設定 `PORT` 與 `SMOKE_BASE_URL` 指向 dev，不得對正式 3000 執行寫入型驗證。
-- **一般開發**：`npm run dev`（後端 watch）+ `npm run dev:angular`（port 5173，proxy → Express:3000）。
+- **生產**：院內 Windows VM + PM2（`ecosystem.config.cjs`，CommonJS 因 PM2 不吃 ESM）。部署目錄 `D:\dialysis-app\`（非 git repo）。詳細步驟見 `.claude/skills/deploy.md`、`DEPLOYMENT.md`。
+- **前端建置**：`npm run build:angular` → `dist/browser`，由 Express 靜態 serve。
+- **開發**：`npm run dev`（後端 watch）+ `npm run dev:angular`（port 5173，proxy → Express:3000）。
 - **備份**：`npm run backup` 手動；scheduler.js cron 自動。WAL mode 注意事項見 `.claude/skills/db-backup.md`。
