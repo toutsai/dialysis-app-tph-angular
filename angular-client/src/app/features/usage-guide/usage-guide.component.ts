@@ -185,7 +185,6 @@ export class UsageGuideComponent {
         { title: '病人異常', desc: '記錄病人的特殊狀況或事件' },
         { title: '醫療事項', desc: '記錄重要的醫療處置或通知' },
         { title: '組長交班', desc: '護理組長的交班備註' },
-        { title: '公告設定', desc: '設定跑馬燈公告內容' },
         { title: 'PDF 導出', desc: '將工作日誌匯出為 PDF 檔案' },
       ],
     },

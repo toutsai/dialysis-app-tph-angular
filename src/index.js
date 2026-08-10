@@ -147,12 +147,6 @@ app.use('/api/consumables/process', (req, res, next) => {
   ordersRoutes(req, res, next)
 })
 
-// GET/PUT /api/system/marquee → system 路由的 /site-config/marquee
-app.use('/api/system/marquee', (req, res, next) => {
-  req.url = '/site-config/marquee'
-  systemRoutes(req, res, next)
-})
-
 // GET /api/system/scheduled-changes → system 路由的 /scheduled-updates
 app.use('/api/system/scheduled-changes', (req, res, next) => {
   req.url = '/scheduled-updates'

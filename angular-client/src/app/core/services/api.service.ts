@@ -28,7 +28,6 @@ export const COLLECTION_ROUTE_MAP: Record<string, string> = {
   inventory_items: '/system/inventory',
   inventory_transactions: '/system/inventory/transactions',
   consumable_records: '/orders/consumables',
-  marquee_settings: '/system/marquee',
   auto_assign_configs: '/system/auto-assign-config',
   // 共用元件/服務遷移所需的映射
   condition_records: '/orders/condition-records',

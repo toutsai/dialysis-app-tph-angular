@@ -23,9 +23,6 @@
       <button class="btn btn-handover" (click)="isHandoverDialogVisible = true" [disabled]="isPageLocked">
         <i class="fas fa-clipboard-list"></i> 組長交班
       </button>
-      <button class="btn btn-marquee-settings" (click)="isMarqueeDialogVisible = true" [disabled]="isPageLocked">
-        <i class="fas fa-bullhorn"></i> 公告設定
-      </button>
     </div>
     <div class="header-right">
       <span class="status-indicator">{{ statusText }}</span>
@@ -670,10 +667,4 @@
     (closeEvent)="isHandoverDialogVisible = false"
     (notesUpdated)="onNotesUpdated($event)">
   </app-handover-notes-dialog>
-
-  <app-marquee-edit-dialog
-    [isVisible]="isMarqueeDialogVisible"
-    (close)="isMarqueeDialogVisible = false"
-    (save)="handleMarqueeSave($event)">
-  </app-marquee-edit-dialog>
 </div>

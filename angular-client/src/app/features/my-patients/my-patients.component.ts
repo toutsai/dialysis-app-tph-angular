@@ -45,7 +45,6 @@ import { kiditService } from '@/services/kiditService';
 import { TaskCreateDialogComponent } from '@app/components/dialogs/task-create-dialog/task-create-dialog.component';
 import { ConfirmDialogComponent } from '@app/components/dialogs/confirm-dialog/confirm-dialog.component';
 import { DialysisOrderModalComponent } from '@app/components/dialogs/dialysis-order-modal/dialysis-order-modal.component';
-import { MarqueeBannerComponent } from '@app/components/marquee-banner/marquee-banner.component';
 import { EducationRecordDialogComponent } from '@app/components/dialogs/education-record-dialog/education-record-dialog.component';
 import { VascularAccessEventDialogComponent } from '@app/components/dialogs/vascular-access-event-dialog/vascular-access-event-dialog.component';
 import { PatientDetailModalComponent } from '@app/components/dialogs/patient-detail-modal/patient-detail-modal.component';
@@ -166,7 +165,6 @@ interface SelectableUser {
     TaskCreateDialogComponent,
     ConfirmDialogComponent,
     DialysisOrderModalComponent,
-    MarqueeBannerComponent,
     EducationRecordDialogComponent,
     VascularAccessEventDialogComponent,
     PatientDetailModalComponent,

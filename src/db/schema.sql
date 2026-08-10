@@ -611,7 +611,7 @@ CREATE TABLE IF NOT EXISTS consumables_reports (
 -- 系統配置與日誌
 -- ========================================
 
--- 站點配置 (跑馬燈等)
+-- 站點配置 (床位設定、假日主檔等鍵值存放)
 CREATE TABLE IF NOT EXISTS site_config (
     id TEXT PRIMARY KEY,
     config_data TEXT DEFAULT '{}',  -- JSON

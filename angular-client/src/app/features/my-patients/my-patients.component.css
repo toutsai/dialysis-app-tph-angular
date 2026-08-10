@@ -921,8 +921,7 @@
 @media print {
   .no-print,
   .page-header,
-  .care-tools-bar,
-  app-marquee-banner {
+  .care-tools-bar {
     display: none !important;
   }
   .clinical-view-wrapper {

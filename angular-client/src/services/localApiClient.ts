@@ -161,7 +161,6 @@ const COLLECTION_ROUTE_MAP: Record<string, string> = {
   inventory_items: '/system/inventory',
   inventory_transactions: '/system/inventory/transactions', // TODO: 待後端實作
   consumable_records: '/orders/consumables',
-  marquee_settings: '/system/marquee',               // TODO: 待後端實作
   auto_assign_configs: '/system/auto-assign-config', // TODO: Phase 3 待實作
   nursing_duties: '/nursing/duties',
   nursing_group_config: '/nursing/group-config',

@@ -1,5 +1,5 @@
 // Standalone 版：已移除 Firebase，改用 REST API + polling
-import { Component, inject, signal, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
+import { Component, inject, signal, OnInit, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -18,7 +18,6 @@ import { WardNumberDialogComponent } from '@app/components/dialogs/ward-number-d
 import { ConfirmDialogComponent } from '@app/components/dialogs/confirm-dialog/confirm-dialog.component';
 import { AlertDialogComponent } from '@app/components/dialogs/alert-dialog/alert-dialog.component';
 import { HandoverNotesDialogComponent } from '@app/components/dialogs/handover-notes-dialog/handover-notes-dialog.component';
-import { MarqueeEditDialogComponent } from '@app/components/dialogs/marquee-edit-dialog/marquee-edit-dialog.component';
 import { VascularAccessEventDialogComponent } from '@app/components/dialogs/vascular-access-event-dialog/vascular-access-event-dialog.component';
 
 @Component({
@@ -31,13 +30,12 @@ import { VascularAccessEventDialogComponent } from '@app/components/dialogs/vasc
     ConfirmDialogComponent,
     AlertDialogComponent,
     HandoverNotesDialogComponent,
-    MarqueeEditDialogComponent,
     VascularAccessEventDialogComponent,
   ],
   templateUrl: './daily-log.component.html',
   styleUrl: './daily-log.component.css',
 })
-export class DailyLogComponent implements OnInit, OnDestroy {
+export class DailyLogComponent implements OnInit {
   // ===================================================================
   // Services
   // ===================================================================
@@ -75,9 +73,7 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   @ViewChild('otherNotesTextarea') otherNotesTextareaRef?: ElementRef<HTMLTextAreaElement>;
   @ViewChild('hiddenDateInput') hiddenDateInputRef?: ElementRef<HTMLInputElement>;
   isStaffingDetailsVisible = false;
-  private marqueePollTimer: ReturnType<typeof setInterval> | null = null;
   private dailyLogCache = new Map<string, any>();
-  private readonly siteConfigApi: ApiManager<FirestoreRecord>;
   private readonly handoverLogsApi: ApiManager<FirestoreRecord>;
 
   // ===================================================================
@@ -87,7 +83,6 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   isConfirmDialogVisible = false;
   isAlertDialogVisible = false;
   isHandoverDialogVisible = false;
-  isMarqueeDialogVisible = false;
   isVascularRejectDialogVisible = false;
   vascularRejectTarget: VascularAccessEvent | null = null;
   vascularRejectIsRevoke = false;
@@ -96,7 +91,6 @@ export class DailyLogComponent implements OnInit, OnDestroy {
 
   // Dialog Data
   handoverNotes = '';
-  marqueeHtmlContent = '';
   confirmDialogTitle = '';
   confirmDialogMessage = '';
   confirmAction: (() => void) | null = null;
@@ -120,7 +114,6 @@ export class DailyLogComponent implements OnInit, OnDestroy {
     this.dailyLogsApi = this.apiManagerService.create<FirestoreRecord>('daily_logs');
     this.schedulesApi = this.apiManagerService.create<FirestoreRecord>('schedules');
     this.expiredSchedulesApi = this.apiManagerService.create<FirestoreRecord>('expired_schedules');
-    this.siteConfigApi = this.apiManagerService.create<FirestoreRecord>('site_config');
     this.handoverLogsApi = this.apiManagerService.create<FirestoreRecord>('handover_logs');
     this.dailyLog = this.initialLogState();
   }
@@ -242,28 +235,6 @@ export class DailyLogComponent implements OnInit, OnDestroy {
   // ===================================================================
   async ngOnInit(): Promise<void> {
     await this.loadDailyLog(this.selectedDate());
-    // Fetch marquee content and start polling (replaces Firebase onSnapshot)
-    this.fetchMarqueeContent();
-    this.marqueePollTimer = setInterval(() => {
-      if (!document.hidden) this.fetchMarqueeContent();
-    }, 30_000);
-  }
-
-  ngOnDestroy(): void {
-    if (this.marqueePollTimer) {
-      clearInterval(this.marqueePollTimer);
-      this.marqueePollTimer = null;
-    }
-  }
-
-  /** Fetch marquee content via REST API. */
-  private async fetchMarqueeContent(): Promise<void> {
-    try {
-      const result = await this.siteConfigApi.fetchById('marquee_announcements');
-      this.marqueeHtmlContent = (result as any)?.content || '';
-    } catch {
-      // Ignore fetch errors for marquee
-    }
   }
 
   // ===================================================================
@@ -541,29 +512,6 @@ export class DailyLogComponent implements OnInit, OnDestroy {
       this.showAlert('儲存失敗', '儲存日誌時發生錯誤');
     } finally {
       this.isLoading.set(false);
-    }
-  }
-
-  async handleMarqueeSave(newContent: string): Promise<void> {
-    if (this.isPageLocked) {
-      this.showAlert('權限不足', '您沒有權限修改全域公告。');
-      return;
-    }
-    try {
-      await this.siteConfigApi.save('marquee_announcements', {
-        content: newContent,
-        updatedAt: new Date().toISOString(),
-        updatedBy: {
-          uid: this.currentUser.uid,
-          name: this.currentUser.name,
-        },
-      });
-      this.marqueeHtmlContent = newContent;
-      this.isMarqueeDialogVisible = false;
-      this.showAlert('儲存成功', '全域跑馬燈公告已更新！');
-    } catch (error) {
-      console.error('儲存跑馬燈公告失敗:', error);
-      this.showAlert('儲存失敗', '更新公告時發生錯誤。');
     }
   }
 
