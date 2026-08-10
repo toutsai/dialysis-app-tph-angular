@@ -195,7 +195,9 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
     // 註冊版本號依賴，scheduleData 更新時觸發重算
     this.scheduleDataRevision();
     return this.availablePhysicians().map((doc: any) => {
-      const stats = { name: doc.name, monthlyWeekday: 0, monthlyWeekend: 0, ytdTotal: 0, ytdHolidays: 0, ytdWeekends: 0 };
+      const stats = { name: doc.name, monthlyWeekday: 0, monthlyWeekend: 0, ytdTotal: 0, ytdHolidays: 0, ytdWeekends: 0, ytdAvgHoliday: '—' };
+      // 平均假日分母 = 從今年第一個有班的月份累積到目前選取月份（中途到職者如陳怡汝 115/04 自動從到職月起算）
+      let firstShiftMonth = 0;
       const currentMonthData = this.scheduleData;
       if (Object.keys(currentMonthData).length > 0) {
         this.daysInMonth().forEach((dayInfo) => {
@@ -224,9 +226,14 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
               stats.ytdTotal++;
               if (isHoliday && !isWeekend) stats.ytdHolidays++;
               if (isWeekend) stats.ytdWeekends++;
+              if (!firstShiftMonth || monthNum < firstShiftMonth) firstShiftMonth = monthNum;
             }
           });
         }
+      }
+      if (firstShiftMonth) {
+        const accumulatedMonths = Math.max(1, this.selectedMonth() - firstShiftMonth + 1);
+        stats.ytdAvgHoliday = ((stats.ytdHolidays + stats.ytdWeekends) / accumulatedMonths).toFixed(1);
       }
       return stats;
     });

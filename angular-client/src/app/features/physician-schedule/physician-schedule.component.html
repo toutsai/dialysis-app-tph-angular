@@ -692,6 +692,7 @@
                 <th>累計總班數</th>
                 <th>累計平日假日班</th>
                 <th>累計週末班</th>
+                <th>平均假日</th>
               </tr>
             </thead>
             <tbody *ngIf="statsViewMode() === 'ytd'">
@@ -700,6 +701,7 @@
                 <td>{{ stat.ytdTotal }}</td>
                 <td>{{ stat.ytdHolidays }}</td>
                 <td>{{ stat.ytdWeekends }}</td>
+                <td>{{ stat.ytdAvgHoliday }}</td>
               </tr>
             </tbody>
           </table>
@@ -996,6 +998,7 @@
                     <th>總班數</th>
                     <th>假日班</th>
                     <th>週末班</th>
+                    <th>平均假日</th>
                   </tr>
                 </thead>
                 <tbody *ngIf="statsViewMode() === 'ytd'">
@@ -1004,6 +1007,7 @@
                     <td>{{ stat.ytdTotal }}</td>
                     <td>{{ stat.ytdHolidays }}</td>
                     <td>{{ stat.ytdWeekends }}</td>
+                    <td>{{ stat.ytdAvgHoliday }}</td>
                   </tr>
                 </tbody>
               </table>
