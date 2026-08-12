@@ -9,6 +9,7 @@ import { ApiService } from '@services/api.service';
 import { ApiManagerService, type ApiManagerCrud } from '@services/api-manager.service';
 import { AuthService } from '@services/auth.service';
 import { PatientStoreService, type Patient } from '@services/patient-store.service';
+import { UserDirectoryService } from '@app/core/services/user-directory.service';
 import {
   CatastrophicFormData,
   createEmptyFormData,
@@ -104,7 +105,13 @@ export class CatastrophicIllnessComponent implements OnInit {
   expiryFilteredPatients: Patient[] = [];
   expiryPickedPatient: Patient | null = null;
   newExpiryDate = '';
+  newExpiryPhysician = ''; // 補登時一併指定負責醫師（到期提醒卡「協助掛 {醫師}」用）
   addingExpiry = false;
+
+  /** 主治醫師偏好排序；後備清單（使用者目錄載入失敗時沿用）。比照 patient-form-modal。 */
+  private readonly PHYSICIAN_ORDER = ['廖丁瑩', '蔡宜潔', '蘇哲弘', '蔡亨政', '林天佑', '陳怡汝'];
+  /** 補登負責醫師選單：使用者管理「職稱=主治醫師」名單（見 loadExpiryPhysicians） */
+  expiryPhysicians: string[] = [...this.PHYSICIAN_ORDER];
 
   // 頁籤與紀錄
   activeTab: AppType = 'initial';
@@ -129,6 +136,7 @@ export class CatastrophicIllnessComponent implements OnInit {
     private apiManager: ApiManagerService,
     private auth: AuthService,
     public patientStore: PatientStoreService,
+    private userDirectory: UserDirectoryService,
   ) {
     this.labsApi = this.apiManager.create<LabReportRecord>('lab_reports');
   }
@@ -137,11 +145,34 @@ export class CatastrophicIllnessComponent implements OnInit {
     const role = this.auth.currentUser()?.role;
     this.isClerk = role === 'admin' || role === 'viewer';
     this.canWrite = role === 'admin' || role === 'contributor';
+    if (this.isClerk) void this.loadExpiryPhysicians();
     await Promise.all([
       // 書記（isClerk）也要病人清單：總覽「新增到期日」入口選病人用
       this.canWrite || this.isClerk ? this.patientStore.fetchPatientsIfNeeded() : Promise.resolve(),
       this.loadOverview(),
     ]);
+  }
+
+  /** 從使用者管理載入「職稱=主治醫師」名單作為補登負責醫師選項，依偏好順序排序（比照 patient-form-modal） */
+  private async loadExpiryPhysicians(): Promise<void> {
+    try {
+      await this.userDirectory.fetchUsersIfNeeded();
+      const names = this.userDirectory.allUsers()
+        .filter((u) => u.title === '主治醫師' && u.isActive !== false)
+        .map((u) => u.name)
+        .filter((name): name is string => !!name);
+      names.sort((a, b) => {
+        const ia = this.PHYSICIAN_ORDER.indexOf(a);
+        const ib = this.PHYSICIAN_ORDER.indexOf(b);
+        if (ia === -1 && ib === -1) return a.localeCompare(b);
+        if (ia === -1) return 1;
+        if (ib === -1) return -1;
+        return ia - ib;
+      });
+      if (names.length > 0) this.expiryPhysicians = Array.from(new Set(names));
+    } catch {
+      // 使用者目錄載入失敗時保留初始後備清單
+    }
   }
 
   // ---------------------------------------------------------------
@@ -179,13 +210,14 @@ export class CatastrophicIllnessComponent implements OnInit {
   }
 
   // 到期提醒：非終身且到期日在一個月內（含已過期，續辦完成書記更新到期日後自動退場）
+  // 續辦追蹤已填「已掛號」也退場（已協助掛號不必再提醒；到期日更新＝新一輪，後端會清空三欄讓下一輪提醒回來）
   readonly expiryReminders = computed(() => {
     const today = new Date();
     const fmt = (d: Date) => d.toLocaleDateString('sv-SE');
     const todayStr = fmt(today);
     const oneMonthLater = fmt(new Date(today.getFullYear(), today.getMonth() + 1, today.getDate()));
     return this.overviewRows()
-      .filter((r) => r.expiryDate && !this.isLifetime(r) && r.expiryDate <= oneMonthLater)
+      .filter((r) => r.expiryDate && !this.isLifetime(r) && r.expiryDate <= oneMonthLater && !r.renewalRegisteredDate)
       .map((r) => ({
         patientId: r.patientId,
         patientName: r.patientName,
@@ -269,8 +301,16 @@ export class CatastrophicIllnessComponent implements OnInit {
     const input = event.target as HTMLInputElement;
     const value = input.value || '';
     try {
-      await firstValueFrom(this.api.put(`/catastrophic-illness/expiry/${row.patientId}`, { expiryDate: value }));
+      const resp = await firstValueFrom(
+        this.api.put<{ renewalReset?: boolean }>(`/catastrophic-illness/expiry/${row.patientId}`, { expiryDate: value })
+      );
       row.expiryDate = value;
+      // 到期日變動＝新一輪續辦週期，後端已清空續辦追蹤三欄，前端同步歸零
+      if (resp?.renewalReset) {
+        row.renewalRegisteredDate = '';
+        row.renewalFormDate = '';
+        row.renewalDocsDate = '';
+      }
     } catch (err) {
       console.error('更新重大傷病到期日失敗:', err);
       input.value = row.expiryDate;
@@ -296,6 +336,12 @@ export class CatastrophicIllnessComponent implements OnInit {
     this.expiryPickedPatient = p;
     this.expirySearchText = this.patientLabel(p);
     this.expiryShowDropdown = false;
+    // 預設帶入病人資料的主治醫師（可改選）；不在名單中的醫師補進選單避免下拉顯示空白
+    const physician = String(p['physician'] || '');
+    this.newExpiryPhysician = physician;
+    if (physician && !this.expiryPhysicians.includes(physician)) {
+      this.expiryPhysicians = [...this.expiryPhysicians, physician];
+    }
   }
 
   async addExpiry(): Promise<void> {
@@ -305,10 +351,14 @@ export class CatastrophicIllnessComponent implements OnInit {
     if (existing?.expiryDate && !confirm(`${patient['name']} 已有到期日 ${existing.expiryDate}，要改成 ${this.newExpiryDate} 嗎？`)) return;
     this.addingExpiry = true;
     try {
-      await firstValueFrom(this.api.put(`/catastrophic-illness/expiry/${patient['id']}`, { expiryDate: this.newExpiryDate }));
+      await firstValueFrom(this.api.put(`/catastrophic-illness/expiry/${patient['id']}`, {
+        expiryDate: this.newExpiryDate,
+        physicianName: this.newExpiryPhysician,
+      }));
       this.expiryPickedPatient = null;
       this.expirySearchText = '';
       this.newExpiryDate = '';
+      this.newExpiryPhysician = '';
       await this.loadOverview(); // 重新載入：新列與到期提醒卡立即出現
     } catch (err) {
       console.error('新增重大傷病到期日失敗:', err);

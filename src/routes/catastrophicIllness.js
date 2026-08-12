@@ -84,7 +84,7 @@ router.get('/overview', ...isOverviewRole, (req, res) => {
     }
 
     const expiryMap = new Map(
-      db.prepare('SELECT patient_id, expiry_date, renewal_registered_date, renewal_form_date, renewal_docs_date, updated_at FROM catastrophic_illness_expiry').all()
+      db.prepare('SELECT patient_id, expiry_date, renewal_registered_date, renewal_form_date, renewal_docs_date, physician_name, updated_at FROM catastrophic_illness_expiry').all()
         .map((r) => [r.patient_id, r])
     )
 
@@ -115,7 +115,8 @@ router.get('/overview', ...isOverviewRole, (req, res) => {
       return {
         patientId,
         patientName: entry.patientName,
-        physicianName: entry.physicianName,
+        // 申請表填的負責醫師優先；沒有時退回書記補登時指定的醫師
+        physicianName: entry.physicianName || expiry.physician_name || '',
         applications: [
           entry.initials.length > 0 ? entry.initials[entry.initials.length - 1] : null,
           ...entry.renewals
@@ -138,7 +139,7 @@ router.get('/overview', ...isOverviewRole, (req, res) => {
         result.push({
           patientId,
           patientName: patientNameStmt.get(patientId)?.name || '(查無病人)',
-          physicianName: '',
+          physicianName: expiry.physician_name || '',
           applications: [null],
           expiryDate: expiry.expiry_date || '',
           renewalRegisteredDate: expiry.renewal_registered_date || '',
@@ -186,23 +187,37 @@ router.put('/clerk-sent/:id', ...isClerkRole, (req, res) => {
 /**
  * PUT /api/catastrophic-illness/expiry/:patientId
  * 書記填該病人的重大傷病到期日（YYYY-MM-DD，空字串=清除）
+ * body 可帶 physicianName（負責醫師，補登入口用）；未帶則不動既有值＝守衛式部分更新
+ * 到期日「變動」＝進入新一輪續辦週期：清空續辦追蹤三欄（否則上一輪的「已掛號」會永遠壓掉下一輪到期提醒）
  */
 router.put('/expiry/:patientId', ...isClerkRole, (req, res) => {
   try {
-    const { expiryDate } = req.body
+    const { expiryDate, physicianName } = req.body
     if (!isValidDateOrEmpty(expiryDate)) {
       return res.status(400).json({ error: true, message: '到期日格式必須為 YYYY-MM-DD' })
     }
+    if (physicianName !== undefined && typeof physicianName !== 'string') {
+      return res.status(400).json({ error: true, message: '負責醫師格式錯誤' })
+    }
     const db = getDatabase()
+    const prev = db.prepare('SELECT expiry_date FROM catastrophic_illness_expiry WHERE patient_id = ?').get(req.params.patientId)
+    const renewalReset = prev !== undefined && (prev.expiry_date || '') !== (expiryDate || '')
     db.prepare(`
-      INSERT INTO catastrophic_illness_expiry (patient_id, expiry_date, updated_by, updated_at)
-      VALUES (?, ?, ?, datetime('now', 'localtime'))
+      INSERT INTO catastrophic_illness_expiry (patient_id, expiry_date, physician_name, updated_by, updated_at)
+      VALUES (?, ?, ?, ?, datetime('now', 'localtime'))
       ON CONFLICT(patient_id) DO UPDATE SET
         expiry_date = excluded.expiry_date,
+        physician_name = ${physicianName !== undefined ? 'excluded.physician_name' : 'physician_name'},
+        ${renewalReset ? 'renewal_registered_date = NULL, renewal_form_date = NULL, renewal_docs_date = NULL,' : ''}
         updated_by = excluded.updated_by,
         updated_at = excluded.updated_at
-    `).run(req.params.patientId, expiryDate || null, JSON.stringify({ uid: req.user.id, name: req.user.name }))
-    res.json({ success: true, expiryDate: expiryDate || '' })
+    `).run(
+      req.params.patientId,
+      expiryDate || null,
+      physicianName !== undefined ? (physicianName || null) : null,
+      JSON.stringify({ uid: req.user.id, name: req.user.name })
+    )
+    res.json({ success: true, expiryDate: expiryDate || '', renewalReset })
   } catch (error) {
     console.error('更新重大傷病到期日錯誤:', error)
     res.status(500).json({ error: true, message: '更新重大傷病到期日失敗' })

@@ -899,12 +899,14 @@ CREATE INDEX IF NOT EXISTS idx_cia_type ON catastrophic_illness_applications(app
 
 -- 重大傷病到期日（每病人一筆，總覽列表由書記手動輸入）
 -- renewal_* 三欄＝到期續辦準備追蹤（已掛號/已填寫申請書/已收齊證件診斷書，書記填日期）
+-- physician_name＝書記補登時指定的負責醫師（無申請紀錄的病人以此顯示；有申請紀錄則以申請表的醫師優先）
 CREATE TABLE IF NOT EXISTS catastrophic_illness_expiry (
     patient_id TEXT PRIMARY KEY,
     expiry_date TEXT,
     renewal_registered_date TEXT,
     renewal_form_date TEXT,
     renewal_docs_date TEXT,
+    physician_name TEXT,
     updated_by TEXT DEFAULT '{}',
     updated_at TEXT DEFAULT (datetime('now', 'localtime'))
 );

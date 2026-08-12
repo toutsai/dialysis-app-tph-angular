@@ -66,6 +66,7 @@
 .expiry-add-label { font-size: 0.9em; color: #495057; font-weight: 600; }
 .expiry-add-picker { width: 280px; }
 .expiry-add-date { padding: 5px 8px; border: 1px solid #c5dbf0; border-radius: 4px; }
+.expiry-add-physician { padding: 5px 8px; border: 1px solid #c5dbf0; border-radius: 4px; font-size: 0.9em; background: #fff; }
 .expiry-add-btn { padding: 6px 14px; border: none; border-radius: 4px; background: #1971c2; color: #fff; cursor: pointer; }
 .expiry-add-btn:hover:not(:disabled) { background: #1864ab; }
 .expiry-add-btn:disabled { background: #adb5bd; cursor: not-allowed; }

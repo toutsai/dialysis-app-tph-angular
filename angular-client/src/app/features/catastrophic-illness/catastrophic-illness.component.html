@@ -52,6 +52,12 @@
             </div>
           }
         </div>
+        <select class="expiry-add-physician" [(ngModel)]="newExpiryPhysician" title="負責醫師：到期提醒卡「協助掛」顯示此醫師">
+          <option value="">負責醫師（未選）</option>
+          @for (name of expiryPhysicians; track name) {
+            <option [value]="name">{{ name }}</option>
+          }
+        </select>
         <input type="date" class="clerk-input expiry-add-date" [(ngModel)]="newExpiryDate" />
         <button type="button" class="expiry-add-btn" [disabled]="!expiryPickedPatient || !newExpiryDate || addingExpiry" (click)="addExpiry()">
           {{ addingExpiry ? '新增中…' : '新增' }}

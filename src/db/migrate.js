@@ -661,6 +661,11 @@ export function runMigrations() {
       }
     }
 
+    // 重大傷病補登負責醫師（2026-08-12）：書記補登到期日時一併指定，供到期提醒卡「協助掛 {醫師}」與總覽負責醫師欄
+    if (addColumnIfNotExists(db, 'catastrophic_illness_expiry', 'physician_name', 'TEXT')) {
+      migrationsApplied++
+    }
+
     if (migrationsApplied > 0) {
       console.log(`✅ 已完成 ${migrationsApplied} 項遷移`)
     } else {
