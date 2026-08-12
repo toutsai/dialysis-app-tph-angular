@@ -1,0 +1,59 @@
+<div class="board-page">
+  <header class="board-header">
+    <h1>住院病人趴趴走總覽</h1>
+    <div class="refresh-info">
+      @if (lastRefreshLabel()) {
+        <span>更新於 {{ lastRefreshLabel() }}</span>
+      }
+      <span class="auto-note">每分鐘自動更新</span>
+    </div>
+  </header>
+
+  @if (errorMessage()) {
+    <p class="board-error">{{ errorMessage() }}</p>
+  }
+
+  @if (isLoading() && days().length === 0) {
+    <p class="no-data">載入中…</p>
+  }
+
+  <div class="days-grid">
+    @for (day of days(); track day.date; let dayIndex = $index) {
+      <section class="day-column" [class.is-today]="dayIndex === 0">
+        <h2 class="day-title">{{ day.label }}<span class="day-count">共 {{ day.total }} 人</span></h2>
+
+        @for (shift of day.shifts; track shift.code) {
+          <div class="shift-section">
+            <h3 class="shift-title">{{ shift.label }}（{{ shift.patients.length }} 人）</h3>
+            <table class="rounds-table">
+              <thead>
+                <tr>
+                  <th>洗腎床位</th>
+                  <th>姓名</th>
+                  <th>病房號</th>
+                  <th>來洗腎室方式</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (patient of shift.patients; track patient.id) {
+                  <tr>
+                    <td>{{ patient.dialysisBed }}</td>
+                    <td>{{ patient.name }}</td>
+                    <td>{{ patient.wardNumber }}</td>
+                    <td [class.unconfirmed]="patient.transportMethod === 'unconfirmed'">
+                      {{ transportLabel(patient.transportMethod) }}
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+
+        @if (day.total === 0) {
+          <p class="no-data">排程無住院/急診病人。</p>
+        }
+      </section>
+    }
+  </div>
+</div>

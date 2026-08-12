@@ -1,0 +1,121 @@
+.board-page {
+  min-height: 100vh;
+  background-color: #f0f2f5;
+  padding: 1.5rem 2rem 3rem;
+  font-family: 'Microsoft JhengHei', 'Segoe UI', sans-serif;
+  color: #212529;
+}
+
+.board-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.board-header h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  color: #0056b3;
+}
+
+.refresh-info {
+  display: flex;
+  gap: 1rem;
+  color: #6c757d;
+  font-size: 0.95rem;
+}
+
+.auto-note {
+  color: #adb5bd;
+}
+
+.board-error {
+  background-color: #f8d7da;
+  color: #842029;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.days-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.day-column {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  padding: 1.25rem 1.5rem;
+  border-top: 5px solid #adb5bd;
+}
+
+.day-column.is-today {
+  border-top-color: #007bff;
+}
+
+.day-title {
+  margin: 0 0 1rem;
+  font-size: 1.35rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.day-count {
+  font-size: 0.95rem;
+  color: #6c757d;
+  font-weight: normal;
+}
+
+.shift-section {
+  margin-bottom: 1.75rem;
+}
+
+.shift-section:last-of-type {
+  margin-bottom: 0;
+}
+
+.shift-title {
+  font-size: 1.15rem;
+  margin: 0 0 0.6rem;
+  color: #0056b3;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid #007bff;
+}
+
+.rounds-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 1.05rem;
+}
+
+.rounds-table th,
+.rounds-table td {
+  border: 1px solid #ddd;
+  padding: 9px 12px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.rounds-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+}
+
+.rounds-table td.unconfirmed {
+  color: #6c757d;
+  font-style: italic;
+}
+
+.no-data {
+  text-align: center;
+  color: #888;
+  font-size: 1.1rem;
+  padding: 1.5rem 0;
+}

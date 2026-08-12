@@ -13,6 +13,8 @@ import {
   isDerivedDashboardPinValid,
   DASHBOARD_PIN_ROTATION_DAYS,
 } from '../services/dashboardPinService.js'
+import { getTaipeiTodayString, formatDateToTaipeiString } from '../utils/dateUtils.js'
+import { maskName } from '../utils/privacy.js'
 
 const router = Router()
 const JWT_SECRET = process.env.JWT_SECRET || 'dialysis-local-secret-key-change-in-production'
@@ -252,6 +254,77 @@ router.get('/bed/:bedKey', (req, res) => {
   } catch (error) {
     console.error('[Dashboard] get bed data error:', error)
     res.status(500).json({ error: true, message: '讀取床邊儀表板資料失敗' })
+  }
+})
+
+const ROUNDS_SHIFT_ORDER = { early: 1, noon: 2, late: 3 }
+
+// 與前端 schedule.component.ts todayInpatients 同邏輯：排除外圍格、只列住院(ipd)/急診(er)、每人只列一次。
+// 唯讀：查無排程列就回空清單，不從總表補產生（免登入端點不寫 DB）。
+function buildInpatientRoundsList(db, date, patientsById) {
+  const row = db.prepare('SELECT schedule FROM schedules WHERE date = ?').get(date)
+  let schedule = {}
+  try {
+    schedule = row?.schedule ? JSON.parse(row.schedule) || {} : {}
+  } catch {
+    schedule = {}
+  }
+
+  const seen = new Set()
+  const items = []
+  for (const [shiftId, slot] of Object.entries(schedule)) {
+    if (!slot?.patientId || shiftId.startsWith('peripheral')) continue
+    const patient = patientsById.get(slot.patientId)
+    if (!patient) continue
+    const info = slot.archivedPatientInfo || { status: patient.status, wardNumber: patient.ward_number }
+    if (info.status !== 'ipd' && info.status !== 'er') continue
+    if (seen.has(slot.patientId)) continue
+    seen.add(slot.patientId)
+
+    const parts = shiftId.split('-')
+    items.push({
+      id: `${date}-${shiftId}`,
+      dialysisBed: parts[1] || 'N/A',
+      name: maskName(patient.name),
+      wardNumber: info.wardNumber || '未登錄',
+      shift: parts[parts.length - 1],
+      transportMethod: ['推床', '輪椅'].includes(slot.transportMethod) ? slot.transportMethod : 'unconfirmed',
+    })
+  }
+
+  items.sort((a, b) => {
+    const sa = ROUNDS_SHIFT_ORDER[a.shift] || 4
+    const sb = ROUNDS_SHIFT_ORDER[b.shift] || 4
+    if (sa !== sb) return sa - sb
+    const bedA = parseInt(a.dialysisBed, 10)
+    const bedB = parseInt(b.dialysisBed, 10)
+    return (Number.isNaN(bedA) ? 1000 : bedA) - (Number.isNaN(bedB) ? 1000 : bedB)
+  })
+  return items
+}
+
+// 住院趴趴走展示板：免登入公開端點（院內螢幕常駐展示用，固定今天+明天）。
+// 個資保護在後端做：姓名遮罩後才回傳，不回傳病歷號、patientId。
+router.get('/inpatient-rounds-board', (req, res) => {
+  try {
+    const db = getDatabase()
+    const today = getTaipeiTodayString()
+    const tomorrowDate = new Date()
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1)
+    const tomorrow = formatDateToTaipeiString(tomorrowDate)
+
+    const patients = db.prepare('SELECT id, name, status, ward_number FROM patients').all()
+    const patientsById = new Map(patients.map((p) => [p.id, p]))
+
+    const days = [today, tomorrow].map((date) => ({
+      date,
+      patients: buildInpatientRoundsList(db, date, patientsById),
+    }))
+
+    res.json({ days })
+  } catch (error) {
+    console.error('[Dashboard] inpatient rounds board error:', error)
+    res.status(500).json({ error: true, message: '讀取住院趴趴走名單失敗' })
   }
 })
 

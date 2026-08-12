@@ -20,6 +20,14 @@ export const routes: Routes = [
       ),
   },
   {
+    // 住院趴趴走獨立展示頁：刻意免登入（資料已在後端遮罩姓名、去除病歷號）
+    path: 'inpatient-rounds-board',
+    loadComponent: () =>
+      import('./features/inpatient-rounds-board/inpatient-rounds-board.component').then(
+        (m) => m.InpatientRoundsBoardComponent
+      ),
+  },
+  {
     path: '',
     loadComponent: () =>
       import('./layouts/main-layout.component').then(
