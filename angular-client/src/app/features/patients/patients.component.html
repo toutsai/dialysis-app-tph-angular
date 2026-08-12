@@ -271,7 +271,7 @@
               <div class="info-item"><span class="label">醫師</span><span class="value">{{ p.physician }}</span></div>
               <div class="info-item"><span class="label">模式</span><span class="value">{{ p.mode }}</span></div>
               <div *ngIf="activeTab() !== 'opd'" class="info-item">
-                <span class="label">首透</span><span class="value">{{ p.isFirstDialysis ? '&#10003; (' + formatDate(p.firstDialysisDate) + ')' : '否' }}</span>
+                <span class="label">首透</span><span class="value">{{ p.patientStatus?.isFirstDialysis?.active ? '&#10003; (' + formatDate(p.patientStatus.isFirstDialysis.date) + ')' : '否' }}</span>
               </div>
               <div class="info-item"><span class="label">異動日期</span><span class="value">{{ formatDate(p.updatedAt) }}</span></div>
             </div>

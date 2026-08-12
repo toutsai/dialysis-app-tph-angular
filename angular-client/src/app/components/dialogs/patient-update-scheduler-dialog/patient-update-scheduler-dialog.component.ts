@@ -154,7 +154,7 @@ export class PatientUpdateSchedulerDialogComponent implements OnChanges {
 
   onStatusChange(): void {
     if (this.formData.payload.status === 'opd') {
-      this.formData.payload.wardNumber = '';
+      this.formData.payload.wardNumber = null; // null 而非 ''：cron 端一律以 NULL 清除病房號
     }
   }
 

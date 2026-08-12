@@ -1183,6 +1183,8 @@ export class PatientsComponent implements OnInit, OnDestroy {
         deleteReason: null,
         originalStatus: null,
       };
+      // 轉移成門診時病房號無意義，避免既有病人的舊病房號殘留
+      if (this.modalType() === 'opd') dataToUpdate.wardNumber = null;
       delete dataToUpdate.id;
       delete dataToUpdate.firstDialysisPlan;
       await this.patientsApi.save(existingPatient.id, dataToUpdate);
@@ -1557,12 +1559,13 @@ export class PatientsComponent implements OnInit, OnDestroy {
         originalStatus: patient.status,
         deleteReason: reason,
         deleteEventDate: eventDate || undefined,
+        wardNumber: null,
         deletedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
       await this.patientStore.removeRuleFromMasterSchedule(patientId);
       this.patientStore.updatePatientInStore(patientId, {
-        isDeleted: true, originalStatus: patient.status, deleteReason: reason,
+        isDeleted: true, originalStatus: patient.status, deleteReason: reason, wardNumber: null,
         deletedAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       } as any);
       await this.recalculateStatsLocally();
@@ -1612,6 +1615,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
         deletedAt: null,
         originalStatus: null,
         patientCategory: newPatientCategory,
+        wardNumber: null, // 刪除時已清病房號，復原後由使用者重新填（住院/急診）
         updatedAt: new Date().toISOString(),
       };
 

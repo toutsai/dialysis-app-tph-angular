@@ -1393,6 +1393,15 @@ async function updatePatientHandler(req, res) {
     dbData.last_modified_by = JSON.stringify({ uid: req.user.id, name: req.user.name })
     dbData.updated_at = "datetime('now', 'localtime')"
 
+    // 病房號只對住院/急診有意義：生效後身分是門診、或本次轉為刪除，一律清除。
+    // 用「生效後」狀態判斷（payload 可能只帶 status 或只帶 isDeleted），
+    // 表單整包回送舊 wardNumber 的情況也在此攔下。
+    const effectiveStatus = dbData.status !== undefined ? dbData.status : existing.status
+    const effectiveDeleted = dbData.is_deleted !== undefined ? dbData.is_deleted : existing.is_deleted
+    if (effectiveStatus === 'opd' || effectiveDeleted === 1) {
+      dbData.ward_number = null
+    }
+
     const updates = Object.keys(dbData).map(k => {
       if (k === 'updated_at') return `${k} = datetime('now', 'localtime')`
       return `${k} = ?`
@@ -1683,6 +1692,7 @@ router.delete('/:id', ...isEditor, async (req, res) => {
       SET is_deleted = 1,
           original_status = ?,
           delete_reason = ?,
+          ward_number = NULL,
           deleted_at = datetime('now', 'localtime'),
           last_modified_by = ?,
           updated_at = datetime('now', 'localtime')
@@ -1773,11 +1783,13 @@ router.post('/:id/restore', ...isEditor, async (req, res) => {
           deleted_at = NULL,
           original_status = NULL,
           status = ?,
+          ward_number = ?,
           last_modified_by = ?,
           updated_at = datetime('now', 'localtime')
       WHERE id = ?
     `).run(
       status || 'opd',
+      (status || 'opd') === 'opd' ? null : existing.ward_number,
       JSON.stringify({ uid: req.user.id, name: req.user.name }),
       id
     )

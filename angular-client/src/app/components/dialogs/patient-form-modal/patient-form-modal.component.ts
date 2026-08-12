@@ -110,7 +110,9 @@ export class PatientFormModalComponent implements OnInit {
     data.hospitalInfo = data.hospitalInfo || { source: '', transferOut: '' };
     this.form = data;
     this.ensurePatientStatus();
-    this.syncFirstDialysisStatus(this.form.firstDialysisDate);
+    // 刻意不從 firstDialysisDate 自動點亮首透標記：開窗要忠實顯示「已存檔」的狀態，
+    // 否則與清單星星不同步（蕭修銘案 2026-08-12）；且此欄位對轉入病人是他院初透日期，
+    // 有日期≠本院首透。要標記首透請點狀態晶片。
     this.loadPhysicians();
   }
 
@@ -235,13 +237,19 @@ export class PatientFormModalComponent implements OnInit {
     }
   }
 
-  private syncFirstDialysisStatus(date: string | null | undefined, forceDate = false): void {
+  /**
+   * 依「首次透析日期」欄同步巢狀首透標記的日期。
+   * 預設不自動開啟 active（有日期≠首透，轉入病人存的是他院日期）；
+   * activate=true 只給首透連續洗計畫等明確首透情境用。
+   */
+  private syncFirstDialysisStatus(date: string | null | undefined, forceDate = false, activate = false): void {
     this.ensurePatientStatus();
     const status = this.form.patientStatus.isFirstDialysis;
+    if (activate && date) status.active = true;
+    if (!status.active) return;
     if (date) {
-      status.active = true;
       if (forceDate || !status.date) status.date = date;
-    } else if (forceDate && status.active) {
+    } else if (forceDate) {
       status.date = null;
     }
   }
@@ -420,7 +428,7 @@ export class PatientFormModalComponent implements OnInit {
     }
     this.form.freq = this.firstPlan.regularFreq;
     this.form.firstDialysisDate = this.firstPlan.startDate;
-    this.syncFirstDialysisStatus(this.firstPlan.startDate, true);
+    this.syncFirstDialysisStatus(this.firstPlan.startDate, true, true);
     this.form.firstDialysisPlan = {
       startDate: this.firstPlan.startDate,
       continuousDays: this.firstPlan.continuousDays,

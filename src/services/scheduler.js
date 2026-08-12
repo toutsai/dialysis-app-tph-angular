@@ -456,6 +456,13 @@ async function applyScheduledPatientUpdates() {
                 throw new Error(`${changeType} 含未允許的欄位: ${unknownKeys.join(', ')}`)
               }
             }
+            // 病房號只對住院/急診有意義：轉門診一律清除（含舊單未帶 wardNumber 的情況）；
+            // 前端可能送空字串，一律正規化成 NULL
+            if (changeType === 'UPDATE_STATUS') {
+              if (payload.status === 'opd' || payload.wardNumber === '') {
+                payload.wardNumber = null
+              }
+            }
             // 更新病人屬性
             // 分離 DB 欄位與 JSON 欄位 (mode, freq 在 dialysis_orders 中)
             // 先擷取變更前的病人資料，供工作日誌/歷史比對
@@ -656,6 +663,7 @@ async function applyScheduledPatientUpdates() {
                   status = 'deleted',
                   delete_reason = ?,
                   notes = ?,
+                  ward_number = NULL,
                   deleted_at = datetime('now', 'localtime'),
                   updated_at = datetime('now', 'localtime')
               WHERE id = ?
@@ -814,7 +822,7 @@ async function applyScheduledPatientUpdates() {
                   updated_at = datetime('now', 'localtime')
               WHERE id = ?
             `,
-            ).run(payload.status, payload.wardNumber || null, patientId)
+            ).run(payload.status, payload.status === 'opd' ? null : (payload.wardNumber || null), patientId)
             console.log(`    - 成功復原 patient/${patientId} 為 ${payload.status}`)
 
             // 同步工作日誌 / KiDit / 病人歷史（比照即時復原；非致命）
