@@ -77,6 +77,26 @@ export class NursePatientCareDialogComponent implements OnChanges {
     );
   }
 
+  /**
+   * 從門診被刪除、仍在保留期（刪除日+1個月）內的病人：
+   * 護理師卡片上暫留一個月才退場（2026-08-13 使用者需求），加「已刪除」標記。
+   * 只影響卡片顯示；未分配池維持嚴格條件，避免已刪除病人被重新指派。
+   * 即時刪除 status 仍是 opd、預約刪除 cron 會改成 deleted+originalStatus，兩種都涵蓋。
+   */
+  isRetainedDeleted(p: Patient): boolean {
+    if (!p['isDeleted']) return false;
+    const wasOpd = p.status === 'opd' || p['originalStatus'] === 'opd';
+    if (!wasOpd) return false;
+    if (!(p['patientCategory'] == null || p['patientCategory'] === 'opd_regular')) return false;
+    const deletedAt = p['deletedAt'] as string | null | undefined;
+    if (!deletedAt) return false;
+    const deleted = new Date(deletedAt);
+    if (isNaN(deleted.getTime())) return false;
+    const expiry = new Date(deleted);
+    expiry.setMonth(expiry.getMonth() + 1);
+    return new Date() < expiry;
+  }
+
   // --- Computed ---
   readonly nurses = computed(() => {
     const list = this.userDirectory
@@ -122,7 +142,7 @@ export class NursePatientCareDialogComponent implements OnChanges {
       .filter((p) => p.id && this.isRegularOpd(p) && !assigned.has(p.id)).length;
   });
 
-  /** 每位護理師的卡片（照護病人只顯示目前為常規門診者） */
+  /** 每位護理師的卡片（常規門診者＋刪除未滿一個月的保留病人） */
   readonly nurseCards = computed<NurseCard[]>(() => {
     const map = this.assignmentMap();
     const patientMap = this.patientStore.patientMap();
@@ -130,7 +150,7 @@ export class NursePatientCareDialogComponent implements OnChanges {
     return this.nurses().map((n) => {
       const patients = (map[n.id] || [])
         .map((id) => patientMap.get(id))
-        .filter((p): p is Patient => !!p && this.isRegularOpd(p));
+        .filter((p): p is Patient => !!p && (this.isRegularOpd(p) || this.isRetainedDeleted(p)));
       return { nurseId: n.id, nurseName: n.name || '', patients, excluded: excluded.has(n.id) };
     });
   });

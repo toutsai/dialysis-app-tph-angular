@@ -1201,7 +1201,8 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
       const rows = [...new Set<string>([...myCareIds, ...todayIds])]
         .map((pid) => {
           const p = patientMap.get(pid);
-          if (!p) return null; // 照護清單殘留的已不存在病人不列
+          // 照護清單殘留的已不存在/已刪除病人不列（照護清單保留已刪除病人一個月，血管通路填寫不跟進）
+          if (!p || p['isDeleted']) return null;
           return {
             patientId: pid,
             patientName: p.name || '未知',

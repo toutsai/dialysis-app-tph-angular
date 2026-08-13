@@ -97,10 +97,11 @@
                 *ngFor="let p of card.patients"
                 class="npc-chip small"
                 [class.selected]="selectedPatientId() === p.id"
-                [title]="'病歷號: ' + (p.medicalRecordNumber || '-')"
+                [class.deleted]="p['isDeleted']"
+                [title]="'病歷號: ' + (p.medicalRecordNumber || '-') + (p['isDeleted'] ? '｜已刪除，保留一個月後自動退場' : '')"
                 (click)="togglePatient(p); $event.stopPropagation()"
               >
-                {{ p.name }}
+                {{ p.name }}<span class="npc-deleted-tag" *ngIf="p['isDeleted']">已刪除</span>
               </button>
               <span *ngIf="card.patients.length === 0" class="npc-empty-text small">尚未分配</span>
             </div>
