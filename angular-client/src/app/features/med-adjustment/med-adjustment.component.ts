@@ -1,6 +1,7 @@
 // 醫師藥物調整：單一病人調藥工作檯（唯讀）
-// 上半三頁籤（醫囑調整/貧血藥物/鈣磷恆定）× 下半每月累積報告，同一月份軸對照，
-// 供醫師依趨勢開立下個月藥物。群組篩選+上一位/下一位輪巡。
+// 上半三頁籤（醫囑調整/貧血藥物/鈣磷恆定）＝「有異動的日期」軸（同月多次修改各自一欄，
+// 醫囑合併 dialysis_orders_history + dialysis_order_uploads 逐次全紀錄）；
+// 下半每月累積報告維持月份軸。供醫師依趨勢開立下個月藥物。群組篩選+上一位/下一位輪巡。
 import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -9,6 +10,7 @@ import {
   type ApiManager,
   type FirestoreRecord,
 } from '@services/api-manager.service';
+import { ApiConfigService } from '@services/api-config.service';
 import { PatientStoreService } from '@services/patient-store.service';
 import { LAB_ITEM_DISPLAY_NAMES } from '@/constants/labAlertConstants';
 import { exportMedAdjustmentExcel } from '@/services/medAdjustmentExportService';
@@ -39,6 +41,7 @@ interface PatientEntry {
 })
 export class MedAdjustmentComponent implements OnInit {
   private readonly apiManager = inject(ApiManagerService);
+  private readonly apiConfig = inject(ApiConfigService);
   private readonly patientStore = inject(PatientStoreService);
 
   private readonly baseSchedulesApi: ApiManager<FirestoreRecord>;
@@ -65,8 +68,44 @@ export class MedAdjustmentComponent implements OnInit {
     return list;
   });
 
-  // 下半累積報告的月份列：新→舊（上半月份軸維持舊→新，兩者刻意不同向）
+  // 下半累積報告的月份列：新→舊（上半改日期軸後，下半檢驗維持月頻不動）
   readonly reportMonths = computed(() => [...this.months()].reverse());
+
+  // --- 上半日期軸（2026-08-14 使用者需求：依年月日呈現，同月多次修改各自一欄不覆蓋） ---
+  /** 月份窗內所有「有異動的日期」：醫囑生效日（history+uploads 合併）＋藥囑開始/停止日 */
+  readonly dateColumns = computed(() => {
+    this.dataRevision();
+    const start = `${this.months()[0]}-01`;
+    const end = `${this.months()[5]}-31`;
+    const dates = new Set<string>();
+    for (const h of this.historyRows) {
+      if (h.date >= start && h.date <= end) dates.add(h.date);
+    }
+    for (const m of this.medRows) {
+      if (m.startDate && m.startDate >= start && m.startDate <= end) dates.add(m.startDate);
+      if (m.endDate && m.endDate >= start && m.endDate <= end) dates.add(m.endDate);
+    }
+    if (dates.size === 0) {
+      // 窗內完全無異動：退回每月一欄（月底現值），避免空表
+      return this.months().map((m) => ({ date: `${m}-31`, label: '—', month: m }));
+    }
+    return [...dates].sort().map((d) => ({
+      date: d,
+      label: `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`,
+      month: d.slice(0, 7),
+    }));
+  });
+
+  /** 表頭第一列的月份分組（colspan），保住舊的月份對照直覺 */
+  readonly monthGroups = computed(() => {
+    const groups: { month: string; span: number }[] = [];
+    for (const col of this.dateColumns()) {
+      const last = groups[groups.length - 1];
+      if (last && last.month === col.month) last.span++;
+      else groups.push({ month: col.month, span: 1 });
+    }
+    return groups;
+  });
 
   // --- 頁籤 ---
   activeTab: 'orders' | 'anemia' | 'capho' = 'orders';
@@ -131,6 +170,10 @@ export class MedAdjustmentComponent implements OnInit {
     const p = new Date(d.getFullYear(), d.getMonth() - 1, 1);
     return `${p.getFullYear()}-${String(p.getMonth() + 1).padStart(2, '0')}`;
   })();
+  /** 上月底截止日：供「N月修正」差異比對沿用原本「上月生效值」語意 */
+  readonly prevMonthEnd = `${this.prevMonth}-31`;
+  /** 今天（預帶「目前生效值」的截止日） */
+  private readonly todayStr = new Date().toLocaleDateString('sv-SE');
   /** 當月已儲存的修正（僅存檔後顯示「N月修正」欄；預帶未存不算） */
   savedNotes: Record<string, string> = {};
 
@@ -302,11 +345,19 @@ export class MedAdjustmentComponent implements OnInit {
     if (!patient) { this.dataRevision.update((v) => v + 1); return; }
     this.isLoading.set(true);
     try {
-      const [history, meds, labs, drafts] = await Promise.all([
+      const [history, meds, labs, drafts, uploads] = await Promise.all([
         this.historyApi.fetchWhere({ patientId: patient.patientId }),
         this.medsApi.fetchWhere({ patientId: patient.patientId }),
         this.labsApi.fetchWhere({ patientId: patient.patientId }),
         this.draftsApi.fetchWhere({ patientId: patient.patientId }),
+        // 上傳醫囑逐次全紀錄：dialysis_orders_history 在 Excel 上傳只留每人最新一筆，
+        // 完整的每個生效日在 dialysis_order_uploads（同月多次修改要各自呈現就得補這條）
+        fetch(
+          `${this.apiConfig.apiBaseUrl}/orders/dialysis-orders?patientId=${encodeURIComponent(patient.patientId)}`,
+          { headers: { Authorization: `Bearer ${this.apiConfig.getToken() || ''}` } },
+        )
+          .then((r) => (r.ok ? r.json() : []))
+          .catch(() => []),
       ]);
       // 當月藥物修正：取本月最新一份
       const adjustDoc = ((drafts as any[]) || [])
@@ -314,14 +365,17 @@ export class MedAdjustmentComponent implements OnInit {
         .sort((a: any, b: any) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0];
       this.adjustNotes = { ...(adjustDoc?.notes || {}) };
       this.savedNotes = { ...(adjustDoc?.notes || {}) };
-      // 醫囑歷史：依生效日(退 createdAt)由舊到新
-      this.historyRows = ((history as any[]) || [])
-        .map((h: any) => ({
-          date: (h.orders?.effectiveDate || h.createdAt || '').slice(0, 10),
-          orders: h.orders || {},
-        }))
-        .filter((h) => h.date)
-        .sort((a, b) => a.date.localeCompare(b.date));
+      // 醫囑歷史：history + 上傳全紀錄合併，依生效日(退 createdAt)由舊到新；同日以 history（系統權威）為準
+      const byDate = new Map<string, any>();
+      for (const u of (uploads as any[]) || []) {
+        const date = String(u.effectiveDate || '').slice(0, 10);
+        if (date) byDate.set(date, { date, orders: u.orders || {} });
+      }
+      for (const h of (history as any[]) || []) {
+        const date = String(h.orders?.effectiveDate || h.createdAt || '').slice(0, 10);
+        if (date) byDate.set(date, { date, orders: h.orders || {} });
+      }
+      this.historyRows = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
       this.medRows = ((meds as any[]) || []).filter((m: any) => m.startDate);
       for (const report of ((labs as any[]) || []).sort((a: any, b: any) =>
         String(a.reportDate || '').localeCompare(String(b.reportDate || '')),
@@ -356,17 +410,17 @@ export class MedAdjustmentComponent implements OnInit {
     return { text, diff: text !== prev };
   }
 
-  /** 當月修正欄預帶目前生效值（醫囑/藥物劑量），已存草稿的欄位不覆蓋；預帶不算未儲存變更 */
+  /** 當月修正欄預帶目前生效值（醫囑/藥物劑量，以今天為截止日），已存草稿的欄位不覆蓋；預帶不算未儲存變更 */
   private prefillAdjustNotes(): void {
     for (const row of this.ORDER_ROWS) {
       if (!this.adjustNotes[row.key]) {
-        const text = this.orderCell(row.key, this.currentMonth).text;
+        const text = this.orderCell(row.key, this.todayStr).text;
         if (text !== '-') this.adjustNotes[row.key] = text;
       }
     }
     for (const drug of [...this.ANEMIA_DRUGS, ...this.CAPHO_DRUGS]) {
       if (!this.adjustNotes[drug.label]) {
-        const text = this.drugCell(drug, this.currentMonth);
+        const text = this.drugCell(drug, this.todayStr).text;
         if (text !== '-') this.adjustNotes[drug.label] = text;
       }
     }
@@ -442,9 +496,8 @@ export class MedAdjustmentComponent implements OnInit {
     return { h: null, m: null };
   }
 
-  private latestOrdersForMonth(month: string): any {
-    const monthEnd = `${month}-31`;
-    const applicable = this.historyRows.filter((h) => h.date <= monthEnd);
+  private latestOrdersAsOf(asOfDate: string): any {
+    const applicable = this.historyRows.filter((h) => h.date <= asOfDate);
     return applicable.length ? applicable[applicable.length - 1].orders : null;
   }
 
@@ -454,7 +507,7 @@ export class MedAdjustmentComponent implements OnInit {
     this.adjustTimeHours = t.h;
     this.adjustTimeMinutes = t.m;
     const akText = String(this.adjustNotes['ak'] || '').trim();
-    const latest = this.latestOrdersForMonth(this.currentMonth);
+    const latest = this.latestOrdersAsOf(this.todayStr);
     const orderRotation = String(latest?.ak ?? latest?.artificialKidney ?? '').trim();
     const orderWeekly = Array.isArray(latest?.akWeekly) && latest.akWeekly.length === 6
       ? latest.akWeekly.map((v: unknown) => String(v ?? ''))
@@ -466,16 +519,15 @@ export class MedAdjustmentComponent implements OnInit {
     this.refreshAkOptions();
   }
 
-  // --- 儲存格計算（模板呼叫；資料量小，逐月計算可接受） ---
+  // --- 儲存格計算（模板呼叫；資料量小，逐欄計算可接受） ---
 
-  /** 醫囑調整：取該月底前最後一次調整的值；該月內有調整則標記 */
-  orderCell(rowKey: string, month: string): { text: string; changed: boolean } {
+  /** 醫囑調整：取截止日（含）前最後一次調整的值；截止日當天有醫囑異動則標記 */
+  orderCell(rowKey: string, asOfDate: string): { text: string; changed: boolean } {
     this.dataRevision();
-    const monthEnd = `${month}-31`;
-    const applicable = this.historyRows.filter((h) => h.date <= monthEnd);
+    const applicable = this.historyRows.filter((h) => h.date <= asOfDate);
     if (!applicable.length) return { text: '-', changed: false };
     const latest = applicable[applicable.length - 1].orders;
-    const changed = this.historyRows.some((h) => h.date.slice(0, 7) === month);
+    const changed = this.historyRows.some((h) => h.date === asOfDate);
     let text = '-';
     if (rowKey === 'bf') text = String(latest.bloodFlow ?? latest.blood_flow ?? '-');
     else if (rowKey === 'df') text = String(latest.dialysateFlow ?? latest.dialysateFlowRate ?? latest.dialysisFlow ?? '-');
@@ -490,31 +542,26 @@ export class MedAdjustmentComponent implements OnInit {
     return { text: text || '-', changed };
   }
 
-  /** 藥物：該月內有效的處方（區間模型），多筆並列；月內停用標「至M/D止」 */
-  drugCell(def: DrugDef, month: string): string {
+  /** 藥物：截止日當天有效的處方（區間模型），多筆並列；已知停止日標「至M/D止」；當天有開始/停止異動則標記 */
+  drugCell(def: DrugDef, asOfDate: string): { text: string; changed: boolean } {
     this.dataRevision();
-    const monthStart = `${month}-01`;
-    const monthEnd = `${month}-31`;
-    const active = this.medRows
-      .filter(
-        (o: any) =>
-          def.codes.includes(o.orderCode) &&
-          o.startDate <= monthEnd &&
-          (!o.endDate || o.endDate >= monthStart),
-      )
+    const mine = this.medRows.filter((o: any) => def.codes.includes(o.orderCode));
+    const active = mine
+      .filter((o: any) => o.startDate <= asOfDate && (!o.endDate || o.endDate >= asOfDate))
       .sort((a: any, b: any) => a.startDate.localeCompare(b.startDate));
-    if (!active.length) return '-';
+    const changed = mine.some((o: any) => o.startDate === asOfDate || o.endDate === asOfDate);
+    if (!active.length) return { text: '-', changed };
     const parts = active.map((o: any) => {
       const details: string[] = [];
       const freqText = o.orderType === 'injection' ? o.note : o.frequency;
       if (freqText) details.push(freqText);
-      if (o.endDate && o.endDate <= monthEnd) {
+      if (o.endDate) {
         const [, m, d] = o.endDate.split('-');
         details.push(`至${Number(m)}/${Number(d)}止`);
       }
       return `${o.dose}${def.unit ? ' ' + def.unit : ''}${details.length ? ` (${details.join('，')})` : ''}`;
     });
-    return parts.join('；');
+    return { text: parts.join('；'), changed };
   }
 
   /** 檢驗：當月值（TSAT/CaxP 為衍生計算） */

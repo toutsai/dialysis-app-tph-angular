@@ -60,10 +60,15 @@
         <table class="matrix-table">
           <thead>
             <tr>
-              <th class="sticky-col">項目</th>
-              @for (m of months(); track m) { <th>{{ m }}</th> }
-              @if (hasSavedNotes) { <th class="saved-col-head">{{ currentMonthLabel }}</th> }
-              <th class="adjust-col-head">當月修正</th>
+              <th class="sticky-col" rowspan="2">項目</th>
+              @for (g of monthGroups(); track g.month) {
+                <th class="month-group-head" [attr.colspan]="g.span">{{ g.month }}</th>
+              }
+              @if (hasSavedNotes) { <th class="saved-col-head" rowspan="2">{{ currentMonthLabel }}</th> }
+              <th class="adjust-col-head" rowspan="2">當月修正</th>
+            </tr>
+            <tr>
+              @for (col of dateColumns(); track col.date) { <th class="date-head">{{ col.label }}</th> }
             </tr>
           </thead>
           <tbody>
@@ -71,11 +76,11 @@
               @for (row of ORDER_ROWS; track row.key) {
                 <tr>
                   <td class="sticky-col row-label">{{ row.label }}</td>
-                  @for (m of months(); track m) {
-                    <td [class.cell-changed]="orderCell(row.key, m).changed">{{ orderCell(row.key, m).text }}</td>
+                  @for (col of dateColumns(); track col.date) {
+                    <td [class.cell-changed]="orderCell(row.key, col.date).changed">{{ orderCell(row.key, col.date).text }}</td>
                   }
                   @if (hasSavedNotes) {
-                    @let sv = savedAdjust(row.key, orderCell(row.key, prevMonth).text);
+                    @let sv = savedAdjust(row.key, orderCell(row.key, prevMonthEnd).text);
                     <td class="saved-col" [class.saved-diff]="sv.diff">{{ sv.text }}</td>
                   }
                   <td class="adjust-cell">
@@ -110,9 +115,12 @@
               @for (drug of activeTab === 'anemia' ? ANEMIA_DRUGS : CAPHO_DRUGS; track drug.label) {
                 <tr>
                   <td class="sticky-col row-label">{{ drug.label }}</td>
-                  @for (m of months(); track m) { <td>{{ drugCell(drug, m) }}</td> }
+                  @for (col of dateColumns(); track col.date) {
+                    @let dc = drugCell(drug, col.date);
+                    <td [class.cell-changed]="dc.changed">{{ dc.text }}</td>
+                  }
                   @if (hasSavedNotes) {
-                    @let sv = savedAdjust(drug.label, drugCell(drug, prevMonth));
+                    @let sv = savedAdjust(drug.label, drugCell(drug, prevMonthEnd).text);
                     <td class="saved-col" [class.saved-diff]="sv.diff">{{ sv.text }}</td>
                   }
                   <td class="adjust-cell">
@@ -124,9 +132,7 @@
           </tbody>
         </table>
       </div>
-      @if (activeTab === 'orders') {
-        <div class="table-hint">底色標示 = 該月有醫囑調整；數值為該月最後生效的設定</div>
-      }
+      <div class="table-hint">欄位 = 有異動的日期（醫囑修改/藥物開始或停止），同月多次修改各自一欄；底色標示 = 當天有異動；數值為當天生效的設定</div>
     </section>
 
     <!-- 下半：每月累積報告 -->

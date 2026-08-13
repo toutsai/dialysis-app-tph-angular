@@ -47,6 +47,9 @@
 thead .sticky-col { z-index: 3; }
 .row-label { font-weight: 600; color: #343a40; }
 .cell-changed { background: #fff3bf; font-weight: 700; }
+/* 上半日期軸表頭：第一列=月份分組(colspan)、第二列=異動日 M/D */
+.month-group-head { font-size: 0.85em; color: #495057; padding: 3px 8px; }
+.date-head { font-weight: 600; }
 .table-hint { margin-top: 6px; font-size: 0.9em; color: #868e96; }
 .tab-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .btn-save { background: #1971c2; color: #fff; border-color: #1971c2; }
