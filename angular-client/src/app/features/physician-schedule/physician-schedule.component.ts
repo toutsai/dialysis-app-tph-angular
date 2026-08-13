@@ -663,6 +663,8 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
     }
   }
 
+  // 帶入＝只加不刪（2026-08-14 使用者裁定）：醫院放假與政府行事曆有時不同，
+  // 各月既有假日設定（含手動自訂）一律不動，主檔只是供手動挑選/帶入的參考清單。
   addCurrentMonthHolidays(): void {
     const monthPrefix = `${this.selectedYearMonth()}-`;
     const candidates = this.currentYearHolidays().filter((h: any) => (h.date || '').startsWith(monthPrefix));
@@ -670,31 +672,20 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
       this.showAlert('本月無國定假日', '假日主檔中本月沒有國定假日；若尚未同步，請先按「同步政府行事曆」。');
       return;
     }
-    // 以主檔「取代」本月清單（加也刪）：原本只加不刪會留下舊清單的幻影日期（例：舊 2026-02-21）
-    const existingThisMonth = this.managedHolidays.filter((h: any) => (h.date || '').startsWith(monthPrefix));
-    const sameAsMaster =
-      existingThisMonth.length === candidates.length &&
-      candidates.every((h: any) => existingThisMonth.some((e: any) => e.date === h.date && e.name === h.name));
-    if (sameAsMaster) {
-      this.showAlert('無需帶入', '本月假日清單已與主檔一致。');
+    let addedCount = 0;
+    candidates.forEach((h: any) => {
+      if (!this.managedHolidays.some((existing: any) => existing.date === h.date)) {
+        this.managedHolidays.push({ name: h.name, date: h.date });
+        addedCount++;
+      }
+    });
+    if (addedCount === 0) {
+      this.showAlert('無需帶入', '本月的國定假日皆已在清單中。');
       return;
     }
-    const removed = existingThisMonth.filter((e: any) => !candidates.some((h: any) => h.date === e.date));
-    if (removed.length > 0) {
-      const ok = confirm(
-        `帶入將以政府行事曆主檔取代本月清單，以下 ${removed.length} 筆不在主檔的日期會被移除：\n` +
-        removed.map((e: any) => `${e.name} (${e.date})`).join('、') +
-        '\n（含手動自訂的本月假日）確定帶入？'
-      );
-      if (!ok) return;
-    }
-    this.managedHolidays = [
-      ...this.managedHolidays.filter((h: any) => !(h.date || '').startsWith(monthPrefix)),
-      ...candidates.map((h: any) => ({ name: h.name, date: h.date })),
-    ];
     this.managedHolidays.sort((a: any, b: any) => a.date.localeCompare(b.date));
     this.markUnsaved();
-    this.showAlert('帶入完成', `本月假日已依主檔更新為 ${candidates.length} 天，請記得按「儲存」。`);
+    this.showAlert('帶入完成', `已帶入 ${addedCount} 個本月國定假日（既有設定不變動），請記得按「儲存」。`);
   }
 
   checkClinicConflict(event: Event, day: any, shift: string): void {
@@ -741,21 +732,22 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
     return this.getPhysicianClassById(physicianId);
   }
 
+  // 配色維持「假日優先」＝原本行為（2026-08-14 使用者裁定：既有假日設定與顯示不能動）。
+  // 注意：撞週末的國定假日日曆顯示假日紅、統計歸「週末累積」欄，口徑本就不同，屬既有設計。
   getDayClass(day: any): string {
     if (!day || !day.day) return 'is-empty';
     const dateStr = `${this.selectedYear()}-${String(this.selectedMonth()).padStart(2, '0')}-${String(day.day).padStart(2, '0')}`;
     if (this.specialDatesSet.has(dateStr)) return 'is-special-date';
-    // 週末優先於假日：撞週末的國定假日統計歸「週末累積」，配色跟著一致才對得上（2026-08-14 使用者拍板）
-    if (day.isWeekend) return 'is-weekend';
     if (this.managedHolidays.some((h: any) => h.date === dateStr)) return 'is-holiday';
+    if (day.isWeekend) return 'is-weekend';
     return 'is-weekday';
   }
 
   getShiftCellClass(day: any): string {
     if (!day || !day.day) return 'is-empty';
     const dateStr = `${this.selectedYear()}-${String(this.selectedMonth()).padStart(2, '0')}-${String(day.day).padStart(2, '0')}`;
-    if (day.isWeekend) return 'is-weekend-text-only';
     if (this.managedHolidays.some((h: any) => h.date === dateStr)) return 'is-holiday-text-only';
+    if (day.isWeekend) return 'is-weekend-text-only';
     return '';
   }
 
