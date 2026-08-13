@@ -301,9 +301,10 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
     this.previousYearMonth = current;
   }
 
+  // 下拉 value 是「日期」不是名稱：政府清單的補假名稱全叫「補假」，用名稱比對永遠抓到第一筆
   onHolidayNameChange(): void {
     if (this.holidayForm.name && this.holidayForm.name !== 'custom') {
-      const found = this.currentYearHolidays().find((h: any) => h.name === this.holidayForm.name);
+      const found = this.currentYearHolidays().find((h: any) => h.date === this.holidayForm.name);
       if (found) this.holidayForm.date = found.date;
     }
   }
@@ -575,7 +576,10 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   }
 
   addHoliday(): void {
-    const name = this.holidayForm.name === 'custom' ? this.holidayForm.customName : this.holidayForm.name;
+    // holidayForm.name：'custom'=自訂（取 customName）、否則是主檔假日的「日期」，反查顯示名稱
+    const name = this.holidayForm.name === 'custom'
+      ? this.holidayForm.customName
+      : (this.currentYearHolidays().find((h: any) => h.date === this.holidayForm.name)?.name || this.holidayForm.name);
     const date = this.holidayForm.date;
     if (!name || !date) { this.showAlert('輸入不完整', '請提供完整的假日名稱和日期。'); return; }
     if (this.managedHolidays.some((h: any) => h.date === date)) { this.showAlert('日期重複', '這個日期已經被設定為假日了。'); return; }
@@ -666,20 +670,31 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
       this.showAlert('本月無國定假日', '假日主檔中本月沒有國定假日；若尚未同步，請先按「同步政府行事曆」。');
       return;
     }
-    let addedCount = 0;
-    candidates.forEach((h: any) => {
-      if (!this.managedHolidays.some((existing: any) => existing.date === h.date)) {
-        this.managedHolidays.push({ name: h.name, date: h.date });
-        addedCount++;
-      }
-    });
-    if (addedCount === 0) {
-      this.showAlert('無需帶入', '本月的國定假日皆已在清單中。');
+    // 以主檔「取代」本月清單（加也刪）：原本只加不刪會留下舊清單的幻影日期（例：舊 2026-02-21）
+    const existingThisMonth = this.managedHolidays.filter((h: any) => (h.date || '').startsWith(monthPrefix));
+    const sameAsMaster =
+      existingThisMonth.length === candidates.length &&
+      candidates.every((h: any) => existingThisMonth.some((e: any) => e.date === h.date && e.name === h.name));
+    if (sameAsMaster) {
+      this.showAlert('無需帶入', '本月假日清單已與主檔一致。');
       return;
     }
+    const removed = existingThisMonth.filter((e: any) => !candidates.some((h: any) => h.date === e.date));
+    if (removed.length > 0) {
+      const ok = confirm(
+        `帶入將以政府行事曆主檔取代本月清單，以下 ${removed.length} 筆不在主檔的日期會被移除：\n` +
+        removed.map((e: any) => `${e.name} (${e.date})`).join('、') +
+        '\n（含手動自訂的本月假日）確定帶入？'
+      );
+      if (!ok) return;
+    }
+    this.managedHolidays = [
+      ...this.managedHolidays.filter((h: any) => !(h.date || '').startsWith(monthPrefix)),
+      ...candidates.map((h: any) => ({ name: h.name, date: h.date })),
+    ];
     this.managedHolidays.sort((a: any, b: any) => a.date.localeCompare(b.date));
     this.markUnsaved();
-    this.showAlert('帶入完成', `已帶入 ${addedCount} 個本月國定假日，請記得按「儲存」。`);
+    this.showAlert('帶入完成', `本月假日已依主檔更新為 ${candidates.length} 天，請記得按「儲存」。`);
   }
 
   checkClinicConflict(event: Event, day: any, shift: string): void {
@@ -730,16 +745,17 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
     if (!day || !day.day) return 'is-empty';
     const dateStr = `${this.selectedYear()}-${String(this.selectedMonth()).padStart(2, '0')}-${String(day.day).padStart(2, '0')}`;
     if (this.specialDatesSet.has(dateStr)) return 'is-special-date';
-    if (this.managedHolidays.some((h: any) => h.date === dateStr)) return 'is-holiday';
+    // 週末優先於假日：撞週末的國定假日統計歸「週末累積」，配色跟著一致才對得上（2026-08-14 使用者拍板）
     if (day.isWeekend) return 'is-weekend';
+    if (this.managedHolidays.some((h: any) => h.date === dateStr)) return 'is-holiday';
     return 'is-weekday';
   }
 
   getShiftCellClass(day: any): string {
     if (!day || !day.day) return 'is-empty';
     const dateStr = `${this.selectedYear()}-${String(this.selectedMonth()).padStart(2, '0')}-${String(day.day).padStart(2, '0')}`;
-    if (this.managedHolidays.some((h: any) => h.date === dateStr)) return 'is-holiday-text-only';
     if (day.isWeekend) return 'is-weekend-text-only';
+    if (this.managedHolidays.some((h: any) => h.date === dateStr)) return 'is-holiday-text-only';
     return '';
   }
 

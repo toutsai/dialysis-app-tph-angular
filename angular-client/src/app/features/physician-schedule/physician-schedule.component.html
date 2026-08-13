@@ -775,7 +775,7 @@
                 <option disabled value="">選擇或自訂假日</option>
                 <option
                   *ngFor="let holiday of currentYearHolidays()"
-                  [value]="holiday.name"
+                  [value]="holiday.date"
                 >
                   {{ holiday.name }} ({{ holiday.date }})
                 </option>
@@ -1096,7 +1096,7 @@
                     <option disabled value="">選擇或自訂假日</option>
                     <option
                       *ngFor="let holiday of currentYearHolidays()"
-                      [value]="holiday.name"
+                      [value]="holiday.date"
                     >
                       {{ holiday.name }} ({{ holiday.date }})
                     </option>

@@ -1869,7 +1869,9 @@ function decodeGovCsvBuffer(buffer, encodingHint) {
 }
 
 // 解析辦公日曆表 CSV：西元日期(yyyymmdd),星期,是否放假(0/2),備註
-// 回傳指定年份的國定假日（放假且備註非空 → 含補假；週末備註為空自然排除）
+// 回傳指定年份的國定假日（放假且備註非空 → 含補假與新法定節日）。
+// 注意：一般週末備註為空所以排除，但「撞週末的國定假日」（如國慶撞週六）備註是節日名、會收入清單
+// —— 前端統計把撞週末者歸「週末累積」、日曆也顯示週末色（getDayClass 週末優先），此為刻意口徑。
 function parseGovCalendarCsv(csvText, year) {
   const holidays = []
   const lines = csvText.replace(/^\uFEFF/, '').split(/\r?\n/)
