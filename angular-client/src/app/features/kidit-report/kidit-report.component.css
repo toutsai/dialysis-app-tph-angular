@@ -672,3 +672,48 @@ tr.qi-untouched .qi-flag { background: #eceff1; color: #90a4ae; }
   .day-cell.empty { display: none; }
   .day-cell { min-height: 3.4rem; }
 }
+
+/* ===== 初次建檔：匯出下拉選單（2026-08-15 卡片重整） ===== */
+.export-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.export-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: #fff;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  z-index: 30;
+  min-width: 210px;
+  padding: 4px;
+}
+
+.export-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 8px 12px;
+  font-size: 1rem;
+  cursor: pointer;
+  border-radius: 4px;
+  color: #2c3e50;
+}
+
+.export-menu button:hover {
+  background: #eef5ff;
+}
+
+/* 需建檔名單下區「本月已完成建檔」分隔 */
+.bd-completed-header {
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 2px solid #e4eaf1;
+}

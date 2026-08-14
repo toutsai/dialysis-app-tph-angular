@@ -1,5 +1,5 @@
 // src/services/firstDialysisExportService.ts
-// 當月初次透析名單匯出（來源：病人資料庫 first_dialysis_date）
+// 院內首透名單匯出（來源：病人狀態標記「本院初透」，2026-08-15 起）
 
 export interface FirstDialysisRow {
   name: string;
@@ -21,7 +21,7 @@ export async function exportFirstDialysisExcel(
   const sheetData = rows.map((r) => ({
     姓名: r.name || '',
     病歷號: r.medicalRecordNumber || '',
-    首透日期: r.firstDialysisDate || '',
+    本院初透日: r.firstDialysisDate || '',
     透析模式: r.mode || '',
     狀態: r.isDeleted ? `${r.statusLabel}（已刪除）` : r.statusLabel,
     主治醫師: r.physician || '',
@@ -35,6 +35,6 @@ export async function exportFirstDialysisExcel(
     { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 },
     { wch: 14 }, { wch: 12 }, { wch: 20 }, { wch: 12 },
   ];
-  XLSX.utils.book_append_sheet(wb, ws, '初次透析名單');
+  XLSX.utils.book_append_sheet(wb, ws, '院內首透名單');
   XLSX.writeFile(wb, filename);
 }

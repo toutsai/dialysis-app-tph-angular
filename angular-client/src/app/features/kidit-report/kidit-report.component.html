@@ -139,12 +139,19 @@
   <!-- ========== 初次建檔 ========== -->
   <section class="tab-panel" *ngIf="activeTab() === 'initial'">
     <div class="tool-row">
-      <button class="action-btn export-btn" (click)="exportOfficialPatientCsv()" [disabled]="isLoading()">
-        <i class="fas fa-file-csv"></i> 匯出病患資料 CSV
-      </button>
-      <button class="action-btn export-btn" (click)="exportOfficialHistoryCsv()" [disabled]="isLoading()">
-        <i class="fas fa-file-csv"></i> 匯出病史原發病 CSV
-      </button>
+      <div class="export-dropdown">
+        <button class="action-btn export-btn" (click)="showExportMenu.set(!showExportMenu())" [disabled]="isLoading()">
+          <i class="fas fa-file-csv"></i> 匯出 <i class="fas fa-caret-down"></i>
+        </button>
+        <div class="export-menu" *ngIf="showExportMenu()">
+          <button (click)="exportOfficialPatientCsv(); showExportMenu.set(false)">
+            <i class="fas fa-id-card"></i> 基本資料 CSV
+          </button>
+          <button (click)="exportOfficialHistoryCsv(); showExportMenu.set(false)">
+            <i class="fas fa-notes-medical"></i> 病史原發病 CSV
+          </button>
+        </div>
+      </div>
       <span class="pr-hint tool-hint">
         <i class="fas fa-info-circle"></i>
         官方 KiDit 匯入格式（民國日期）；範圍＝本月（依上方月份）已填寫建檔資料的病人，可直接上傳 KiDit。
@@ -153,13 +160,10 @@
 
     <div class="sub-tabs">
       <button class="sub-tab-btn" [class.active]="initialSubTab() === 'pending'" (click)="setInitialSubTab('pending')">
-        <i class="fas fa-user-clock"></i> 待建檔清單
-      </button>
-      <button class="sub-tab-btn" [class.active]="initialSubTab() === 'basic'" (click)="setInitialSubTab('basic')">
-        <i class="fas fa-id-card"></i> 當月基本資料
+        <i class="fas fa-user-clock"></i> 需建檔名單
       </button>
       <button class="sub-tab-btn" [class.active]="initialSubTab() === 'first'" (click)="setInitialSubTab('first')">
-        <i class="fas fa-user-plus"></i> 當月初次透析名單
+        <i class="fas fa-user-plus"></i> 院內首透名單
       </button>
     </div>
 
@@ -168,7 +172,7 @@
       <div class="list-panel-header">
         <h3>
           <i class="fas fa-user-clock"></i>
-          KiDit 待建檔清單
+          尚未完成建檔
           <span class="va-count" *ngIf="!isLoadingPendingReg()">（{{ visiblePendingRegRows().length }} 人）</span>
         </h3>
         <button class="action-btn" *ngIf="!isLoadingPendingReg() && excludedPendingRegRows().length > 0"
@@ -261,50 +265,37 @@
           </tbody>
         </table>
       </div>
-    </div>
 
-    <!-- 當月基本資料（本院初透 × 建檔基本資料比對） -->
-    <div class="list-panel" *ngIf="initialSubTab() === 'basic'">
-      <div class="list-panel-header">
+      <!-- 下區：本月已完成建檔（原「當月基本資料」頁籤併入，2026-08-15） -->
+      <div class="list-panel-header bd-completed-header">
         <h3>
-          <i class="fas fa-id-card"></i>
-          {{ currentYear() }} 年 {{ currentMonth() }} 月 本院初透基本資料
-          <span class="va-count" *ngIf="!isLoadingBasicData()">（{{ basicDataRows().length }} 人）</span>
+          <i class="fas fa-check-circle"></i>
+          {{ currentYear() }} 年 {{ currentMonth() }} 月 已完成建檔
+          <span class="va-count" *ngIf="!isLoadingBasicData()">（{{ completedBasicRows().length }} 人）</span>
         </h3>
-        <button class="action-btn export-btn" (click)="exportBasicDataCsv()"
-                [disabled]="isLoadingBasicData() || basicDataRows().length === 0">
-          <i class="fas fa-file-csv"></i> 匯出 CSV
-        </button>
       </div>
 
       <p class="pr-hint">
         <i class="fas fa-info-circle"></i>
-        名單＝病人清單標記「本院初透」且日期在本月的病人（含已刪除），比對 KiDit 建檔是否已儲存基本資料。
-        <span *ngIf="!isLoadingBasicData() && basicDataIncompleteCount() > 0" class="bd-warn">
-          ⚠️ {{ basicDataIncompleteCount() }} 位尚未建檔完成
-        </span>
-        <span *ngIf="!isLoadingBasicData() && basicDataRows().length > 0 && basicDataIncompleteCount() === 0" class="bd-ok">
-          ✓ 全數已建檔
-        </span>
+        名單＝該月標記「本院初透」且建檔完成（基本資料＋病史原發病）的病人（含已刪除）。點擊列可開啟編輯。
       </p>
 
       <div *ngIf="isLoadingBasicData()" class="va-loading">
         <div class="spinner"></div>
-        <p>正在彙整本月基本資料...</p>
+        <p>正在彙整本月已完成建檔...</p>
       </div>
 
-      <div *ngIf="!isLoadingBasicData() && basicDataRows().length === 0" class="va-empty">
-        本月份尚無標記本院初透的病人。
+      <div *ngIf="!isLoadingBasicData() && completedBasicRows().length === 0" class="va-empty">
+        本月份尚無建檔完成的本院初透病人。
       </div>
 
-      <div class="table-wrap" *ngIf="!isLoadingBasicData() && basicDataRows().length > 0">
+      <div class="table-wrap" *ngIf="!isLoadingBasicData() && completedBasicRows().length > 0">
         <table class="va-table">
           <thead>
             <tr>
               <th>姓名</th>
               <th>病歷號</th>
               <th>本院初透日</th>
-              <th>建檔狀態</th>
               <th>建檔者</th>
               <th>建檔日期</th>
               <th>基本資料儲存日</th>
@@ -315,12 +306,11 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let r of basicDataRows()"
+            <tr *ngFor="let r of completedBasicRows()"
                 class="pr-row"
                 title="點擊開啟此病人的建檔編輯表格"
                 (click)="openPendingRegTarget(r)"
-                [class.va-row-deleted]="r.isDeleted"
-                [class.bd-row-incomplete]="!r.complete">
+                [class.va-row-deleted]="r.isDeleted">
               <td>
                 {{ r.profile?.['name'] || r.name || '—' }}
                 <span class="va-deleted-tag" *ngIf="r.isDeleted">已刪除</span>
@@ -329,11 +319,6 @@
               <td>
                 {{ r.hospitalFirstDialysisDate || r.effectiveDate || '—' }}
                 <span class="bd-date-missing" *ngIf="r.dateMissing" title="病人清單的本院初透標記未填日期，以建檔日期歸月">未填日期</span>
-              </td>
-              <td>
-                <span class="bd-status" [class.done]="r.complete" [class.missing]="!r.complete">
-                  {{ basicDataStatus(r) }}
-                </span>
               </td>
               <!-- 建檔者/建檔日期＝實際儲存基本資料表單的人與時間（2026-08-08 起記錄，舊資料無戳記顯示 — ） -->
               <td>{{ r.profileSavedBy || '—' }}</td>
@@ -349,12 +334,12 @@
       </div>
     </div>
 
-    <!-- 當月初次透析名單 -->
+    <!-- 院內首透名單（動態追蹤用；來源＝本院初透標記） -->
     <div class="list-panel" *ngIf="initialSubTab() === 'first'">
       <div class="list-panel-header">
         <h3>
           <i class="fas fa-user-plus"></i>
-          {{ currentYear() }} 年 {{ currentMonth() }} 月 初次透析名單
+          {{ currentYear() }} 年 {{ currentMonth() }} 月 院內首透名單
           <span class="va-count" *ngIf="!isLoadingFirstDialysis()">（{{ firstDialysisRows().length }} 人）</span>
         </h3>
         <button class="action-btn export-btn" (click)="exportFirstDialysisRows()"
@@ -365,11 +350,11 @@
 
       <div *ngIf="isLoadingFirstDialysis()" class="va-loading">
         <div class="spinner"></div>
-        <p>正在彙整本月初次透析名單...</p>
+        <p>正在彙整本月院內首透名單...</p>
       </div>
 
       <div *ngIf="!isLoadingFirstDialysis() && firstDialysisRows().length === 0" class="va-empty">
-        本月份尚無初次透析病人。
+        本月份尚無本院初透病人。
       </div>
 
       <div class="table-wrap" *ngIf="!isLoadingFirstDialysis() && firstDialysisRows().length > 0">
@@ -378,7 +363,7 @@
             <tr>
               <th>姓名</th>
               <th>病歷號</th>
-              <th>首透日期</th>
+              <th>本院初透日</th>
               <th>透析模式</th>
               <th>狀態</th>
               <th>主治醫師</th>

@@ -21,11 +21,7 @@ import {
 } from '@/services/kiditQuarterInputService';
 import { exportVascularAccessExcel, VascularAccessRow } from '@/services/vascularAccessExportService';
 import { exportFirstDialysisExcel, FirstDialysisRow } from '@/services/firstDialysisExportService';
-import {
-  downloadMonthlyBasicDataCsv,
-  basicDataStatusText,
-  MonthlyBasicDataRow,
-} from '@/services/kiditBasicDataCsvService';
+import { MonthlyBasicDataRow } from '@/services/kiditBasicDataCsvService';
 import { localApi } from '@/services/localApiClient';
 import { KiditDetailModalComponent } from '@app/components/kidit/kidit-detail-modal.component';
 import { KiditVascularQuarterlyComponent } from './kidit-vascular-quarterly.component';
@@ -45,7 +41,7 @@ interface DayData {
 
 /** 主頁籤：依 KiDit 申報項目分區；hdrx/qinput/hosp 為後續批次的建置中佔位 */
 type MainTab = 'overview' | 'initial' | 'vascular' | 'movement' | 'hdrx' | 'qinput' | 'hosp';
-type InitialSubTab = 'pending' | 'basic' | 'first';
+type InitialSubTab = 'pending' | 'first';
 
 @Component({
   selector: 'app-kidit-report',
@@ -94,9 +90,12 @@ export class KiditReportComponent implements OnInit {
   readonly showExcludedReg = signal(false);
   readonly visiblePendingRegRows = computed(() => this.pendingRegRows().filter((r) => !r.excluded));
   readonly excludedPendingRegRows = computed(() => this.pendingRegRows().filter((r) => r.excluded));
-  // 每月基本資料（初次建檔頁籤內嵌；本院初透 × 建檔基本資料，含未建檔比對）
+  // 每月基本資料（需建檔名單下區「本月已完成」資料來源；本院初透 × 建檔比對）
   readonly isLoadingBasicData = signal(false);
   readonly basicDataRows = signal<MonthlyBasicDataRow[]>([]);
+  readonly completedBasicRows = computed(() => this.basicDataRows().filter((r) => r.complete));
+  // 標題列「匯出」下拉選單開闔
+  readonly showExportMenu = signal(false);
   readonly weekDays = ['日', '一', '二', '三', '四', '五', '六'];
 
   // Modal state
@@ -152,9 +151,13 @@ export class KiditReportComponent implements OnInit {
   /** 載入初次建檔頁籤目前子頁籤的清單（切頁籤/切月份時呼叫） */
   private loadInitialSubTab(): void {
     const sub = this.initialSubTab();
-    if (sub === 'pending') this.loadPendingRegList();
-    else if (sub === 'basic') this.loadBasicDataList();
-    else this.loadFirstDialysisList();
+    if (sub === 'pending') {
+      // 需建檔名單＝上區「未完成」（跨月）＋下區「本月已完成」（依月份選擇器）
+      this.loadPendingRegList();
+      this.loadBasicDataList();
+    } else {
+      this.loadFirstDialysisList();
+    }
   }
 
   trackByDate(_index: number, day: DayData): string {
@@ -354,8 +357,10 @@ export class KiditReportComponent implements OnInit {
   private readonly statusLabelMap: Record<string, string> = { opd: '門診', ipd: '住院', er: '急診' };
 
   /**
-   * 載入「當月初次透析名單」（初次建檔頁籤內嵌）：來源為病人資料庫的 firstDialysisDate（含已刪除病人）。
-   * 進入頁籤時即時過濾（已載入的 allPatients），不需後端。
+   * 載入「院內首透名單」（初次建檔頁籤內嵌，動態追蹤用）：來源為狀態標記「本院初透」
+   * (patientStatus.hospitalFirstDialysis.date)，含已刪除病人。2026-08-15 依使用者裁定由
+   * 「首透」標記改為「本院初透」標記（與需建檔名單同一權威來源；未填日期者不列，
+   * 其會出現在需建檔名單）。進入頁籤時即時過濾（已載入的 allPatients），不需後端。
    */
   async loadFirstDialysisList(): Promise<void> {
     const year = this.currentYear();
@@ -368,10 +373,10 @@ export class KiditReportComponent implements OnInit {
       await this.patientStore.fetchPatientsIfNeeded();
       const patients = this.patientStore.allPatients();
 
-      // 本院首次透析名單：來源為狀態標記「首透」(patientStatus.isFirstDialysis.date)。
+      // 院內首透名單：來源為狀態標記「本院初透」(patientStatus.hospitalFirstDialysis.date)。
       // 注意：頂層 firstDialysisDate 是「他院初次透析日期」(來自洗腎摘要)，語意不同，不可採用。
       const rows: FirstDialysisRow[] = patients
-        .map((p: any) => ({ p, fd: p?.patientStatus?.isFirstDialysis?.date || '' }))
+        .map((p: any) => ({ p, fd: p?.patientStatus?.hospitalFirstDialysis?.date || '' }))
         .filter(({ fd }: any) => typeof fd === 'string' && fd.slice(0, 7) === ym)
         .map(({ p, fd }: any) => ({
           name: p.name || '',
@@ -460,8 +465,8 @@ export class KiditReportComponent implements OnInit {
 
   exportFirstDialysisRows(): void {
     const rows = this.firstDialysisRows();
-    if (!rows.length) { alert('本月份尚無初次透析病人。'); return; }
-    const filename = `初次透析名單_${this.currentYear()}_${String(this.currentMonth()).padStart(2, '0')}.xlsx`;
+    if (!rows.length) { alert('本月份尚無本院初透病人。'); return; }
+    const filename = `院內首透名單_${this.currentYear()}_${String(this.currentMonth()).padStart(2, '0')}.xlsx`;
     try {
       exportFirstDialysisExcel(rows, filename);
     } catch (error) {
@@ -486,10 +491,6 @@ export class KiditReportComponent implements OnInit {
     }
   }
 
-  basicDataStatus(row: MonthlyBasicDataRow): string {
-    return basicDataStatusText(row);
-  }
-
   /** 西元 YYYY-MM-DD → 民國顯示（45/08/15），無法解析回空字串（生日欄顯示用，儲存/匯出不變） */
   rocDisplay(dateStr: string | undefined): string {
     const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dateStr || ''));
@@ -497,22 +498,6 @@ export class KiditReportComponent implements OnInit {
     const y = Number(m[1]) - 1911;
     if (y <= 0) return '';
     return `${y}/${m[2]}/${m[3]}`;
-  }
-
-  /** 未建檔/不完整人數（比對結果提示用） */
-  basicDataIncompleteCount(): number {
-    return this.basicDataRows().filter((r) => !r.complete).length;
-  }
-
-  exportBasicDataCsv(): void {
-    const rows = this.basicDataRows();
-    if (!rows.length) { alert('本月份尚無標記本院初透的病人。'); return; }
-    try {
-      downloadMonthlyBasicDataCsv(rows, this.currentYear(), this.currentMonth());
-    } catch (error) {
-      console.error('匯出失敗:', error);
-      alert('匯出失敗，請稍後再試。');
-    }
   }
 
   // ========== 季度輸入彙整（透析紀錄／醫療狀況評估／合併症） ==========
