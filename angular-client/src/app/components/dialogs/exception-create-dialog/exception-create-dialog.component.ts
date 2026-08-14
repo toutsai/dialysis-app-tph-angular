@@ -321,6 +321,13 @@ export class ExceptionCreateDialogComponent implements OnChanges {
     }
   }
 
+  /** 病人B下拉選擇 → 寫入 formData.patient2（isFormValid 依賴此欄位才能提交） */
+  onPatientBSelected(key: string): void {
+    this.patientB_SwapSelection = key;
+    const slot = this.availableSlotsForPatientB.find(s => s.key === key);
+    this.formData.patient2 = slot ? slot.data : null;
+  }
+
   get patientA_SwapDisplay(): string {
     if (!this.formData.date) return '請先選擇日期...';
     if (this.isFetchingSwapSchedule) return '查詢排班中...';
