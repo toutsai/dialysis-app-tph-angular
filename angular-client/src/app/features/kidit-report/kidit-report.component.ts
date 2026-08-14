@@ -337,7 +337,7 @@ export class KiditReportComponent implements OnInit {
           name: ev.patientName || '',
           medicalRecordNumber: ev.medicalRecordNumber || '',
           date: (ev.eventDate || '').slice(0, 10),
-          interventions: describeVascularEvent(ev),
+          interventions: `${describeVascularEvent(ev)}${ev.notes ? `；備註：${ev.notes}` : ''}`,
           location: ev.location || '',
           source: '事件填寫',
         });

@@ -54,7 +54,7 @@ function buildConfirmedVaeEvents(db, dateStr) {
     patientName: row.patient_name,
     patientId: row.patient_id,
     medicalRecordNumber: row.medical_record_number || '',
-    details: `通路處置: ${describeVaeEvent(row)} (${row.location || '未知院所'})`,
+    details: `通路處置: ${describeVaeEvent(row)} (${row.location || '未知院所'})${row.notes ? `；備註：${row.notes}` : ''}`,
   }))
 }
 

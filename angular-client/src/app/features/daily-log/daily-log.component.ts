@@ -976,7 +976,7 @@ export class DailyLogComponent implements OnInit {
       if (this.selectedDate() !== dateStr) return; // 已切換日期，不覆蓋
       const events = (resp?.events || []).map((ev) => ({
         ...ev,
-        summary: `${describeVascularEvent(ev)}${ev.location ? `（${ev.location}）` : ''}`,
+        summary: `${describeVascularEvent(ev)}${ev.location ? `（${ev.location}）` : ''}${ev.notes ? `；備註：${ev.notes}` : ''}`,
       }));
       this.vascularEvents.set(events);
     } catch (error) {
