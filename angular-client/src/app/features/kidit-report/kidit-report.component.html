@@ -167,13 +167,27 @@
       </button>
     </div>
 
-    <!-- 待建檔清單 -->
+    <!-- 需建檔名單：內層頁籤並列「未完成建檔／已完成建檔」（2026-08-15，免捲到最下面） -->
     <div class="list-panel" *ngIf="initialSubTab() === 'pending'">
+      <div class="pending-view-tabs">
+        <button class="pending-view-btn" [class.active]="pendingView() === 'incomplete'"
+                (click)="pendingView.set('incomplete')">
+          <i class="fas fa-user-clock"></i> 未完成建檔
+          <span class="pv-count" *ngIf="!isLoadingPendingReg()">{{ monthPendingRegRows().length }}</span>
+        </button>
+        <button class="pending-view-btn" [class.active]="pendingView() === 'completed'"
+                (click)="pendingView.set('completed')">
+          <i class="fas fa-check-circle"></i> 已完成建檔
+          <span class="pv-count" *ngIf="!isLoadingBasicData()">{{ completedBasicRows().length }}</span>
+        </button>
+      </div>
+
+      <ng-container *ngIf="pendingView() === 'incomplete'">
       <div class="list-panel-header">
         <h3>
           <i class="fas fa-user-clock"></i>
-          尚未完成建檔
-          <span class="va-count" *ngIf="!isLoadingPendingReg()">（{{ visiblePendingRegRows().length }} 人）</span>
+          {{ currentYear() }} 年 {{ currentMonth() }} 月 未完成建檔
+          <span class="va-count" *ngIf="!isLoadingPendingReg()">（{{ monthPendingRegRows().length }} 人）</span>
         </h3>
         <button class="action-btn" *ngIf="!isLoadingPendingReg() && excludedPendingRegRows().length > 0"
                 (click)="showExcludedReg.set(!showExcludedReg())">
@@ -184,7 +198,12 @@
 
       <p class="pr-hint">
         <i class="fas fa-info-circle"></i>
-        名單＝勾選「本院初透」或「首透」標記、且 KiDit 病患資料/病史尚未填寫完整的病人。點擊列可直接開啟該病人所在日期的 KiDit 視窗補建檔；建檔完成後自動退出名單。
+        名單＝勾選「本院初透」或「首透」標記、且 KiDit 病患資料/病史尚未填寫完整的病人（未填標記日期者不分月份恆顯示）。點擊列可直接開啟該病人所在日期的 KiDit 視窗補建檔；建檔完成後自動退出名單。
+      </p>
+
+      <p class="pr-hint pv-other-months" *ngIf="!isLoadingPendingReg() && otherMonthsPendingCount() > 0">
+        <i class="fas fa-exclamation-triangle"></i>
+        其他月份尚有 {{ otherMonthsPendingCount() }} 位未完成建檔，請切換上方月份查看。
       </p>
 
       <div *ngIf="isLoadingPendingReg()" class="va-loading">
@@ -192,11 +211,11 @@
         <p>正在彙整待建檔名單...</p>
       </div>
 
-      <div *ngIf="!isLoadingPendingReg() && visiblePendingRegRows().length === 0" class="va-empty">
-        目前沒有待建檔的病人。
+      <div *ngIf="!isLoadingPendingReg() && monthPendingRegRows().length === 0" class="va-empty">
+        本月份沒有未完成建檔的病人。
       </div>
 
-      <div class="table-wrap" *ngIf="!isLoadingPendingReg() && visiblePendingRegRows().length > 0">
+      <div class="table-wrap" *ngIf="!isLoadingPendingReg() && monthPendingRegRows().length > 0">
         <table class="va-table">
           <thead>
             <tr>
@@ -212,7 +231,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let r of visiblePendingRegRows()" class="pr-row" (click)="openPendingRegTarget(r)">
+            <tr *ngFor="let r of monthPendingRegRows()" class="pr-row" (click)="openPendingRegTarget(r)">
               <td>{{ r.name || '—' }}</td>
               <td>{{ r.medicalRecordNumber || '—' }}</td>
               <td>{{ pendingRegFlagLabel(r) }}</td>
@@ -266,8 +285,11 @@
         </table>
       </div>
 
-      <!-- 下區：本月已完成建檔（原「當月基本資料」頁籤併入，2026-08-15） -->
-      <div class="list-panel-header bd-completed-header">
+      </ng-container>
+
+      <!-- 已完成建檔（原「當月基本資料」頁籤併入，2026-08-15 改內層頁籤） -->
+      <ng-container *ngIf="pendingView() === 'completed'">
+      <div class="list-panel-header">
         <h3>
           <i class="fas fa-check-circle"></i>
           {{ currentYear() }} 年 {{ currentMonth() }} 月 已完成建檔
@@ -332,6 +354,7 @@
           </tbody>
         </table>
       </div>
+      </ng-container>
     </div>
 
     <!-- 院內首透名單（動態追蹤用；來源＝本院初透標記） -->

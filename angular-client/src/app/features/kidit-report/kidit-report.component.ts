@@ -90,6 +90,20 @@ export class KiditReportComponent implements OnInit {
   readonly showExcludedReg = signal(false);
   readonly visiblePendingRegRows = computed(() => this.pendingRegRows().filter((r) => !r.excluded));
   readonly excludedPendingRegRows = computed(() => this.pendingRegRows().filter((r) => r.excluded));
+  /** 需建檔名單內層頁籤：未完成建檔／已完成建檔（2026-08-15 並列，免捲動） */
+  readonly pendingView = signal<'incomplete' | 'completed'>('incomplete');
+  /** 未完成建檔＝只顯示當月（依月份選擇器）；未填標記日期者恆顯示（否則任何月份都找不到） */
+  readonly monthPendingRegRows = computed(() => {
+    const ym = `${this.currentYear()}-${String(this.currentMonth()).padStart(2, '0')}`;
+    return this.visiblePendingRegRows().filter((r) => {
+      const d = String(r.hospitalFirstDialysisDate || r.firstDialysisDate || '');
+      return !d || d.slice(0, 7) === ym;
+    });
+  });
+  /** 其他月份未完成人數（防漏追提示） */
+  readonly otherMonthsPendingCount = computed(
+    () => this.visiblePendingRegRows().length - this.monthPendingRegRows().length,
+  );
   // 每月基本資料（需建檔名單下區「本月已完成」資料來源；本院初透 × 建檔比對）
   readonly isLoadingBasicData = signal(false);
   readonly basicDataRows = signal<MonthlyBasicDataRow[]>([]);
