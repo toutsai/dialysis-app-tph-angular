@@ -3,6 +3,11 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { KIDIT_HISTORY_OPTIONS } from '@/utils/kiditHelpers';
 import { kiditService } from '@/services/kiditService';
+import {
+  VASCULAR_ACCESS_TYPES,
+  VASCULAR_ACCESS_SIDES,
+  siteOptionsForType,
+} from '@app/core/constants/vascular-access-codes';
 
 @Component({
   selector: 'app-kidit-history-form',
@@ -24,6 +29,19 @@ export class KiditHistoryFormComponent implements OnChanges {
   formData: any = {};
 
   readonly opts = KIDIT_HISTORY_OPTIONS;
+
+  // 首次瘻管建立（比照官方病史頁；站內欄位，沿用造管官方代碼表）
+  readonly ffTypes = VASCULAR_ACCESS_TYPES;
+  readonly ffSides = VASCULAR_ACCESS_SIDES;
+  get ffSiteOptions() {
+    return siteOptionsForType(this.formData?.firstFistulaType || null);
+  }
+  onFirstFistulaTypeChange(): void {
+    const site = this.formData?.firstFistulaSite;
+    if (site && !this.ffSiteOptions.some((o) => o.code === site)) {
+      this.formData.firstFistulaSite = '';
+    }
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['initialData'] || changes['masterPatient']) {
@@ -89,6 +107,10 @@ export class KiditHistoryFormComponent implements OnChanges {
         emergencyHCO3: h.emergencyHCO3 || '',
         emergencyAlb: h.emergencyAlb || '',
         isFirstCatastrophic: h.isFirstCatastrophic || 'N',
+        firstFistulaDate: h.firstFistulaDate || '',
+        firstFistulaType: h.firstFistulaType || '',
+        firstFistulaSide: h.firstFistulaSide || '',
+        firstFistulaSite: h.firstFistulaSite || '',
       };
     } else {
       this.formData = {};

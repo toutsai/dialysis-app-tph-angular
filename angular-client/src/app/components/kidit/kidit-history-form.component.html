@@ -337,6 +337,43 @@
     </div>
 
     <div class="form-section">
+      <h4 class="section-title">首次瘻管建立<span class="kd-note">（站內紀錄欄位，匯入格式無此欄）</span></h4>
+      <div class="kd-row">
+        <div class="kd-field">
+          <label>手術日期</label>
+          <input type="date" [(ngModel)]="formData.firstFistulaDate" />
+        </div>
+        <div class="kd-field">
+          <label>Type</label>
+          <select [(ngModel)]="formData.firstFistulaType" (ngModelChange)="onFirstFistulaTypeChange()">
+            <option value="">請選擇</option>
+            @for (opt of ffTypes; track opt.code) {
+              <option [value]="opt.code">{{ opt.label }}</option>
+            }
+          </select>
+        </div>
+        <div class="kd-field">
+          <label>Side</label>
+          <select [(ngModel)]="formData.firstFistulaSide">
+            <option value="">請選擇</option>
+            @for (opt of ffSides; track opt.code) {
+              <option [value]="opt.code">{{ opt.label }}</option>
+            }
+          </select>
+        </div>
+        <div class="kd-field">
+          <label>Location</label>
+          <select [(ngModel)]="formData.firstFistulaSite">
+            <option value="">請選擇</option>
+            @for (opt of ffSiteOptions; track opt.code) {
+              <option [value]="opt.code">{{ opt.label }}</option>
+            }
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
       <h4 class="section-title">重大傷病證明</h4>
       <div class="kd-row">
         <div class="kd-field">
