@@ -24,6 +24,8 @@ export interface MonthlyBasicDataRow {
   profileSavedAt?: string | null;
   profile: Record<string, string> | null;
   history: Record<string, unknown> | null;
+  /** 清單點擊直達建檔用：建檔事件日優先，否則最近事件日；無事件為 null */
+  lastEventDate?: string | null;
 }
 
 /** 建檔狀態文字（清單顯示與 CSV 共用） */

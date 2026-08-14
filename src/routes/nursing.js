@@ -1722,7 +1722,8 @@ router.get('/kidit-monthly-basic-data', authenticate, (req, res) => {
         const cur =
           dataByPatient.get(e.patientId) ||
           { profile: null, history: null, profileDate: null, historyDate: null, complete: false,
-            profileSavedBy: null, profileSavedAt: null }
+            profileSavedBy: null, profileSavedAt: null, lastEventDate: null }
+        cur.lastEventDate = row.date
         if (e.kidit_profile?.idNumber) {
           cur.profile = e.kidit_profile
           cur.profileDate = row.date
@@ -1763,6 +1764,8 @@ router.get('/kidit-monthly-basic-data', authenticate, (req, res) => {
           profileSavedAt: k?.profileSavedAt || null,
           profile: k?.profile || null,
           history: k?.history || null,
+          // 清單點擊直達建檔用：建檔事件日優先（編輯既有建檔），否則最近事件日（從頭建檔）
+          lastEventDate: k?.profileDate || k?.historyDate || k?.lastEventDate || null,
         }
       })
       .filter((r) => r.effectiveDate.startsWith(month))

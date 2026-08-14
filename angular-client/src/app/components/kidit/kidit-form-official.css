@@ -1,0 +1,155 @@
+/* KiDit 官方頁面風格（2026-08-15 比照官方截圖重排：標籤在左、欄位在右的橫排列，
+   藍色分區標題＋藍色底線；供 kidit-patient-form 與 kidit-history-form 共用） */
+
+.kidit-form-container {
+  padding: 6px 10px 10px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: #fff;
+}
+
+.form-section {
+  margin-bottom: 16px;
+}
+
+.section-title {
+  margin: 4px 0 12px 0;
+  padding-bottom: 5px;
+  border-bottom: 2px solid #8db8dd;
+  color: #00008b;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+/* 橫排列：一列多組「標籤＋欄位」 */
+.kd-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 28px;
+  margin-bottom: 10px;
+  padding-left: 6px;
+}
+
+.kd-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kd-field-grow {
+  flex: 1 1 auto;
+}
+
+.kd-field > label {
+  font-size: 1rem;
+  color: #1a1a1a;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* 匯入格式欄位編號（CSV 對照用，弱化顯示） */
+.fnum {
+  color: #93a8bd;
+  font-weight: 400;
+  font-size: 0.78rem;
+  margin-right: 3px;
+}
+
+.kd-note {
+  font-size: 0.9rem;
+  color: #1565c0;
+}
+.kd-note-bad {
+  color: #c62828;
+  font-weight: 700;
+}
+
+.kd-field input,
+.kd-field select {
+  padding: 5px 8px;
+  border: 1px solid #b9c4cf;
+  border-radius: 3px;
+  font-size: 1.02rem;
+  background: #fff;
+}
+
+.kd-field input:focus,
+.kd-field select:focus {
+  border-color: #3498db;
+  outline: none;
+}
+
+.kd-field input:disabled {
+  background-color: #f0f0f0;
+  cursor: not-allowed;
+  color: #666;
+}
+
+/* 常用欄寬 */
+.w-sm { width: 110px; }
+.w-md { width: 150px; }
+.w-lg { min-width: 280px; }
+.w-full { width: 100%; min-width: 240px; }
+
+/* 複選群組（官方為多欄勾選清單） */
+.kd-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 4px 20px;
+  padding-left: 6px;
+  margin-bottom: 10px;
+}
+
+.kd-checkbox-grid.two-col {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+/* 複選群組前的說明標籤（官方「合併症狀，請詳細填寫：」樣式） */
+.kd-sub-label {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 4px 0 6px;
+  padding-left: 6px;
+}
+
+.kd-checkbox-grid .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 1rem;
+  font-weight: 400;
+  color: #1a1a1a;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.actions {
+  text-align: right;
+  padding-top: 10px;
+  border-top: 1px solid #eee;
+}
+
+.save-btn {
+  background: #27ae60;
+  color: white;
+  border: none;
+  padding: 10px 25px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1.26rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s;
+}
+
+.save-btn:hover {
+  background: #219150;
+}
+
+.save-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}

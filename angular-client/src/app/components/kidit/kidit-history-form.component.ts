@@ -9,7 +9,7 @@ import { kiditService } from '@/services/kiditService';
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './kidit-history-form.component.html',
-  styleUrl: './kidit-history-form.component.css'
+  styleUrls: ['./kidit-form-official.css', './kidit-history-form.component.css']
 })
 export class KiditHistoryFormComponent implements OnChanges {
   @Input() date = '';

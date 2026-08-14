@@ -1,137 +1,174 @@
 @if (formData) {
   <div class="kidit-form-container">
-    <!-- 區塊 1: 身分與基本資料 -->
+    <!-- 版面比照 KiDit 官方「基本資料」頁（2026-08-15，截圖：D:\KiDit匯入\kidit基本資料版面.jpg），
+         欄位編號＝匯入格式說明.xls 欄序，供 CSV 對照 -->
     <div class="form-section">
-      <h4 class="section-title">基本身分資料</h4>
-      <div class="form-grid">
-        <div class="form-group">
-          <label>01 姓名</label>
-          <input type="text" [(ngModel)]="formData.name" disabled class="input-disabled" />
-        </div>
+      <h4 class="section-title">基本資料</h4>
 
-        <div class="form-group">
-          <label>04 身分證號</label>
-          <input type="text" [(ngModel)]="formData.idNumber" placeholder="10碼" />
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">01</span>病患姓名</label>
+          <input type="text" class="w-md" [(ngModel)]="formData.name" disabled />
         </div>
-
-        <div class="form-group">
-          <label>08 病歷號</label>
-          <input type="text" [(ngModel)]="formData.medicalRecordNumber" placeholder="10碼" />
+        <div class="kd-field">
+          <label><span class="fnum">08</span>病歷號碼</label>
+          <input type="text" class="w-md" [(ngModel)]="formData.medicalRecordNumber" placeholder="10碼" />
         </div>
+        <div class="kd-field">
+          <label><span class="fnum">04</span>身分證號</label>
+          <input type="text" class="w-md" [(ngModel)]="formData.idNumber" placeholder="10碼" />
+        </div>
+      </div>
 
-        <div class="form-group">
-          <label>02 病患類別</label>
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">03</span>出生西元年</label>
+          <input type="date" [ngModel]="formData.birthDate" (ngModelChange)="onIsoBirthChange($event)" />
+        </div>
+        <div class="kd-field">
+          <label>出生民國年</label>
+          <input
+            type="text"
+            class="w-sm"
+            placeholder="例：45/08/15"
+            [ngModel]="rocBirthInput"
+            (ngModelChange)="onRocBirthChange($event)"
+            [class.roc-error]="rocBirthError"
+          />
+        </div>
+        <span class="kd-note" *ngIf="!rocBirthError">民國年與西元年會自動換算，任填一欄位即可</span>
+        <span class="kd-note kd-note-bad" *ngIf="rocBirthError">格式無法辨識，請輸入民國年/月/日</span>
+      </div>
+
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">21</span>本院開始日期</label>
+          <input type="date" [(ngModel)]="formData.hospitalStartDate" />
+        </div>
+        <div class="kd-field">
+          <label><span class="fnum">20</span>首次治療日期</label>
+          <input type="date" [(ngModel)]="formData.firstDialysisDate" />
+        </div>
+        <div class="kd-field">
+          <label><span class="fnum">09</span>透析代號</label>
+          <input type="text" class="w-sm" [(ngModel)]="formData.dialysisCode" placeholder="10碼" />
+        </div>
+      </div>
+
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">19</span>狀態</label>
+          <select [(ngModel)]="formData.status">
+            @for (opt of opts.status; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+        </div>
+        <div class="kd-field">
+          <label><span class="fnum">22</span>原發病大類</label>
+          <select [(ngModel)]="formData.diagnosisCategory" (ngModelChange)="handleCategoryChange()">
+            <option value="">請選擇</option>
+            @for (opt of opts.diagnosisCategory; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+        </div>
+        <div class="kd-field">
+          <label><span class="fnum">23</span>原發病細類</label>
+          <select class="w-lg" [(ngModel)]="formData.diagnosisSubcategory">
+            <option value="">請選擇</option>
+            @for (opt of filteredSubcategories; track opt.value) {
+              <option [value]="opt.value">{{ opt.value }} - {{ opt.label }}</option>
+            }
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h4 class="section-title">其他</h4>
+
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">02</span>病患類別</label>
           <select [(ngModel)]="formData.patientCategory">
             @for (opt of opts.patientCategory; track opt.value) {
               <option [value]="opt.value">{{ opt.label }}</option>
             }
           </select>
         </div>
-
-        <div class="form-group">
-          <label>03 生日（民國 年/月/日）</label>
-          <input
-            type="text"
-            placeholder="例：45/08/15 或 0450815"
-            [ngModel]="rocBirthInput"
-            (ngModelChange)="onRocBirthChange($event)"
-            [class.roc-error]="rocBirthError"
-          />
-          <small class="roc-hint" *ngIf="!rocBirthError && formData.birthDate">西元 {{ formData.birthDate }}</small>
-          <small class="roc-hint roc-bad" *ngIf="rocBirthError">格式無法辨識，請輸入民國年/月/日</small>
-        </div>
-
-        <div class="form-group">
-          <label>05 性別</label>
+        <div class="kd-field">
+          <label><span class="fnum">05</span>性別</label>
           <select [(ngModel)]="formData.gender">
             @for (opt of opts.gender; track opt.value) {
               <option [value]="opt.value">{{ opt.label }}</option>
             }
           </select>
         </div>
-
-        <div class="form-group">
-          <label>15 血型</label>
-          <select [(ngModel)]="formData.bloodType">
-            @for (opt of opts.bloodType; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
-            }
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label>17 原住民</label>
-          <select [(ngModel)]="formData.isIndigenous">
-            @for (opt of opts.yesNo; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
-            }
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label>18 福保身分</label>
-          <select [(ngModel)]="formData.isWelfare">
-            @for (opt of opts.yesNo; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
-            }
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label>16 重大傷病卡號</label>
-          <input type="text" [(ngModel)]="formData.catastrophicCardNo" placeholder="10碼" />
-        </div>
-      </div>
-    </div>
-
-    <!-- 區塊 2: 聯絡與社會資料 -->
-    <div class="form-section">
-      <h4 class="section-title">聯絡與社會資料</h4>
-      <div class="form-grid">
-        <div class="form-group full-width">
-          <label>10 地址</label>
-          <input type="text" [(ngModel)]="formData.address" placeholder="最多80字" />
-        </div>
-
-        <div class="form-group">
-          <label>07 電話</label>
-          <input type="text" [(ngModel)]="formData.phone" placeholder="最多25碼" />
-        </div>
-
-        <div class="form-group">
-          <label>06 婚姻</label>
+        <div class="kd-field">
+          <label><span class="fnum">06</span>婚姻狀況</label>
           <select [(ngModel)]="formData.maritalStatus">
             @for (opt of opts.maritalStatus; track opt.value) {
               <option [value]="opt.value">{{ opt.label }}</option>
             }
           </select>
         </div>
+        <div class="kd-field">
+          <label><span class="fnum">15</span>血型</label>
+          <select [(ngModel)]="formData.bloodType">
+            @for (opt of opts.bloodType; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+        </div>
+      </div>
 
-        <div class="form-group">
-          <label>11 教育程度</label>
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">11</span>教育程度</label>
           <select [(ngModel)]="formData.education">
             @for (opt of opts.education; track opt.value) {
               <option [value]="opt.value">{{ opt.label }}</option>
             }
           </select>
         </div>
-
-        <div class="form-group">
-          <label>12 職業</label>
+        <div class="kd-field">
+          <label><span class="fnum">12</span>職業</label>
           <select [(ngModel)]="formData.occupation">
             @for (opt of opts.occupation; track opt.value) {
               <option [value]="opt.value">{{ opt.label }}</option>
             }
           </select>
         </div>
-
-        <div class="form-group">
-          <label>13 連絡人</label>
-          <input type="text" [(ngModel)]="formData.contactPerson" placeholder="姓名" />
+        <div class="kd-field">
+          <label><span class="fnum">17</span>原住民</label>
+          <select [(ngModel)]="formData.isIndigenous">
+            @for (opt of opts.yesNo; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
         </div>
+        <div class="kd-field">
+          <label><span class="fnum">18</span>福保身分</label>
+          <select [(ngModel)]="formData.isWelfare">
+            @for (opt of opts.yesNo; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+        </div>
+      </div>
 
-        <div class="form-group">
-          <label>14 關係</label>
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">16</span>重大傷病卡</label>
+          <input type="text" class="w-md" [(ngModel)]="formData.catastrophicCardNo" placeholder="10碼" />
+        </div>
+        <div class="kd-field">
+          <label><span class="fnum">13</span>聯絡人</label>
+          <input type="text" class="w-md" [(ngModel)]="formData.contactPerson" placeholder="姓名" />
+        </div>
+        <div class="kd-field">
+          <label><span class="fnum">14</span>關係</label>
           <select [(ngModel)]="formData.relationship">
             @for (opt of opts.relation; track opt.value) {
               <option [value]="opt.value">{{ opt.label }}</option>
@@ -141,52 +178,20 @@
       </div>
     </div>
 
-    <!-- 區塊 3: 透析與病史資料 -->
     <div class="form-section">
-      <h4 class="section-title">透析與病史資料</h4>
-      <div class="form-grid">
-        <div class="form-group">
-          <label>09 透析代號</label>
-          <input type="text" [(ngModel)]="formData.dialysisCode" placeholder="10碼" />
-        </div>
+      <h4 class="section-title">住址</h4>
 
-        <div class="form-group span-2">
-          <label>19 狀態</label>
-          <select [(ngModel)]="formData.status">
-            @for (opt of opts.status; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
-            }
-          </select>
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">07</span>電話</label>
+          <input type="text" class="w-md" [(ngModel)]="formData.phone" placeholder="最多25碼" />
         </div>
+      </div>
 
-        <div class="form-group">
-          <label>20 首次治療日期</label>
-          <input type="date" [(ngModel)]="formData.firstDialysisDate" />
-        </div>
-
-        <div class="form-group">
-          <label>21 本院開始治療日期</label>
-          <input type="date" [(ngModel)]="formData.hospitalStartDate" />
-        </div>
-
-        <div class="form-group">
-          <label>22 原發病大類</label>
-          <select [(ngModel)]="formData.diagnosisCategory" (ngModelChange)="handleCategoryChange()">
-            <option value="">請選擇</option>
-            @for (opt of opts.diagnosisCategory; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
-            }
-          </select>
-        </div>
-
-        <div class="form-group span-2">
-          <label>23 原發病細類（依大類過濾）</label>
-          <select [(ngModel)]="formData.diagnosisSubcategory">
-            <option value="">請選擇</option>
-            @for (opt of filteredSubcategories; track opt.value) {
-              <option [value]="opt.value">{{ opt.value }} - {{ opt.label }}</option>
-            }
-          </select>
+      <div class="kd-row">
+        <div class="kd-field kd-field-grow">
+          <label><span class="fnum">10</span>地址</label>
+          <input type="text" class="w-full" [(ngModel)]="formData.address" placeholder="最多80字" />
         </div>
       </div>
     </div>

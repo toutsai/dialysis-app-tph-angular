@@ -9,7 +9,7 @@ import { kiditService } from '@/services/kiditService';
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './kidit-patient-form.component.html',
-  styleUrl: './kidit-patient-form.component.css'
+  styleUrls: ['./kidit-form-official.css', './kidit-patient-form.component.css']
 })
 export class KiditPatientFormComponent implements OnChanges {
   @Input() date = '';
@@ -89,6 +89,13 @@ export class KiditPatientFormComponent implements OnChanges {
       this.formData = {};
     }
     this.rocBirthInput = this.isoToRocDisplay(this.formData?.birthDate || '');
+    this.rocBirthError = false;
+  }
+
+  /** 西元日期欄輸入 → 同步民國顯示欄（官方版面兩欄並列，任填一欄自動換算） */
+  onIsoBirthChange(value: string): void {
+    this.formData.birthDate = value || '';
+    this.rocBirthInput = this.isoToRocDisplay(this.formData.birthDate);
     this.rocBirthError = false;
   }
 

@@ -1,142 +1,157 @@
 @if (formData) {
   <div class="kidit-form-container">
-    <!-- 1. 轉入與透析史 -->
-    <div class="form-section">
-      <h4 class="section-title">轉入與透析史</h4>
-      <div class="form-grid">
-        <div class="form-group">
-          <label>03 轉入院所名稱</label>
-          <input type="text" [(ngModel)]="formData.transferFromName" />
-        </div>
-        <div class="form-group">
-          <label>04 轉入院所醫事代號</label>
-          <input type="text" [(ngModel)]="formData.transferFromCode" />
-        </div>
+    <!-- 版面比照 KiDit 官方「病史紀錄」頁（2026-08-15，截圖：D:\KiDit匯入\kidit病史紀錄原發病1/2.jpg），
+         欄位編號＝匯入格式說明.xls 欄序；原發病大類/細類在基本資料表單（官方兩頁皆顯示、本站存於 profile） -->
 
-        <div class="form-group">
-          <label>05 開始HD日期</label>
+    <div class="form-section">
+      <h4 class="section-title">初診資料</h4>
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">03</span>轉入院所名稱</label>
+          <input type="text" class="w-md" [(ngModel)]="formData.transferFromName" />
+        </div>
+        <div class="kd-field">
+          <label><span class="fnum">04</span>轉入院所醫事代號</label>
+          <input type="text" class="w-md" [(ngModel)]="formData.transferFromCode" />
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h4 class="section-title">病史</h4>
+
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">05</span>首次血液透析日期</label>
           <input type="date" [(ngModel)]="formData.startHDDate" />
         </div>
-        <div class="form-group">
-          <label>06 本院開始HD</label>
+        <div class="kd-field">
+          <label><span class="fnum">06</span>本院開始</label>
           <select [(ngModel)]="formData.isStartHDHere">
             @for (opt of opts.yesNo; track opt.value) {
               <option [value]="opt.value">{{ opt.label }}</option>
             }
           </select>
         </div>
-        <div class="form-group">
-          <label>07 開始HD院所</label>
-          <input type="text" [(ngModel)]="formData.startHDHospital" />
+        <div class="kd-field">
+          <label><span class="fnum">07</span>院所</label>
+          <input type="text" class="w-md" [(ngModel)]="formData.startHDHospital" />
         </div>
+      </div>
 
-        <div class="form-group">
-          <label>08 開始PD日期</label>
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">08</span>首次腹膜透析日期</label>
           <input type="date" [(ngModel)]="formData.startPDDate" />
         </div>
-        <div class="form-group">
-          <label>09 本院開始PD</label>
+        <div class="kd-field">
+          <label><span class="fnum">09</span>本院開始</label>
           <select [(ngModel)]="formData.isStartPDHere">
             @for (opt of opts.yesNo; track opt.value) {
               <option [value]="opt.value">{{ opt.label }}</option>
             }
           </select>
         </div>
-        <div class="form-group">
-          <label>10 開始PD院所</label>
-          <input type="text" [(ngModel)]="formData.startPDHospital" />
+        <div class="kd-field">
+          <label><span class="fnum">10</span>院所</label>
+          <input type="text" class="w-md" [(ngModel)]="formData.startPDHospital" />
         </div>
+      </div>
 
-        <div class="form-group">
-          <label>11 腎移植日期</label>
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">11</span>腎移植日期</label>
           <input type="date" [(ngModel)]="formData.transplantDate" />
         </div>
-        <div class="form-group">
-          <label>12 本院移植</label>
+        <div class="kd-field">
+          <label><span class="fnum">12</span>本院移植</label>
           <select [(ngModel)]="formData.isTransplantHere">
             @for (opt of opts.yesNo; track opt.value) {
               <option [value]="opt.value">{{ opt.label }}</option>
             }
           </select>
         </div>
-        <div class="form-group">
-          <label>13 移植院所</label>
-          <input type="text" [(ngModel)]="formData.transplantHospital" />
+        <div class="kd-field">
+          <label><span class="fnum">13</span>院所</label>
+          <input type="text" class="w-md" [(ngModel)]="formData.transplantHospital" />
         </div>
       </div>
-    </div>
 
-    <!-- 2. 初始評估與慢性病 -->
-    <div class="form-section">
-      <h4 class="section-title">初始評估與系統性疾病</h4>
-      <div class="form-grid">
-        <div class="form-group">
-          <label>14 知為慢性腎衰竭</label>
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">14</span>過去病史及檢查是否知道為慢性腎衰竭</label>
           <select [(ngModel)]="formData.isKnownCKD">
             @for (opt of opts.yesNo; track opt.value) {
               <option [value]="opt.value">{{ opt.label }}</option>
             }
           </select>
         </div>
-        <div class="form-group">
-          <label>15 BUN/Cr異常</label>
+      </div>
+
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">15</span>BUN 或 Creatinine 異常</label>
           <select [(ngModel)]="formData.isBUNCreatAbnormal">
             @for (opt of opts.yesNo; track opt.value) {
               <option [value]="opt.value">{{ opt.label }}</option>
             }
           </select>
         </div>
-        <div class="form-group">
-          <label>16 檢驗日期</label>
+        <div class="kd-field">
+          <label><span class="fnum">16</span>BUN 檢查日期</label>
           <input type="date" [(ngModel)]="formData.abnormalLabDate" />
         </div>
-        <div class="form-group">
-          <label>17 BUN</label>
-          <input type="number" [(ngModel)]="formData.initialBUN" step="0.1" />
+        <div class="kd-field">
+          <label><span class="fnum">17</span>Bun (mg/dl)</label>
+          <input type="number" class="w-sm" [(ngModel)]="formData.initialBUN" step="0.1" />
         </div>
-        <div class="form-group">
-          <label>18 Creatinine</label>
-          <input type="number" [(ngModel)]="formData.initialCr" step="0.1" />
+        <div class="kd-field">
+          <label><span class="fnum">18</span>Creatinine (mg/dl)</label>
+          <input type="number" class="w-sm" [(ngModel)]="formData.initialCr" step="0.1" />
         </div>
+      </div>
 
-        <div class="form-group">
-          <label>19 腎臟超音波檢查異常</label>
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">19</span>腎臟超音波檢查異常</label>
           <select [(ngModel)]="formData.renalUltrasoundAbnormal">
             @for (opt of opts.yesNo; track opt.value) {
               <option [value]="opt.value">{{ opt.label }}</option>
             }
           </select>
         </div>
-        <div class="form-group">
-          <label>20 超音波異常說明</label>
-          <input type="text" [(ngModel)]="formData.renalUltrasoundDesc" maxlength="20" />
+        <div class="kd-field">
+          <label><span class="fnum">20</span>異常說明</label>
+          <input type="text" class="w-md" [(ngModel)]="formData.renalUltrasoundDesc" maxlength="20" />
         </div>
-        <div class="form-group">
-          <label>超音波異常其他說明</label>
-          <input type="text" [(ngModel)]="formData.renalUltrasoundOtherDesc" maxlength="20" />
+        <div class="kd-field">
+          <label>其他說明</label>
+          <input type="text" class="w-md" [(ngModel)]="formData.renalUltrasoundOtherDesc" maxlength="20" />
         </div>
-        <div class="form-group">
-          <label>21 腎臟超音波檢驗日期</label>
+        <div class="kd-field">
+          <label><span class="fnum">21</span>檢驗日期</label>
           <input type="date" [(ngModel)]="formData.renalUltrasoundDate" />
         </div>
+      </div>
+    </div>
 
-        <div class="form-group full-width">
-          <label>22 其他系統性疾病 (複選)</label>
-          <div class="checkbox-grid">
-            @for (item of opts.systemicDiseases; track item.index) {
-              <label class="checkbox-label">
-                <input type="checkbox" [checked]="isSystemicDiseaseChecked(item.index)" (change)="toggleSystemicDisease(item.index)" />
-                {{ item.label }}
-              </label>
-            }
-          </div>
+    <div class="form-section">
+      <h4 class="section-title">開始透析之相關性系統疾病</h4>
+      <div class="kd-checkbox-grid">
+        @for (item of opts.systemicDiseases; track item.index) {
+          <label class="checkbox-label">
+            <input type="checkbox" [checked]="isSystemicDiseaseChecked(item.index)" (change)="toggleSystemicDisease(item.index)" />
+            {{ item.label }}
+          </label>
+        }
+      </div>
+      <div class="kd-row">
+        <div class="kd-field kd-field-grow">
+          <label><span class="fnum">23</span>其他說明</label>
+          <input type="text" class="w-full" [(ngModel)]="formData.otherSystemicDescription" />
         </div>
-        <div class="form-group full-width">
-          <label>23 其他說明</label>
-          <input type="text" [(ngModel)]="formData.otherSystemicDescription" />
-        </div>
-        <div class="form-group">
-          <label>24 DM型式</label>
+        <div class="kd-field">
+          <label><span class="fnum">24</span>DM 型式</label>
           <select [(ngModel)]="formData.dmType">
             @for (opt of opts.dmType; track opt.value) {
               <option [value]="opt.value">{{ opt.label }}</option>
@@ -146,54 +161,76 @@
       </div>
     </div>
 
-    <!-- 3. 初始檢驗數值 -->
     <div class="form-section">
-      <h4 class="section-title">初始檢驗數值</h4>
-      <div class="form-grid">
-        <div class="form-group">
-          <label>25 檢驗日期</label>
+      <h4 class="section-title">開始透析適應症<span class="kd-note">（請填寫病患首次接受長期透析適應症與檢驗值）</span></h4>
+
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">25</span>開始透析前檢驗日期</label>
           <input type="date" [(ngModel)]="formData.initialLabDate" />
         </div>
-        <div class="form-group">
-          <label>26 Hct</label><input type="number" [(ngModel)]="formData.initialHct" />
+      </div>
+
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">26</span>Hct (%)</label>
+          <input type="number" class="w-sm" [(ngModel)]="formData.initialHct" />
         </div>
-        <div class="form-group">
-          <label>27 Hb</label><input type="number" [(ngModel)]="formData.initialHb" />
+        <div class="kd-field">
+          <label><span class="fnum">30</span>K (meq/l)</label>
+          <input type="number" class="w-sm" [(ngModel)]="formData.initialK" />
         </div>
-        <div class="form-group">
-          <label>28 BUN</label><input type="number" [(ngModel)]="formData.initialLabBUN" step="0.1" />
+        <div class="kd-field">
+          <label><span class="fnum">32</span>Albumin (gm/dl)</label>
+          <input type="number" class="w-sm" [(ngModel)]="formData.initialAlb" />
         </div>
-        <div class="form-group">
-          <label>29 Creatinine</label><input type="number" [(ngModel)]="formData.initialLabCr" step="0.1" />
+      </div>
+
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">27</span>Hb (g/dl)</label>
+          <input type="number" class="w-sm" [(ngModel)]="formData.initialHb" />
         </div>
-        <div class="form-group">
-          <label>30 K</label><input type="number" [(ngModel)]="formData.initialK" />
+        <div class="kd-field">
+          <label><span class="fnum">31</span>CCr (ml/min)</label>
+          <input type="number" class="w-sm" [(ngModel)]="formData.initialCCr" step="0.1" />
         </div>
-        <div class="form-group">
-          <label>31 CCr</label><input type="number" [(ngModel)]="formData.initialCCr" step="0.1" />
+        <div class="kd-field">
+          <label>身高</label>
+          <input type="number" class="w-sm" [(ngModel)]="formData.initialHeight" />
         </div>
-        <div class="form-group">
-          <label>32 Albumin</label><input type="number" [(ngModel)]="formData.initialAlb" />
+      </div>
+
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">28</span>Bun (mg/dl)</label>
+          <input type="number" class="w-sm" [(ngModel)]="formData.initialLabBUN" step="0.1" />
         </div>
-        <div class="form-group">
-          <label>體重</label><input type="number" [(ngModel)]="formData.initialWeight" />
+        <div class="kd-field">
+          <label><span class="fnum">29</span>Creatinine (mg/dl)</label>
+          <input type="number" class="w-sm" [(ngModel)]="formData.initialLabCr" step="0.1" />
         </div>
-        <div class="form-group">
-          <label>身高</label><input type="number" [(ngModel)]="formData.initialHeight" />
+        <div class="kd-field">
+          <label>體重</label>
+          <input type="number" class="w-sm" [(ngModel)]="formData.initialWeight" />
         </div>
-        <div class="form-group">
-          <label>eGFR</label><input type="number" [(ngModel)]="formData.initialEGFR" />
+        <div class="kd-field">
+          <label>eGFR</label>
+          <input type="number" class="w-sm" [(ngModel)]="formData.initialEGFR" />
         </div>
-        <div class="form-group">
-          <label>33 HBsAg</label>
+      </div>
+
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">33</span>HBsAg</label>
           <select [(ngModel)]="formData.hbsag">
             @for (opt of opts.hepatitis; track opt.value) {
               <option [value]="opt.value">{{ opt.label }}</option>
             }
           </select>
         </div>
-        <div class="form-group">
-          <label>34 Anti-HCV</label>
+        <div class="kd-field">
+          <label><span class="fnum">34</span>AntiHCV</label>
           <select [(ngModel)]="formData.antihcv">
             @for (opt of opts.hepatitis; track opt.value) {
               <option [value]="opt.value">{{ opt.label }}</option>
@@ -201,87 +238,109 @@
           </select>
         </div>
       </div>
-    </div>
 
-    <!-- 4. 症狀與緊急透析 -->
-    <div class="form-section">
-      <h4 class="section-title">症狀與緊急透析</h4>
-      <div class="form-grid">
-        <div class="form-group full-width">
-          <label>35 適應症種類</label>
-          <select [(ngModel)]="formData.indicationType">
+      <div class="kd-row">
+        <div class="kd-field kd-field-grow">
+          <label><span class="fnum">35</span>適應症總類</label>
+          <select class="w-full" [(ngModel)]="formData.indicationType">
             @for (opt of opts.indicationType; track opt.value) {
               <option [value]="opt.value">{{ opt.label }}</option>
             }
           </select>
         </div>
+      </div>
 
-        <div class="form-group full-width">
-          <label>36 其他症狀 (複選)</label>
-          <div class="checkbox-grid">
-            @for (item of opts.otherSymptoms; track item.index) {
-              <label class="checkbox-label">
-                <input type="checkbox" [checked]="isSymptomChecked(item.index)" (change)="toggleSymptom(item.index)" />
-                {{ item.label }}
-              </label>
-            }
-          </div>
+      <div class="kd-sub-label"><span class="fnum">36</span>合併症狀，請詳細填寫：</div>
+      <div class="kd-checkbox-grid two-col">
+        @for (item of opts.otherSymptoms; track item.index) {
+          <label class="checkbox-label">
+            <input type="checkbox" [checked]="isSymptomChecked(item.index)" (change)="toggleSymptom(item.index)" />
+            {{ item.label }}
+          </label>
+        }
+      </div>
+      <div class="kd-row">
+        <div class="kd-field kd-field-grow">
+          <label><span class="fnum">37</span>其他（請說明）</label>
+          <input type="text" class="w-full" [(ngModel)]="formData.symptomsOtherDescription" maxlength="50" />
         </div>
-        <div class="form-group full-width">
-          <label>37 其他症狀 (其他，請說明)</label>
-          <input type="text" [(ngModel)]="formData.symptomsOtherDescription" maxlength="50" />
-        </div>
+      </div>
+    </div>
 
-        <div class="form-group full-width">
-          <label>38 緊急透析原因 (複選)</label>
-          <div class="checkbox-grid">
-            @for (item of opts.emergencyReasons; track item.index) {
-              <label class="checkbox-label">
-                <input type="checkbox" [checked]="isEmergencyReasonChecked(item.index)" (change)="toggleEmergencyReason(item.index)" />
-                {{ item.label }}
-              </label>
-            }
-          </div>
-        </div>
+    <div class="form-section">
+      <h4 class="section-title">緊急透析</h4>
 
-        <div class="form-group full-width">
-          <label>39 緊急透析原因 (其他，請說明)</label>
-          <input type="text" [(ngModel)]="formData.emergencyReasonsOtherDescription" maxlength="50" />
+      <div class="kd-sub-label"><span class="fnum">38</span>緊急透析原因（複選）：</div>
+      <div class="kd-checkbox-grid two-col">
+        @for (item of opts.emergencyReasons; track item.index) {
+          <label class="checkbox-label">
+            <input type="checkbox" [checked]="isEmergencyReasonChecked(item.index)" (change)="toggleEmergencyReason(item.index)" />
+            {{ item.label }}
+          </label>
+        }
+      </div>
+      <div class="kd-row">
+        <div class="kd-field kd-field-grow">
+          <label><span class="fnum">39</span>其他（請說明）</label>
+          <input type="text" class="w-full" [(ngModel)]="formData.emergencyReasonsOtherDescription" maxlength="50" />
         </div>
+      </div>
 
-        <div class="form-group">
-          <label>40 緊急檢驗日期</label>
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">40</span>緊急檢驗日期</label>
           <input type="date" [(ngModel)]="formData.emergencyLabDate" />
         </div>
-        <div class="form-group">
-          <label>41 Hct</label><input type="number" [(ngModel)]="formData.emergencyHct" />
+        <div class="kd-field">
+          <label><span class="fnum">41</span>Hct (%)</label>
+          <input type="number" class="w-sm" [(ngModel)]="formData.emergencyHct" />
         </div>
-        <div class="form-group">
-          <label>42 Hb</label><input type="number" [(ngModel)]="formData.emergencyHb" />
+        <div class="kd-field">
+          <label><span class="fnum">42</span>Hb (g/dl)</label>
+          <input type="number" class="w-sm" [(ngModel)]="formData.emergencyHb" />
         </div>
-        <div class="form-group">
-          <label>43 BUN</label><input type="number" [(ngModel)]="formData.emergencyBUN" step="0.1" />
+      </div>
+
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">43</span>BUN (mg/dl)</label>
+          <input type="number" class="w-sm" [(ngModel)]="formData.emergencyBUN" step="0.1" />
         </div>
-        <div class="form-group">
-          <label>44 Creatinine</label><input type="number" [(ngModel)]="formData.emergencyCr" step="0.1" />
+        <div class="kd-field">
+          <label><span class="fnum">44</span>Creatinine (mg/dl)</label>
+          <input type="number" class="w-sm" [(ngModel)]="formData.emergencyCr" step="0.1" />
         </div>
-        <div class="form-group">
-          <label>45 CCr</label><input type="number" [(ngModel)]="formData.emergencyCCr" step="0.1" />
+        <div class="kd-field">
+          <label><span class="fnum">45</span>CCr (ml/min)</label>
+          <input type="number" class="w-sm" [(ngModel)]="formData.emergencyCCr" step="0.1" />
         </div>
-        <div class="form-group">
-          <label>46 Na</label><input type="number" [(ngModel)]="formData.emergencyNa" />
+      </div>
+
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">46</span>Na</label>
+          <input type="number" class="w-sm" [(ngModel)]="formData.emergencyNa" />
         </div>
-        <div class="form-group">
-          <label>47 K</label><input type="number" [(ngModel)]="formData.emergencyK" />
+        <div class="kd-field">
+          <label><span class="fnum">47</span>K</label>
+          <input type="number" class="w-sm" [(ngModel)]="formData.emergencyK" />
         </div>
-        <div class="form-group">
-          <label>48 HCO3</label><input type="number" [(ngModel)]="formData.emergencyHCO3" />
+        <div class="kd-field">
+          <label><span class="fnum">48</span>HCO3</label>
+          <input type="number" class="w-sm" [(ngModel)]="formData.emergencyHCO3" />
         </div>
-        <div class="form-group">
-          <label>49 Albumin</label><input type="number" [(ngModel)]="formData.emergencyAlb" />
+        <div class="kd-field">
+          <label><span class="fnum">49</span>Albumin</label>
+          <input type="number" class="w-sm" [(ngModel)]="formData.emergencyAlb" />
         </div>
-        <div class="form-group">
-          <label>50 初次重大傷病</label>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h4 class="section-title">重大傷病證明</h4>
+      <div class="kd-row">
+        <div class="kd-field">
+          <label><span class="fnum">50</span>初次重大傷病</label>
           <select [(ngModel)]="formData.isFirstCatastrophic">
             @for (opt of opts.yesNo; track opt.value) {
               <option [value]="opt.value">{{ opt.label }}</option>

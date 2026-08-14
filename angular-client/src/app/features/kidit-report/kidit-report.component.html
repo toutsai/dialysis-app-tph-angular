@@ -316,6 +316,9 @@
           </thead>
           <tbody>
             <tr *ngFor="let r of basicDataRows()"
+                class="pr-row"
+                title="點擊開啟此病人的建檔編輯表格"
+                (click)="openPendingRegTarget(r)"
                 [class.va-row-deleted]="r.isDeleted"
                 [class.bd-row-incomplete]="!r.complete">
               <td>
