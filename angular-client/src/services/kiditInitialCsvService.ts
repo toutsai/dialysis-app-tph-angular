@@ -62,7 +62,7 @@ export function buildPatientRow(p: any): string[] {
 }
 
 /** 值順序對應 HISTORY_CSV_HEADERS（同舊 Excel 病史原發病 sheet 的欄位對應，含 28/29 舊資料 fallback） */
-function buildHistoryRow(p: any, h: any): string[] {
+export function buildHistoryRow(p: any, h: any): string[] {
   return [
     p.idNumber || '', p.medicalRecordNumber || '', h.transferFromName || '', h.transferFromCode || '',
     toRocDate(h.startHDDate), h.isStartHDHere || '', h.startHDHospital || '',

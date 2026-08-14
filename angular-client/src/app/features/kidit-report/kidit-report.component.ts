@@ -6,7 +6,8 @@ import { ApiConfigService } from '@services/api-config.service';
 import { PatientStoreService } from '@services/patient-store.service';
 import { kiditService } from '@/services/kiditService';
 import {
-  buildInitialRegistrationRows,
+  buildPatientRow,
+  buildHistoryRow,
   downloadPatientCsv,
   downloadHistoryCsv,
 } from '@/services/kiditInitialCsvService';
@@ -248,12 +249,23 @@ export class KiditReportComponent implements OnInit {
     if (this.activeTab() === 'initial') this.loadInitialSubTab();
   }
 
-  /** 官方病患資料 CSV：本月事件中已填寫建檔「病患資料」的病人（民國日期、官方欄序） */
-  exportOfficialPatientCsv(): void {
-    const allEvents = this.daysData().flatMap(day => day.events);
-    const { patientRows } = buildInitialRegistrationRows(allEvents);
-    if (!patientRows.length) { alert('本月份尚無已填寫的「病患資料」建檔。'); return; }
+  /**
+   * 匯出來源＝每月基本資料端點（本院初透歸月），與需建檔名單完全同一套——清單看到誰、匯出就有誰。
+   * ⚠️ 2026-08-15 前是掃「當月建檔事件」：建檔事件落在前月（周玉蘭案：初透日 8/1、建檔事件 7/31）
+   * 會在清單有列、匯出卻漏人。勿改回事件制。每次匯出即時重抓，不依賴清單 signal 的載入時機。
+   */
+  private async fetchMonthlyBasicRows(): Promise<MonthlyBasicDataRow[]> {
+    const month = `${this.currentYear()}-${String(this.currentMonth()).padStart(2, '0')}`;
+    const rows = await localApi.get(`/nursing/kidit-monthly-basic-data?month=${month}`);
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  /** 官方病患資料 CSV：該月本院初透中已填寫建檔「病患資料」的病人（民國日期、官方欄序） */
+  async exportOfficialPatientCsv(): Promise<void> {
     try {
+      const rows = await this.fetchMonthlyBasicRows();
+      const patientRows = rows.filter((r) => r.profile).map((r) => buildPatientRow(r.profile));
+      if (!patientRows.length) { alert('本月份尚無已填寫的「病患資料」建檔。'); return; }
       downloadPatientCsv(patientRows);
     } catch (error) {
       console.error('匯出失敗:', error);
@@ -261,12 +273,14 @@ export class KiditReportComponent implements OnInit {
     }
   }
 
-  /** 官方病史原發病 CSV：本月事件中已填寫建檔「病史原發病」的病人 */
-  exportOfficialHistoryCsv(): void {
-    const allEvents = this.daysData().flatMap(day => day.events);
-    const { historyRows } = buildInitialRegistrationRows(allEvents);
-    if (!historyRows.length) { alert('本月份尚無已填寫的「病史原發病」建檔。'); return; }
+  /** 官方病史原發病 CSV：該月本院初透中已填寫建檔「病史原發病」的病人 */
+  async exportOfficialHistoryCsv(): Promise<void> {
     try {
+      const rows = await this.fetchMonthlyBasicRows();
+      const historyRows = rows
+        .filter((r) => r.history)
+        .map((r) => buildHistoryRow(r.profile || {}, r.history));
+      if (!historyRows.length) { alert('本月份尚無已填寫的「病史原發病」建檔。'); return; }
       downloadHistoryCsv(historyRows);
     } catch (error) {
       console.error('匯出失敗:', error);
