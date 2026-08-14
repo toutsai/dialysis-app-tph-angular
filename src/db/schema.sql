@@ -144,7 +144,7 @@ CREATE TABLE IF NOT EXISTS base_schedules (
 CREATE TABLE IF NOT EXISTS schedule_exceptions (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL CHECK (type IN ('MOVE', 'ADD_SESSION', 'SWAP', 'SUSPEND')),
-    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'applied', 'cancelled', 'conflict_requires_resolution', 'processing', 'expired')),
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'applied', 'cancelled', 'conflict_requires_resolution', 'processing', 'expired', 'error')),
 
     patient_id TEXT,
     patient_name TEXT,

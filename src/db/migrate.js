@@ -666,6 +666,62 @@ export function runMigrations() {
       migrationsApplied++
     }
 
+    // ========================================
+    // schedule_exceptions.status CHECK 納入 'error'（2026-08-15）
+    // exceptionHandler 失敗路徑寫 status='error' 被舊 CHECK 擋下，記錄會卡在 processing；
+    // 前端調班管理本就支援「錯誤」終態。SQLite 不能改 CHECK，只能重建表搬資料。
+    // ========================================
+    const seDdl = db
+      .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='schedule_exceptions'")
+      .get()
+    if (seDdl && seDdl.sql.includes("'expired'") && !seDdl.sql.includes("'error'")) {
+      const expectedCols = [
+        'id', 'type', 'status', 'patient_id', 'patient_name',
+        'from_data', 'to_data', 'patient1', 'patient2',
+        'start_date', 'end_date', 'date', 'reason', 'cancel_reason',
+        'error_message', 'created_by', 'cancelled_at', 'created_at', 'updated_at',
+      ]
+      const seCols = db.prepare('PRAGMA table_info(schedule_exceptions)').all().map((c) => c.name)
+      if (seCols.length === expectedCols.length && expectedCols.every((c) => seCols.includes(c))) {
+        console.log('📋 重建 schedule_exceptions（status CHECK 納入 error）...')
+        const colList = expectedCols.join(', ')
+        db.transaction(() => {
+          db.exec(`
+            CREATE TABLE schedule_exceptions_new (
+              id TEXT PRIMARY KEY,
+              type TEXT NOT NULL CHECK (type IN ('MOVE', 'ADD_SESSION', 'SWAP', 'SUSPEND')),
+              status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'applied', 'cancelled', 'conflict_requires_resolution', 'processing', 'expired', 'error')),
+              patient_id TEXT,
+              patient_name TEXT,
+              from_data TEXT DEFAULT '{}',
+              to_data TEXT DEFAULT '{}',
+              patient1 TEXT DEFAULT '{}',
+              patient2 TEXT DEFAULT '{}',
+              start_date TEXT,
+              end_date TEXT,
+              date TEXT,
+              reason TEXT,
+              cancel_reason TEXT,
+              error_message TEXT,
+              created_by TEXT DEFAULT '{}',
+              cancelled_at TEXT,
+              created_at TEXT DEFAULT (datetime('now', 'localtime')),
+              updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+            )
+          `)
+          db.exec(`INSERT INTO schedule_exceptions_new (${colList}) SELECT ${colList} FROM schedule_exceptions`)
+          db.exec('DROP TABLE schedule_exceptions')
+          db.exec('ALTER TABLE schedule_exceptions_new RENAME TO schedule_exceptions')
+          db.exec('CREATE INDEX IF NOT EXISTS idx_exceptions_status ON schedule_exceptions(status)')
+          db.exec('CREATE INDEX IF NOT EXISTS idx_exceptions_patient ON schedule_exceptions(patient_id)')
+          db.exec('CREATE INDEX IF NOT EXISTS idx_exceptions_date ON schedule_exceptions(date)')
+        })()
+        migrationsApplied++
+      } else {
+        console.warn('⚠️ schedule_exceptions 欄位與預期不符，跳過 status CHECK 遷移（需人工確認）')
+      }
+    }
+
     if (migrationsApplied > 0) {
       console.log(`✅ 已完成 ${migrationsApplied} 項遷移`)
     } else {
