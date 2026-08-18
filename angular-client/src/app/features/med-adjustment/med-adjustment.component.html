@@ -116,15 +116,41 @@
                 <tr>
                   <td class="sticky-col row-label">{{ drug.label }}</td>
                   @for (col of dateColumns(); track col.date) {
-                    @let dc = drugCell(drug, col.date);
-                    <td [class.cell-changed]="dc.changed">{{ dc.text }}</td>
+                    @let doseCell = drugFieldCell(drug, 'dose', col.date);
+                    @let freqCell = drugFieldCell(drug, 'frequency', col.date);
+                    <td [class.cell-changed]="doseCell.changed || freqCell.changed">
+                      <div class="med-fields med-fields-readonly">
+                        <span class="med-dose">{{ doseCell.text === '-' ? '—' : doseCell.text.replace(' ' + drug.unit, '') }}</span>
+                        <span class="med-unit">{{ drug.unit || '—' }}</span>
+                        <span class="med-frequency">{{ freqCell.text === '-' ? '—' : freqCell.text }}</span>
+                      </div>
+                    </td>
                   }
                   @if (hasSavedNotes) {
-                    @let sv = savedAdjust(drug.label, drugCell(drug, prevMonthEnd).text);
-                    <td class="saved-col" [class.saved-diff]="sv.diff">{{ sv.text }}</td>
+                    @let doseSaved = savedAdjust(drugNoteKey(drug, 'dose'), drugFieldCell(drug, 'dose', prevMonthEnd).text);
+                    @let freqSaved = savedAdjust(drugNoteKey(drug, 'frequency'), drugFieldCell(drug, 'frequency', prevMonthEnd).text);
+                    <td class="saved-col" [class.saved-diff]="doseSaved.diff || freqSaved.diff">
+                      <div class="med-fields med-fields-readonly">
+                        <span class="med-dose">{{ doseSaved.text || '—' }}</span>
+                        <span class="med-unit">{{ drug.unit || '—' }}</span>
+                        <span class="med-frequency">{{ freqSaved.text || '—' }}</span>
+                      </div>
+                    </td>
                   }
-                  <td class="adjust-cell">
-                    <input class="adjust-input" [(ngModel)]="adjustNotes[drug.label]" (ngModelChange)="markDirty()" placeholder="" />
+                  <td class="adjust-cell med-adjust-cell">
+                    <div class="med-field-labels" aria-hidden="true">
+                      <span>劑量</span><span>單位</span><span>頻率</span>
+                    </div>
+                    <div class="med-fields">
+                      <input class="med-dose-input" [(ngModel)]="adjustNotes[drugNoteKey(drug, 'dose')]" (ngModelChange)="markDirty()" placeholder="劑量" />
+                      <span class="med-unit med-unit-fixed">{{ drug.unit || '—' }}</span>
+                      <select class="med-frequency-select" [(ngModel)]="adjustNotes[drugNoteKey(drug, 'frequency')]" (ngModelChange)="markDirty()">
+                        <option value="">—</option>
+                        @for (frequency of MED_FREQUENCY_OPTIONS; track frequency) {
+                          <option [value]="frequency">{{ frequency }}</option>
+                        }
+                      </select>
+                    </div>
                   </td>
                 </tr>
               }
@@ -132,7 +158,7 @@
           </tbody>
         </table>
       </div>
-      <div class="table-hint">欄位 = 有異動的日期（醫囑修改/藥物開始或停止），同月多次修改各自一欄；底色標示 = 當天有異動；數值為當天生效的設定</div>
+      <div class="table-hint">欄位 = 有異動的日期（醫囑修改/藥物開始或停止），同月多次修改各自一欄；藥囑以「劑量｜單位｜頻率」橫向呈現；底色標示 = 當天有異動</div>
     </section>
 
     <!-- 下半：每月累積報告 -->

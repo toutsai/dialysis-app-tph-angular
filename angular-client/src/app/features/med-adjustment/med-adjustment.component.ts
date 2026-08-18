@@ -21,6 +21,8 @@ interface DrugDef {
   unit: string;
 }
 
+type DrugField = 'dose' | 'frequency';
+
 const SHIFT_LABELS: Record<string, string> = { early: '早班', noon: '午班', late: '晚班' };
 
 interface PatientEntry {
@@ -126,6 +128,10 @@ export class MedAdjustmentComponent implements OnInit {
     { label: 'Parsabiv', codes: ['IPAR1'], unit: 'mg' },
     { label: 'Evocalcet (Orkedia)', codes: ['OORK'], unit: '顆' },
   ];
+  readonly MED_FREQUENCY_OPTIONS = [
+    'QW', 'QW14', 'QW25', 'QW36', 'QW15', 'QW26', 'QW135', 'QW246',
+    'Q2W', 'Q3W', 'Q4W',
+  ];
   readonly ORDER_ROWS = [
     { key: 'bf', label: 'BF 血流速' },
     { key: 'df', label: 'DF 透析液流速' },
@@ -217,7 +223,10 @@ export class MedAdjustmentComponent implements OnInit {
       }
       const itemDefs = [
         ...this.ORDER_ROWS.map((r) => ({ label: r.label, key: r.key })),
-        ...[...this.ANEMIA_DRUGS, ...this.CAPHO_DRUGS].map((d) => ({ label: d.label, key: d.label })),
+        ...[...this.ANEMIA_DRUGS, ...this.CAPHO_DRUGS].flatMap((d) => [
+          { label: `${d.label}－單次劑量`, key: this.drugNoteKey(d, 'dose') },
+          { label: `${d.label}－頻率`, key: this.drugNoteKey(d, 'frequency') },
+        ]),
       ];
       const rows = patients.map((p) => {
         const notes: Record<string, string> = latestByPatient.get(p.patientId)?.notes || {};
@@ -419,9 +428,12 @@ export class MedAdjustmentComponent implements OnInit {
       }
     }
     for (const drug of [...this.ANEMIA_DRUGS, ...this.CAPHO_DRUGS]) {
-      if (!this.adjustNotes[drug.label]) {
-        const text = this.drugCell(drug, this.todayStr).text;
-        if (text !== '-') this.adjustNotes[drug.label] = text;
+      for (const field of ['dose', 'frequency'] as const) {
+        const key = this.drugNoteKey(drug, field);
+        if (!this.adjustNotes[key]) {
+          const text = this.drugFieldCell(drug, field, this.todayStr).text;
+          if (text !== '-') this.adjustNotes[key] = text;
+        }
       }
     }
   }
@@ -562,6 +574,40 @@ export class MedAdjustmentComponent implements OnInit {
       return `${o.dose}${def.unit ? ' ' + def.unit : ''}${details.length ? ` (${details.join('，')})` : ''}`;
     });
     return { text: parts.join('；'), changed };
+  }
+
+  /** 藥囑調整分欄：次劑量與頻率沿用藥囑管理的 dose/frequency 欄位。 */
+  drugFieldCell(def: DrugDef, field: DrugField, asOfDate: string): { text: string; changed: boolean } {
+    this.dataRevision();
+    const mine = this.medRows.filter((o: any) => def.codes.includes(o.orderCode));
+    const active = mine
+      .filter((o: any) => o.startDate <= asOfDate && (!o.endDate || o.endDate >= asOfDate))
+      .sort((a: any, b: any) => a.startDate.localeCompare(b.startDate));
+    const changed = mine.some((o: any) => o.startDate === asOfDate || o.endDate === asOfDate);
+    if (!active.length) return { text: '-', changed };
+
+    const parts = active.map((o: any) => {
+      if (field === 'dose') {
+        const dose = String(o.dose || '').trim();
+        return dose ? `${dose}${def.unit ? ` ${def.unit}` : ''}` : '-';
+      }
+      // 藥囑管理的舊針劑資料以 note（備註）為頻率權威；備註空白才退回新版 frequency。
+      // 口服藥則維持使用 frequency（頻率服法）。
+      const frequency = String(
+        o.orderType === 'injection' ? (o.note || o.frequency || '') : (o.frequency || ''),
+      ).trim();
+      const details = frequency ? [frequency] : [];
+      if (o.endDate) {
+        const [, m, d] = String(o.endDate).split('-');
+        details.push(`至${Number(m)}/${Number(d)}止`);
+      }
+      return details.join('，') || '-';
+    }).filter((value: string) => value !== '-');
+    return { text: parts.join('；') || '-', changed };
+  }
+
+  drugNoteKey(def: DrugDef, field: DrugField): string {
+    return `${def.label}__${field}`;
   }
 
   /** 檢驗：當月值（TSAT/CaxP 為衍生計算） */

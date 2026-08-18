@@ -63,6 +63,18 @@ thead .sticky-col { z-index: 3; }
 .adjust-input { width: 100%; min-width: 170px; border: 1px solid #c5dbf0; border-radius: 3px; padding: 4px 6px; font-size: 1em; }
 .adjust-input:focus { outline: none; border-color: #1971c2; }
 
+/* 藥囑每種藥物維持單列，欄內橫向呈現「劑量／單位／頻率」 */
+.med-fields { display: grid; grid-template-columns: minmax(58px, 1fr) minmax(42px, auto) minmax(76px, 1fr); align-items: center; gap: 4px; min-width: 190px; }
+.med-fields-readonly > span { padding: 3px 5px; border-right: 1px solid #e9ecef; text-align: center; }
+.med-fields-readonly > span:last-child { border-right: 0; }
+.med-unit { color: #495057; font-size: 0.92em; }
+.med-frequency { color: #1864ab; }
+.med-adjust-cell { min-width: 230px; }
+.med-field-labels { display: grid; grid-template-columns: minmax(58px, 1fr) minmax(42px, auto) minmax(76px, 1fr); gap: 4px; margin-bottom: 2px; color: #868e96; font-size: 0.72em; text-align: center; }
+.med-dose-input, .med-frequency-select { width: 100%; min-width: 0; box-sizing: border-box; border: 1px solid #c5dbf0; border-radius: 3px; padding: 4px 5px; font-size: 0.95em; }
+.med-dose-input:focus, .med-frequency-select:focus { outline: none; border-color: #1971c2; }
+.med-unit-fixed { padding: 4px 5px; border-radius: 3px; background: #e9ecef; text-align: center; font-weight: 600; }
+
 /* 修正欄「透析時間」時/分兩欄 */
 .adjust-time-inputs { display: flex; align-items: center; gap: 4px; }
 .adjust-time-input { width: 56px; border: 1px solid #c5dbf0; border-radius: 3px; padding: 4px 6px; font-size: 1em; text-align: center; }
