@@ -1,0 +1,365 @@
+.research-page {
+  padding: 16px 20px 40px;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.page-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.generated-at {
+  color: #78909c;
+  font-size: 0.85rem;
+}
+
+.btn {
+  padding: 6px 14px;
+  border: 1px solid #b0bec5;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.btn:hover:not(:disabled) {
+  background: #eceff1;
+}
+
+.btn.primary {
+  background: #1565c0;
+  border-color: #1565c0;
+  color: #fff;
+}
+
+.btn.primary:hover:not(:disabled) {
+  background: #0d47a1;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.error-banner {
+  background: #ffebee;
+  border: 1px solid #ef9a9a;
+  color: #b71c1c;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+}
+
+.loading-hint {
+  color: #78909c;
+  padding: 24px 0;
+  text-align: center;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+
+.card h3 {
+  margin: 0 0 10px;
+  font-size: 1.02rem;
+  color: #37474f;
+}
+
+/* 世代摘要 */
+.cohort-stats {
+  display: flex;
+  gap: 22px;
+  flex-wrap: wrap;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 90px;
+}
+
+.stat-num {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #1565c0;
+}
+
+.stat.warn .stat-num {
+  color: #e65100;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: #78909c;
+}
+
+.start-by-month {
+  margin-top: 12px;
+}
+
+.chart-title {
+  font-size: 0.88rem;
+  color: #546e7a;
+  margin-bottom: 6px;
+}
+
+.bar-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 90px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.bar-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  min-width: 40px;
+}
+
+.bar-n {
+  font-size: 0.75rem;
+  color: #455a64;
+}
+
+.bar {
+  width: 22px;
+  background: #64b5f6;
+  border-radius: 3px 3px 0 0;
+  min-height: 2px;
+}
+
+.bar-label {
+  font-size: 0.72rem;
+  color: #90a4ae;
+  white-space: nowrap;
+}
+
+/* 分析設定 */
+.config-grid {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.config-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: #546e7a;
+}
+
+.config-grid select,
+.config-grid input {
+  padding: 5px 8px;
+  border: 1px solid #b0bec5;
+  border-radius: 5px;
+  font-size: 0.9rem;
+}
+
+.range-pair {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.range-pair input {
+  width: 62px;
+}
+
+.notes-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  font-size: 0.85rem;
+  color: #546e7a;
+}
+
+.notes-label textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #b0bec5;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
+/* 表格共通 */
+.table-scroll {
+  overflow-x: auto;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.86rem;
+}
+
+th,
+td {
+  border: 1px solid #e0e0e0;
+  padding: 5px 8px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+thead th {
+  background: #f5f7f8;
+  color: #455a64;
+  font-weight: 600;
+}
+
+/* 成對比較表 */
+.outcome-table .metric {
+  text-align: left;
+  font-weight: 600;
+}
+
+.outcome-table .unit {
+  display: block;
+  font-weight: 400;
+  font-size: 0.74rem;
+  color: #90a4ae;
+}
+
+.outcome-table .sd {
+  color: #90a4ae;
+  font-size: 0.8rem;
+}
+
+.sig {
+  font-weight: 700;
+  color: #c62828;
+}
+
+.sig-up {
+  color: #2e7d32;
+}
+
+.sig-down {
+  color: #c62828;
+}
+
+.esa-stop-line {
+  margin-top: 10px;
+  font-size: 0.9rem;
+  color: #37474f;
+}
+
+/* 事件時間圖 */
+.chart-block {
+  margin-bottom: 14px;
+}
+
+.trend-svg {
+  width: 100%;
+  max-width: 720px;
+  display: block;
+  background: #fff;
+}
+
+.tick {
+  font-size: 10px;
+  fill: #90a4ae;
+}
+
+.band-hint {
+  font-size: 0.76rem;
+  color: #2e7d32;
+}
+
+.legend {
+  margin-left: 12px;
+}
+
+.legend-item {
+  margin-right: 12px;
+  font-size: 0.8rem;
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.event-table .zero-month,
+.month-table .zero-month {
+  background: #fff8e1;
+}
+
+/* 逐病人 */
+.patients-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.toggle-excluded {
+  font-size: 0.85rem;
+  color: #546e7a;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
+.patient-table .clickable {
+  cursor: pointer;
+}
+
+.patient-table .clickable:hover {
+  background: #f1f8ff;
+}
+
+.excluded-row {
+  color: #b0bec5;
+  background: #fafafa;
+}
+
+.detail-row > td {
+  background: #f8fafb;
+  padding: 8px 14px;
+}
+
+.month-table {
+  width: auto;
+  min-width: 520px;
+  margin: 0 auto;
+}

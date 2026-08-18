@@ -1,0 +1,320 @@
+<div class="research-page">
+  <div class="page-header">
+    <h2>研究專用｜Vafseo (Vadadustat) 真實世界分析</h2>
+    <div class="header-actions">
+      @if (data(); as d) {
+        <span class="generated-at">分析時間：{{ d.generatedAt || '—' }}</span>
+      }
+      <button class="btn" (click)="load()" [disabled]="loading || saving">重新整理</button>
+    </div>
+  </div>
+
+  @if (errorMessage) {
+    <div class="error-banner">{{ errorMessage }}</div>
+  }
+
+  @if (loading && !data()) {
+    <div class="loading-hint">分析計算中…</div>
+  }
+
+  @if (data(); as d) {
+    <!-- 世代摘要 -->
+    <section class="card">
+      <h3>研究世代</h3>
+      <div class="cohort-stats">
+        <div class="stat"><span class="stat-num">{{ d.cohort.total }}</span><span class="stat-label">曾開立 Vafseo</span></div>
+        <div class="stat"><span class="stat-num">{{ d.cohort.included }}</span><span class="stat-label">納入分析</span></div>
+        <div class="stat"><span class="stat-num">{{ d.cohort.excluded }}</span><span class="stat-label">手動排除</span></div>
+        @if (d.warnings.unparsedFreqRows > 0) {
+          <div class="stat warn" title="頻率字串無法解析的藥囑列，以每週 1 次估計">
+            <span class="stat-num">{{ d.warnings.unparsedFreqRows }}</span><span class="stat-label">頻率無法解析列</span>
+          </div>
+        }
+      </div>
+      @if (startByMonthChart(); as bars) {
+        <div class="start-by-month">
+          <div class="chart-title">起始月分布（index date）</div>
+          <div class="bar-row">
+            @for (b of bars; track b.month) {
+              <div class="bar-cell">
+                <div class="bar-n">{{ b.n }}</div>
+                <div class="bar" [style.height.%]="b.pct"></div>
+                <div class="bar-label">{{ b.month.slice(2) }}</div>
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </section>
+
+    <!-- 分析設定 -->
+    <section class="card">
+      <h3>分析設定</h3>
+      <div class="config-grid">
+        <label>
+          Darbepoetin 換算比
+          <select [(ngModel)]="cfgDarbeRatio">
+            <option [ngValue]="200">1 mcg = 200 IU（仿單）</option>
+            <option [ngValue]="250">1 mcg = 250 IU</option>
+            <option [ngValue]="300">1 mcg = 300 IU（敏感度）</option>
+            <option [ngValue]="350">1 mcg = 350 IU</option>
+          </select>
+        </label>
+        <label>Baseline 窗（月）
+          <span class="range-pair">
+            <input type="number" [(ngModel)]="cfgBaselineFrom" min="-12" max="-1" />
+            <span>~</span>
+            <input type="number" [(ngModel)]="cfgBaselineTo" min="-12" max="-1" />
+          </span>
+        </label>
+        <label>Post 窗（月）
+          <span class="range-pair">
+            <input type="number" [(ngModel)]="cfgPostFrom" min="1" max="24" />
+            <span>~</span>
+            <input type="number" [(ngModel)]="cfgPostTo" min="1" max="24" />
+          </span>
+        </label>
+        <label>圖表顯示範圍（月）
+          <span class="range-pair">
+            <input type="number" [(ngModel)]="cfgOffsetMin" min="-12" max="-1" />
+            <span>~</span>
+            <input type="number" [(ngModel)]="cfgOffsetMax" min="1" max="24" />
+          </span>
+        </label>
+        <button class="btn primary" (click)="saveConfig()" [disabled]="saving || loading">
+          {{ saving ? '儲存中…' : '儲存並重算' }}
+        </button>
+      </div>
+      <label class="notes-label">研究筆記
+        <textarea rows="3" [(ngModel)]="cfgNotes" placeholder="紀錄排除原因、分析決策、投稿備忘…（隨設定一併儲存）"></textarea>
+      </label>
+    </section>
+
+    <!-- 主要結果：成對比較 -->
+    <section class="card">
+      <h3>主要結果（Baseline {{ d.config.baselineFrom }}~{{ d.config.baselineTo }} 月 vs Post +{{ d.config.postFrom }}~+{{ d.config.postTo }} 月，配對比較）</h3>
+      <div class="table-scroll">
+        <table class="outcome-table">
+          <thead>
+            <tr>
+              <th>指標</th><th>n</th><th>Baseline 平均 (SD)</th><th>Post 平均 (SD)</th>
+              <th>差值</th><th>95% CI</th><th>配對 t 檢定 p</th><th>Wilcoxon p</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of outcomeRows(); track row.label) {
+              <tr>
+                <td class="metric">{{ row.label }}<span class="unit">{{ row.unit }}</span></td>
+                <td>{{ row.oc!.n }}</td>
+                <td>{{ fmt(row.oc!.baselineMean) }} <span class="sd">({{ fmt(row.oc!.baselineSd) }})</span></td>
+                <td>{{ fmt(row.oc!.postMean) }} <span class="sd">({{ fmt(row.oc!.postSd) }})</span></td>
+                <td [class.sig-up]="(row.oc!.meanDiff || 0) > 0" [class.sig-down]="(row.oc!.meanDiff || 0) < 0">{{ fmt(row.oc!.meanDiff) }}</td>
+                <td>{{ fmtCi(row.oc!.ci95) }}</td>
+                <td [class.sig]="(row.oc!.tP ?? 1) < 0.05">{{ fmtP(row.oc!.tP) }}</td>
+                <td [class.sig]="(row.oc!.wilcoxonP ?? 1) < 0.05">{{ fmtP(row.oc!.wilcoxonP) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (d.outcomes.esaDiscontinuation; as ds) {
+        <div class="esa-stop-line">
+          ESA 停用率：baseline 有用 ESA 者 {{ ds.baselineUsers }} 人，post 窗停用 {{ ds.stopped }} 人
+          @if (ds.pct !== null) { <strong>（{{ ds.pct }}%）</strong> }
+        </div>
+      }
+    </section>
+
+    <!-- 事件時間圖 -->
+    <section class="card">
+      <h3>事件時間序列（月 0 = Vafseo 起始月）</h3>
+      @if (hbChart(); as c) {
+        <div class="chart-block">
+          <div class="chart-title">Hb 平均 (g/dL)　<span class="band-hint">綠帶 = 目標 10–12</span></div>
+          <svg [attr.viewBox]="'0 0 ' + c.W + ' ' + c.H" class="trend-svg">
+            @if (c.band) {
+              <rect x="0" [attr.y]="c.band.y" [attr.width]="c.W" [attr.height]="c.band.h" fill="#e8f5e9" />
+            }
+            @for (t of c.yTicks; track t.label) {
+              <line [attr.x1]="40" [attr.x2]="c.W" [attr.y1]="t.y" [attr.y2]="t.y" stroke="#eceff1" stroke-width="1" />
+              <text x="2" [attr.y]="t.y + 3" class="tick">{{ t.label }}</text>
+            }
+            @if (c.zeroX !== null) {
+              <line [attr.x1]="c.zeroX" [attr.x2]="c.zeroX" y1="4" [attr.y2]="c.H - 14" stroke="#546e7a" stroke-dasharray="4 4" />
+            }
+            @for (t of c.xTicks; track t.label) {
+              <text [attr.x]="t.x" [attr.y]="c.H - 2" text-anchor="middle" class="tick">{{ t.label }}</text>
+            }
+            @for (s of c.series; track s.label) {
+              @if (s.dots.length > 1) {
+                <polyline [attr.points]="s.polyline" fill="none" [attr.stroke]="s.color" stroke-width="2" />
+              }
+              @for (dt of s.dots; track dt.offset) {
+                <circle [attr.cx]="dt.cx" [attr.cy]="dt.cy" r="3.5" [attr.fill]="s.color">
+                  <title>月 {{ dt.offset }}：{{ dt.value }}</title>
+                </circle>
+              }
+            }
+          </svg>
+        </div>
+      }
+      @if (esaChart(); as c) {
+        <div class="chart-block">
+          <div class="chart-title">ESA 週劑量平均 (IU/wk，epoetin 當量)</div>
+          <svg [attr.viewBox]="'0 0 ' + c.W + ' ' + c.H" class="trend-svg">
+            @for (t of c.yTicks; track t.label) {
+              <line [attr.x1]="40" [attr.x2]="c.W" [attr.y1]="t.y" [attr.y2]="t.y" stroke="#eceff1" stroke-width="1" />
+              <text x="2" [attr.y]="t.y + 3" class="tick">{{ t.label }}</text>
+            }
+            @if (c.zeroX !== null) {
+              <line [attr.x1]="c.zeroX" [attr.x2]="c.zeroX" y1="4" [attr.y2]="c.H - 14" stroke="#546e7a" stroke-dasharray="4 4" />
+            }
+            @for (t of c.xTicks; track t.label) {
+              <text [attr.x]="t.x" [attr.y]="c.H - 2" text-anchor="middle" class="tick">{{ t.label }}</text>
+            }
+            @for (s of c.series; track s.label) {
+              @if (s.dots.length > 1) {
+                <polyline [attr.points]="s.polyline" fill="none" [attr.stroke]="s.color" stroke-width="2" />
+              }
+              @for (dt of s.dots; track dt.offset) {
+                <circle [attr.cx]="dt.cx" [attr.cy]="dt.cy" r="3.5" [attr.fill]="s.color">
+                  <title>月 {{ dt.offset }}：{{ dt.value }}</title>
+                </circle>
+              }
+            }
+          </svg>
+        </div>
+      }
+      @if (pctChart(); as c) {
+        <div class="chart-block">
+          <div class="chart-title">
+            比率 (%)
+            <span class="legend">
+              @for (s of c.series; track s.label) {
+                <span class="legend-item"><span class="legend-dot" [style.background]="s.color"></span>{{ s.label }}</span>
+              }
+            </span>
+          </div>
+          <svg [attr.viewBox]="'0 0 ' + c.W + ' ' + c.H" class="trend-svg">
+            @for (t of c.yTicks; track t.label) {
+              <line [attr.x1]="40" [attr.x2]="c.W" [attr.y1]="t.y" [attr.y2]="t.y" stroke="#eceff1" stroke-width="1" />
+              <text x="2" [attr.y]="t.y + 3" class="tick">{{ t.label }}</text>
+            }
+            @if (c.zeroX !== null) {
+              <line [attr.x1]="c.zeroX" [attr.x2]="c.zeroX" y1="4" [attr.y2]="c.H - 14" stroke="#546e7a" stroke-dasharray="4 4" />
+            }
+            @for (t of c.xTicks; track t.label) {
+              <text [attr.x]="t.x" [attr.y]="c.H - 2" text-anchor="middle" class="tick">{{ t.label }}</text>
+            }
+            @for (s of c.series; track s.label) {
+              @if (s.dots.length > 1) {
+                <polyline [attr.points]="s.polyline" fill="none" [attr.stroke]="s.color" stroke-width="2" />
+              }
+              @for (dt of s.dots; track dt.offset) {
+                <circle [attr.cx]="dt.cx" [attr.cy]="dt.cy" r="3.5" [attr.fill]="s.color">
+                  <title>月 {{ dt.offset }}：{{ dt.value }}%</title>
+                </circle>
+              }
+            }
+          </svg>
+        </div>
+      }
+
+      <div class="table-scroll">
+        <table class="event-table">
+          <thead>
+            <tr>
+              <th>月</th><th>Hb n</th><th>Hb 平均</th><th>Hb 10–12 %</th><th>ESA n</th><th>ESA IU/wk</th>
+              <th>ESA 使用率 %</th><th>Vafseo mg/wk</th><th>Ca</th><th>P</th><th>iPTH</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (pt of d.eventTime; track pt.offset) {
+              <tr [class.zero-month]="pt.offset === 0">
+                <td>{{ pt.offset > 0 ? '+' + pt.offset : pt.offset }}</td>
+                <td>{{ pt.hb.n }}</td>
+                <td>{{ fmt(pt.hb.mean) }}</td>
+                <td>{{ fmt(pt.hbInRange12Pct) }}</td>
+                <td>{{ pt.esaEq.n }}</td>
+                <td>{{ fmt(pt.esaEq.mean) }}</td>
+                <td>{{ fmt(pt.esaUserPct) }}</td>
+                <td>{{ fmt(pt.vafseoMgWk.mean) }}</td>
+                <td>{{ fmt(pt.ca.mean) }}</td>
+                <td>{{ fmt(pt.p.mean) }}</td>
+                <td>{{ fmt(pt.ipth.mean) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 逐病人 -->
+    <section class="card">
+      <div class="patients-header">
+        <h3>逐病人資料（{{ visiblePatients().length }} 人）</h3>
+        <label class="toggle-excluded">
+          <input type="checkbox" [checked]="showExcluded" (change)="toggleShowExcluded()" />
+          顯示已排除
+        </label>
+      </div>
+      <div class="table-scroll">
+        <table class="patient-table">
+          <thead>
+            <tr>
+              <th>排除</th><th>姓名</th><th>病歷號</th><th>起始日</th>
+              <th>Hb 前</th><th>Hb 後</th><th>ESA 前</th><th>ESA 後</th>
+              <th>iPTH 前</th><th>iPTH 後</th><th>Ca 前</th><th>Ca 後</th><th>P 前</th><th>P 後</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (p of visiblePatients(); track p.patientId) {
+              <tr [class.excluded-row]="p.excluded" (click)="toggleExpand(p)" class="clickable">
+                <td (click)="$event.stopPropagation()">
+                  <input type="checkbox" [checked]="p.excluded" [disabled]="saving" (change)="toggleExclude(p)" title="勾選 = 排除於分析外" />
+                </td>
+                <td>{{ p.name }}</td>
+                <td>{{ p.mrn }}</td>
+                <td>{{ p.indexDate }}</td>
+                <td>{{ fmt(p.baselineHb) }}</td>
+                <td>{{ fmt(p.postHb) }}</td>
+                <td>{{ fmt(p.baselineEsaEq) }}</td>
+                <td>{{ fmt(p.postEsaEq) }}</td>
+                <td>{{ fmt(p.baselineIpth) }}</td>
+                <td>{{ fmt(p.postIpth) }}</td>
+                <td>{{ fmt(p.baselineCa) }}</td>
+                <td>{{ fmt(p.postCa) }}</td>
+                <td>{{ fmt(p.baselineP) }}</td>
+                <td>{{ fmt(p.postP) }}</td>
+              </tr>
+              @if (expandedPatientId === p.patientId) {
+                <tr class="detail-row">
+                  <td colspan="14">
+                    <table class="month-table">
+                      <thead>
+                        <tr><th>月</th><th>Hb</th><th>Ca</th><th>P</th><th>iPTH</th><th>ESA IU/wk</th><th>Vafseo mg/wk</th></tr>
+                      </thead>
+                      <tbody>
+                        @for (m of expandedMonths; track m.offset) {
+                          <tr [class.zero-month]="m.offset === 0">
+                            <td>{{ m.offset > 0 ? '+' + m.offset : m.offset }}</td>
+                            <td>{{ fmt(m.hb) }}</td>
+                            <td>{{ fmt(m.ca) }}</td>
+                            <td>{{ fmt(m.p) }}</td>
+                            <td>{{ fmt(m.ipth) }}</td>
+                            <td>{{ fmt(m.esaEq) }}</td>
+                            <td>{{ fmt(m.vafseoMgWk) }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+</div>

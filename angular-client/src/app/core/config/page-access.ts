@@ -153,6 +153,13 @@ export const PAGE_ACCESS = {
     roles: DOCTOR_VIEW_ROLES,
     roleLabel: '管理員、貢獻者、查看者',
   },
+  research: {
+    path: '/research',
+    title: '研究專用',
+    // 醫師與專師的研究分析工作檯（Vafseo 真實世界分析）；後端 /api/research 另有守門
+    roles: DOCTOR_ROLES,
+    roleLabel: '管理員、貢獻者',
+  },
   inventory: {
     path: '/inventory',
     // 2026-07 改名：頁內三大頁籤 = 醫師班表列印 / 常規病人掛號 / 庫存管理
