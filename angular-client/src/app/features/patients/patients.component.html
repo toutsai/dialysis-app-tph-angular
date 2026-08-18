@@ -96,10 +96,10 @@
             <div class="flex-cell col-freq" (click)="handleSort('freq')">頻率</div>
             <div class="flex-cell col-mode" (click)="handleSort('mode')">模式</div>
             <div class="flex-cell col-status" (click)="handleSort('patientStatus')">狀態</div>
+            <div class="flex-cell col-actions">操作</div>
             <div class="flex-cell col-hospital" (click)="handleSort('hospitalInfo')">透析院所</div>
             <div class="flex-cell col-remarks">備註</div>
             <div class="flex-cell col-updated" (click)="handleSort('updatedAt')">異動日期</div>
-            <div class="flex-cell col-actions">操作</div>
           </div>
           <div class="flex-table-body">
             <div *ngFor="let p of displayedPatients()" class="flex-table-row" [ngClass]="getRowClass(p)">
@@ -142,15 +142,6 @@
                      [title]="p.patientStatus?.doNotMove?.active ? doNotMoveTitle(p) : '勿動（未設定，點擊編輯）'"></i>
                 </div>
               </div>
-              <div class="flex-cell col-hospital">
-                <div class="hospital-cell-content">
-                  <span class="hospital-source">{{ p.hospitalInfo?.source }}</span>
-                  <div *ngIf="p.hospitalInfo?.source && p.hospitalInfo?.transferOut" class="hospital-divider"></div>
-                  <span class="hospital-transfer-out">{{ p.hospitalInfo?.transferOut }}</span>
-                </div>
-              </div>
-              <div class="flex-cell col-remarks">{{ p.remarks }}</div>
-              <div class="flex-cell col-updated">{{ formatDate(p.updatedAt) }}</div>
               <div class="flex-cell col-actions">
                 <div class="action-buttons">
                   <button class="btn-icon btn-edit" (click)="openEditPatientModal(p)" [disabled]="isPageLocked()" title="編輯">
@@ -174,6 +165,15 @@
                   </button>
                 </div>
               </div>
+              <div class="flex-cell col-hospital">
+                <div class="hospital-cell-content">
+                  <span class="hospital-source">{{ p.hospitalInfo?.source }}</span>
+                  <div *ngIf="p.hospitalInfo?.source && p.hospitalInfo?.transferOut" class="hospital-divider"></div>
+                  <span class="hospital-transfer-out">{{ p.hospitalInfo?.transferOut }}</span>
+                </div>
+              </div>
+              <div class="flex-cell col-remarks">{{ p.remarks }}</div>
+              <div class="flex-cell col-updated">{{ formatDate(p.updatedAt) }}</div>
             </div>
           </div>
         </div>
