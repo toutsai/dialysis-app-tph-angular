@@ -162,6 +162,8 @@
                   <div class="action-divider"></div>
                   <button class="btn-icon btn-history" (click)="openPatientProfile(p.id)" title="病人履歷">
                     <i class="fas fa-address-card"></i>
+                  </button><button class="btn-icon btn-problem-list" (click)="openProblemList(p)" title="病史與問題列表">
+                    <i class="fas fa-clipboard-list"></i>
                   </button>
                 </div>
               </div>
@@ -254,6 +256,8 @@
             <div class="card-actions-header">
               <button class="btn-icon btn-history" (click)="openPatientProfile(p.id)" title="病人履歷">
                 <i class="fas fa-address-card"></i>
+              </button><button class="btn-icon btn-problem-list" (click)="openProblemList(p)" title="病史與問題列表">
+                <i class="fas fa-clipboard-list"></i>
               </button><button *ngIf="isFirstDialysisPatient(p)" class="btn-icon btn-education" (click)="openEducationRecord(p)" title="初透衛教紀錄">
                 <i class="fas fa-chalkboard-teacher"></i>
               </button><button class="btn-icon btn-delete" (click)="deletePatient(p.id)" [disabled]="isDeleteLocked()" title="刪除">
@@ -472,6 +476,15 @@
     [canEdit]="!isPageLocked()"
     (close)="closeEducationRecord()"
   ></app-education-record-dialog>
+
+  <app-problem-list-dialog
+    *ngIf="showProblemListDialog() && problemListPatient()"
+    [patientId]="problemListPatient()!.id"
+    [patientName]="problemListPatient()!.name"
+    [canEdit]="!isPageLocked()"
+    [canDelete]="!isDeleteLocked()"
+    (close)="closeProblemList()"
+  ></app-problem-list-dialog>
 
   <!-- 狀態快速編輯浮動面板 -->
   @if (statusEditVisible() && statusEditPatient()) {

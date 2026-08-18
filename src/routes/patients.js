@@ -1833,4 +1833,208 @@ router.post('/:id/restore', ...isEditor, async (req, res) => {
   }
 })
 
+// ========================================
+// 病史與問題列表（2026-08-19，病人清單操作欄彈窗）
+// 區塊一：相關性系統疾病——優先帶 KiDit 病史（唯讀），無資料時前端可手動勾選存 patient_problem_profiles（不回寫 KiDit）
+// 區塊二：問題列表 patient_problems（問題/起始/治療處置/解決時間）
+// ========================================
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+const isValidDateOrEmpty = (v) => v === null || v === undefined || v === '' || (typeof v === 'string' && DATE_RE.test(v))
+
+function formatProblemRow(row) {
+  return {
+    id: row.id,
+    patientId: row.patient_id,
+    problem: row.problem,
+    startDate: row.start_date || '',
+    treatment: row.treatment || '',
+    resolvedDate: row.resolved_date || '',
+    createdBy: (() => { try { return JSON.parse(row.created_by || '{}') } catch { return {} } })(),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  }
+}
+
+/**
+ * GET /api/patients/:id/problem-list
+ * 回傳 KiDit 病史相關性系統疾病（掃 kidit_logbook 取最新一筆）+ 手動勾選備援 + 問題列表
+ */
+router.get('/:id/problem-list', authenticate, (req, res) => {
+  try {
+    const { id } = req.params
+    const db = getDatabase()
+
+    // KiDit 病史：profile 與 history 可能建在不同日期，取最新含 selectedSystemicDiseases 的事件
+    let kidit = null
+    const rows = db.prepare('SELECT date, events FROM kidit_logbook ORDER BY date DESC').all()
+    for (const row of rows) {
+      let events = []
+      try { events = JSON.parse(row.events || '[]') } catch { continue }
+      for (const e of events) {
+        if (!e || e.patientId !== id) continue
+        const h = e.kidit_history
+        if (h && Array.isArray(h.selectedSystemicDiseases) && h.selectedSystemicDiseases.length > 0) {
+          kidit = {
+            date: row.date,
+            selectedSystemicDiseases: h.selectedSystemicDiseases,
+            otherSystemicDescription: h.otherSystemicDescription || '',
+            dmType: h.dmType || ''
+          }
+          break
+        }
+      }
+      if (kidit) break
+    }
+
+    const profileRow = db.prepare('SELECT * FROM patient_problem_profiles WHERE patient_id = ?').get(id)
+    const manual = profileRow
+      ? {
+          systemicDiseases: (() => { try { return JSON.parse(profileRow.systemic_diseases || '[]') } catch { return [] } })(),
+          otherDescription: profileRow.other_description || '',
+          updatedAt: profileRow.updated_at
+        }
+      : null
+
+    const problems = db
+      .prepare('SELECT * FROM patient_problems WHERE patient_id = ? ORDER BY CASE WHEN resolved_date IS NULL OR resolved_date = \'\' THEN 0 ELSE 1 END, start_date DESC, created_at DESC')
+      .all(id)
+      .map(formatProblemRow)
+
+    res.json({ kidit, manual, problems })
+  } catch (error) {
+    console.error('讀取病史與問題列表錯誤:', error)
+    res.status(500).json({ error: true, message: '讀取失敗' })
+  }
+})
+
+/**
+ * PUT /api/patients/:id/problem-profile
+ * 儲存相關性系統疾病手動勾選（KiDit 無資料時的備援）
+ */
+router.put('/:id/problem-profile', ...isContributor, (req, res) => {
+  try {
+    const { id } = req.params
+    const { systemicDiseases, otherDescription } = req.body || {}
+    if (!Array.isArray(systemicDiseases) || systemicDiseases.some((x) => !Number.isInteger(x) || x < 0 || x > 11)) {
+      return res.status(400).json({ error: true, message: 'systemicDiseases 需為 0-11 整數陣列' })
+    }
+    if (otherDescription !== undefined && (typeof otherDescription !== 'string' || otherDescription.length > 500)) {
+      return res.status(400).json({ error: true, message: 'otherDescription 需為 ≤500 字的字串' })
+    }
+    const db = getDatabase()
+    const updatedBy = JSON.stringify({ uid: req.user?.uid || '', name: req.user?.name || '' })
+    db.prepare(`
+      INSERT INTO patient_problem_profiles (patient_id, systemic_diseases, other_description, updated_by, updated_at)
+      VALUES (?, ?, ?, ?, datetime('now','localtime'))
+      ON CONFLICT(patient_id) DO UPDATE SET
+        systemic_diseases = excluded.systemic_diseases,
+        other_description = excluded.other_description,
+        updated_by = excluded.updated_by,
+        updated_at = excluded.updated_at
+    `).run(id, JSON.stringify([...new Set(systemicDiseases)].sort((a, b) => a - b)), otherDescription || '', updatedBy)
+    res.json({ success: true })
+  } catch (error) {
+    console.error('儲存系統疾病勾選錯誤:', error)
+    res.status(500).json({ error: true, message: '儲存失敗' })
+  }
+})
+
+/**
+ * POST /api/patients/:id/problems
+ * 新增問題（問題必填；起始/治療處置選填）
+ */
+router.post('/:id/problems', ...isContributor, (req, res) => {
+  try {
+    const { id } = req.params
+    const { problem, startDate, treatment } = req.body || {}
+    if (typeof problem !== 'string' || !problem.trim() || problem.length > 500) {
+      return res.status(400).json({ error: true, message: '問題為必填（≤500 字）' })
+    }
+    if (!isValidDateOrEmpty(startDate)) {
+      return res.status(400).json({ error: true, message: '起始時間格式需為 YYYY-MM-DD' })
+    }
+    if (treatment !== undefined && (typeof treatment !== 'string' || treatment.length > 2000)) {
+      return res.status(400).json({ error: true, message: '治療處置需為 ≤2000 字的字串' })
+    }
+    const db = getDatabase()
+    const newId = uuidv4()
+    db.prepare(`
+      INSERT INTO patient_problems (id, patient_id, problem, start_date, treatment, created_by)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      newId, id, problem.trim(), startDate || getTaipeiTodayString(), treatment || '',
+      JSON.stringify({ uid: req.user?.uid || '', name: req.user?.name || '' })
+    )
+    const row = db.prepare('SELECT * FROM patient_problems WHERE id = ?').get(newId)
+    res.status(201).json(formatProblemRow(row))
+  } catch (error) {
+    console.error('新增問題錯誤:', error)
+    res.status(500).json({ error: true, message: '新增失敗' })
+  }
+})
+
+/**
+ * PUT /api/patients/:id/problems/:problemId
+ * 更新問題（含標記已解決 resolvedDate、清空 = 恢復進行中）
+ */
+router.put('/:id/problems/:problemId', ...isContributor, (req, res) => {
+  try {
+    const { id, problemId } = req.params
+    const { problem, startDate, treatment, resolvedDate } = req.body || {}
+    const db = getDatabase()
+    const existing = db.prepare('SELECT * FROM patient_problems WHERE id = ? AND patient_id = ?').get(problemId, id)
+    if (!existing) {
+      return res.status(404).json({ error: true, message: '找不到此問題' })
+    }
+    if (problem !== undefined && (typeof problem !== 'string' || !problem.trim() || problem.length > 500)) {
+      return res.status(400).json({ error: true, message: '問題不可為空（≤500 字）' })
+    }
+    if (!isValidDateOrEmpty(startDate) || !isValidDateOrEmpty(resolvedDate)) {
+      return res.status(400).json({ error: true, message: '日期格式需為 YYYY-MM-DD' })
+    }
+    if (treatment !== undefined && (typeof treatment !== 'string' || treatment.length > 2000)) {
+      return res.status(400).json({ error: true, message: '治療處置需為 ≤2000 字的字串' })
+    }
+    db.prepare(`
+      UPDATE patient_problems SET
+        problem = ?,
+        start_date = ?,
+        treatment = ?,
+        resolved_date = ?,
+        updated_at = datetime('now','localtime')
+      WHERE id = ?
+    `).run(
+      problem !== undefined ? problem.trim() : existing.problem,
+      startDate !== undefined ? (startDate || null) : existing.start_date,
+      treatment !== undefined ? treatment : existing.treatment,
+      resolvedDate !== undefined ? (resolvedDate || null) : existing.resolved_date,
+      problemId
+    )
+    const row = db.prepare('SELECT * FROM patient_problems WHERE id = ?').get(problemId)
+    res.json(formatProblemRow(row))
+  } catch (error) {
+    console.error('更新問題錯誤:', error)
+    res.status(500).json({ error: true, message: '更新失敗' })
+  }
+})
+
+/**
+ * DELETE /api/patients/:id/problems/:problemId
+ */
+router.delete('/:id/problems/:problemId', ...isEditor, (req, res) => {
+  try {
+    const { id, problemId } = req.params
+    const db = getDatabase()
+    const result = db.prepare('DELETE FROM patient_problems WHERE id = ? AND patient_id = ?').run(problemId, id)
+    if (result.changes === 0) {
+      return res.status(404).json({ error: true, message: '找不到此問題' })
+    }
+    res.json({ success: true })
+  } catch (error) {
+    console.error('刪除問題錯誤:', error)
+    res.status(500).json({ error: true, message: '刪除失敗' })
+  }
+})
+
 export default router

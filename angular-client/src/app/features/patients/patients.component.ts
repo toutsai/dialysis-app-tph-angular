@@ -42,6 +42,7 @@ import { PatientUpdateSchedulerDialogComponent } from '@app/components/dialogs/p
 import { BedAssignmentDialogComponent } from '@app/components/dialogs/bed-assignment-dialog/bed-assignment-dialog.component';
 import { PatientSummaryComponent } from './patient-summary/patient-summary.component';
 import { EducationRecordDialogComponent } from '@app/components/dialogs/education-record-dialog/education-record-dialog.component';
+import { ProblemListDialogComponent } from '@app/components/dialogs/problem-list-dialog/problem-list-dialog.component';
 
 type PatientTab = 'opd' | 'ipd' | 'er' | 'deleted' | 'query';
 
@@ -73,6 +74,7 @@ interface PatientStats {
     BedAssignmentDialogComponent,
     PatientSummaryComponent,
     EducationRecordDialogComponent,
+    ProblemListDialogComponent,
   ],
   templateUrl: './patients.component.html',
   styleUrl: './patients.component.css',
@@ -261,6 +263,21 @@ export class PatientsComponent implements OnInit, OnDestroy {
   closeEducationRecord(): void {
     this.showEducationDialog.set(false);
     this.educationPatient.set(null);
+  }
+
+  // 病史與問題列表視窗（操作欄 fa-clipboard-list 圖示）
+  readonly showProblemListDialog = signal(false);
+  readonly problemListPatient = signal<{ id: string; name: string } | null>(null);
+
+  openProblemList(p: any): void {
+    if (!p?.id) return;
+    this.problemListPatient.set({ id: p.id, name: p.name || '' });
+    this.showProblemListDialog.set(true);
+  }
+
+  closeProblemList(): void {
+    this.showProblemListDialog.set(false);
+    this.problemListPatient.set(null);
   }
 
   // --- 狀態欄快速編輯（inline 浮動面板）---

@@ -1,0 +1,166 @@
+<div class="pl-overlay" (click)="onOverlayClick($event)">
+  <div class="pl-modal">
+    <div class="pl-header">
+      <h3><i class="fas fa-clipboard-list"></i> 病史與問題列表 — {{ patientName }}</h3>
+      <button class="pl-close" (click)="close.emit()" title="關閉">&times;</button>
+    </div>
+
+    @if (errorMsg) {
+      <div class="pl-error">{{ errorMsg }}</div>
+    }
+
+    <div class="pl-body">
+      @if (loading) {
+        <div class="pl-loading">載入中…</div>
+      } @else {
+        <!-- 區塊一：相關性系統疾病 -->
+        <section class="pl-section">
+          <div class="pl-section-title">
+            開始透析之相關性系統疾病
+            @if (kidit) {
+              <span class="pl-source-tag kidit">來源：KiDit 病史（{{ kidit.date }}）</span>
+            } @else {
+              <span class="pl-source-tag manual">KiDit 病史無資料，可手動勾選</span>
+            }
+          </div>
+
+          @if (kidit) {
+            <div class="pl-checkbox-grid readonly">
+              @for (opt of systemicOptions; track opt.index) {
+                <label class="pl-checkbox" [class.checked]="isKiditChecked(opt.index)">
+                  <input type="checkbox" [checked]="isKiditChecked(opt.index)" disabled />
+                  {{ opt.label }}
+                </label>
+              }
+            </div>
+            @if (kiditDmTypeLabel()) {
+              <div class="pl-note">DM 型式：{{ kiditDmTypeLabel() }}</div>
+            }
+            @if (kidit.otherSystemicDescription) {
+              <div class="pl-note">其他說明：{{ kidit.otherSystemicDescription }}</div>
+            }
+          } @else {
+            <div class="pl-checkbox-grid" [class.readonly]="!canEdit">
+              @for (opt of systemicOptions; track opt.index) {
+                <label class="pl-checkbox" [class.checked]="isManualChecked(opt.index)">
+                  <input type="checkbox" [checked]="isManualChecked(opt.index)" [disabled]="!canEdit" (change)="toggleManual(opt.index)" />
+                  {{ opt.label }}
+                </label>
+              }
+            </div>
+            <div class="pl-manual-row">
+              <input type="text" class="pl-input" placeholder="其他說明…" [(ngModel)]="manualOther"
+                     [disabled]="!canEdit" (ngModelChange)="onManualOtherChange()" maxlength="500" />
+              @if (canEdit) {
+                <button class="pl-btn primary" (click)="saveManual()" [disabled]="saving || !manualDirty">
+                  {{ saving ? '儲存中…' : (manualDirty ? '儲存勾選' : '已儲存') }}
+                </button>
+              }
+            </div>
+          }
+        </section>
+
+        <!-- 區塊二：問題列表 -->
+        <section class="pl-section">
+          <div class="pl-section-title">問題列表
+            <span class="pl-count">進行中 {{ activeProblems.length }}｜已解決 {{ resolvedProblems.length }}</span>
+          </div>
+
+          @if (canEdit) {
+            <div class="pl-add-row">
+              <input type="text" class="pl-input grow" placeholder="問題（必填）" [(ngModel)]="newProblem" maxlength="500" (keyup.enter)="addProblem()" />
+              <input type="date" class="pl-input" [(ngModel)]="newStartDate" title="起始時間" />
+              <input type="text" class="pl-input grow" placeholder="治療處置（選填）" [(ngModel)]="newTreatment" maxlength="2000" (keyup.enter)="addProblem()" />
+              <button class="pl-btn primary" (click)="addProblem()" [disabled]="saving || !newProblem.trim()">
+                <i class="fas fa-plus"></i> 新增
+              </button>
+            </div>
+          }
+
+          <div class="pl-table-scroll">
+            <table class="pl-table">
+              <thead>
+                <tr>
+                  <th class="col-problem">問題</th>
+                  <th class="col-date">起始時間</th>
+                  <th class="col-treatment">治療處置</th>
+                  <th class="col-date">解決時間</th>
+                  @if (canEdit) { <th class="col-actions">動作</th> }
+                </tr>
+              </thead>
+              <tbody>
+                @for (p of activeProblems; track p.id) {
+                  @if (editingId === p.id) {
+                    <tr class="editing">
+                      <td><input type="text" class="pl-input full" [(ngModel)]="editProblem" maxlength="500" /></td>
+                      <td><input type="date" class="pl-input" [(ngModel)]="editStartDate" /></td>
+                      <td><input type="text" class="pl-input full" [(ngModel)]="editTreatment" maxlength="2000" /></td>
+                      <td><input type="date" class="pl-input" [(ngModel)]="editResolvedDate" title="填入即標記已解決" /></td>
+                      <td class="actions">
+                        <button class="pl-btn primary sm" (click)="saveEdit()" [disabled]="saving || !editProblem.trim()">儲存</button>
+                        <button class="pl-btn sm" (click)="cancelEdit()">取消</button>
+                      </td>
+                    </tr>
+                  } @else {
+                    <tr>
+                      <td class="col-problem">{{ p.problem }}</td>
+                      <td class="col-date">{{ p.startDate || '—' }}</td>
+                      <td class="col-treatment">{{ p.treatment || '—' }}</td>
+                      <td class="col-date">—</td>
+                      @if (canEdit) {
+                        <td class="actions">
+                          <button class="pl-btn sm resolve" (click)="markResolved(p)" [disabled]="saving" title="標記今天已解決">
+                            <i class="fas fa-check"></i> 已解決
+                          </button>
+                          <button class="pl-icon-btn" (click)="startEdit(p)" title="編輯"><i class="fas fa-pencil-alt"></i></button>
+                          @if (canDelete) {
+                            <button class="pl-icon-btn danger" (click)="deleteProblem(p)" title="刪除"><i class="fas fa-trash-alt"></i></button>
+                          }
+                        </td>
+                      }
+                    </tr>
+                  }
+                }
+                @if (!activeProblems.length && !resolvedProblems.length) {
+                  <tr><td [attr.colspan]="canEdit ? 5 : 4" class="pl-empty">尚無問題紀錄</td></tr>
+                }
+                @for (p of resolvedProblems; track p.id) {
+                  @if (editingId === p.id) {
+                    <tr class="editing">
+                      <td><input type="text" class="pl-input full" [(ngModel)]="editProblem" maxlength="500" /></td>
+                      <td><input type="date" class="pl-input" [(ngModel)]="editStartDate" /></td>
+                      <td><input type="text" class="pl-input full" [(ngModel)]="editTreatment" maxlength="2000" /></td>
+                      <td><input type="date" class="pl-input" [(ngModel)]="editResolvedDate" title="清空即恢復進行中" /></td>
+                      <td class="actions">
+                        <button class="pl-btn primary sm" (click)="saveEdit()" [disabled]="saving || !editProblem.trim()">儲存</button>
+                        <button class="pl-btn sm" (click)="cancelEdit()">取消</button>
+                      </td>
+                    </tr>
+                  } @else {
+                    <tr class="resolved-row">
+                      <td class="col-problem">{{ p.problem }}</td>
+                      <td class="col-date">{{ p.startDate || '—' }}</td>
+                      <td class="col-treatment">{{ p.treatment || '—' }}</td>
+                      <td class="col-date resolved-date">{{ p.resolvedDate }}</td>
+                      @if (canEdit) {
+                        <td class="actions">
+                          <button class="pl-btn sm" (click)="reopenProblem(p)" [disabled]="saving" title="恢復為進行中">
+                            <i class="fas fa-undo"></i> 恢復
+                          </button>
+                          <button class="pl-icon-btn" (click)="startEdit(p)" title="編輯"><i class="fas fa-pencil-alt"></i></button>
+                          @if (canDelete) {
+                            <button class="pl-icon-btn danger" (click)="deleteProblem(p)" title="刪除"><i class="fas fa-trash-alt"></i></button>
+                          }
+                        </td>
+                      }
+                    </tr>
+                  }
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      }
+    </div>
+  </div>
+</div>

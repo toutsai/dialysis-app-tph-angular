@@ -760,6 +760,9 @@
 .btn-icon.btn-history {
   color: #6c757d;
 }
+.btn-icon.btn-problem-list {
+  color: #5b2c6f;
+}
 .btn-icon.btn-education {
   color: #8e44ad;
 }
@@ -777,6 +780,9 @@
 }
 .btn-icon.btn-history:hover:not(:disabled) {
   background-color: #f1f3f5;
+}
+.btn-icon.btn-problem-list:hover:not(:disabled) {
+  background-color: #f0e6f6;
 }
 .btn-icon.btn-education:hover:not(:disabled) {
   background-color: #f3e8fb;

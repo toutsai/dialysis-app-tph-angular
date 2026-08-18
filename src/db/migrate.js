@@ -667,6 +667,52 @@ export function runMigrations() {
     }
 
     // ========================================
+    // 病史與問題列表（2026-08-19）：病人清單操作欄新彈窗
+    // patient_problems = 問題列表（問題/起始/治療處置/解決時間）
+    // patient_problem_profiles = 相關性系統疾病手動勾選（KiDit 病史無資料時的備援，
+    //   systemic_diseases 存 index 陣列、對照前端 KIDIT_HISTORY_OPTIONS.systemicDiseases；不回寫 KiDit）
+    // ========================================
+    const patientProblemsExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='patient_problems'")
+      .get()
+    if (!patientProblemsExists) {
+      console.log('📋 建立 patient_problems 表格...')
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS patient_problems (
+          id TEXT PRIMARY KEY,
+          patient_id TEXT NOT NULL,
+          problem TEXT NOT NULL,
+          start_date TEXT,
+          treatment TEXT DEFAULT '',
+          resolved_date TEXT,
+          created_by TEXT DEFAULT '{}',
+          created_at TEXT DEFAULT (datetime('now', 'localtime')),
+          updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+      `)
+      migrationsApplied++
+    }
+    db.exec('CREATE INDEX IF NOT EXISTS idx_patient_problems_patient ON patient_problems(patient_id)')
+
+    const patientProblemProfilesExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='patient_problem_profiles'")
+      .get()
+    if (!patientProblemProfilesExists) {
+      console.log('📋 建立 patient_problem_profiles 表格...')
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS patient_problem_profiles (
+          patient_id TEXT PRIMARY KEY,
+          systemic_diseases TEXT DEFAULT '[]',
+          other_description TEXT DEFAULT '',
+          updated_by TEXT DEFAULT '{}',
+          created_at TEXT DEFAULT (datetime('now', 'localtime')),
+          updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+      `)
+      migrationsApplied++
+    }
+
+    // ========================================
     // schedule_exceptions.status CHECK 納入 'error'（2026-08-15）
     // exceptionHandler 失敗路徑寫 status='error' 被舊 CHECK 擋下，記錄會卡在 processing；
     // 前端調班管理本就支援「錯誤」終態。SQLite 不能改 CHECK，只能重建表搬資料。
