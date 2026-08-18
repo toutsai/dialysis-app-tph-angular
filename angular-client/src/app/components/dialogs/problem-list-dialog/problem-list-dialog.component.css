@@ -329,3 +329,60 @@ td.actions {
 tr.editing {
   background: #fffde7;
 }
+
+/* ===== 整體字級放大（2026-08-19 使用者要求，覆寫置後生效） ===== */
+.pl-modal {
+  font-size: 16.5px;
+  line-height: 1.65;
+}
+
+.pl-header h3 {
+  font-size: 1.3rem;
+}
+
+.pl-section-title {
+  font-size: 1.12rem;
+}
+
+.pl-source-tag {
+  font-size: 0.86rem;
+}
+
+.pl-count {
+  font-size: 0.9rem;
+}
+
+.pl-checkbox {
+  font-size: 1.02rem;
+}
+
+.pl-note {
+  font-size: 0.95rem;
+}
+
+.pl-input {
+  font-size: 1rem;
+  padding: 7px 10px;
+}
+
+.pl-btn {
+  font-size: 0.98rem;
+}
+
+.pl-btn.sm {
+  font-size: 0.9rem;
+  padding: 4px 10px;
+}
+
+.pl-icon-btn {
+  font-size: 1rem;
+}
+
+.pl-table {
+  font-size: 1rem;
+}
+
+.pl-table th,
+.pl-table td {
+  padding: 8px 12px;
+}
