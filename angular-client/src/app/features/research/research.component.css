@@ -1,7 +1,5 @@
 .research-page {
   padding: 16px 20px 40px;
-  max-width: 1180px;
-  margin: 0 auto;
 }
 
 .page-header {
@@ -284,7 +282,7 @@ thead th {
 
 .trend-svg {
   width: 100%;
-  max-width: 720px;
+  max-width: 1000px;
   display: block;
   background: #fff;
 }
