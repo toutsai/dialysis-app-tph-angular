@@ -7,13 +7,25 @@
       <h4 class="section-title">初診資料</h4>
       <div class="kd-row">
         <div class="kd-field">
-          <label><span class="fnum">03</span>轉入院所名稱</label>
-          <input type="text" class="w-md" [(ngModel)]="formData.transferFromName" />
+          <label>他院轉入</label>
+          <div class="kd-choice-group">
+            @for (opt of opts.yesNo; track opt.value) {
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.isTransferFromOther === opt.value"
+                      (click)="onTransferFromOtherChange(opt.value)">{{ opt.label }}</button>
+            }
+          </div>
         </div>
-        <div class="kd-field">
-          <label><span class="fnum">04</span>轉入院所醫事代號</label>
-          <input type="text" class="w-md" [(ngModel)]="formData.transferFromCode" />
-        </div>
+        @if (formData.isTransferFromOther === 'Y') {
+          <div class="kd-field">
+            <label><span class="fnum">03</span>轉入院所名稱</label>
+            <input type="text" class="w-md" [(ngModel)]="formData.transferFromName" />
+          </div>
+          <div class="kd-field">
+            <label><span class="fnum">04</span>轉入院所醫事代號</label>
+            <input type="text" class="w-md" [(ngModel)]="formData.transferFromCode" />
+          </div>
+        }
       </div>
     </div>
 
@@ -287,74 +299,8 @@
       </div>
     </div>
 
-    <div class="form-section">
-      <h4 class="section-title">緊急透析</h4>
-
-      <div class="kd-sub-label"><span class="fnum">38</span>緊急透析原因（複選）：</div>
-      <div class="kd-checkbox-grid two-col">
-        @for (item of opts.emergencyReasons; track item.index) {
-          <label class="checkbox-label">
-            <input type="checkbox" [checked]="isEmergencyReasonChecked(item.index)" (change)="toggleEmergencyReason(item.index)" />
-            {{ item.label }}
-          </label>
-        }
-      </div>
-      <div class="kd-row">
-        <div class="kd-field kd-field-grow">
-          <label><span class="fnum">39</span>其他（請說明）</label>
-          <input type="text" class="w-full" [(ngModel)]="formData.emergencyReasonsOtherDescription" maxlength="50" />
-        </div>
-      </div>
-
-      <div class="kd-row">
-        <div class="kd-field">
-          <label><span class="fnum">40</span>緊急檢驗日期</label>
-          <input type="date" [(ngModel)]="formData.emergencyLabDate" />
-        </div>
-        <div class="kd-field">
-          <label><span class="fnum">41</span>Hct (%)</label>
-          <input type="number" class="w-sm" [(ngModel)]="formData.emergencyHct" />
-        </div>
-        <div class="kd-field">
-          <label><span class="fnum">42</span>Hb (g/dl)</label>
-          <input type="number" class="w-sm" [(ngModel)]="formData.emergencyHb" />
-        </div>
-      </div>
-
-      <div class="kd-row">
-        <div class="kd-field">
-          <label><span class="fnum">43</span>BUN (mg/dl)</label>
-          <input type="number" class="w-sm" [(ngModel)]="formData.emergencyBUN" step="0.1" />
-        </div>
-        <div class="kd-field">
-          <label><span class="fnum">44</span>Creatinine (mg/dl)</label>
-          <input type="number" class="w-sm" [(ngModel)]="formData.emergencyCr" step="0.1" />
-        </div>
-        <div class="kd-field">
-          <label><span class="fnum">45</span>CCr (ml/min)</label>
-          <input type="number" class="w-sm" [(ngModel)]="formData.emergencyCCr" step="0.1" />
-        </div>
-      </div>
-
-      <div class="kd-row">
-        <div class="kd-field">
-          <label><span class="fnum">46</span>Na</label>
-          <input type="number" class="w-sm" [(ngModel)]="formData.emergencyNa" />
-        </div>
-        <div class="kd-field">
-          <label><span class="fnum">47</span>K</label>
-          <input type="number" class="w-sm" [(ngModel)]="formData.emergencyK" />
-        </div>
-        <div class="kd-field">
-          <label><span class="fnum">48</span>HCO3</label>
-          <input type="number" class="w-sm" [(ngModel)]="formData.emergencyHCO3" />
-        </div>
-        <div class="kd-field">
-          <label><span class="fnum">49</span>Albumin</label>
-          <input type="number" class="w-sm" [(ngModel)]="formData.emergencyAlb" />
-        </div>
-      </div>
-    </div>
+    <!-- 緊急透析區塊（官方欄 38-49）UI 已依使用者要求移除（2026-08-18）；
+         formData 內 emergency* / selectedEmergencyReasons 欄位保留，舊資料與 CSV 匯出欄序不受影響 -->
 
     <div class="form-section">
       <h4 class="section-title">首次瘻管建立<span class="kd-note">（站內紀錄欄位，匯入格式無此欄）</span></h4>

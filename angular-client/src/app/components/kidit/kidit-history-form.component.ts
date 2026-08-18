@@ -55,6 +55,7 @@ export class KiditHistoryFormComponent implements OnChanges {
     } else if (this.masterPatient) {
       const h = this.masterPatient.kiditProfile?.history || {};
       this.formData = {
+        isTransferFromOther: h.isTransferFromOther || '',
         transferFromName: h.transferFromName || '',
         transferFromCode: h.transferFromCode || '',
         startHDDate: h.startHDDate || '',
@@ -115,6 +116,19 @@ export class KiditHistoryFormComponent implements OnChanges {
     } else {
       this.formData = {};
     }
+    // 站內欄位：舊資料沒有他院轉入旗標時，依既有轉入院所欄位推導
+    if (Object.keys(this.formData).length && !this.formData.isTransferFromOther) {
+      this.formData.isTransferFromOther =
+        this.formData.transferFromName || this.formData.transferFromCode ? 'Y' : 'N';
+    }
+  }
+
+  onTransferFromOtherChange(val: string): void {
+    this.formData.isTransferFromOther = val;
+    if (val === 'N') {
+      this.formData.transferFromName = '';
+      this.formData.transferFromCode = '';
+    }
   }
 
   // Checkbox array toggle helpers
@@ -136,16 +150,6 @@ export class KiditHistoryFormComponent implements OnChanges {
     const i = arr.indexOf(idx);
     if (i > -1) arr.splice(i, 1); else arr.push(idx);
     this.formData.selectedSymptoms = [...arr];
-  }
-
-  isEmergencyReasonChecked(idx: number): boolean {
-    return (this.formData.selectedEmergencyReasons || []).includes(idx);
-  }
-  toggleEmergencyReason(idx: number): void {
-    const arr = this.formData.selectedEmergencyReasons || [];
-    const i = arr.indexOf(idx);
-    if (i > -1) arr.splice(i, 1); else arr.push(idx);
-    this.formData.selectedEmergencyReasons = [...arr];
   }
 
   async saveData(): Promise<void> {
