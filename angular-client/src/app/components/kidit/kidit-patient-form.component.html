@@ -111,38 +111,46 @@
         </div>
         <div class="kd-field">
           <label><span class="fnum">06</span>婚姻狀況</label>
-          <select [(ngModel)]="formData.maritalStatus">
+          <div class="kd-choice-group">
             @for (opt of opts.maritalStatus; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.maritalStatus === opt.value"
+                      (click)="formData.maritalStatus = opt.value">{{ opt.label }}</button>
             }
-          </select>
+          </div>
         </div>
         <div class="kd-field">
           <label><span class="fnum">15</span>血型</label>
-          <select [(ngModel)]="formData.bloodType">
+          <div class="kd-choice-group">
             @for (opt of opts.bloodType; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.bloodType === opt.value"
+                      (click)="formData.bloodType = opt.value">{{ opt.label }}</button>
             }
-          </select>
+          </div>
         </div>
       </div>
 
       <div class="kd-row">
         <div class="kd-field">
           <label><span class="fnum">11</span>教育程度</label>
-          <select [(ngModel)]="formData.education">
+          <div class="kd-choice-group">
             @for (opt of opts.education; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.education === opt.value"
+                      (click)="formData.education = opt.value">{{ opt.label }}</button>
             }
-          </select>
+          </div>
         </div>
         <div class="kd-field">
           <label><span class="fnum">12</span>職業</label>
-          <select [(ngModel)]="formData.occupation">
+          <div class="kd-choice-group">
             @for (opt of opts.occupation; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.occupation === opt.value"
+                      (click)="formData.occupation = opt.value">{{ opt.label }}</button>
             }
-          </select>
+          </div>
         </div>
         <div class="kd-field">
           <label><span class="fnum">17</span>原住民</label>

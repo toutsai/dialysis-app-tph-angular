@@ -95,6 +95,7 @@
 /* 少選項欄位（≤3 項）改按鈕點選，取代下拉 */
 .kd-choice-group {
   display: inline-flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
