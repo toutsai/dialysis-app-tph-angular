@@ -164,11 +164,13 @@
         </div>
         <div class="kd-field">
           <label><span class="fnum">24</span>DM 型式</label>
-          <select [(ngModel)]="formData.dmType">
+          <div class="kd-choice-group">
             @for (opt of opts.dmType; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.dmType === opt.value"
+                      (click)="formData.dmType = opt.value">{{ opt.label }}</button>
             }
-          </select>
+          </div>
         </div>
       </div>
     </div>
@@ -235,30 +237,36 @@
       <div class="kd-row">
         <div class="kd-field">
           <label><span class="fnum">33</span>HBsAg</label>
-          <select [(ngModel)]="formData.hbsag">
+          <div class="kd-choice-group">
             @for (opt of opts.hepatitis; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.hbsag === opt.value"
+                      (click)="formData.hbsag = opt.value">{{ opt.label }}</button>
             }
-          </select>
+          </div>
         </div>
         <div class="kd-field">
           <label><span class="fnum">34</span>AntiHCV</label>
-          <select [(ngModel)]="formData.antihcv">
+          <div class="kd-choice-group">
             @for (opt of opts.hepatitis; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.antihcv === opt.value"
+                      (click)="formData.antihcv = opt.value">{{ opt.label }}</button>
             }
-          </select>
+          </div>
         </div>
       </div>
 
       <div class="kd-row">
         <div class="kd-field kd-field-grow">
           <label><span class="fnum">35</span>適應症總類</label>
-          <select class="w-full" [(ngModel)]="formData.indicationType">
+          <div class="kd-choice-group">
             @for (opt of opts.indicationType; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.indicationType === opt.value"
+                      (click)="formData.indicationType = opt.value">{{ opt.label }}</button>
             }
-          </select>
+          </div>
         </div>
       </div>
 
@@ -366,12 +374,13 @@
         </div>
         <div class="kd-field">
           <label>Side</label>
-          <select [(ngModel)]="formData.firstFistulaSide">
-            <option value="">請選擇</option>
+          <div class="kd-choice-group">
             @for (opt of ffSides; track opt.code) {
-              <option [value]="opt.code">{{ opt.label }}</option>
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.firstFistulaSide === opt.code"
+                      (click)="formData.firstFistulaSide = formData.firstFistulaSide === opt.code ? '' : opt.code">{{ opt.label }}</button>
             }
-          </select>
+          </div>
         </div>
         <div class="kd-field">
           <label>Location</label>
