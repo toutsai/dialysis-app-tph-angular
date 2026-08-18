@@ -108,7 +108,8 @@ interface UnitSnapshot {
     hbN: number; hbMean: number | null; hbInRange: number | null; hbOver12: number | null; hbUnder9: number | null;
     caMean: number | null; caOver102: number | null; pMean: number | null; pOver55: number | null;
     ipthN: number; ipthMedian: number | null; ipthOver585: number | null; ipthOver800: number | null; ipthUnder130: number | null;
-    ferritinN: number; tsatN: number;
+    ferritinN: number; ferritinMedian: number | null; ferritinUnder200: number | null; ferritinOver700: number | null;
+    tsatN: number; tsatMedian: number | null; tsatUnder20: number | null; tsatOver40: number | null;
   };
 }
 

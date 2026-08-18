@@ -360,27 +360,37 @@ export function buildUnitSnapshot() {
   for (const [key, codes] of Object.entries(SNAPSHOT_DRUGS)) sets[key] = activeSet(codes)
   const both = [...sets.vafseo].filter((id) => sets.esa.has(id)).length
 
-  // 每人最近一筆檢驗（Hb/Ca/P 取 120 天、iPTH 取 200 天涵蓋季抽）
-  const latestPerPatient = (days) => {
-    const rows = db.prepare(`
-      SELECT patient_id, results FROM lab_reports
-      WHERE report_date >= date(?, ?)
-      ORDER BY report_date
-    `).all(today, `-${days} days`)
-    const latest = new Map()
-    for (const r of rows) {
-      try { latest.set(r.patient_id, JSON.parse(r.results || '{}')) } catch {}
+  // 每人「每個檢驗項目」各自取最近值——月抽(Hb/Ca/P)與季抽(iPTH/Ferritin/TSAT)混在
+  // 不同報告，若只取每人最近一筆報告，季抽值會被其後的月抽報告蓋掉（2026-08-19 踩過）
+  const WINDOW_SHORT = 120 // Hb/Ca/P：月抽
+  const WINDOW_LONG = 200 // iPTH/Ferritin/TSAT：季抽
+  const perKeyLatest = new Map() // patient_id -> { key: { v, date } }
+  const rows = db.prepare(`
+    SELECT patient_id, report_date, results FROM lab_reports
+    WHERE report_date >= date(?, ?)
+    ORDER BY report_date
+  `).all(today, `-${WINDOW_LONG} days`)
+  for (const r of rows) {
+    let data
+    try { data = JSON.parse(r.results || '{}') } catch { continue }
+    let bucket = perKeyLatest.get(r.patient_id)
+    if (!bucket) { bucket = {}; perKeyLatest.set(r.patient_id, bucket) }
+    for (const key of ['Hb', 'Ca', 'P', 'iPTH', 'Ferritin']) {
+      const v = parseFloat(data[key])
+      if (Number.isFinite(v)) bucket[key] = { v, date: r.report_date }
     }
-    return latest
+    const fe = parseFloat(data.Iron)
+    const tibc = parseFloat(data.TIBC)
+    if (fe > 0 && tibc > 0) bucket.TSAT = { v: (fe / tibc) * 100, date: r.report_date }
   }
-  const recent = latestPerPatient(120)
-  const recentLong = latestPerPatient(200)
-
-  const collect = (map, key) => {
+  const cutoffShort = db.prepare('SELECT date(?, ?) AS d').get(today, `-${WINDOW_SHORT} days`).d
+  const collect = (key, longWindow) => {
     const vals = []
-    for (const d of map.values()) {
-      const v = parseFloat(d[key])
-      if (Number.isFinite(v)) vals.push(v)
+    for (const bucket of perKeyLatest.values()) {
+      const entry = bucket[key]
+      if (!entry) continue
+      if (!longWindow && entry.date < cutoffShort) continue
+      vals.push(entry.v)
     }
     return vals
   }
@@ -391,17 +401,12 @@ export function buildUnitSnapshot() {
     return round(s[Math.floor(s.length / 2)], dec)
   }
 
-  const hb = collect(recent, 'Hb')
-  const ca = collect(recent, 'Ca')
-  const p = collect(recent, 'P')
-  const ipth = collect(recentLong, 'iPTH')
-  const ferritin = collect(recent, 'Ferritin')
-  let tsatN = 0
-  for (const d of recent.values()) {
-    const fe = parseFloat(d.Iron)
-    const tibc = parseFloat(d.TIBC)
-    if (fe > 0 && tibc > 0) tsatN++
-  }
+  const hb = collect('Hb', false)
+  const ca = collect('Ca', false)
+  const p = collect('P', false)
+  const ipth = collect('iPTH', true)
+  const ferritin = collect('Ferritin', true)
+  const tsat = collect('TSAT', true)
 
   return {
     date: today,
@@ -430,7 +435,13 @@ export function buildUnitSnapshot() {
       ipthOver800: pct(ipth, (v) => v > 800),
       ipthUnder130: pct(ipth, (v) => v < 130),
       ferritinN: ferritin.length,
-      tsatN
+      ferritinMedian: median(ferritin, 0),
+      ferritinUnder200: pct(ferritin, (v) => v < 200),
+      ferritinOver700: pct(ferritin, (v) => v > 700),
+      tsatN: tsat.length,
+      tsatMedian: median(tsat, 1),
+      tsatUnder20: pct(tsat, (v) => v < 20),
+      tsatOver40: pct(tsat, (v) => v >= 40)
     }
   }
 }

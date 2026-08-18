@@ -423,7 +423,7 @@
       <ol>
         <li><strong>ESA 與 Vafseo 併用@if (snapshot(); as s) { {{ s.drugs.both }} 人 }是最優先待釐清事項</strong>——KDIGO 2026 定位 HIF-PHI 為 ESA 的「替代」而非「加成」，勿併用；併用增加 Hb 過衝與血栓風險（Vafseo 黑框警語），且 Vafseo 現為自費。應逐一清查是「真併用」還是「ESA 藥囑未關檔」。</li>
         <li><strong>Hb 分布整體良好</strong>，但 Hb &gt;12 者@if (snapshot(); as s) {（{{ fmt(s.labs.hbOver12, '%') }}）}超過健保「&gt;11 應暫停 ESA」與 KDIGO「不以 ESA 維持 &gt;11.5」的雙重上限，屬可立即行動的減量對象。</li>
-        <li><strong>鐵指標監測有落差</strong>：近 120 天 Ferritin/TSAT 檢驗筆數極少。PIVOTAL 支持的 proactive 補鐵策略與 HIF-PHI 使用前提（鐵充足）都以定期鐵指標為基礎，建議固定季抽全面涵蓋。</li>
+        <li><strong>鐵指標季抽落實、整體鐵充足，行動點是「依門檻調整」</strong>@if (snapshot(); as s) {：TSAT &lt;20% 者（{{ fmt(s.labs.tsatUnder20, '%') }}）加強補鐵；Ferritin &gt;700 或 TSAT ≥40% 者（{{ fmt(s.labs.ferritinOver700, '%') }}／{{ fmt(s.labs.tsatOver40, '%') }}）依 KDIGO 2026／PIVOTAL 暫停線考慮暫停 IV 鐵}。Vafseo 起始前確認鐵充足（SF &gt;100 且 TSAT &gt;20%）。</li>
         <li><strong>iPTH 兩端都有可觀比例</strong>：高於 585（9×ULN）與低於 130（2×ULN）各約兩成。高端受限於擬鈣劑自費，建議分層處理；低端應檢視活性維生素 D 減停（動力缺乏性骨病風險）。</li>
         <li><strong>Vafseo 健保給付進行中</strong>：2025-05 健保專家會議已建議納入（比照 EPO 給付條件、透析定額內不另核價），條文尚未刊出。給付生效後「換用而非併用」的轉換流程要先準備好。</li>
       </ol>
@@ -452,8 +452,12 @@
           <div class="ev-tile"><div class="v warn">{{ fmt(s.labs.pOver55, '%') }}</div><div class="k">P &gt;5.5</div></div>
           <div class="ev-tile"><div class="v">{{ fmt(s.labs.caMean) }}</div><div class="k">Ca 平均</div></div>
           <div class="ev-tile"><div class="v">{{ fmt(s.labs.caOver102, '%') }}</div><div class="k">Ca &gt;10.2</div></div>
+          <div class="ev-tile"><div class="v">{{ fmt(s.labs.ferritinMedian) }}</div><div class="k">Ferritin 中位數（n={{ s.labs.ferritinN }}）</div></div>
+          <div class="ev-tile"><div class="v warn">{{ fmt(s.labs.ferritinOver700, '%') }}</div><div class="k">Ferritin &gt;700</div></div>
+          <div class="ev-tile"><div class="v">{{ fmt(s.labs.tsatMedian, '%') }}</div><div class="k">TSAT 中位數（n={{ s.labs.tsatN }}）</div></div>
+          <div class="ev-tile"><div class="v warn">{{ fmt(s.labs.tsatUnder20, '%') }}</div><div class="k">TSAT &lt;20%</div></div>
         </div>
-        <p class="ev-footnote">「使用中」＝藥囑起始日 ≤ 今日且無結束日或結束日 ≥ 今日，可能含未關檔的舊藥囑。檢驗為每人最近一筆（Hb/Ca/P 取 120 天內、iPTH 取 200 天內；近 120 天 Ferritin {{ s.labs.ferritinN }} 筆、TSAT {{ s.labs.tsatN }} 筆）。iPTH 2–9×ULN 以 ULN=65 估算為 130–585 pg/mL。</p>
+        <p class="ev-footnote">「使用中」＝藥囑起始日 ≤ 今日且無結束日或結束日 ≥ 今日，可能含未關檔的舊藥囑。檢驗為每人「各項目」各自最近一筆（Hb/Ca/P 取 120 天內；iPTH/Ferritin/TSAT 為季抽、取 200 天內）。TSAT＝Iron÷TIBC×100。iPTH 2–9×ULN 以 ULN=65 估算為 130–585 pg/mL。</p>
       </section>
     }
 
@@ -625,7 +629,7 @@
       <ol class="ev-recs">
         <li><strong>清查 ESA＋Vafseo「併用」病人@if (snapshot(); as s) {（{{ s.drugs.both }} 人）}</strong>——先分辨 ESA 藥囑未關檔與真併用。真併用者回歸「擇一」（KDIGO 2026）；轉換原則：換用當下停 ESA、前 6 個月每月肝功能、Hb 每 2–4 週追蹤（升幅 ≤1 g/dL／2 週）。</li>
         <li><strong>Hb &gt;12 者啟動減量@if (snapshot(); as s) {（{{ fmt(s.labs.hbOver12, '%') }}）}</strong>——健保 &gt;11 應暫停、KDIGO 反對 &gt;11.5；同時檢視 Hb &lt;9 者@if (snapshot(); as s) {（{{ fmt(s.labs.hbUnder9, '%') }}）}的低反應待查因素。</li>
-        <li><strong>恢復每季全面鐵指標監測（Ferritin＋TSAT）</strong>——proactive 補鐵、低反應鑑別、Vafseo 起始前鐵充足確認都需要。目標：SF ≤500 或 TSAT ≤30% 起始／加強；SF &gt;700 或 TSAT ≥40% 暫停。</li>
+        <li><strong>鐵劑依門檻分層調整</strong>——季抽監測已落實，重點是執行面：TSAT &lt;20% 者@if (snapshot(); as s) {（{{ fmt(s.labs.tsatUnder20, '%') }}）}加強補鐵（PIVOTAL proactive 策略）；Ferritin &gt;700 或 TSAT ≥40% 者@if (snapshot(); as s) {（{{ fmt(s.labs.ferritinOver700, '%') }}／{{ fmt(s.labs.tsatOver40, '%') }}）}依 KDIGO 2026 暫停線考慮暫停 IV 鐵；Vafseo 起始前確認 SF &gt;100 且 TSAT &gt;20%。</li>
         <li><strong>iPTH &gt;585 者分層處理@if (snapshot(); as s) {（{{ fmt(s.labs.ipthOver585, '%') }}，其中 &gt;800 佔 {{ fmt(s.labs.ipthOver800, '%') }}）}</strong>——①Ca &lt;10.5 且 Ca×P ≤55 者活性維生素 D 給付內加量；②iPTH ≥800 且 VDRA 不佳者 SDM 討論自費擬鈣劑；③藥物失敗且持續 &gt;800–1000 者轉介副甲狀腺切除（健保給付，勿延誤）。</li>
         <li><strong>iPTH &lt;130 者檢視活性維生素 D 減停@if (snapshot(); as s) {（{{ fmt(s.labs.ipthUnder130, '%') }}）}</strong>——過度抑制屬動力缺乏性骨病高風險；J-DAVID 不支持無 SHPT 使用；亦符合給付條件精神（iPTH &gt;3×ULN 才給付）。</li>
         <li><strong>血磷 &gt;5.5 者納入品質改善@if (snapshot(); as s) {（{{ fmt(s.labs.pOver55, '%') }}）}</strong>——結合劑順應性、含鈣結合劑總量（2B）、飲食衛教、透析處方；對照品質獎勵鈣磷乘積指標。</li>
