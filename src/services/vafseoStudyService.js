@@ -199,6 +199,141 @@ function pairedCompare(pairs) {
   }
 }
 
+// ---- 日曆月趨勢（全中心兩大區塊：貧血 / 鈣磷）--------------------------------
+// dose 欄語意（2026-08-18 對照實際資料）：IFER2/IPAR1 存 mg、ICAC 存 mcg、
+// OUCA1 存顆數(×0.5mcg)、OVAF 存顆數(×300mg)、INES2 存 mcg、IREC1 存 KIU
+const TREND_BLOCKS = [
+  {
+    key: 'anemia',
+    title: '貧血',
+    drugs: [
+      { key: 'esa', label: 'ESA (epoetin 當量)', unit: 'IU/wk', dec: 0, codes: ['INES2', 'IREC1'], toDose: (row, dose, ratio) => (row.order_code === 'INES2' ? dose * ratio : dose * 1000) },
+      { key: 'vafseo', label: 'Vafseo', unit: 'mg/wk', dec: 0, codes: ['OVAF'], toDose: (row, dose) => dose * 300 },
+      { key: 'goodfe', label: 'GoodFe (靜脈鐵)', unit: 'mg/wk', dec: 0, codes: ['IFER2'], toDose: (row, dose) => dose }
+    ],
+    labs: [
+      { key: 'Hb', label: 'Hb', unit: 'g/dL', dec: 2 },
+      { key: 'Ferritin', label: 'Ferritin', unit: 'ng/mL', dec: 0 },
+      { key: 'TSAT', label: 'TSAT', unit: '%', dec: 1 },
+      { key: 'iPTH', label: 'iPTH', unit: 'pg/mL', dec: 1 }
+    ]
+  },
+  {
+    key: 'mineral',
+    title: '鈣磷',
+    drugs: [
+      { key: 'parsabiv', label: 'Parsabiv (etelcalcetide)', unit: 'mg/wk', dec: 2, codes: ['IPAR1'], toDose: (row, dose) => dose },
+      { key: 'cacare', label: 'Cacare (calcitriol 注射)', unit: 'mcg/wk', dec: 1, codes: ['ICAC'], toDose: (row, dose) => dose },
+      { key: 'uca', label: 'U-Ca (口服活性維生素D)', unit: 'mcg/wk', dec: 2, codes: ['OUCA1'], toDose: (row, dose) => dose * 0.5 }
+    ],
+    labs: [
+      { key: 'Ca', label: 'Ca', unit: 'mg/dL', dec: 2 },
+      { key: 'P', label: 'P', unit: 'mg/dL', dec: 2 },
+      { key: 'iPTH', label: 'iPTH', unit: 'pg/mL', dec: 1 }
+    ]
+  }
+]
+
+export function buildMonthlyTrends(userConfig = {}) {
+  const config = { ...DEFAULT_CONFIG, ...userConfig }
+  const db = getDatabase()
+
+  const allCodes = [...new Set(TREND_BLOCKS.flatMap((b) => b.drugs.flatMap((d) => d.codes)))]
+  const orderRows = db.prepare(`
+    SELECT patient_id, order_code, dose, frequency, note, start_date, end_date
+    FROM injection_orders
+    WHERE order_code IN (${allCodes.map(() => '?').join(',')})
+      AND start_date IS NOT NULL AND start_date != ''
+  `).all(...allCodes)
+
+  // 月範圍：藥囑最早起始月 ~ 本月（檢驗較早的月份只有 lab 沒藥囑資訊，一併納入）
+  const nowIdx = monthIndexOf(new Date().toLocaleDateString('sv-SE'))
+  let minIdx = nowIdx
+  for (const r of orderRows) {
+    const mi = monthIndexOf(r.start_date)
+    if (mi !== null && mi < minIdx) minIdx = mi
+  }
+  const labMin = db.prepare('SELECT MIN(report_date) a FROM lab_reports').get()
+  if (labMin && labMin.a) {
+    const mi = monthIndexOf(labMin.a)
+    if (mi !== null && mi < minIdx) minIdx = mi
+  }
+  const monthIdxs = []
+  for (let mi = minIdx; mi <= nowIdx; mi++) monthIdxs.push(mi)
+
+  // 檢驗逐月彙整（全中心；TSAT = Iron/TIBC×100 即時計算）
+  const labMonthly = new Map()
+  for (const lr of db.prepare('SELECT report_date, results FROM lab_reports').all()) {
+    const mi = monthIndexOf(lr.report_date)
+    if (mi === null || mi < minIdx || mi > nowIdx) continue
+    let data
+    try { data = JSON.parse(lr.results || '{}') } catch { continue }
+    let bucket = labMonthly.get(mi)
+    if (!bucket) { bucket = {}; labMonthly.set(mi, bucket) }
+    for (const key of ['Hb', 'Ferritin', 'iPTH', 'Ca', 'P']) {
+      const v = parseFloat(data[key])
+      if (!Number.isFinite(v)) continue
+      ;(bucket[key] = bucket[key] || []).push(v)
+    }
+    const iron = parseFloat(data.Iron)
+    const tibc = parseFloat(data.TIBC)
+    if (iron > 0 && tibc > 0) (bucket.TSAT = bucket.TSAT || []).push((iron / tibc) * 100)
+  }
+
+  const blocks = TREND_BLOCKS.map((b) => ({
+    key: b.key,
+    title: b.title,
+    drugs: b.drugs.map((d) => {
+      const byPatient = new Map()
+      for (const r of orderRows) {
+        if (!d.codes.includes(r.order_code)) continue
+        if (!byPatient.has(r.patient_id)) byPatient.set(r.patient_id, [])
+        byPatient.get(r.patient_id).push(r)
+      }
+      const points = monthIdxs.map((mi) => {
+        const values = []
+        for (const prows of byPatient.values()) {
+          let total = 0
+          let found = false
+          for (const row of prows) {
+            const frac = activeFractionInMonth(row, mi)
+            if (frac <= 0) continue
+            const doseNum = parseFloat(row.dose)
+            if (!Number.isFinite(doseNum)) continue
+            let freq = parseFreqPerWeek(row.note)
+            if (freq === null) freq = parseFreqPerWeek(row.frequency)
+            if (freq === null) freq = 1
+            total += d.toDose(row, doseNum, config.darbeRatio) * freq * frac
+            found = true
+          }
+          if (found && total > 0) values.push(total)
+        }
+        return {
+          month: monthKeyFromIndex(mi),
+          users: values.length,
+          meanWeekly: values.length ? round(mean(values), d.dec) : null
+        }
+      })
+      return { key: d.key, label: d.label, unit: d.unit, points }
+    }),
+    labs: b.labs.map((l) => ({
+      key: l.key,
+      label: l.label,
+      unit: l.unit,
+      points: monthIdxs.map((mi) => {
+        const vals = (labMonthly.get(mi) || {})[l.key] || []
+        return { month: monthKeyFromIndex(mi), n: vals.length, mean: vals.length ? round(mean(vals), l.dec) : null }
+      })
+    }))
+  }))
+
+  return {
+    generatedAt: new Date().toLocaleString('sv-SE'),
+    months: monthIdxs.map(monthKeyFromIndex),
+    blocks
+  }
+}
+
 // ---- 主分析 -----------------------------------------------------------------
 export function buildVafseoStudy(userConfig = {}) {
   const config = { ...DEFAULT_CONFIG, ...userConfig }

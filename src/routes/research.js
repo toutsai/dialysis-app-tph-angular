@@ -3,7 +3,7 @@
 import { Router } from 'express'
 import { getDatabase } from '../db/init.js'
 import { authenticate, requireAnyRole } from '../middleware/auth.js'
-import { buildVafseoStudy, DEFAULT_CONFIG } from '../services/vafseoStudyService.js'
+import { buildVafseoStudy, buildMonthlyTrends, DEFAULT_CONFIG } from '../services/vafseoStudyService.js'
 
 const router = Router()
 const isResearchRole = [authenticate, requireAnyRole('admin', 'contributor')]
@@ -31,6 +31,20 @@ router.get('/vafseo-study', ...isResearchRole, (req, res) => {
     res.json(buildVafseoStudy(config))
   } catch (error) {
     console.error('Vafseo 研究分析失敗:', error)
+    res.status(500).json({ error: true, message: '分析計算失敗' })
+  }
+})
+
+/**
+ * GET /api/research/monthly-trends
+ * 全中心日曆月趨勢（貧血/鈣磷兩大區塊：各藥使用人數+平均週劑量 vs 檢驗月平均）
+ */
+router.get('/monthly-trends', ...isResearchRole, (req, res) => {
+  try {
+    const config = loadConfig()
+    res.json(buildMonthlyTrends(config))
+  } catch (error) {
+    console.error('月趨勢分析失敗:', error)
     res.status(500).json({ error: true, message: '分析計算失敗' })
   }
 })

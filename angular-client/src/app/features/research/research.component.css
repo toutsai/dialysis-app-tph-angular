@@ -2,24 +2,65 @@
   padding: 16px 20px 40px;
 }
 
+/* 標題列比照其他頁面（my-patients 樣式） */
 .page-header {
+  padding-bottom: 0.75rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.header-toolbar {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 12px;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
 }
 
-.page-header h2 {
-  margin: 0;
-  font-size: 1.25rem;
-}
-
-.header-actions {
+.toolbar-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.page-title {
+  font-size: 32px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.block-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.tab-btn {
+  padding: 8px 18px;
+  border: 1px solid #b0bec5;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: #546e7a;
+}
+
+.tab-btn:hover {
+  background: #eceff1;
+}
+
+.tab-btn.active {
+  background: #1565c0;
+  border-color: #1565c0;
+  color: #fff;
+  font-weight: 600;
 }
 
 .generated-at {
@@ -211,6 +252,61 @@
   font-size: 0.9rem;
   font-family: inherit;
   resize: vertical;
+}
+
+/* 月趨勢小倍數圖 */
+.section-hint {
+  margin: -4px 0 10px;
+  font-size: 0.8rem;
+  color: #90a4ae;
+}
+
+.mini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 14px;
+}
+
+.mini-card {
+  border: 1px solid #e8ecef;
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #fff;
+}
+
+.mini-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #37474f;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.mini-title .unit {
+  font-weight: 400;
+  font-size: 0.76rem;
+  color: #90a4ae;
+}
+
+.mini-title .bar-max {
+  margin-left: auto;
+  font-weight: 400;
+  font-size: 0.74rem;
+  color: #90a4ae;
+}
+
+.mini-svg {
+  width: 100%;
+  display: block;
+}
+
+.mini-empty {
+  color: #b0bec5;
+  text-align: center;
+  padding: 30px 0;
+  font-size: 0.85rem;
 }
 
 /* 表格共通 */

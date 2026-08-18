@@ -92,6 +92,15 @@ interface StudyResponse {
   patients: StudyPatient[];
 }
 
+// ---- 月趨勢 API 型別（/research/monthly-trends） ----
+interface TrendDrugPoint { month: string; users: number; meanWeekly: number | null }
+interface TrendLabPoint { month: string; n: number; mean: number | null }
+interface TrendDrug { key: string; label: string; unit: string; points: TrendDrugPoint[] }
+interface TrendLab { key: string; label: string; unit: string; points: TrendLabPoint[] }
+interface TrendBlockData { key: string; title: string; drugs: TrendDrug[]; labs: TrendLab[] }
+interface TrendsResponse { generatedAt: string | null; months: string[]; blocks: TrendBlockData[] }
+
+// ---- 圖表模型 ----
 interface ChartDot {
   cx: number;
   cy: number;
@@ -109,10 +118,30 @@ interface LineChart {
   band: { y: number; h: number } | null;
 }
 
+interface MiniChart {
+  W: number;
+  H: number;
+  color: string;
+  bars: { x: number; y: number; w: number; h: number; count: number; month: string }[];
+  dots: { cx: number; cy: number; value: number; month: string }[];
+  polyline: string;
+  xTicks: { x: number; label: string }[];
+  yTicks: { y: number; label: string }[];
+  maxBar: number;
+}
+
+interface TrendChartCard { label: string; unit: string; chart: MiniChart | null }
+interface TrendBlockView { key: string; title: string; drugCharts: TrendChartCard[]; labCharts: TrendChartCard[] }
+
 const CHART_W = 680;
 const CHART_H = 210;
 const PAD_X = 46;
 const PAD_Y = 22;
+
+const MINI_W = 460;
+const MINI_H = 180;
+
+type BlockTab = 'anemia' | 'mineral' | 'vafseo';
 
 @Component({
   selector: 'app-research',
@@ -123,6 +152,8 @@ const PAD_Y = 22;
 })
 export class ResearchComponent implements OnInit {
   readonly data = signal<StudyResponse | null>(null);
+  readonly trends = signal<TrendsResponse | null>(null);
+  activeBlock: BlockTab = 'anemia';
   loading = false;
   saving = false;
   errorMessage = '';
@@ -139,6 +170,8 @@ export class ResearchComponent implements OnInit {
 
   showExcluded = true;
   expandedPatientId: string | null = null;
+  // 展開時算一次存欄位，模板勿直接呼叫重算（CD 週期效能）
+  expandedMonths: ({ offset: number } & MonthMetrics)[] = [];
 
   readonly outcomeRows = computed(() => {
     const d = this.data();
@@ -162,6 +195,32 @@ export class ResearchComponent implements OnInit {
   });
   // showExcluded 需要 signal 版本讓 computed 追蹤
   private readonly showExcludedSig = signal(true);
+
+  // ---- 月趨勢圖（兩大區塊，小倍數圖：淡色柱=人數/筆數、實線=平均） ----
+  readonly trendBlocks = computed<TrendBlockView[]>(() => {
+    const t = this.trends();
+    if (!t) return [];
+    return t.blocks.map((b) => ({
+      key: b.key,
+      title: b.title,
+      drugCharts: b.drugs.map((d) => ({
+        label: d.label,
+        unit: d.unit,
+        chart: this.buildMiniChart(
+          d.points.map((p) => ({ month: p.month, value: p.meanWeekly, count: p.users })),
+          '#1565c0',
+        ),
+      })),
+      labCharts: b.labs.map((l) => ({
+        label: l.label,
+        unit: l.unit,
+        chart: this.buildMiniChart(
+          l.points.map((p) => ({ month: p.month, value: p.mean, count: p.n })),
+          '#c62828',
+        ),
+      })),
+    }));
+  });
 
   readonly hbChart = computed<LineChart | null>(() =>
     this.buildChart(
@@ -208,13 +267,21 @@ export class ResearchComponent implements OnInit {
     await this.load();
   }
 
+  setBlock(tab: BlockTab): void {
+    this.activeBlock = tab;
+  }
+
   async load(): Promise<void> {
     this.loading = true;
     this.errorMessage = '';
     try {
-      const res = await firstValueFrom(this.api.get<StudyResponse>('/research/vafseo-study'));
-      this.data.set(res);
-      const c = res.config;
+      const [study, trends] = await Promise.all([
+        firstValueFrom(this.api.get<StudyResponse>('/research/vafseo-study')),
+        firstValueFrom(this.api.get<TrendsResponse>('/research/monthly-trends')),
+      ]);
+      this.data.set(study);
+      this.trends.set(trends);
+      const c = study.config;
       this.cfgDarbeRatio = c.darbeRatio;
       this.cfgBaselineFrom = c.baselineFrom;
       this.cfgBaselineTo = c.baselineTo;
@@ -224,7 +291,7 @@ export class ResearchComponent implements OnInit {
       this.cfgOffsetMax = c.offsetMax;
       this.cfgNotes = c.notes || '';
     } catch (err) {
-      console.error('載入 Vafseo 研究分析失敗:', err);
+      console.error('載入研究分析失敗:', err);
       this.errorMessage = '載入分析失敗，請稍後重試';
     } finally {
       this.loading = false;
@@ -272,9 +339,6 @@ export class ResearchComponent implements OnInit {
     this.showExcludedSig.set(this.showExcluded);
   }
 
-  // 展開時算一次存欄位，模板勿直接呼叫重算（CD 週期效能）
-  expandedMonths: ({ offset: number } & MonthMetrics)[] = [];
-
   toggleExpand(p: StudyPatient): void {
     if (this.expandedPatientId === p.patientId) {
       this.expandedPatientId = null;
@@ -300,7 +364,69 @@ export class ResearchComponent implements OnInit {
     return ci ? `${ci[0]} ~ ${ci[1]}` : '—';
   }
 
-  // ---- SVG 折線圖組裝（照 aki-map 手刻 SVG 模式，不用 chart.js 省 canvas 生命週期） ----
+  // ---- 月趨勢小圖組裝（淡色柱=人數/筆數自成比例，實線=平均值） ----
+  private buildMiniChart(
+    points: { month: string; value: number | null; count: number }[],
+    color: string,
+  ): MiniChart | null {
+    const withValue = points.filter((p) => p.value !== null);
+    if (!withValue.length) return null;
+    const n = points.length;
+    const padL = 46;
+    const padR = 8;
+    const padT = 12;
+    const padB = 18;
+    const plotW = MINI_W - padL - padR;
+    const plotH = MINI_H - padT - padB;
+    const step = plotW / n;
+    const xAt = (i: number) => padL + step * (i + 0.5);
+
+    const values = withValue.map((p) => p.value as number);
+    let minV = Math.min(...values);
+    let maxV = Math.max(...values);
+    if (minV === maxV) { minV -= 1; maxV += 1; }
+    const span = maxV - minV;
+    // 上下各留 8% 邊距避免點貼邊
+    const yAt = (v: number) => padT + plotH - ((v - minV) / span) * plotH * 0.84 - plotH * 0.08;
+
+    const maxBar = Math.max(...points.map((p) => p.count), 1);
+    const bars = points
+      .filter((p) => p.count > 0)
+      .map((p) => {
+        const i = points.indexOf(p);
+        const h = (p.count / maxBar) * plotH;
+        return { x: padL + step * i + step * 0.22, y: padT + plotH - h, w: step * 0.56, h, count: p.count, month: p.month };
+      });
+
+    const dots = points
+      .map((p, i) => (p.value === null ? null : { cx: xAt(i), cy: yAt(p.value), value: p.value, month: p.month }))
+      .filter((d): d is { cx: number; cy: number; value: number; month: string } => d !== null);
+
+    const every = Math.max(1, Math.ceil(n / 8));
+    const xTicks = points
+      .map((p, i) => ({ i, p }))
+      .filter(({ i }) => i % every === 0)
+      .map(({ i, p }) => ({ x: xAt(i), label: p.month.slice(2) }));
+    const fmtTick = (v: number) => (Math.abs(v) >= 100 ? String(Math.round(v)) : String(Math.round(v * 10) / 10));
+    const yTicks = [0, 0.5, 1].map((f) => {
+      const v = minV + span * f;
+      return { y: yAt(v), label: fmtTick(v) };
+    });
+
+    return {
+      W: MINI_W,
+      H: MINI_H,
+      color,
+      bars,
+      dots,
+      polyline: dots.map((d) => `${d.cx.toFixed(1)},${d.cy.toFixed(1)}`).join(' '),
+      xTicks,
+      yTicks,
+      maxBar,
+    };
+  }
+
+  // ---- 事件時間折線圖組裝（照 aki-map 手刻 SVG 模式，不用 chart.js 省 canvas 生命週期） ----
   private buildChart(
     seriesDefs: { key: string; color: string; label: string }[],
     valueOf: (pt: EventTimePoint, key: string) => number | null,
