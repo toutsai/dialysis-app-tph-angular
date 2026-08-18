@@ -3,7 +3,7 @@
 import { Router } from 'express'
 import { getDatabase } from '../db/init.js'
 import { authenticate, requireAnyRole } from '../middleware/auth.js'
-import { buildVafseoStudy, buildMonthlyTrends, DEFAULT_CONFIG } from '../services/vafseoStudyService.js'
+import { buildVafseoStudy, buildMonthlyTrends, buildUnitSnapshot, DEFAULT_CONFIG } from '../services/vafseoStudyService.js'
 
 const router = Router()
 const isResearchRole = [authenticate, requireAnyRole('admin', 'contributor')]
@@ -45,6 +45,19 @@ router.get('/monthly-trends', ...isResearchRole, (req, res) => {
     res.json(buildMonthlyTrends(config))
   } catch (error) {
     console.error('月趨勢分析失敗:', error)
+    res.status(500).json({ error: true, message: '分析計算失敗' })
+  }
+})
+
+/**
+ * GET /api/research/unit-snapshot
+ * 本院現況快照（實證與給付頁籤：活躍用藥人數＋檢驗分布即時計算）
+ */
+router.get('/unit-snapshot', ...isResearchRole, (req, res) => {
+  try {
+    res.json(buildUnitSnapshot())
+  } catch (error) {
+    console.error('本院快照計算失敗:', error)
     res.status(500).json({ error: true, message: '分析計算失敗' })
   }
 })

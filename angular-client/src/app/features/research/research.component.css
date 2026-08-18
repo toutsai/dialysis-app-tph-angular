@@ -416,6 +416,184 @@ thead th {
   background: #fff8e1;
 }
 
+/* 實證與給付頁籤 */
+.ev-keypoints {
+  background: #f0f7f5;
+  border-color: #bcd8d3;
+}
+
+.ev-keypoints ol {
+  margin: 0;
+  padding-left: 1.4em;
+}
+
+.ev-keypoints li {
+  margin-bottom: 8px;
+}
+
+.ev-stat-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.ev-tile {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #fff;
+}
+
+.ev-tile .v {
+  font-size: 1.4rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #0e6e66;
+  line-height: 1.2;
+}
+
+.ev-tile .v.warn { color: #b45309; }
+.ev-tile .v.danger { color: #a33b2e; }
+
+.ev-tile .k {
+  font-size: 0.76rem;
+  color: #78909c;
+  margin-top: 2px;
+}
+
+.ev-footnote {
+  font-size: 0.78rem;
+  color: #90a4ae;
+  margin: 6px 0 0;
+}
+
+.ev-drug-title {
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: #0e6e66;
+  margin: 24px 0 8px;
+  padding-top: 14px;
+  border-top: 1px solid #eceff1;
+}
+
+.ev-drug-title:first-of-type {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 12px;
+}
+
+.ev-table td, .ev-table th {
+  text-align: left;
+  white-space: normal;
+  min-width: 90px;
+}
+
+.ev-src {
+  font-size: 0.76rem;
+  color: #90a4ae;
+  white-space: nowrap;
+}
+
+.ev-pros-cons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 12px;
+  margin: 10px 0;
+}
+
+.ev-pc {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 10px 16px;
+  background: #fff;
+}
+
+.ev-pc h5 {
+  margin: 0 0 6px;
+  font-size: 0.83rem;
+  letter-spacing: 0.06em;
+}
+
+.ev-pc.pros h5 { color: #0e6e66; }
+.ev-pc.cons h5 { color: #a33b2e; }
+
+.ev-pc ul {
+  margin: 0;
+  padding-left: 1.2em;
+}
+
+.ev-pc li { margin-bottom: 5px; }
+.ev-pc li:last-child { margin-bottom: 0; }
+
+.ev-nhi {
+  border: 1px dashed #bcd8d3;
+  border-radius: 8px;
+  padding: 10px 16px;
+  margin: 10px 0;
+  background: #fbfdfc;
+}
+
+.ev-blackbox {
+  border: 2px solid #a33b2e;
+  border-radius: 8px;
+  background: #faeeeb;
+  padding: 10px 16px;
+  margin: 10px 0;
+}
+
+.ev-blackbox p { margin: 4px 0 0; }
+
+.ev-tag {
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.ev-nhi .ev-tag { color: #0e6e66; }
+.ev-blackbox .ev-tag { color: #a33b2e; }
+
+.ev-nhi ul {
+  margin: 6px 0 0;
+  padding-left: 1.2em;
+}
+
+.ev-nhi li { margin-bottom: 3px; }
+
+.ev-note {
+  font-size: 0.88rem;
+  color: #546e7a;
+  background: #f8fafb;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin: 16px 0 0;
+}
+
+.ev-recs {
+  margin: 0;
+  padding-left: 1.5em;
+}
+
+.ev-recs li {
+  margin-bottom: 12px;
+  line-height: 1.7;
+}
+
+.ev-refs {
+  font-size: 0.85rem;
+  color: #546e7a;
+}
+
+.ev-refs a { color: #0e6e66; }
+
+.ev-disclaimer {
+  border-top: 1px solid #eceff1;
+  padding-top: 10px;
+  margin-top: 12px;
+  font-size: 0.78rem;
+  color: #90a4ae;
+}
+
 /* 逐病人 */
 .patients-header {
   display: flex;

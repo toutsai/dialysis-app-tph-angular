@@ -7,6 +7,7 @@
           <button class="tab-btn" [class.active]="activeBlock === 'anemia'" (click)="setBlock('anemia')">貧血趨勢</button>
           <button class="tab-btn" [class.active]="activeBlock === 'mineral'" (click)="setBlock('mineral')">鈣磷趨勢</button>
           <button class="tab-btn" [class.active]="activeBlock === 'vafseo'" (click)="setBlock('vafseo')">Vafseo 事件時間</button>
+          <button class="tab-btn" [class.active]="activeBlock === 'evidence'" (click)="setBlock('evidence')">實證與給付</button>
         </nav>
       </div>
       <div class="header-controls">
@@ -413,5 +414,251 @@
         </div>
       </section>
     }
+  }
+
+  <!-- ============ 實證與給付區塊 ============ -->
+  @if (activeBlock === 'evidence') {
+    <section class="card ev-keypoints">
+      <h3>重點摘要</h3>
+      <ol>
+        <li><strong>ESA 與 Vafseo 併用@if (snapshot(); as s) { {{ s.drugs.both }} 人 }是最優先待釐清事項</strong>——KDIGO 2026 定位 HIF-PHI 為 ESA 的「替代」而非「加成」，勿併用；併用增加 Hb 過衝與血栓風險（Vafseo 黑框警語），且 Vafseo 現為自費。應逐一清查是「真併用」還是「ESA 藥囑未關檔」。</li>
+        <li><strong>Hb 分布整體良好</strong>，但 Hb &gt;12 者@if (snapshot(); as s) {（{{ fmt(s.labs.hbOver12, '%') }}）}超過健保「&gt;11 應暫停 ESA」與 KDIGO「不以 ESA 維持 &gt;11.5」的雙重上限，屬可立即行動的減量對象。</li>
+        <li><strong>鐵指標監測有落差</strong>：近 120 天 Ferritin/TSAT 檢驗筆數極少。PIVOTAL 支持的 proactive 補鐵策略與 HIF-PHI 使用前提（鐵充足）都以定期鐵指標為基礎，建議固定季抽全面涵蓋。</li>
+        <li><strong>iPTH 兩端都有可觀比例</strong>：高於 585（9×ULN）與低於 130（2×ULN）各約兩成。高端受限於擬鈣劑自費，建議分層處理；低端應檢視活性維生素 D 減停（動力缺乏性骨病風險）。</li>
+        <li><strong>Vafseo 健保給付進行中</strong>：2025-05 健保專家會議已建議納入（比照 EPO 給付條件、透析定額內不另核價），條文尚未刊出。給付生效後「換用而非併用」的轉換流程要先準備好。</li>
+      </ol>
+    </section>
+
+    @if (snapshot(); as s) {
+      <section class="card">
+        <h3>本院現況快照（{{ s.date }}，即時計算）</h3>
+        <div class="ev-stat-strip">
+          <div class="ev-tile"><div class="v">{{ s.drugs.esa }}</div><div class="k">ESA 使用中</div></div>
+          <div class="ev-tile"><div class="v">{{ s.drugs.vafseo }}</div><div class="k">Vafseo 使用中</div></div>
+          <div class="ev-tile"><div class="v danger">{{ s.drugs.both }}</div><div class="k">ESA＋Vafseo 併用</div></div>
+          <div class="ev-tile"><div class="v">{{ s.drugs.iron }}</div><div class="k">靜脈鐵使用中</div></div>
+          <div class="ev-tile"><div class="v">{{ s.drugs.parsabiv }}</div><div class="k">Parsabiv 使用中</div></div>
+          <div class="ev-tile"><div class="v">{{ s.drugs.cacare }}</div><div class="k">Cacare 使用中</div></div>
+          <div class="ev-tile"><div class="v">{{ s.drugs.uca }}</div><div class="k">U-Ca 使用中</div></div>
+        </div>
+        <div class="ev-stat-strip">
+          <div class="ev-tile"><div class="v">{{ fmt(s.labs.hbMean) }}</div><div class="k">Hb 平均 (g/dL)</div></div>
+          <div class="ev-tile"><div class="v">{{ fmt(s.labs.hbInRange, '%') }}</div><div class="k">Hb 10–12</div></div>
+          <div class="ev-tile"><div class="v warn">{{ fmt(s.labs.hbOver12, '%') }}</div><div class="k">Hb &gt;12</div></div>
+          <div class="ev-tile"><div class="v warn">{{ fmt(s.labs.hbUnder9, '%') }}</div><div class="k">Hb &lt;9</div></div>
+          <div class="ev-tile"><div class="v">{{ fmt(s.labs.ipthMedian) }}</div><div class="k">iPTH 中位數</div></div>
+          <div class="ev-tile"><div class="v warn">{{ fmt(s.labs.ipthOver585, '%') }}</div><div class="k">iPTH &gt;585</div></div>
+          <div class="ev-tile"><div class="v warn">{{ fmt(s.labs.ipthUnder130, '%') }}</div><div class="k">iPTH &lt;130</div></div>
+          <div class="ev-tile"><div class="v warn">{{ fmt(s.labs.pOver55, '%') }}</div><div class="k">P &gt;5.5</div></div>
+          <div class="ev-tile"><div class="v">{{ fmt(s.labs.caMean) }}</div><div class="k">Ca 平均</div></div>
+          <div class="ev-tile"><div class="v">{{ fmt(s.labs.caOver102, '%') }}</div><div class="k">Ca &gt;10.2</div></div>
+        </div>
+        <p class="ev-footnote">「使用中」＝藥囑起始日 ≤ 今日且無結束日或結束日 ≥ 今日，可能含未關檔的舊藥囑。檢驗為每人最近一筆（Hb/Ca/P 取 120 天內、iPTH 取 200 天內；近 120 天 Ferritin {{ s.labs.ferritinN }} 筆、TSAT {{ s.labs.tsatN }} 筆）。iPTH 2–9×ULN 以 ULN=65 估算為 130–585 pg/mL。</p>
+      </section>
+    }
+
+    <section class="card">
+      <h3>貧血用藥實證</h3>
+
+      <h4 class="ev-drug-title">ESA（Darbepoetin／Epoetin beta）</h4>
+      <div class="table-scroll"><table class="ev-table">
+        <thead><tr><th>試驗</th><th>族群</th><th>比較</th><th>主要結果</th><th>意涵</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Normal Hematocrit</strong><br><span class="ev-src">NEJM 1998</span></td><td>HD＋心臟病 1,233 人</td><td>Hct 42% vs 30%</td><td>死亡/MI RR 1.3（0.9–1.9），提前中止</td><td>透析病人勿正常化 Hct</td></tr>
+          <tr><td><strong>CHOIR</strong><br><span class="ev-src">NEJM 2006</span></td><td>CKD 非透析 1,432 人</td><td>Hb 13.5 vs 11.3</td><td>複合心血管終點 HR 1.34（1.03–1.74）</td><td>高目標顯著增害</td></tr>
+          <tr><td><strong>CREATE</strong><br><span class="ev-src">NEJM 2006</span></td><td>CKD 3–5 期 603 人</td><td>Hb 13–15 vs 10.5–11.5</td><td>心血管事件無差異，高標組較早需透析</td><td>完全矯正無益</td></tr>
+          <tr><td><strong>TREAT</strong><br><span class="ev-src">NEJM 2009</span></td><td>DM＋CKD 非透析 4,038 人</td><td>Darbepoetin（目標 13）vs 安慰劑</td><td>主要終點無益；中風 HR 1.92（1.38–2.68）</td><td>高目標中風倍增</td></tr>
+        </tbody>
+      </table></div>
+      <div class="ev-pros-cons">
+        <div class="ev-pc pros"><h5>效益</h5><ul>
+          <li>升 Hb、減輸血證據充分，劑量調控成熟</li>
+          <li>KDIGO 2026 仍為第一線（優先於 HIF-PHI，2D）</li>
+          <li>健保給付、院內給藥順應性無虞</li>
+        </ul></div>
+        <div class="ev-pc cons"><h5>風險與缺點</h5><ul>
+          <li>Hb 目標 &gt;11.5–13 增加死亡、中風、血栓（&gt;13 為 1A 等級反對）</li>
+          <li>低反應者追打高劑量風險更高——勿超過初始劑量 2 倍，先找可矯正原因（缺鐵、發炎、SHPT）</li>
+          <li>血壓上升、血管通路血栓</li>
+        </ul></div>
+      </div>
+      <div class="ev-nhi">
+        <span class="ev-tag">台灣健保給付（4.1.1）</span>
+        <ul>
+          <li>起始：透析病人 <strong>Hb &lt;9</strong>；目標 Hb 10；<strong>Hb &gt;11 應即暫停</strong></li>
+          <li>劑量上限：每月 EPO <strong>20,000 U</strong> 或 darbepoetin <strong>100 mcg</strong> 為原則，超量須附理由</li>
+          <li>治療前與治療中每 3–6 個月評估鐵儲存（透析 ferritin &lt;200 提示缺鐵）</li>
+        </ul>
+      </div>
+
+      <h4 class="ev-drug-title">Vadadustat（Vafseo，HIF-PHI 口服）</h4>
+      <div class="table-scroll"><table class="ev-table">
+        <thead><tr><th>試驗</th><th>族群</th><th>比較</th><th>主要結果</th><th>意涵</th></tr></thead>
+        <tbody>
+          <tr><td><strong>INNO2VATE</strong><br><span class="ev-src">NEJM 2021</span></td><td>透析 3,923 人</td><td>vs darbepoetin</td><td>MACE 18.2% vs 19.3%，HR 0.96（0.83–1.11）非劣性成立；Hb 效果相當</td><td>透析族群安全性療效與 ESA 相當</td></tr>
+          <tr><td><strong>PRO2TECT</strong><br><span class="ev-src">NEJM 2021</span></td><td>非透析 CKD</td><td>vs darbepoetin</td><td>MACE HR 1.17（1.01–1.36），<strong>未達非劣性</strong></td><td>非透析族群有安全警訊，未獲適應症</td></tr>
+          <tr><td><strong>Meta-analysis</strong><br><span class="ev-src">CKJ 2023，26,478 人</span></td><td>HIF-PHI class</td><td>vs ESA</td><td>MACE、血栓、死亡無顯著差異；hepcidin/ferritin 下降、IV 鐵需求較低</td><td>Class 安全性與 ESA 相當；長期腫瘤證據不足</td></tr>
+          <tr><td><strong>ASCEND-D</strong><br><span class="ev-src">NEJM 2021</span></td><td>透析 2,964 人（daprodustat）</td><td>vs ESA</td><td>MACE HR 0.93（0.81–1.07）非劣性</td><td>Class 內透析證據一致；roxadustat 因血栓疑慮遭 FDA 否決</td></tr>
+        </tbody>
+      </table></div>
+      <div class="ev-blackbox">
+        <span class="ev-tag">FDA 黑框警語（2024 核准，限透析 ≥3 個月）</span>
+        <p>死亡、心肌梗塞、中風、靜脈血栓與血管通路血栓——<strong>Hb 兩週升 &gt;1 g/dL 或目標 &gt;11 時風險更高</strong>。另注意肝毒性（起始前與前 6 個月每月測 ALT/AST/bilirubin）、高血壓惡化、癲癇、胃腸道糜爛。</p>
+      </div>
+      <div class="ev-pros-cons">
+        <div class="ev-pc pros"><h5>效益</h5><ul>
+          <li>口服；Hb 提升與 ESA 相當（INNO2VATE）</li>
+          <li>改善鐵利用（hepcidin↓）、減 IV 鐵與 ESA 需求；<strong>ESA 低反應／發炎型貧血</strong>的合理替代（KDIGO 2026：頑固低反應者可試 3–4 個月）</li>
+          <li>日本 2020 年起大規模使用，上市後監測未見新警訊</li>
+        </ul></div>
+        <div class="ev-pc cons"><h5>風險與缺點</h5><ul>
+          <li>黑框警語如上；起始前提是<strong>鐵充足</strong>（TSN：SF &gt;100 且 TSAT &gt;20%）</li>
+          <li>KDIGO 2026 仍以 ESA 為第一線，HIF-PHI 為替代，<strong>勿與 ESA 併用</strong></li>
+          <li>台灣目前<strong>自費</strong>（給付建議通過、條文未刊）；長期腫瘤安全性證據累積中</li>
+        </ul></div>
+      </div>
+      <div class="ev-nhi">
+        <span class="ev-tag">台灣現況</span>
+        <ul>
+          <li>TFDA 適應症：透析成人 CKD 貧血；起始 300 mg QD、最高 600 mg QD</li>
+          <li>健保：2025-05 專家會議<strong>建議納入給付</strong>（限血液透析、比照 EPO 條件、定額內不另核價）；至今條文未刊，仍自費——以健保署公告為準</li>
+          <li>Roxadustat 未取得台灣藥證；台灣 HIF-PHI 實際選項即 vadadustat</li>
+        </ul>
+      </div>
+
+      <h4 class="ev-drug-title">靜脈鐵劑（GoodFe）</h4>
+      <div class="table-scroll"><table class="ev-table">
+        <thead><tr><th>試驗</th><th>族群</th><th>比較</th><th>主要結果</th><th>意涵</th></tr></thead>
+        <tbody>
+          <tr><td><strong>PIVOTAL</strong><br><span class="ev-src">NEJM 2019</span></td><td>新進 HD 2,141 人，2.1 年</td><td>Proactive 高劑量（400 mg/月）vs reactive 低劑量</td><td>複合終點 HR 0.85（0.73–1.00）優越性 P=0.04；ESA 月劑量少 7,539 IU；<strong>感染無增加</strong></td><td>主動補鐵較優，且省 ESA</td></tr>
+        </tbody>
+      </table></div>
+      <div class="ev-pros-cons">
+        <div class="ev-pc pros"><h5>效益</h5><ul>
+          <li>Proactive 策略減少心血管複合事件並降 ESA 需求（RCT 硬終點）</li>
+          <li>KDIGO 2026 放寬：ferritin ≤500 或 TSAT ≤30% 起始 IV 鐵；<strong>暫停線 ferritin &gt;700 或 TSAT ≥40%</strong></li>
+          <li>感染疑慮在 PIVOTAL 未獲證實</li>
+        </ul></div>
+        <div class="ev-pc cons"><h5>風險與缺點</h5><ul>
+          <li>長期組織鐵沉積安全性仍是證據缺口；ferritin 受發炎干擾需搭配 TSAT 判讀</li>
+          <li>PIVOTAL 用 iron sucrose；ferric chloride 為 class 效應外推</li>
+          <li>需要規律鐵指標監測支撐</li>
+        </ul></div>
+      </div>
+      <div class="ev-nhi">
+        <span class="ev-tag">台灣現況</span>
+        <ul>
+          <li>健保無鐵劑專屬給付條文（透析定額已含藥劑費）；EPO 條文間接要求每 3–6 個月鐵儲存評估</li>
+          <li>TSN 2022：SF ≤300 或 TSAT ≤30% 可考慮鐵劑；上限 SF 800、TSAT 40%；HD 建議 IV 途徑</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>鈣磷／副甲狀腺用藥實證</h3>
+
+      <h4 class="ev-drug-title">Etelcalcetide（Parsabiv，靜脈擬鈣劑）</h4>
+      <div class="table-scroll"><table class="ev-table">
+        <thead><tr><th>試驗</th><th>族群</th><th>比較</th><th>主要結果</th><th>意涵</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Phase 3 ×2</strong><br><span class="ev-src">JAMA 2017</span></td><td>HD＋SHPT 1,023 人</td><td>vs 安慰劑，26 週</td><td>iPTH 降 &gt;30%：74.7% vs 8.9%；血鈣下降 63.8%、症狀性低血鈣 7.0%</td><td>降 PTH 強效；低血鈣是主要代價</td></tr>
+          <tr><td><strong>Head-to-head</strong><br><span class="ev-src">JAMA 2017</span></td><td>HD 683 人，雙盲</td><td>vs cinacalcet</td><td>iPTH 降 &gt;30%：68.2% vs 57.7%（非劣＋次級優越）；低血鈣 68.9% vs 59.8%</td><td>比口服更有效，低血鈣也更多</td></tr>
+          <tr><td><strong>EVOLVE</strong><br><span class="ev-src">NEJM 2012（cinacalcet）</span></td><td>HD 3,883 人</td><td>vs 安慰劑</td><td>死亡/CV 複合 ITT HR 0.93（P=0.11）<strong>陰性</strong>；lag-censoring HR 0.85（P=0.003）</td><td>Class 硬終點僅「可能有益」；etelcalcetide 無硬終點 RCT</td></tr>
+          <tr><td><strong>FGF23／LVH</strong><br><span class="ev-src">CKJ 2020；Circ Res 2021</span></td><td>次級／小型 RCT</td><td>—</td><td>FGF23 −56%；vs alfacalcidol 12 個月 LVMI 差 −6.9 g/m²</td><td>機轉面訊號正向，尚非硬終點</td></tr>
+        </tbody>
+      </table></div>
+      <div class="ev-pros-cons">
+        <div class="ev-pc pros"><h5>效益</h5><ul>
+          <li>降 iPTH 最強、透析時給藥順應性 100%，同時降 Ca、P、FGF23</li>
+          <li>KDIGO 2017 與 VDRA 並列 G5D 降 PTH 選項（2B），可併用 VDRA 抵消低血鈣</li>
+          <li>「高 iPTH＋高 Ca／高 P」型 SHPT 唯一不推升鈣磷的藥物</li>
+        </ul></div>
+        <div class="ev-pc cons"><h5>風險與缺點</h5><ul>
+          <li>低血鈣常見（血鈣下降 6 成、症狀性 7%）</li>
+          <li>無死亡／骨折硬終點 RCT；EVOLVE 主要終點陰性</li>
+          <li>台灣<strong>自費</strong>（約 730 元/支）——使用人數的主要限制</li>
+        </ul></div>
+      </div>
+      <div class="ev-nhi">
+        <span class="ev-tag">台灣現況</span>
+        <ul>
+          <li>Etelcalcetide 與 cinacalcet 均<strong>未納入健保</strong>（自費；參考價 cinacalcet 25 mg 約 220 元/顆、etelcalcetide 5 mg 約 730 元/支）</li>
+          <li>實務適用（醫院 SDM 慣例）：iPTH ≥800 且維生素 D 效果不佳或有禁忌時考慮</li>
+          <li><strong>副甲狀腺切除術有健保給付</strong>：藥物無法達標且 iPTH 持續 &gt;800–1000 者應納入評估</li>
+        </ul>
+      </div>
+
+      <h4 class="ev-drug-title">活性維生素 D（Cacare 注射 calcitriol／U-Ca 口服）</h4>
+      <div class="table-scroll"><table class="ev-table">
+        <thead><tr><th>試驗</th><th>族群</th><th>比較</th><th>主要結果</th><th>意涵</th></tr></thead>
+        <tbody>
+          <tr><td><strong>J-DAVID</strong><br><span class="ev-src">JAMA 2018</span></td><td>HD 無 SHPT 976 人，4 年</td><td>Alfacalcidol vs 不用</td><td>CV 複合 21.1% vs 17.9%，HR 1.25（0.94–1.67）無益（數值偏害）</td><td>無 SHPT 勿常規給 VDRA</td></tr>
+          <tr><td><strong>PRIMO</strong><br><span class="ev-src">JAMA 2012</span></td><td>CKD＋LVH 227 人</td><td>Paricalcitol vs 安慰劑</td><td>LVMI 無差異；<strong>高血鈣 22.6% vs 0.9%</strong></td><td>心臟終點陰性、高血鈣顯著</td></tr>
+          <tr><td><strong>OPERA</strong><br><span class="ev-src">JASN 2014</span></td><td>CKD 3–5＋LVH 60 人</td><td>Paricalcitol vs 安慰劑</td><td>LVMI 無差異；高血鈣顯著較多</td><td>同上</td></tr>
+        </tbody>
+      </table></div>
+      <div class="ev-pros-cons">
+        <div class="ev-pc pros"><h5>效益</h5><ul>
+          <li>抑制 PTH 有效、口服/注射彈性、<strong>健保給付</strong>、價廉</li>
+          <li>KDIGO 2017 G5D 降 PTH 選項之一（2B）；與擬鈣劑併用可抵消低血鈣</li>
+          <li>「iPTH 高＋Ca 不高」的病人是最適對象</li>
+        </ul></div>
+        <div class="ev-pc cons"><h5>風險與缺點</h5><ul>
+          <li>高血鈣與鈣磷乘積上升（PRIMO 高血鈣 25 倍）；血管鈣化疑慮</li>
+          <li>過度抑制 iPTH（&lt;2×ULN）→ 動力缺乏性骨病</li>
+          <li>無 SHPT 之常規使用經 J-DAVID 否定</li>
+        </ul></div>
+      </div>
+      <div class="ev-nhi">
+        <span class="ev-tag">台灣健保給付（3.2.2）</span>
+        <ul>
+          <li>CKD 適應：低血鈣症且 eGFR &lt;45，或 <strong>iPTH &gt;3× 正常值上限</strong></li>
+          <li><strong>血鈣 ≥10.5 不可使用</strong>；每 6 個月測鈣磷乘積，<strong>Ca×P &gt;55 不可使用</strong></li>
+        </ul>
+      </div>
+
+      <p class="ev-note"><strong>延伸註記（血磷控制）</strong>：KDIGO 2017 建議高血磷「降向正常」（2C）並限制含鈣磷結合劑總量（2B）；Lancet 2013 統合分析顯示不含鈣結合劑全因死亡低 22%（RR 0.78），但 LANDMARK（JAMA 2021）未能證實優越性——「不含鈣一定較好」尚無定論，重點仍是總磷負荷控制與避免高血鈣。健保透析品質獎勵指標含鈣磷乘積 &lt;60 合格率 ≥80%。</p>
+    </section>
+
+    <section class="card">
+      <h3>綜合建議（依優先序）</h3>
+      <ol class="ev-recs">
+        <li><strong>清查 ESA＋Vafseo「併用」病人@if (snapshot(); as s) {（{{ s.drugs.both }} 人）}</strong>——先分辨 ESA 藥囑未關檔與真併用。真併用者回歸「擇一」（KDIGO 2026）；轉換原則：換用當下停 ESA、前 6 個月每月肝功能、Hb 每 2–4 週追蹤（升幅 ≤1 g/dL／2 週）。</li>
+        <li><strong>Hb &gt;12 者啟動減量@if (snapshot(); as s) {（{{ fmt(s.labs.hbOver12, '%') }}）}</strong>——健保 &gt;11 應暫停、KDIGO 反對 &gt;11.5；同時檢視 Hb &lt;9 者@if (snapshot(); as s) {（{{ fmt(s.labs.hbUnder9, '%') }}）}的低反應待查因素。</li>
+        <li><strong>恢復每季全面鐵指標監測（Ferritin＋TSAT）</strong>——proactive 補鐵、低反應鑑別、Vafseo 起始前鐵充足確認都需要。目標：SF ≤500 或 TSAT ≤30% 起始／加強；SF &gt;700 或 TSAT ≥40% 暫停。</li>
+        <li><strong>iPTH &gt;585 者分層處理@if (snapshot(); as s) {（{{ fmt(s.labs.ipthOver585, '%') }}，其中 &gt;800 佔 {{ fmt(s.labs.ipthOver800, '%') }}）}</strong>——①Ca &lt;10.5 且 Ca×P ≤55 者活性維生素 D 給付內加量；②iPTH ≥800 且 VDRA 不佳者 SDM 討論自費擬鈣劑；③藥物失敗且持續 &gt;800–1000 者轉介副甲狀腺切除（健保給付，勿延誤）。</li>
+        <li><strong>iPTH &lt;130 者檢視活性維生素 D 減停@if (snapshot(); as s) {（{{ fmt(s.labs.ipthUnder130, '%') }}）}</strong>——過度抑制屬動力缺乏性骨病高風險；J-DAVID 不支持無 SHPT 使用；亦符合給付條件精神（iPTH &gt;3×ULN 才給付）。</li>
+        <li><strong>血磷 &gt;5.5 者納入品質改善@if (snapshot(); as s) {（{{ fmt(s.labs.pOver55, '%') }}）}</strong>——結合劑順應性、含鈣結合劑總量（2B）、飲食衛教、透析處方；對照品質獎勵鈣磷乘積指標。</li>
+        <li><strong>追蹤 Vafseo 給付條文刊出</strong>——生效後自費壓力解除；轉換 SOP 與申報對接可先準備，本頁「貧血趨勢」頁籤即為導入前後成效追蹤工具。</li>
+      </ol>
+    </section>
+
+    <section class="card ev-refs">
+      <h3>主要參考來源</h3>
+      <p><strong>指引</strong>：
+        <a href="https://www.kidney-international.org/article/S0085-2538(25)00495-8/fulltext" target="_blank" rel="noopener">KDIGO 2026 Anemia</a>（Hb 上限 &lt;11.5、ESA 優先於 HIF-PHI、鐵指標放寬）｜
+        <a href="https://kdigo.org/wp-content/uploads/2017/02/2017-KDIGO-CKD-MBD-GL-Update.pdf" target="_blank" rel="noopener">KDIGO 2017 CKD-MBD</a>（iPTH 2–9×ULN；至 2026-08 無新版）｜
+        <a href="https://tsnorgtw.gitbook.io/2022_taiwan_chronic_kidney_disease_clinical_guidelines/" target="_blank" rel="noopener">TSN 2022 台灣 CKD 指引</a>｜
+        <a href="https://academic.oup.com/ndt/article/39/10/1710/7640867" target="_blank" rel="noopener">ERBP 2024 HIF-PHI</a></p>
+      <p><strong>關鍵試驗</strong>：
+        <a href="https://www.nejm.org/doi/full/10.1056/NEJMoa2025956" target="_blank" rel="noopener">INNO2VATE</a>｜
+        <a href="https://www.nejm.org/doi/full/10.1056/NEJMoa2035938" target="_blank" rel="noopener">PRO2TECT</a>｜
+        <a href="https://www.nejm.org/doi/full/10.1056/NEJMoa2113379" target="_blank" rel="noopener">ASCEND-D</a>｜
+        <a href="https://www.nejm.org/doi/full/10.1056/NEJMoa1810742" target="_blank" rel="noopener">PIVOTAL</a>｜
+        <a href="https://academic.oup.com/ckj/article/17/1/sfad143/7205515" target="_blank" rel="noopener">HIF-PHI meta（CKJ 2023）</a>｜
+        <a href="https://pubmed.ncbi.nlm.nih.gov/28097356/" target="_blank" rel="noopener">Etelcalcetide JAMA 2017</a>｜
+        <a href="https://www.nejm.org/doi/full/10.1056/NEJMoa1205624" target="_blank" rel="noopener">EVOLVE</a>｜
+        <a href="https://jamanetwork.com/journals/jama/fullarticle/2718066" target="_blank" rel="noopener">J-DAVID</a>｜
+        <a href="https://jamanetwork.com/journals/jama/fullarticle/1104984" target="_blank" rel="noopener">PRIMO</a>｜
+        <a href="https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(13)60897-1/abstract" target="_blank" rel="noopener">Jamal meta（Lancet 2013）</a>｜
+        <a href="https://pubmed.ncbi.nlm.nih.gov/34003226/" target="_blank" rel="noopener">LANDMARK</a></p>
+      <p><strong>法規與給付</strong>：
+        <a href="https://www.nhi.gov.tw/ch/dl-50604-c079f56241d94d678a621c79571ddb7f-1.pdf" target="_blank" rel="noopener">健保給付規定第 4 節（ESA 4.1.1）</a>｜
+        <a href="https://www.nhi.gov.tw/ch/dl-50601-a3baf9dd4cd44fbb93b4d62a01cdf1df-1.pdf" target="_blank" rel="noopener">第 3 節（活性維生素 D 3.2.2）</a>｜
+        <a href="https://www.nhi.gov.tw/ch/dl-89854-9af54f935dd4404bb93b9caa75607cfd-1.pdf" target="_blank" rel="noopener">CDE Vafseo HTA（2025-08）</a>｜
+        <a href="https://www.accessdata.fda.gov/drugsatfda_docs/label/2024/215192s000lbl.pdf" target="_blank" rel="noopener">FDA Vafseo 仿單（2024）</a>｜
+        <a href="https://www.tsn.org.tw/archive/20250806/30ba88ec-de34-459c-ba47-5fa7c4968b5f/30ba88ec-de34-459c-ba47-5fa7c4968b5f.pdf" target="_blank" rel="noopener">114 年透析品質獎勵計畫</a></p>
+      <p class="ev-disclaimer">本頁為臨床決策輔助，不取代個別病人之臨床判斷。「本院現況」為即時彙總（無個資），「使用中」以藥囑起訖日推定可能含未關檔藥囑。健保給付條文為滾動修訂事項（尤其 vadadustat 與擬鈣劑給付狀態），執行前以健保署最新公告為準。文獻整理日期 2026-08-19。</p>
+    </section>
   }
 </div>

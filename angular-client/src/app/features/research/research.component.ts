@@ -100,6 +100,18 @@ interface TrendLab { key: string; label: string; unit: string; points: TrendLabP
 interface TrendBlockData { key: string; title: string; drugs: TrendDrug[]; labs: TrendLab[] }
 interface TrendsResponse { generatedAt: string | null; months: string[]; blocks: TrendBlockData[] }
 
+// ---- 本院快照 API 型別（/research/unit-snapshot） ----
+interface UnitSnapshot {
+  date: string;
+  drugs: { esa: number; vafseo: number; both: number; iron: number; parsabiv: number; cacare: number; uca: number };
+  labs: {
+    hbN: number; hbMean: number | null; hbInRange: number | null; hbOver12: number | null; hbUnder9: number | null;
+    caMean: number | null; caOver102: number | null; pMean: number | null; pOver55: number | null;
+    ipthN: number; ipthMedian: number | null; ipthOver585: number | null; ipthOver800: number | null; ipthUnder130: number | null;
+    ferritinN: number; tsatN: number;
+  };
+}
+
 // ---- 圖表模型 ----
 interface ChartDot {
   cx: number;
@@ -141,7 +153,7 @@ const PAD_Y = 22;
 const MINI_W = 460;
 const MINI_H = 180;
 
-type BlockTab = 'anemia' | 'mineral' | 'vafseo';
+type BlockTab = 'anemia' | 'mineral' | 'vafseo' | 'evidence';
 
 @Component({
   selector: 'app-research',
@@ -153,6 +165,7 @@ type BlockTab = 'anemia' | 'mineral' | 'vafseo';
 export class ResearchComponent implements OnInit {
   readonly data = signal<StudyResponse | null>(null);
   readonly trends = signal<TrendsResponse | null>(null);
+  readonly snapshot = signal<UnitSnapshot | null>(null);
   activeBlock: BlockTab = 'anemia';
   loading = false;
   saving = false;
@@ -275,12 +288,14 @@ export class ResearchComponent implements OnInit {
     this.loading = true;
     this.errorMessage = '';
     try {
-      const [study, trends] = await Promise.all([
+      const [study, trends, snapshot] = await Promise.all([
         firstValueFrom(this.api.get<StudyResponse>('/research/vafseo-study')),
         firstValueFrom(this.api.get<TrendsResponse>('/research/monthly-trends')),
+        firstValueFrom(this.api.get<UnitSnapshot>('/research/unit-snapshot')),
       ]);
       this.data.set(study);
       this.trends.set(trends);
+      this.snapshot.set(snapshot);
       const c = study.config;
       this.cfgDarbeRatio = c.darbeRatio;
       this.cfgBaselineFrom = c.baselineFrom;

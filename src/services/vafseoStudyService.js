@@ -334,6 +334,107 @@ export function buildMonthlyTrends(userConfig = {}) {
   }
 }
 
+// ---- 本院現況快照（實證與給付頁籤的即時對照數字）------------------------------
+const SNAPSHOT_DRUGS = {
+  esa: ['INES2', 'IREC1'],
+  vafseo: ['OVAF'],
+  iron: ['IFER2'],
+  parsabiv: ['IPAR1'],
+  cacare: ['ICAC'],
+  uca: ['OUCA1']
+}
+
+export function buildUnitSnapshot() {
+  const db = getDatabase()
+  const today = new Date().toLocaleDateString('sv-SE')
+
+  // 目前活躍藥囑（起始 ≤ 今天且無結束日或結束日 ≥ 今天）
+  const activeSet = (codes) => new Set(db.prepare(`
+    SELECT DISTINCT patient_id FROM injection_orders
+    WHERE order_code IN (${codes.map(() => '?').join(',')})
+      AND start_date != '' AND start_date <= ?
+      AND (end_date IS NULL OR end_date = '' OR end_date >= ?)
+  `).all(...codes, today, today).map((r) => r.patient_id))
+
+  const sets = {}
+  for (const [key, codes] of Object.entries(SNAPSHOT_DRUGS)) sets[key] = activeSet(codes)
+  const both = [...sets.vafseo].filter((id) => sets.esa.has(id)).length
+
+  // 每人最近一筆檢驗（Hb/Ca/P 取 120 天、iPTH 取 200 天涵蓋季抽）
+  const latestPerPatient = (days) => {
+    const rows = db.prepare(`
+      SELECT patient_id, results FROM lab_reports
+      WHERE report_date >= date(?, ?)
+      ORDER BY report_date
+    `).all(today, `-${days} days`)
+    const latest = new Map()
+    for (const r of rows) {
+      try { latest.set(r.patient_id, JSON.parse(r.results || '{}')) } catch {}
+    }
+    return latest
+  }
+  const recent = latestPerPatient(120)
+  const recentLong = latestPerPatient(200)
+
+  const collect = (map, key) => {
+    const vals = []
+    for (const d of map.values()) {
+      const v = parseFloat(d[key])
+      if (Number.isFinite(v)) vals.push(v)
+    }
+    return vals
+  }
+  const pct = (arr, fn) => (arr.length ? round((arr.filter(fn).length / arr.length) * 100, 1) : null)
+  const median = (arr, dec = 1) => {
+    if (!arr.length) return null
+    const s = [...arr].sort((a, b) => a - b)
+    return round(s[Math.floor(s.length / 2)], dec)
+  }
+
+  const hb = collect(recent, 'Hb')
+  const ca = collect(recent, 'Ca')
+  const p = collect(recent, 'P')
+  const ipth = collect(recentLong, 'iPTH')
+  const ferritin = collect(recent, 'Ferritin')
+  let tsatN = 0
+  for (const d of recent.values()) {
+    const fe = parseFloat(d.Iron)
+    const tibc = parseFloat(d.TIBC)
+    if (fe > 0 && tibc > 0) tsatN++
+  }
+
+  return {
+    date: today,
+    drugs: {
+      esa: sets.esa.size,
+      vafseo: sets.vafseo.size,
+      both,
+      iron: sets.iron.size,
+      parsabiv: sets.parsabiv.size,
+      cacare: sets.cacare.size,
+      uca: sets.uca.size
+    },
+    labs: {
+      hbN: hb.length,
+      hbMean: round(mean(hb), 2),
+      hbInRange: pct(hb, (v) => v >= 10 && v <= 12),
+      hbOver12: pct(hb, (v) => v > 12),
+      hbUnder9: pct(hb, (v) => v < 9),
+      caMean: round(mean(ca), 2),
+      caOver102: pct(ca, (v) => v > 10.2),
+      pMean: round(mean(p), 2),
+      pOver55: pct(p, (v) => v > 5.5),
+      ipthN: ipth.length,
+      ipthMedian: median(ipth, 0),
+      ipthOver585: pct(ipth, (v) => v > 585),
+      ipthOver800: pct(ipth, (v) => v > 800),
+      ipthUnder130: pct(ipth, (v) => v < 130),
+      ferritinN: ferritin.length,
+      tsatN
+    }
+  }
+}
+
 // ---- 主分析 -----------------------------------------------------------------
 export function buildVafseoStudy(userConfig = {}) {
   const config = { ...DEFAULT_CONFIG, ...userConfig }
