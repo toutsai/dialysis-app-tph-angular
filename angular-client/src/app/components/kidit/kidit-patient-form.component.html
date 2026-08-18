@@ -91,19 +91,23 @@
       <div class="kd-row">
         <div class="kd-field">
           <label><span class="fnum">02</span>病患類別</label>
-          <select [(ngModel)]="formData.patientCategory">
+          <div class="kd-choice-group">
             @for (opt of opts.patientCategory; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.patientCategory === opt.value"
+                      (click)="formData.patientCategory = opt.value">{{ opt.label }}</button>
             }
-          </select>
+          </div>
         </div>
         <div class="kd-field">
           <label><span class="fnum">05</span>性別</label>
-          <select [(ngModel)]="formData.gender">
+          <div class="kd-choice-group">
             @for (opt of opts.gender; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.gender === opt.value"
+                      (click)="formData.gender = opt.value">{{ opt.label }}</button>
             }
-          </select>
+          </div>
         </div>
         <div class="kd-field">
           <label><span class="fnum">06</span>婚姻狀況</label>
@@ -142,19 +146,23 @@
         </div>
         <div class="kd-field">
           <label><span class="fnum">17</span>原住民</label>
-          <select [(ngModel)]="formData.isIndigenous">
+          <div class="kd-choice-group">
             @for (opt of opts.yesNo; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.isIndigenous === opt.value"
+                      (click)="formData.isIndigenous = opt.value">{{ opt.label }}</button>
             }
-          </select>
+          </div>
         </div>
         <div class="kd-field">
           <label><span class="fnum">18</span>福保身分</label>
-          <select [(ngModel)]="formData.isWelfare">
+          <div class="kd-choice-group">
             @for (opt of opts.yesNo; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.isWelfare === opt.value"
+                      (click)="formData.isWelfare = opt.value">{{ opt.label }}</button>
             }
-          </select>
+          </div>
         </div>
       </div>
 
