@@ -481,6 +481,7 @@
     *ngIf="showProblemListDialog() && problemListPatient()"
     [patientId]="problemListPatient()!.id"
     [patientName]="problemListPatient()!.name"
+    [patientMrn]="problemListPatient()!.mrn"
     [canEdit]="!isPageLocked()"
     [canDelete]="!isDeleteLocked()"
     (close)="closeProblemList()"

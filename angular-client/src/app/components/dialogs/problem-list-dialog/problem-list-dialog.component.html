@@ -1,7 +1,7 @@
 <div class="pl-overlay" (click)="onOverlayClick($event)">
   <div class="pl-modal">
     <div class="pl-header">
-      <h3><i class="fas fa-clipboard-list"></i> 病史與問題列表 — {{ patientName }}</h3>
+      <h3><i class="fas fa-clipboard-list"></i> 病史與問題列表 — {{ patientName }}@if (patientMrn) {<span class="pl-mrn">（{{ patientMrn }}）</span>}</h3>
       <button class="pl-close" (click)="close.emit()" title="關閉">&times;</button>
     </div>
 

@@ -39,6 +39,12 @@
   margin-right: 6px;
 }
 
+.pl-mrn {
+  font-weight: 400;
+  color: #78909c;
+  font-size: 0.95em;
+}
+
 .pl-close {
   border: none;
   background: none;

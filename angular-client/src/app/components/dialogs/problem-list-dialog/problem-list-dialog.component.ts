@@ -46,6 +46,7 @@ const DM_TYPE_LABELS: Record<string, string> = {
 export class ProblemListDialogComponent implements OnInit {
   @Input() patientId = '';
   @Input() patientName = '';
+  @Input() patientMrn = '';
   @Input() canEdit = false;
   @Input() canDelete = false;
   @Output() close = new EventEmitter<void>();

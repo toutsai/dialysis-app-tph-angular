@@ -267,11 +267,11 @@ export class PatientsComponent implements OnInit, OnDestroy {
 
   // 病史與問題列表視窗（操作欄 fa-clipboard-list 圖示）
   readonly showProblemListDialog = signal(false);
-  readonly problemListPatient = signal<{ id: string; name: string } | null>(null);
+  readonly problemListPatient = signal<{ id: string; name: string; mrn: string } | null>(null);
 
   openProblemList(p: any): void {
     if (!p?.id) return;
-    this.problemListPatient.set({ id: p.id, name: p.name || '' });
+    this.problemListPatient.set({ id: p.id, name: p.name || '', mrn: p.medicalRecordNumber || '' });
     this.showProblemListDialog.set(true);
   }
 
