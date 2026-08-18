@@ -1402,6 +1402,20 @@ async function updatePatientHandler(req, res) {
       dbData.ward_number = null
     }
 
+    // 從急診/住院刪除時一併清勿動紀錄（勿動是排程床位鎖，刪除後即失義；
+    // 歷史快照保留原貌、復原不自動恢復。DELETE /:id 路徑亦有同步邏輯，2026-08-19）
+    if (effectiveDeleted === 1 && existing.is_deleted !== 1 && ['ipd', 'er'].includes(existing.status)) {
+      try {
+        const ps = dbData.patient_status !== undefined
+          ? JSON.parse(dbData.patient_status || '{}')
+          : JSON.parse(existing.patient_status || '{}')
+        if (ps && ps.doNotMove) {
+          delete ps.doNotMove
+          dbData.patient_status = JSON.stringify(ps)
+        }
+      } catch { /* patient_status 解析失敗就不動 */ }
+    }
+
     const updates = Object.keys(dbData).map(k => {
       if (k === 'updated_at') return `${k} = datetime('now', 'localtime')`
       return `${k} = ?`
@@ -1687,12 +1701,25 @@ router.delete('/:id', ...isEditor, async (req, res) => {
       })
     }
 
+    // 從急診/住院刪除時一併清勿動紀錄（同 PUT 軟刪路徑的邏輯，2026-08-19）
+    let patientStatusJson = existing.patient_status
+    if (['ipd', 'er'].includes(existing.status)) {
+      try {
+        const ps = JSON.parse(existing.patient_status || '{}')
+        if (ps && ps.doNotMove) {
+          delete ps.doNotMove
+          patientStatusJson = JSON.stringify(ps)
+        }
+      } catch { /* patient_status 解析失敗就不動 */ }
+    }
+
     db.prepare(`
       UPDATE patients
       SET is_deleted = 1,
           original_status = ?,
           delete_reason = ?,
           ward_number = NULL,
+          patient_status = ?,
           deleted_at = datetime('now', 'localtime'),
           last_modified_by = ?,
           updated_at = datetime('now', 'localtime')
@@ -1700,6 +1727,7 @@ router.delete('/:id', ...isEditor, async (req, res) => {
     `).run(
       existing.status,
       reason || '未提供原因',
+      patientStatusJson,
       JSON.stringify({ uid: req.user.id, name: req.user.name }),
       id
     )
