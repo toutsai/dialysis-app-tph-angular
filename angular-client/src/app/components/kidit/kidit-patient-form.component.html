@@ -185,11 +185,13 @@
         </div>
         <div class="kd-field">
           <label><span class="fnum">14</span>關係</label>
-          <select [(ngModel)]="formData.relationship">
+          <div class="kd-choice-group">
             @for (opt of opts.relation; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.relationship === opt.value"
+                      (click)="formData.relationship = opt.value">{{ opt.label }}</button>
             }
-          </select>
+          </div>
         </div>
       </div>
     </div>

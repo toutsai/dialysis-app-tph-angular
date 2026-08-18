@@ -27,11 +27,13 @@
         </div>
         <div class="kd-field">
           <label><span class="fnum">06</span>本院開始</label>
-          <select [(ngModel)]="formData.isStartHDHere">
+          <div class="kd-choice-group">
             @for (opt of opts.yesNo; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.isStartHDHere === opt.value"
+                      (click)="formData.isStartHDHere = opt.value">{{ opt.label }}</button>
             }
-          </select>
+          </div>
         </div>
         <div class="kd-field">
           <label><span class="fnum">07</span>院所</label>
@@ -46,11 +48,13 @@
         </div>
         <div class="kd-field">
           <label><span class="fnum">09</span>本院開始</label>
-          <select [(ngModel)]="formData.isStartPDHere">
+          <div class="kd-choice-group">
             @for (opt of opts.yesNo; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.isStartPDHere === opt.value"
+                      (click)="formData.isStartPDHere = opt.value">{{ opt.label }}</button>
             }
-          </select>
+          </div>
         </div>
         <div class="kd-field">
           <label><span class="fnum">10</span>院所</label>
@@ -65,11 +69,13 @@
         </div>
         <div class="kd-field">
           <label><span class="fnum">12</span>本院移植</label>
-          <select [(ngModel)]="formData.isTransplantHere">
+          <div class="kd-choice-group">
             @for (opt of opts.yesNo; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.isTransplantHere === opt.value"
+                      (click)="formData.isTransplantHere = opt.value">{{ opt.label }}</button>
             }
-          </select>
+          </div>
         </div>
         <div class="kd-field">
           <label><span class="fnum">13</span>院所</label>
@@ -80,22 +86,26 @@
       <div class="kd-row">
         <div class="kd-field">
           <label><span class="fnum">14</span>過去病史及檢查是否知道為慢性腎衰竭</label>
-          <select [(ngModel)]="formData.isKnownCKD">
+          <div class="kd-choice-group">
             @for (opt of opts.yesNo; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.isKnownCKD === opt.value"
+                      (click)="formData.isKnownCKD = opt.value">{{ opt.label }}</button>
             }
-          </select>
+          </div>
         </div>
       </div>
 
       <div class="kd-row">
         <div class="kd-field">
           <label><span class="fnum">15</span>BUN 或 Creatinine 異常</label>
-          <select [(ngModel)]="formData.isBUNCreatAbnormal">
+          <div class="kd-choice-group">
             @for (opt of opts.yesNo; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.isBUNCreatAbnormal === opt.value"
+                      (click)="formData.isBUNCreatAbnormal = opt.value">{{ opt.label }}</button>
             }
-          </select>
+          </div>
         </div>
         <div class="kd-field">
           <label><span class="fnum">16</span>BUN 檢查日期</label>
@@ -114,11 +124,13 @@
       <div class="kd-row">
         <div class="kd-field">
           <label><span class="fnum">19</span>腎臟超音波檢查異常</label>
-          <select [(ngModel)]="formData.renalUltrasoundAbnormal">
+          <div class="kd-choice-group">
             @for (opt of opts.yesNo; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.renalUltrasoundAbnormal === opt.value"
+                      (click)="formData.renalUltrasoundAbnormal = opt.value">{{ opt.label }}</button>
             }
-          </select>
+          </div>
         </div>
         <div class="kd-field">
           <label><span class="fnum">20</span>異常說明</label>
@@ -378,11 +390,13 @@
       <div class="kd-row">
         <div class="kd-field">
           <label><span class="fnum">50</span>初次重大傷病</label>
-          <select [(ngModel)]="formData.isFirstCatastrophic">
+          <div class="kd-choice-group">
             @for (opt of opts.yesNo; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.isFirstCatastrophic === opt.value"
+                      (click)="formData.isFirstCatastrophic = opt.value">{{ opt.label }}</button>
             }
-          </select>
+          </div>
         </div>
       </div>
     </div>
