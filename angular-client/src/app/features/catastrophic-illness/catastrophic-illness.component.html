@@ -14,9 +14,9 @@
       } @else {
         <span class="overview-hint">
           @if (isClerk) {
-            「書記送出日期」與「重大傷病到期日」可直接點格子填寫
+            「書記送出日期」與「重大傷病到期日」可直接點格子填寫；醫師手寫附表（未在系統建表）也可在空格填送出日期，完成日期會顯示「紙本」
           } @else {
-            僅顯示您建立的申請紀錄；「書記送出日期」與「到期日」由書記填寫
+            顯示您建立的申請紀錄與書記補登、負責醫師為您的紙本申請；「書記送出日期」與「到期日」由書記填寫
           }
         </span>
       }
@@ -26,9 +26,9 @@
     </button>
     @if (!overviewCollapsed) {
     @if (isClerk) {
-      <!-- 舊病人在系統外已辦過重大傷病、無申請紀錄：書記直接補到期日進入總覽與到期提醒 -->
+      <!-- 無系統申請紀錄的病人：書記直接補到期日（舊病人系統外辦過）或紙本送出日期（醫師手寫附表）進入總覽與到期提醒 -->
       <div class="expiry-add-bar">
-        <span class="expiry-add-label">補登到期日（無申請紀錄的舊病人）：</span>
+        <span class="expiry-add-label">補登（無系統申請紀錄的病人）：</span>
         <div class="picker-box expiry-add-picker">
           <input
             type="text"
@@ -58,8 +58,9 @@
             <option [value]="name">{{ name }}</option>
           }
         </select>
-        <input type="date" class="clerk-input expiry-add-date" [(ngModel)]="newExpiryDate" />
-        <button type="button" class="expiry-add-btn" [disabled]="!expiryPickedPatient || !newExpiryDate || addingExpiry" (click)="addExpiry()">
+        <label class="expiry-add-field">到期日 <input type="date" class="clerk-input expiry-add-date" [(ngModel)]="newExpiryDate" /></label>
+        <label class="expiry-add-field" title="醫師手寫附表、未在系統建表：記錄書記送出日期，完成日期欄顯示「紙本」">紙本送出日期 <input type="date" class="clerk-input expiry-add-date" [(ngModel)]="newSentDate" /></label>
+        <button type="button" class="expiry-add-btn" [disabled]="!canAddExpiry" (click)="addExpiry()">
           {{ addingExpiry ? '新增中…' : '新增' }}
         </button>
       </div>
@@ -101,10 +102,18 @@
               @for (label of overviewColumns(); track $index) {
                 <td class="col-date">
                   @if (slotAt(row, $index); as slot) {
-                    {{ slot.physicianDate || '—' }}
+                    @if (slot.physicianDate) {
+                      {{ slot.physicianDate }}
+                    } @else if (slot.paper) {
+                      <span class="paper-tag" title="醫師手寫附表（未在系統建表），由書記補登送出日期">紙本</span>
+                    } @else {
+                      —
+                    }
                     @if (canWrite) {
                       <button type="button" class="slot-edit-btn" title="編輯這筆申請" (click)="editFromOverview(row, slot, $event)">✎</button>
                       <button type="button" class="slot-del-btn" title="刪除這筆申請" (click)="deleteFromOverview(row, slot, label, $event)">🗑</button>
+                    } @else if (isClerk && slot.paper && !slot.physicianDate) {
+                      <button type="button" class="slot-del-btn" title="移除此紙本紀錄（誤點補救）" (click)="removePaperFromOverview(row, slot, label, $event)">🗑</button>
                     }
                   } @else {
                     —
@@ -117,6 +126,9 @@
                     } @else {
                       {{ slot.clerkSentDate || '—' }}
                     }
+                  } @else if (canClerkAddPaperAt(row, $index)) {
+                    <!-- 醫師未建表：書記直接填送出日期 → 建紙本佔位申請 -->
+                    <input type="date" class="clerk-input clerk-input-paper" value="" title="醫師手寫附表：填送出日期即補登為紙本申請" (change)="onClerkPaperAdd(row, $index, $event)" />
                   } @else {
                     —
                   }
@@ -214,6 +226,9 @@
         <!-- 刪除鈕移至總覽表格（誤刪案 2026-08-05）：此處緊貼開啟紀錄的點擊區，易誤觸 -->
         <button class="record-chip" [class.open]="currentId === app.id" (click)="openApplication(app)">
           {{ (app.updatedAt || app.createdAt || '').slice(0, 10) }}
+          @if (isPaperApp(app) && !app.formData?.physicianDate) {
+            <span class="paper-tag" title="書記補登的紙本申請，表單內容尚未在系統填寫">紙本</span>
+          }
           <!-- 顯示表單存的負責醫師（非存檔帳號）；未填才退回存檔者 -->
           <span class="record-by">{{ app.formData?.physicianName || app.updatedBy?.name || app.createdBy?.name }}</span>
         </button>

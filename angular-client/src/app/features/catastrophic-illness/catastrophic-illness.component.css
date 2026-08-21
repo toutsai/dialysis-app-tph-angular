@@ -35,6 +35,10 @@
 .overview-table .col-prep { background: #f3f0ff; }
 .overview-table thead .col-prep { background: #e5dbff; }
 .lifetime-tag { color: #868e96; }
+/* 書記補登的紙本申請（醫師未在系統建表） */
+.paper-tag { display: inline-block; background: #fff3bf; color: #7c5a00; border: 1px solid #ffe066; border-radius: 4px; padding: 0 6px; font-size: 0.8rem; line-height: 1.5; }
+.clerk-input-paper { border-style: dashed; color: #868e96; }
+.expiry-add-field { display: inline-flex; align-items: center; gap: 4px; font-size: 0.88em; color: #495057; }
 .expiry-reminder { flex: 0 0 220px; background: #fff4e6; border: 1px solid #ffd8a8; border-radius: 6px; padding: 10px 12px; }
 .expiry-reminder h4 { margin: 0 0 8px; font-size: 0.95rem; color: #d9480f; }
 .reminder-item { border-bottom: 1px dashed #ffd8a8; padding: 6px 0; font-size: 0.88rem; }

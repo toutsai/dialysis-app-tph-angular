@@ -14,6 +14,8 @@ const isOverviewRole = [authenticate, requireAnyRole('admin', 'contributor', 'vi
 const isClerkRole = [authenticate, requireAnyRole('admin', 'viewer')]
 
 const VALID_TYPES = ['initial', 'renewal']
+// 書記補登的「紙本申請」佔位紀錄：醫師未在系統建表、只由書記記錄送出日期；form_data.source 標記
+const PAPER_SOURCE = 'clerk_paper'
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 function isValidDateOrEmpty(v) {
@@ -76,10 +78,19 @@ router.get('/overview', ...isOverviewRole, (req, res) => {
   try {
     const db = getDatabase()
     let rows = db.prepare('SELECT * FROM catastrophic_illness_applications ORDER BY created_at ASC').all()
+      .map((row) => {
+        let formData = {}
+        try { formData = JSON.parse(row.form_data || '{}') } catch { /* 留空物件 */ }
+        return { ...row, formData }
+      })
 
     if (req.user.role === 'contributor') {
+      // 醫師看自己建立的；另外書記補登的紙本申請（PAPER_SOURCE）若負責醫師是自己也要看得到
       rows = rows.filter((row) => {
-        try { return JSON.parse(row.created_by || '{}').uid === req.user.id } catch { return false }
+        let createdByUid = null
+        try { createdByUid = JSON.parse(row.created_by || '{}').uid } catch { /* 視為非本人 */ }
+        if (createdByUid === req.user.id) return true
+        return row.formData.source === PAPER_SOURCE && !!req.user.name && row.formData.physicianName === req.user.name
       })
     }
 
@@ -95,13 +106,13 @@ router.get('/overview', ...isOverviewRole, (req, res) => {
         byPatient.set(row.patient_id, { patientName: row.patient_name, physicianName: '', initials: [], renewals: [], latestUpdatedAt: '' })
       }
       const entry = byPatient.get(row.patient_id)
-      let formData = {}
-      try { formData = JSON.parse(row.form_data || '{}') } catch { /* 留空物件 */ }
+      const formData = row.formData
       const slot = {
         id: row.id,
         physicianDate: formData.physicianDate || '',
         physicianName: formData.physicianName || '',
-        clerkSentDate: row.clerk_sent_date || ''
+        clerkSentDate: row.clerk_sent_date || '',
+        paper: formData.source === PAPER_SOURCE // 書記補登的紙本申請（醫師未在系統建表）
       }
       if (row.application_type === 'initial') entry.initials.push(slot)
       else entry.renewals.push(slot)
@@ -181,6 +192,87 @@ router.put('/clerk-sent/:id', ...isClerkRole, (req, res) => {
   } catch (error) {
     console.error('更新書記送出日期錯誤:', error)
     res.status(500).json({ error: true, message: '更新書記送出日期失敗' })
+  }
+})
+
+/**
+ * POST /api/catastrophic-illness/clerk-paper
+ * 書記補登紙本申請：醫師沒在系統建申請表（手寫附表）時，書記直接記錄送出日期
+ * 建一筆 form_data = { source: 'clerk_paper', physicianName } 的佔位申請，沿用 clerk_sent_date 欄；
+ * 總覽完成日期欄顯示「紙本」；醫師仍可從總覽 ✎ 接手補填表單
+ * body: { patientId, applicationType: 'initial'|'renewal', clerkSentDate, physicianName? }
+ * 負責醫師未帶時退回病人資料的主治醫師（contributor 視角靠此欄看到自己病人的紙本列）
+ */
+router.post('/clerk-paper', ...isClerkRole, (req, res) => {
+  try {
+    const { patientId, applicationType, clerkSentDate, physicianName } = req.body
+    if (!patientId) {
+      return res.status(400).json({ error: true, message: '病人為必填' })
+    }
+    if (!VALID_TYPES.includes(applicationType)) {
+      return res.status(400).json({ error: true, message: '申請類別必須為 initial 或 renewal' })
+    }
+    if (!clerkSentDate || !isValidDateOrEmpty(clerkSentDate)) {
+      return res.status(400).json({ error: true, message: '送出日期格式必須為 YYYY-MM-DD' })
+    }
+    if (physicianName !== undefined && typeof physicianName !== 'string') {
+      return res.status(400).json({ error: true, message: '負責醫師格式錯誤' })
+    }
+    const db = getDatabase()
+    const patient = db.prepare('SELECT name, physician FROM patients WHERE id = ?').get(patientId)
+    if (!patient) {
+      return res.status(404).json({ error: true, message: '病人不存在' })
+    }
+    if (applicationType === 'initial') {
+      const hasInitial = db.prepare(
+        "SELECT 1 FROM catastrophic_illness_applications WHERE patient_id = ? AND application_type = 'initial' LIMIT 1"
+      ).get(patientId)
+      if (hasInitial) {
+        return res.status(409).json({ error: true, message: '此病人已有初次申請紀錄，請改填再次申請' })
+      }
+    }
+
+    const id = uuidv4()
+    const userJson = JSON.stringify({ uid: req.user.id, name: req.user.name })
+    const formData = { source: PAPER_SOURCE, physicianName: (physicianName || patient.physician || '').trim() }
+    db.prepare(`
+      INSERT INTO catastrophic_illness_applications
+        (id, patient_id, patient_name, application_type, form_data, clerk_sent_date, created_by, updated_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, patientId, patient.name, applicationType, JSON.stringify(formData), clerkSentDate, userJson, userJson)
+
+    const created = db.prepare('SELECT * FROM catastrophic_illness_applications WHERE id = ?').get(id)
+    res.status(201).json(toApiShape(created))
+  } catch (error) {
+    console.error('補登紙本重大傷病申請錯誤:', error)
+    res.status(500).json({ error: true, message: '補登紙本申請失敗' })
+  }
+})
+
+/**
+ * DELETE /api/catastrophic-illness/clerk-paper/:id
+ * 書記移除自己補登的紙本佔位紀錄（誤點補救）；醫師已接手填表（有簽章日期）的紀錄不可由此刪除
+ */
+router.delete('/clerk-paper/:id', ...isClerkRole, (req, res) => {
+  try {
+    const db = getDatabase()
+    const row = db.prepare('SELECT form_data FROM catastrophic_illness_applications WHERE id = ?').get(req.params.id)
+    if (!row) {
+      return res.status(404).json({ error: true, message: '申請紀錄不存在' })
+    }
+    let formData = {}
+    try { formData = JSON.parse(row.form_data || '{}') } catch { /* 留空物件 */ }
+    if (formData.source !== PAPER_SOURCE) {
+      return res.status(403).json({ error: true, message: '只能移除書記補登的紙本紀錄' })
+    }
+    if (formData.physicianDate) {
+      return res.status(409).json({ error: true, message: '醫師已接手填寫此申請表，請由醫師在總覽刪除' })
+    }
+    db.prepare('DELETE FROM catastrophic_illness_applications WHERE id = ?').run(req.params.id)
+    res.json({ success: true, message: '紙本紀錄已移除' })
+  } catch (error) {
+    console.error('移除紙本重大傷病申請錯誤:', error)
+    res.status(500).json({ error: true, message: '移除紙本紀錄失敗' })
   }
 })
 

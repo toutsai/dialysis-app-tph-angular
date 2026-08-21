@@ -46,7 +46,12 @@ interface CiOverviewSlot {
   physicianDate: string;
   physicianName: string;
   clerkSentDate: string;
+  /** 書記補登的紙本申請（醫師未在系統建表）：完成日期欄顯示「紙本」 */
+  paper?: boolean;
 }
+
+/** 書記補登紙本申請的 form_data.source 標記（與後端 PAPER_SOURCE 一致） */
+const PAPER_SOURCE = 'clerk_paper';
 
 interface CiOverviewRow {
   patientId: string;
@@ -106,6 +111,7 @@ export class CatastrophicIllnessComponent implements OnInit {
   expiryPickedPatient: Patient | null = null;
   newExpiryDate = '';
   newExpiryPhysician = ''; // 補登時一併指定負責醫師（到期提醒卡「協助掛 {醫師}」用）
+  newSentDate = ''; // 補登紙本送出日期（醫師手寫附表、未在系統建表）：建一筆紙本佔位申請
   addingExpiry = false;
 
   /** 主治醫師偏好排序；後備清單（使用者目錄載入失敗時沿用）。比照 patient-form-modal。 */
@@ -249,6 +255,58 @@ export class CatastrophicIllnessComponent implements OnInit {
     return row.applications?.[index] ?? null;
   }
 
+  /**
+   * 書記可在哪些空格補登紙本送出日期：初次欄（index 0）永遠可補；
+   * 再次起只開放「接在既有申請之後的下一格」（applications = [初次|null, ...再次]），避免跳格填寫落到別欄
+   */
+  canClerkAddPaperAt(row: CiOverviewRow, index: number): boolean {
+    if (!this.isClerk || this.slotAt(row, index)) return false;
+    return index === 0 || index === (row.applications?.length || 0);
+  }
+
+  /** 總覽空格直接填日期 → 建一筆紙本佔位申請（初次欄=initial、其餘=renewal），負責醫師沿用該列 */
+  async onClerkPaperAdd(row: CiOverviewRow, index: number, event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const value = input.value || '';
+    if (!value) return;
+    try {
+      await firstValueFrom(this.api.post('/catastrophic-illness/clerk-paper', {
+        patientId: row.patientId,
+        applicationType: index === 0 ? 'initial' : 'renewal',
+        clerkSentDate: value,
+        physicianName: row.physicianName || undefined,
+      }));
+      await this.loadOverview();
+    } catch (err) {
+      console.error('補登紙本送出日期失敗:', err);
+      input.value = '';
+      alert('補登紙本送出日期失敗，請重試');
+    }
+  }
+
+  /** 書記移除自己補登的紙本佔位紀錄（誤點補救；醫師已接手填表者後端會拒絕） */
+  async removePaperFromOverview(row: CiOverviewRow, slot: CiOverviewSlot, columnLabel: string, event: Event): Promise<void> {
+    event.stopPropagation();
+    if (!this.isClerk) return;
+    if (!confirm(`確定要移除「${row.patientName}」的${columnLabel}紙本紀錄（送出日期 ${slot.clerkSentDate || '未填'}）嗎？`)) return;
+    try {
+      await firstValueFrom(this.api.delete(`/catastrophic-illness/clerk-paper/${slot.id}`));
+      const sel = this.selectedPatient();
+      await Promise.all([
+        this.loadOverview(),
+        sel && String(sel['id']) === row.patientId ? this.loadApplications() : Promise.resolve(),
+      ]);
+    } catch (err) {
+      console.error('移除紙本紀錄失敗:', err);
+      alert('移除失敗：' + ((err as { error?: { message?: string } })?.error?.message || '請重試'));
+    }
+  }
+
+  /** 紀錄按鈕區：標示書記補登的紙本紀錄 */
+  isPaperApp(app: CiApplication): boolean {
+    return (app.formData as Record<string, unknown> | undefined)?.['source'] === PAPER_SOURCE;
+  }
+
   toggleOverview(): void {
     this.overviewCollapsed = !this.overviewCollapsed;
   }
@@ -344,20 +402,38 @@ export class CatastrophicIllnessComponent implements OnInit {
     }
   }
 
+  /** 補登列：到期日、紙本送出日期至少填一項 */
+  get canAddExpiry(): boolean {
+    return !!this.expiryPickedPatient && (!!this.newExpiryDate || !!this.newSentDate) && !this.addingExpiry;
+  }
+
   async addExpiry(): Promise<void> {
     const patient = this.expiryPickedPatient;
-    if (!patient || !this.newExpiryDate) return;
+    if (!patient || (!this.newExpiryDate && !this.newSentDate)) return;
     const existing = this.overviewRows().find((r) => r.patientId === patient['id']);
-    if (existing?.expiryDate && !confirm(`${patient['name']} 已有到期日 ${existing.expiryDate}，要改成 ${this.newExpiryDate} 嗎？`)) return;
+    if (this.newExpiryDate && existing?.expiryDate && !confirm(`${patient['name']} 已有到期日 ${existing.expiryDate}，要改成 ${this.newExpiryDate} 嗎？`)) return;
     this.addingExpiry = true;
     try {
-      await firstValueFrom(this.api.put(`/catastrophic-illness/expiry/${patient['id']}`, {
-        expiryDate: this.newExpiryDate,
-        physicianName: this.newExpiryPhysician,
-      }));
+      if (this.newExpiryDate) {
+        await firstValueFrom(this.api.put(`/catastrophic-illness/expiry/${patient['id']}`, {
+          expiryDate: this.newExpiryDate,
+          physicianName: this.newExpiryPhysician,
+        }));
+      }
+      if (this.newSentDate) {
+        // 紙本送出日期：該病人尚無初次申請 → 記在初次欄；已有初次 → 接在再次之後
+        const hasInitial = !!existing?.applications?.[0];
+        await firstValueFrom(this.api.post('/catastrophic-illness/clerk-paper', {
+          patientId: String(patient['id']),
+          applicationType: hasInitial ? 'renewal' : 'initial',
+          clerkSentDate: this.newSentDate,
+          physicianName: this.newExpiryPhysician || undefined,
+        }));
+      }
       this.expiryPickedPatient = null;
       this.expirySearchText = '';
       this.newExpiryDate = '';
+      this.newSentDate = '';
       this.newExpiryPhysician = '';
       await this.loadOverview(); // 重新載入：新列與到期提醒卡立即出現
     } catch (err) {
