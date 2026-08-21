@@ -893,7 +893,7 @@ function getEducationDialysisDates(db, patientId, firstDate, todayStr) {
     .sort((a, b) => a.date.localeCompare(b.date))
 }
 
-// 主護反查：讀「護理師分配病人照護清單」（nurse_patient_care，單一 JSON 文件 id='main'），
+// 主護反查：讀「主護病人照護清單」（原名護理師分配病人照護清單；nurse_patient_care，單一 JSON 文件 id='main'），
 // 建 patientId → { nurseId, nurseName } 反查表。排除名單（excluded_nurse_ids）內的護理師不列入，
 // 與照護清單前端顯示規則一致。衛教紀錄「回示教通過日/主護簽章」欄的主護即由此對應。
 function getPrimaryNurseMap(db) {

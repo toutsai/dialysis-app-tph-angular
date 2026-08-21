@@ -25,7 +25,7 @@ interface EducationListItem {
   firstDialysisActive: boolean;
   firstDialysisDate: string;
   admissionDate: string;
-  /** 主護（來源：使用者管理的護理師分配病人照護清單；null = 尚未分配） */
+  /** 主護（來源：使用者管理的主護病人照護清單；null = 尚未分配） */
   primaryNurse: { nurseId: string; nurseName: string } | null;
   hasRecord: boolean;
   educatedCount: number;

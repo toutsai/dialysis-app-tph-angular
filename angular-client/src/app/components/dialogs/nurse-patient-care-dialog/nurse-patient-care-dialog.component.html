@@ -2,7 +2,7 @@
   <div class="npc-modal">
     <header class="npc-header">
       <div class="npc-header-left">
-        <h2>護理師分配病人照護清單</h2>
+        <h2>主護病人照護清單</h2>
         <span class="npc-updated" *ngIf="updatedInfo().updatedAt">
           最後儲存：{{ updatedInfo().updatedAt }}
           <ng-container *ngIf="updatedInfo().updatedByName">（{{ updatedInfo().updatedByName }}）</ng-container>
@@ -98,7 +98,7 @@
                 class="npc-chip small"
                 [class.selected]="selectedPatientId() === p.id"
                 [class.deleted]="p['isDeleted']"
-                [title]="'病歷號: ' + (p.medicalRecordNumber || '-') + (p['isDeleted'] ? '｜已刪除，保留一個月後自動退場' : '')"
+                [title]="'病歷號: ' + (p.medicalRecordNumber || '-') + (p['isDeleted'] ? '｜已刪除，保留至當季季末次月月底後自動退場' : '')"
                 (click)="togglePatient(p); $event.stopPropagation()"
               >
                 {{ p.name }}<span class="npc-deleted-tag" *ngIf="p['isDeleted']">已刪除</span>

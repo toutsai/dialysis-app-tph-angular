@@ -25,7 +25,7 @@
       </span>
       <span *ngIf="firstDialysisDate">首透日期：{{ firstDialysisDate }}</span>
       <span class="edu-nurse" [class.edu-nurse-none]="!primaryNurse()"
-            title="來源：使用者管理的護理師分配病人照護清單">
+            title="來源：使用者管理的主護病人照護清單">
         <i class="fas fa-user-nurse"></i>
         主護：{{ primaryNurse()?.nurseName || '未分配' }}
       </span>

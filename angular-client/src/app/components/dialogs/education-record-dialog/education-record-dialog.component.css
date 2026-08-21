@@ -58,7 +58,7 @@
 .edu-paper-chk input:disabled { cursor: not-allowed; }
 .edu-paper-dim { opacity: 0.55; }
 
-/* 主護（來源：護理師分配病人照護清單）；未分配以橘色提醒 */
+/* 主護（來源：主護病人照護清單）；未分配以橘色提醒 */
 .edu-nurse { color: #1d6fa5; font-weight: 600; }
 .edu-nurse i { margin-right: 4px; }
 .edu-nurse-none { color: #b45309; }

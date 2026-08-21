@@ -23,7 +23,7 @@ interface EducationSession {
 
 type SignField = 'educatorSign' | 'returnDemoSign' | 'passSign';
 
-/** 主護（來源：使用者管理的護理師分配病人照護清單） */
+/** 主護（來源：使用者管理的主護病人照護清單） */
 interface PrimaryNurse {
   nurseId: string;
   nurseName: string;

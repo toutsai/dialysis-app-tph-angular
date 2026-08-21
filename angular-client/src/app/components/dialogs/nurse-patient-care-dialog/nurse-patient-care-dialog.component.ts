@@ -1,5 +1,5 @@
 // src/app/components/dialogs/nurse-patient-care-dialog/nurse-patient-care-dialog.component.ts
-// 護理師分配病人照護清單：全部護理師 + 未分配門診病人，點選病人→點選護理師卡指派
+// 主護病人照護清單（原名：護理師分配病人照護清單，2026-08-21 改名）：全部護理師 + 未分配門診病人，點選病人→點選護理師卡指派
 // 儲存於 nurse_patient_care 單一 JSON 文件（與每日護理分組無關）
 
 import {
@@ -78,8 +78,10 @@ export class NursePatientCareDialogComponent implements OnChanges {
   }
 
   /**
-   * 從門診被刪除、仍在保留期（刪除日+1個月）內的病人：
-   * 護理師卡片上暫留一個月才退場（2026-08-13 使用者需求），加「已刪除」標記。
+   * 從門診被刪除、仍在保留期內的病人：護理師卡片上暫留（加「已刪除」標記）。
+   * 保留期＝刪除當季的「季末次月月底」（2026-08-19 使用者需求，配合 KiDit 季度申報）：
+   *   1-3 月刪除 → 保留到 4/30；4-6 月 → 7/31；7-9 月 → 10/31；10-12 月 → 次年 1/31。
+   * 理由：當季有洗的病人，季度申報（季末次月）仍要申報他，須撐到季度資料輸入完成。
    * 只影響卡片顯示；未分配池維持嚴格條件，避免已刪除病人被重新指派。
    * 即時刪除 status 仍是 opd、預約刪除 cron 會改成 deleted+originalStatus，兩種都涵蓋。
    */
@@ -92,8 +94,9 @@ export class NursePatientCareDialogComponent implements OnChanges {
     if (!deletedAt) return false;
     const deleted = new Date(deletedAt);
     if (isNaN(deleted.getTime())) return false;
-    const expiry = new Date(deleted);
-    expiry.setMonth(expiry.getMonth() + 1);
+    // 季末次月的下個月 1 號 = 過期時點（Q4 的 month 13 由 Date 自動進位到次年 2/1）
+    const quarter = Math.floor(deleted.getMonth() / 3);
+    const expiry = new Date(deleted.getFullYear(), quarter * 3 + 4, 1);
     return new Date() < expiry;
   }
 
@@ -142,7 +145,7 @@ export class NursePatientCareDialogComponent implements OnChanges {
       .filter((p) => p.id && this.isRegularOpd(p) && !assigned.has(p.id)).length;
   });
 
-  /** 每位護理師的卡片（常規門診者＋刪除未滿一個月的保留病人） */
+  /** 每位護理師的卡片（常規門診者＋仍在季度保留期內的已刪除病人） */
   readonly nurseCards = computed<NurseCard[]>(() => {
     const map = this.assignmentMap();
     const patientMap = this.patientStore.patientMap();

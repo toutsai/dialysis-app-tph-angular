@@ -73,7 +73,7 @@
             <th class="col-ward">病房號</th>
             <th class="col-freq">頻率</th>
             <th>初透日</th>
-            <th title="來源：使用者管理的護理師分配病人照護清單">主護</th>
+            <th title="來源：使用者管理的主護病人照護清單">主護</th>
             <th>檢視／編輯</th>
             <th class="col-prog" title="已衛教次數 / 應衛教次數（初透日起的非外圍透析日，最多12）/ 總次數">已衛教</th>
             <th class="col-uneducated" title="應衛教日中尚未衛教的天數">未衛教</th>
@@ -298,7 +298,7 @@
                 <span class="ue-pstat">
                   未衛教 <b>{{ p.uneducatedCount }}</b> 天／應衛教 {{ p.expectedCount }} 天
                 </span>
-                <span class="ue-pstat" title="來源：使用者管理的護理師分配病人照護清單">
+                <span class="ue-pstat" title="來源：使用者管理的主護病人照護清單">
                   主護：{{ primaryNurseLabel(p) }}
                 </span>
                 <button class="btn-open ue-open" (click)="openRecord(p)">
