@@ -159,23 +159,56 @@
 .basicdata-btn { border-color: #00695c; color: #00695c; }
 .basicdata-btn:hover:not(:disabled) { background: #e0f2f1; }
 
-/* 申報總覽 */
-.ov-hint { margin-bottom: 0.9rem; }
+/* ===== 版面：左側卡片導覽（1/3）＋右側內容（2/3）（2026-08-22，取代上方主頁籤列＋申報總覽頁） ===== */
+.kr-layout {
+  display: grid;
+  grid-template-columns: minmax(18rem, 1fr) 2fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+.kr-side {
+  position: sticky;
+  top: 0.5rem;
+  max-height: calc(100vh - 1rem);
+  overflow-y: auto;
+  padding-right: 0.15rem;
+}
+.kr-main {
+  min-width: 0; /* 讓寬表格在內容區內水平捲動，不撐破版面 */
+}
+
+/* 左側卡片（原申報總覽卡片，改為縱向堆疊＋可點擊切換） */
+.ov-hint { margin-bottom: 0.7rem; }
 .ov-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
-  gap: 0.8rem;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
 }
 .ov-card {
   background: #fff;
   border: 1px solid #eceff1;
   border-radius: 8px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
-  padding: 0.9rem 1rem;
+  padding: 0.75rem 0.9rem;
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.45rem;
+  cursor: pointer;
+  transition: box-shadow 0.15s, background 0.15s, transform 0.15s;
 }
+.ov-card:hover {
+  background: #fafcff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+.ov-card:focus-visible {
+  outline: 2px solid #1565c0;
+  outline-offset: 2px;
+}
+.ov-card.active {
+  background: #f3f8ff;
+  box-shadow: 0 0 0 2px #1565c0 inset, 0 2px 10px rgba(21, 101, 192, 0.15);
+}
+.ov-card.active .ov-card-head h3 { color: #1565c0; }
 .ov-card.ov-wip {
   background: #fafbfc;
   border-style: dashed;
@@ -664,7 +697,8 @@ tr.qi-untouched .qi-flag { background: #eceff1; color: #90a4ae; }
   .header-left, .header-right, .month-navigator { justify-content: center; }
   .main-tabs { gap: 0.15rem; }
   .main-tab-btn { padding: 0.45rem 0.55rem; font-size: 1.01rem; }
-  .ov-grid { grid-template-columns: 1fr; }
+  .kr-layout { grid-template-columns: 1fr; }
+  .kr-side { position: static; max-height: none; }
   .action-btn { justify-content: center; font-size: 0.99rem; }
   .calendar-grid { grid-template-columns: repeat(1, 1fr); gap: 0.45rem; }
   .weekdays-header { display: none; }

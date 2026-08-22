@@ -55,17 +55,10 @@ export class KiditReportComponent implements OnInit {
   private readonly patientStore = inject(PatientStoreService);
   private readonly route = inject(ActivatedRoute);
 
-  readonly mainTabs: { key: MainTab; label: string; icon: string; wip?: boolean }[] = [
-    { key: 'overview', label: '申報總覽', icon: 'fa-clipboard-check' },
-    { key: 'initial', label: '初次建檔', icon: 'fa-id-card' },
-    { key: 'vascular', label: '季度造管', icon: 'fa-file-csv' },
-    { key: 'movement', label: '病人動態', icon: 'fa-calendar-alt' },
-    { key: 'hdrx', label: 'HD處方', icon: 'fa-prescription' },
-    { key: 'qinput', label: '季度輸入', icon: 'fa-notes-medical' },
-    { key: 'hosp', label: '住出院', icon: 'fa-hospital' },
-  ];
+  // 主頁籤列已於 2026-08-22 併入左側卡片導覽（模板 .kr-side 的 ov-card），不再另列 tabs 陣列
 
-  readonly activeTab = signal<MainTab>('overview');
+  /** 預設停在初次建檔（2026-08-22 版面改左側卡片導覽後，「申報總覽」頁籤取消） */
+  readonly activeTab = signal<MainTab>('initial');
   readonly initialSubTab = signal<InitialSubTab>('pending');
   /** 月份導覽只在月份相關頁籤顯示（總覽與季度制頁籤用不到） */
   readonly showMonthNav = computed(() => ['initial', 'vascular', 'movement'].includes(this.activeTab()));
@@ -147,6 +140,8 @@ export class KiditReportComponent implements OnInit {
       return;
     }
     this.fetchData();
+    // 預設頁籤＝初次建檔：一進頁就載入需建檔名單（原本靠點頁籤觸發）
+    this.loadInitialSubTab();
   }
 
   setTab(tab: MainTab): void {
