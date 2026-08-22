@@ -1,7 +1,7 @@
 // 季度病人動態彙整（KiDit 申報工作站）
 // 對應手動「病患異動狀態表」月表：把季度內工作日誌的病人動態按病人分組、
 // 依住院/出院切成一列一段住院歷程，並自動串出病程備註鏈（如「5/21 首透 → 6/3 刪除：家屬拒HD」）。
-// 三區＝本院常規HD／新病患／外院（歸類規則見 core/utils/kidit-patient-groups.ts）。
+// 三區＝本院常規 HD／外院常規 HD／新透析病人（順序與名稱、歸類規則見 core/utils/kidit-patient-groups.ts）。
 // 先只做畫面查閱不做匯出（2026-07-26 使用者拍板）。
 import { Component, EventEmitter, OnInit, Output, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';

@@ -11,12 +11,13 @@ export interface KiditClassifiablePatient {
   hospitalInfo?: { source?: string | null; [key: string]: unknown } | null;
 }
 
-export const KIDIT_GROUP_ORDER: KiditPatientGroup[] = ['regular', 'newPatient', 'external'];
+// 順序與名稱 2026-08-22 使用者裁定：本院常規 HD → 外院常規 HD → 新透析病人（日詳情三區與季度動態頁籤共用）
+export const KIDIT_GROUP_ORDER: KiditPatientGroup[] = ['regular', 'external', 'newPatient'];
 
 export const KIDIT_GROUP_LABELS: Record<KiditPatientGroup, string> = {
   regular: '本院常規 HD',
-  newPatient: '新病患',
-  external: '外院病人',
+  external: '外院常規 HD',
+  newPatient: '新透析病人',
 };
 
 export function classifyKiditPatient(patient: unknown): KiditPatientGroup {
