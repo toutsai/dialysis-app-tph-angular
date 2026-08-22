@@ -4,20 +4,7 @@
     <div class="header-left">
       <h2 class="page-title">KiDit 申報工作站</h2>
     </div>
-
-    <div class="month-navigator" *ngIf="showMonthNav()">
-      <button class="nav-btn" (click)="changeMonth(-1)">
-        <i class="fas fa-chevron-left"></i>
-      </button>
-      <span class="current-month">
-        {{ currentYear() }} 年 <span class="month-number">{{ currentMonth() }}</span> 月
-      </span>
-      <button class="nav-btn" (click)="changeMonth(1)">
-        <i class="fas fa-chevron-right"></i>
-      </button>
-    </div>
-
-    <div class="header-right"></div>
+    <!-- 月份導覽已移入右側各工作區的工具列（2026-08-22 使用者要求頂部列只留標題） -->
   </header>
 
   <!-- 版面（2026-08-22）：左側申報項目卡片縱向排列＝工作區導覽（點卡片切換），右側為內容；
@@ -46,11 +33,6 @@
           <span class="ov-freq">每季・當季第一次透析日</span>
         </div>
         <p class="ov-desc">當次護理師填寫通路事件→同步工作日誌→組長確認→季度造管 CSV（官方 82 欄）。</p>
-        <div class="ov-actions">
-          <button class="action-btn quarterly-btn" (click)="openQuarterlyModal(); $event.stopPropagation()">
-            <i class="fas fa-table"></i> 開啟造管工作檯
-          </button>
-        </div>
       </div>
 
       <div class="ov-card ov-c-movement" role="button" tabindex="0" [class.active]="activeTab() === 'movement'" (click)="setTab('movement')">
@@ -60,11 +42,6 @@
           <span class="ov-freq">每日自動同步</span>
         </div>
         <p class="ov-desc">資料蒐集區：工作日誌動態與通路事件自動同步至日誌本，月曆核對「已登錄 KiDit」勾選。</p>
-        <div class="ov-actions">
-          <button class="action-btn movements-btn" (click)="openMovementsQuarterly(); $event.stopPropagation()">
-            <i class="fas fa-stream"></i> 季度病人動態
-          </button>
-        </div>
       </div>
 
       <div class="ov-card ov-c-hdrx" role="button" tabindex="0" [class.active]="activeTab() === 'hdrx'" (click)="setTab('hdrx')">
@@ -98,27 +75,48 @@
 
   <main class="kr-main">
 
+  <!-- 共用月份導覽（初次建檔／季度造管／病人動態三個月制工作區的工具列左側） -->
+  <ng-template #monthNav>
+    <div class="month-navigator">
+      <button class="nav-btn" (click)="changeMonth(-1)" title="上個月">
+        <i class="fas fa-chevron-left"></i>
+      </button>
+      <span class="current-month">
+        {{ currentYear() }} 年 <span class="month-number">{{ currentMonth() }}</span> 月
+      </span>
+      <button class="nav-btn" (click)="changeMonth(1)" title="下個月">
+        <i class="fas fa-chevron-right"></i>
+      </button>
+    </div>
+  </ng-template>
+
   <!-- ========== 初次建檔 ========== -->
   <section class="tab-panel" *ngIf="activeTab() === 'initial'">
-    <div class="tool-row">
-      <div class="export-dropdown">
-        <button class="action-btn export-btn" (click)="showExportMenu.set(!showExportMenu())" [disabled]="isLoading()">
-          <i class="fas fa-file-csv"></i> 匯出 <i class="fas fa-caret-down"></i>
-        </button>
-        <div class="export-menu" *ngIf="showExportMenu()">
-          <button (click)="exportOfficialPatientCsv(); showExportMenu.set(false)">
-            <i class="fas fa-id-card"></i> 基本資料 CSV
+    <!-- 工具列統一版型：左＝月份/季度導覽，右＝匯出與動作鈕；說明文字放工具列下方 -->
+    <div class="kr-toolbar">
+      <div class="kr-toolbar-left">
+        <ng-container *ngTemplateOutlet="monthNav"></ng-container>
+      </div>
+      <div class="kr-toolbar-right">
+        <div class="export-dropdown">
+          <button class="action-btn export-btn" (click)="showExportMenu.set(!showExportMenu())" [disabled]="isLoading()">
+            <i class="fas fa-file-csv"></i> 匯出 <i class="fas fa-caret-down"></i>
           </button>
-          <button (click)="exportOfficialHistoryCsv(); showExportMenu.set(false)">
-            <i class="fas fa-notes-medical"></i> 病史原發病 CSV
-          </button>
+          <div class="export-menu" *ngIf="showExportMenu()">
+            <button (click)="exportOfficialPatientCsv(); showExportMenu.set(false)">
+              <i class="fas fa-id-card"></i> 基本資料 CSV
+            </button>
+            <button (click)="exportOfficialHistoryCsv(); showExportMenu.set(false)">
+              <i class="fas fa-notes-medical"></i> 病史原發病 CSV
+            </button>
+          </div>
         </div>
       </div>
-      <span class="pr-hint tool-hint">
-        <i class="fas fa-info-circle"></i>
-        官方 KiDit 匯入格式（民國日期）；範圍＝本月本院初透（依上方月份歸月，與需建檔名單一致）已填寫建檔資料的病人，可直接上傳 KiDit。
-      </span>
     </div>
+    <p class="pr-hint kr-toolbar-hint">
+      <i class="fas fa-info-circle"></i>
+      官方 KiDit 匯入格式（民國日期）；範圍＝本月本院初透（依上方月份歸月，與需建檔名單一致）已填寫建檔資料的病人，可直接上傳 KiDit。
+    </p>
 
     <div class="sub-tabs">
       <button class="sub-tab-btn" [class.active]="initialSubTab() === 'pending'" (click)="setInitialSubTab('pending')">
@@ -378,15 +376,24 @@
 
   <!-- ========== 季度造管 ========== -->
   <section class="tab-panel" *ngIf="activeTab() === 'vascular'">
-    <div class="tool-row">
-      <button class="action-btn quarterly-btn" (click)="openQuarterlyModal()">
-        <i class="fas fa-file-csv"></i> 開啟季度造管 CSV 工作檯
-      </button>
-      <span class="pr-hint tool-hint">
-        <i class="fas fa-info-circle"></i>
-        正式申報請由工作檯匯出官方 82 欄 CSV（申報日期＝當季第一次透析日）；下方為當月事件核對清單。
-      </span>
+    <div class="kr-toolbar">
+      <div class="kr-toolbar-left">
+        <ng-container *ngTemplateOutlet="monthNav"></ng-container>
+      </div>
+      <div class="kr-toolbar-right">
+        <button class="action-btn quarterly-btn" (click)="openQuarterlyModal()">
+          <i class="fas fa-table"></i> 季度造管 CSV 工作檯
+        </button>
+        <button class="action-btn export-btn" (click)="exportVascularRows()"
+                [disabled]="isLoadingVascular() || vascularRows().length === 0">
+          <i class="fas fa-file-export"></i> 匯出 Excel
+        </button>
+      </div>
     </div>
+    <p class="pr-hint kr-toolbar-hint">
+      <i class="fas fa-info-circle"></i>
+      正式申報請由工作檯匯出官方 82 欄 CSV（申報日期＝當季第一次透析日）；下方為當月事件核對清單，「匯出 Excel」為核對用。
+    </p>
 
     <div class="list-panel">
       <div class="list-panel-header">
@@ -395,10 +402,6 @@
           {{ currentYear() }} 年 {{ currentMonth() }} 月 血管通路事件清單
           <span class="va-count" *ngIf="!isLoadingVascular()">（{{ vascularRows().length }} 筆）</span>
         </h3>
-        <button class="action-btn export-btn" (click)="exportVascularRows()"
-                [disabled]="isLoadingVascular() || vascularRows().length === 0">
-          <i class="fas fa-file-export"></i> 匯出 Excel
-        </button>
       </div>
 
       <div *ngIf="isLoadingVascular()" class="va-loading">
@@ -441,15 +444,20 @@
 
   <!-- ========== 病人動態（月曆） ========== -->
   <section class="tab-panel" *ngIf="activeTab() === 'movement'">
-    <div class="tool-row">
-      <button class="action-btn movements-btn" (click)="openMovementsQuarterly()">
-        <i class="fas fa-stream"></i> 季度病人動態
-      </button>
-      <span class="pr-hint tool-hint">
-        <i class="fas fa-info-circle"></i>
-        月曆＝每日自動同步的病人動態；點日期開啟詳情，核對「已登錄 KiDit」勾選、填寫轉出院所與通路處置。
-      </span>
+    <div class="kr-toolbar">
+      <div class="kr-toolbar-left">
+        <ng-container *ngTemplateOutlet="monthNav"></ng-container>
+      </div>
+      <div class="kr-toolbar-right">
+        <button class="action-btn movements-btn" (click)="openMovementsQuarterly()">
+          <i class="fas fa-stream"></i> 季度病人動態
+        </button>
+      </div>
     </div>
+    <p class="pr-hint kr-toolbar-hint">
+      <i class="fas fa-info-circle"></i>
+      月曆＝每日自動同步的病人動態；點日期開啟詳情，核對「已登錄 KiDit」勾選、填寫轉出院所與通路處置。
+    </p>
 
     <div class="calendar-wrapper" *ngIf="!isLoading()">
       <div class="weekdays-header">
@@ -506,36 +514,37 @@
 
   <!-- ========== 季度輸入彙整（透析紀錄／醫療狀況評估／合併症） ========== -->
   <section class="tab-panel" *ngIf="activeTab() === 'qinput'">
-    <div class="tool-row">
-      <div class="qi-quarter-nav">
-        <button class="nav-btn" (click)="changeQiQuarter(-1)" title="上一季">
-          <i class="fas fa-chevron-left"></i>
+    <div class="kr-toolbar">
+      <div class="kr-toolbar-left">
+        <div class="qi-quarter-nav">
+          <button class="nav-btn" (click)="changeQiQuarter(-1)" title="上一季">
+            <i class="fas fa-chevron-left"></i>
+          </button>
+          <span class="qi-quarter">
+            {{ qiYear() }} 年 <span class="month-number">Q{{ qiQ() }}</span>
+            <small>{{ qiRangeLabel() }}</small>
+          </span>
+          <button class="nav-btn" (click)="changeQiQuarter(1)" title="下一季">
+            <i class="fas fa-chevron-right"></i>
+          </button>
+        </div>
+      </div>
+      <div class="kr-toolbar-right">
+        <button class="action-btn export-btn" (click)="exportQiCsv('hdrecord')" [disabled]="isLoadingQi()">
+          <i class="fas fa-file-csv"></i> 透析紀錄 CSV（{{ qiCompletedCount('hdrecord') }}）
         </button>
-        <span class="qi-quarter">
-          {{ qiYear() }} 年 <span class="month-number">Q{{ qiQ() }}</span>
-          <small>{{ qiRangeLabel() }}</small>
-        </span>
-        <button class="nav-btn" (click)="changeQiQuarter(1)" title="下一季">
-          <i class="fas fa-chevron-right"></i>
+        <button class="action-btn export-btn" (click)="exportQiCsv('diagnose')" [disabled]="isLoadingQi()">
+          <i class="fas fa-file-csv"></i> 醫療狀況評估 CSV（{{ qiCompletedCount('diagnose') }}）
+        </button>
+        <button class="action-btn export-btn" (click)="exportQiCsv('comorbid')" [disabled]="isLoadingQi()">
+          <i class="fas fa-file-csv"></i> 合併症 CSV（{{ qiCompletedCount('comorbid') }}）
         </button>
       </div>
-      <span class="pr-hint tool-hint">
-        <i class="fas fa-info-circle"></i>
-        主護於「我的病人 → 季度病人 KiDit 輸入」填寫；匯出只含勾選「完成」的病人（日期＝當季最後一次抽血日）。
-      </span>
     </div>
-
-    <div class="tool-row">
-      <button class="action-btn export-btn" (click)="exportQiCsv('hdrecord')" [disabled]="isLoadingQi()">
-        <i class="fas fa-file-csv"></i> 匯出透析紀錄 CSV（{{ qiCompletedCount('hdrecord') }}）
-      </button>
-      <button class="action-btn export-btn" (click)="exportQiCsv('diagnose')" [disabled]="isLoadingQi()">
-        <i class="fas fa-file-csv"></i> 匯出醫療狀況評估 CSV（{{ qiCompletedCount('diagnose') }}）
-      </button>
-      <button class="action-btn export-btn" (click)="exportQiCsv('comorbid')" [disabled]="isLoadingQi()">
-        <i class="fas fa-file-csv"></i> 匯出合併症 CSV（{{ qiCompletedCount('comorbid') }}）
-      </button>
-    </div>
+    <p class="pr-hint kr-toolbar-hint">
+      <i class="fas fa-info-circle"></i>
+      主護於「我的病人 → 季度病人 KiDit 輸入」填寫；右側匯出只含勾選「完成」的病人（日期＝當季最後一次抽血日）。
+    </p>
 
     <div class="list-panel">
       <div class="list-panel-header">

@@ -178,6 +178,28 @@
   min-width: 0; /* 讓寬表格在內容區內水平捲動，不撐破版面 */
 }
 
+/* 右側工作區工具列統一版型（2026-08-22）：左＝月份/季度導覽，右＝匯出與動作鈕；說明另起一行
+   hdrx／hosp 子元件自帶同構工具列（季度導覽左、匯出 CSV 右），勿再包一層 */
+.kr-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+.kr-toolbar-left,
+.kr-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.kr-toolbar-right { margin-left: auto; justify-content: flex-end; }
+.kr-toolbar .month-navigator { flex: none; justify-content: flex-start; gap: 0.6rem; }
+.kr-toolbar .current-month { font-size: 1.21rem; min-width: 7rem; }
+.kr-toolbar-hint { margin-bottom: 0.8rem; }
+
 /* 左側卡片（原申報總覽卡片，改為縱向堆疊＋可點擊切換） */
 .ov-hint { margin-bottom: 0.7rem; }
 .ov-grid {
