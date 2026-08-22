@@ -109,13 +109,23 @@ export class UserManagementComponent implements OnInit {
   }
 
   // --- Options ---
+  // 角色顯示改中文（2026-08-22 使用者裁定）：admin=管理者、editor=護理、contributor=醫療、viewer=行政；值仍為英文角色碼
+  readonly ROLE_LABELS: Record<string, string> = {
+    admin: '管理者',
+    editor: '護理',
+    contributor: '醫療',
+    viewer: '行政',
+  };
   roleOptions = [
-    { value: 'all', label: 'all' },
-    { value: 'admin', label: 'admin' },
-    { value: 'editor', label: 'editor' },
-    { value: 'contributor', label: 'contributor' },
-    { value: 'viewer', label: 'viewer' },
+    { value: 'all', label: '全部' },
+    { value: 'admin', label: this.ROLE_LABELS['admin'] },
+    { value: 'editor', label: this.ROLE_LABELS['editor'] },
+    { value: 'contributor', label: this.ROLE_LABELS['contributor'] },
+    { value: 'viewer', label: this.ROLE_LABELS['viewer'] },
   ];
+  roleLabel(role?: string): string {
+    return (role && this.ROLE_LABELS[role]) || role || '';
+  }
 
   sortOptions = [
     { value: 'name', label: '姓名' },

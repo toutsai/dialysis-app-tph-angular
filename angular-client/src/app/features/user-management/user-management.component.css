@@ -69,15 +69,14 @@
   gap: 0.4rem;
   flex-wrap: wrap;
 }
-/* 篩選器：與個人卡片 role-badge 同款（英文、大寫、彩色徽章） */
+/* 篩選器：與個人卡片 role-badge 同款（中文角色名、彩色徽章；2026-08-22 由英文改中文） */
 .role-toggle-btn {
   padding: 0.35rem 0.9rem;
   border: 2px solid transparent;
   border-radius: 20px;
   color: #fff;
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   font-weight: 600;
-  text-transform: uppercase;
   letter-spacing: 0.5px;
   cursor: pointer;
   transition: all 0.2s;
@@ -420,9 +419,8 @@
 .role-badge {
   padding: 0.2em 0.6em;
   border-radius: 12px;
-  font-size: 0.72em;
+  font-size: 0.8em;
   font-weight: 600;
-  text-transform: uppercase;
   color: white;
   letter-spacing: 0.5px;
   flex-shrink: 0;

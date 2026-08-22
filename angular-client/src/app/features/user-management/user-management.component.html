@@ -167,7 +167,7 @@
       <div class="card-top">
         <div class="card-identity">
           <span class="card-name">{{ user.name }}</span>
-          <span class="role-badge" [ngClass]="'role-' + user.role">{{ user.role }}</span>
+          <span class="role-badge" [ngClass]="'role-' + user.role" [title]="user.role">{{ roleLabel(user.role) }}</span>
         </div>
         <div *ngIf="isAdmin" class="card-actions">
           <button

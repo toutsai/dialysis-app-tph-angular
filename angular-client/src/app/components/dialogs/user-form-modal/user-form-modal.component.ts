@@ -17,11 +17,12 @@ export class UserFormModalComponent implements OnChanges {
   @Output() saved = new EventEmitter<any>();
 
   readonly titles = ['主治醫師', '護理長', '護理師', '專科護理師', '管理員', '書記'];
+  // 角色中文名與使用者管理卡片/篩選一致（admin=管理者、contributor=醫療、editor=護理、viewer=行政），括號保留英文碼與適用職稱
   readonly roles = [
-    { value: 'admin', text: 'Admin (主任/護理長/管理員)' },
-    { value: 'contributor', text: 'Contributor (醫師/專師)' },
-    { value: 'editor', text: 'Editor (護理師)' },
-    { value: 'viewer', text: 'Viewer (書記/白板)' },
+    { value: 'admin', text: '管理者 admin（主任/護理長/管理員）' },
+    { value: 'contributor', text: '醫療 contributor（醫師/專師）' },
+    { value: 'editor', text: '護理 editor（護理師）' },
+    { value: 'viewer', text: '行政 viewer（書記/白板）' },
   ];
 
   form: any = this.getDefaultForm();
