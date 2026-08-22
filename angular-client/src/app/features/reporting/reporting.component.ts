@@ -5,7 +5,20 @@ import { FormsModule } from '@angular/forms';
 import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@services/api-manager.service';
 import { SHIFT_CODES, getShiftDisplayName } from '@/constants/scheduleConstants';
 import { formatDateToYYYYMMDD, formatDateToYYYYMM } from '@/utils/dateUtils';
+import { localApi } from '@/services/localApiClient';
 import { Chart, registerables } from 'chart.js';
+
+/** 年度報表「常規門診病人數（月底）」列的 mode 標記（非人次列：圖表與年總計排除） */
+const CENSUS_ROW_MODE = '常規門診病人數';
+
+interface MonthlyCensusCell {
+  date: string;
+  opdRegular: number;
+  opd: number;
+  ipd: number;
+  er: number;
+  source: 'cron' | 'backfill' | 'live' | string;
+}
 
 Chart.register(...registerables);
 
@@ -317,7 +330,7 @@ export class ReportingComponent implements AfterViewInit {
   }
 
   private renderYearlyBarChart(ctx: CanvasRenderingContext2D): void {
-    const rows = this.yearlyTableRows().filter(r => r.mode !== '每月總計');
+    const rows = this.yearlyTableRows().filter(r => r.mode !== '每月總計' && !r.isCensus);
     const headers = this.yearlyTableHeaders();
     this.renderStackedBarChart(ctx, rows, headers, 'monthlyCounts');
   }
@@ -459,7 +472,23 @@ export class ReportingComponent implements AfterViewInit {
         } else if (this.reportType() === 'monthly') {
           this.processMonthlyReport(allSchedules, patientMap, startDate);
         } else if (this.reportType() === 'yearly') {
-          this.processYearlyReport(allSchedules, patientMap);
+          // 每月月底常規門診病人數：後端每晚快照（cron）＋歷史倒推（backfill 估算），取不到不影響人次表
+          let census: (MonthlyCensusCell | null)[] = [];
+          try {
+            const resp: any = await localApi.get(`/system/patient-census?year=${this.selectedYear()}`);
+            census = Array.isArray(resp?.months) ? resp.months : [];
+            // 當月尚無快照（23:45 才記）→ 以即時人數補上「截至今天」
+            const t = resp?.today;
+            if (t?.date && String(t.date).slice(0, 4) === String(this.selectedYear())) {
+              const mi = Number(String(t.date).slice(5, 7)) - 1;
+              if (mi >= 0 && mi < 12 && !census[mi]) {
+                census[mi] = { date: t.date, opdRegular: t.opdRegular, opd: t.opd, ipd: t.ipd, er: t.er, source: 'live' };
+              }
+            }
+          } catch (e) {
+            console.warn('取得月底病人數快照失敗（年度報表略過此列）:', e);
+          }
+          this.processYearlyReport(allSchedules, patientMap, census);
         }
       }
 
@@ -740,7 +769,7 @@ export class ReportingComponent implements AfterViewInit {
     );
   }
 
-  private processYearlyReport(allSchedules: any[], patientMap: Map<string, any>): void {
+  private processYearlyReport(allSchedules: any[], patientMap: Map<string, any>, census: (MonthlyCensusCell | null)[] = []): void {
     const monthlyBreakdown: Record<string, number[]> = {};
     for (const dailyRecord of allSchedules) {
       if (!dailyRecord.schedule) continue;
@@ -787,6 +816,35 @@ export class ReportingComponent implements AfterViewInit {
     monthlyTotalsRow.yearlyTotal = monthlyTotalsRow.monthlyCounts.reduce(
       (sum: number, count: number) => sum + count, 0
     );
-    this.yearlyTableRows.set([...sortedRows, monthlyTotalsRow]);
+    // 常規門診病人數（月底）列：放最上方、單位是「人」非人次，不計入每月總計/圖表
+    // 估算值（backfill）加「≈」、當月未結束標「截至 M/D」
+    const censusRow = census.length > 0 ? this.buildCensusRow(census) : null;
+    this.yearlyTableRows.set([...(censusRow ? [censusRow] : []), ...sortedRows, monthlyTotalsRow]);
+  }
+
+  private buildCensusRow(census: (MonthlyCensusCell | null)[]): any {
+    const year = Number(this.selectedYear());
+    const today = new Date();
+    const monthlyCounts = Array(12).fill(0);
+    const monthlyLabels: string[] = Array(12).fill('');
+    const monthlyTitles: string[] = Array(12).fill('');
+    for (let i = 0; i < 12; i++) {
+      const cell = census[i];
+      if (!cell) continue;
+      monthlyCounts[i] = cell.opdRegular;
+      const lastDay = new Date(year, i + 1, 0);
+      const isMonthClosed = lastDay < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const d = cell.date;
+      const md = `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+      const isLastDay = d === formatDateToYYYYMMDD(lastDay);
+      const approx = cell.source === 'backfill' ? '≈' : '';
+      monthlyLabels[i] = `${approx}${cell.opdRegular}${isMonthClosed && !isLastDay ? `(${md})` : (!isMonthClosed ? `(截至${md})` : '')}`;
+      monthlyTitles[i] = `${d} 常規門診 ${cell.opdRegular}／門診 ${cell.opd}／住院 ${cell.ipd}／急診 ${cell.er}` +
+        (cell.source === 'backfill' ? '（由病人異動紀錄倒推的估算值）' : cell.source === 'live' ? '（即時人數，今晚 23:45 存快照）' : '（每日快照）');
+    }
+    return {
+      mode: CENSUS_ROW_MODE, status: '月底人數', isCensus: true,
+      monthlyCounts, monthlyLabels, monthlyTitles, yearlyTotal: '',
+    };
   }
 }

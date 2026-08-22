@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isAdmin, isEditor, isContributor, logAudit, requireAnyRole } from '../middleware/auth.js'
 import { getTaipeiTodayString } from '../utils/dateUtils.js'
+import { countCurrentCensus, getMonthlyCensus } from '../services/patientCensus.js'
 
 const router = Router()
 const isInventoryRole = [authenticate, requireAnyRole('admin', 'viewer')]
@@ -2351,6 +2352,30 @@ router.get('/backups', ...isAdmin, (req, res) => {
       error: true,
       message: '取得備份列表失敗',
     })
+  }
+})
+
+/**
+ * GET /api/system/patient-census?year=YYYY
+ * 年度每月「月底」病人數快照（常規門診/門診/住院/急診），供年度報表「常規門診病人數（月底）」列。
+ * 每月取最新一筆快照；當月未結束＝截至最新快照日。source 'cron'=實際快照、'backfill'=倒推估算。
+ * 另回 today＝目前即時人數（快照尚未建立的當天可直接看）。
+ */
+router.get('/patient-census', authenticate, (req, res) => {
+  try {
+    const year = Number(req.query.year)
+    if (!year || year < 2000 || year > 2100) {
+      return res.status(400).json({ error: true, message: 'year 需為 4 位數年份' })
+    }
+    const db = getDatabase()
+    res.json({
+      year,
+      months: getMonthlyCensus(db, year),
+      today: { date: getTaipeiTodayString(), ...countCurrentCensus(db) },
+    })
+  } catch (error) {
+    console.error('取得病人數快照錯誤:', error)
+    res.status(500).json({ error: true, message: '取得病人數快照失敗' })
   }
 })
 

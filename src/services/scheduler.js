@@ -14,6 +14,7 @@ import { normalizeDialysisMode } from '../utils/dialysisMode.js'
 import { addAutoMovementToDailyLog } from './dailyLogMovementSync.js'
 import { recordPatientHistory, createPatientSnapshot } from './patientHistory.js'
 import { hourlyNurseAssignmentSnapshot } from './nurseAssignmentRevisions.js'
+import { countCurrentCensus, recordDailyCensus } from './patientCensus.js'
 
 // 狀態碼中文對照（與 routes/patients.js 一致）
 const SCHED_STATUS_MAP = { opd: '門診', ipd: '住院', er: '急診' }
@@ -935,6 +936,22 @@ async function cleanupOldNotificationsAndTasks() {
 }
 
 // ========================================
+// 每日病人數快照（年度報表「常規門診病人數（月底）」用）
+// ========================================
+
+function scheduledPatientCensus() {
+  try {
+    const db = getDatabase()
+    const today = getTaipeiTodayString()
+    const census = countCurrentCensus(db)
+    recordDailyCensus(db, today, census, 'cron')
+    console.log(`[Scheduler] 📊 病人數快照 ${today}：常規門診 ${census.opdRegular}／門診 ${census.opd}／住院 ${census.ipd}／急診 ${census.er}`)
+  } catch (error) {
+    console.error('[Scheduler] ❌ 病人數快照失敗:', error)
+  }
+}
+
+// ========================================
 // 啟動所有定時任務
 // ========================================
 
@@ -991,6 +1008,12 @@ export function startScheduler() {
   })
   console.log('📅 [Scheduler] 護理分組快照 - 每小時整點 (Asia/Taipei)')
 
+  // 每日晚上 23:45 - 病人數快照（年度報表月底常規門診人數）
+  cron.schedule('45 23 * * *', scheduledPatientCensus, {
+    timezone: 'Asia/Taipei',
+  })
+  console.log('📅 [Scheduler] 病人數快照 - 23:45 (Asia/Taipei)')
+
   console.log('========================================\n')
 }
 
@@ -1003,6 +1026,7 @@ export {
   applyScheduledPatientUpdates,
   cleanupExpiredTokensAndSessions,
   cleanupOldNotificationsAndTasks,
+  scheduledPatientCensus,
 }
 
 export default {

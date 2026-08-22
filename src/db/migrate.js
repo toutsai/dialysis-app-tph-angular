@@ -768,6 +768,30 @@ export function runMigrations() {
       }
     }
 
+    // ========================================
+    // patient_census_daily：每日病人數快照（2026-08-22）
+    // 每晚 23:45 cron 記錄當日常規門診/門診/住院/急診人數；年度報表取每月最後一天呈現「常規門診病人數」。
+    // source='cron' 為實際快照、'backfill' 為由 patient_history 倒推的估算值（scripts/backfill-patient-census.mjs）
+    // ========================================
+    const censusExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='patient_census_daily'")
+      .get()
+    if (!censusExists) {
+      console.log('📋 建立 patient_census_daily 表格...')
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS patient_census_daily (
+          date TEXT PRIMARY KEY,
+          opd_regular_count INTEGER NOT NULL DEFAULT 0,
+          opd_count INTEGER NOT NULL DEFAULT 0,
+          ipd_count INTEGER NOT NULL DEFAULT 0,
+          er_count INTEGER NOT NULL DEFAULT 0,
+          source TEXT NOT NULL DEFAULT 'cron',
+          created_at TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+      `)
+      migrationsApplied++
+    }
+
     if (migrationsApplied > 0) {
       console.log(`✅ 已完成 ${migrationsApplied} 項遷移`)
     } else {

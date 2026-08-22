@@ -374,6 +374,15 @@
   background-color: #e9ecef;
 }
 
+/* 年度報表「常規門診病人數（月底）」列：單位人、與人次列區隔（淡藍底、粗體、底線分隔） */
+.results-table .census-row td {
+  background-color: #eef5ff !important;
+  font-weight: 600;
+  color: #1c4f82;
+  border-bottom: 2px solid #b7d1f0;
+  white-space: nowrap;
+}
+
 .monthly-table {
   min-width: 1200px;
 }

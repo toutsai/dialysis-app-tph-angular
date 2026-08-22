@@ -173,13 +173,21 @@
               </thead>
               <tbody>
                 @for (row of yearlyTableRows(); track $index) {
-                  <tr [class.total-row]="row.mode === '每月總計'">
+                  <tr [class.total-row]="row.mode === '每月總計'" [class.census-row]="row.isCensus">
                     <td>{{ row.mode }}</td>
                     <td>{{ row.status }}</td>
-                    @for (count of row.monthlyCounts; track $index) {
-                      <td>{{ count > 0 ? count : '' }}</td>
+                    @if (row.isCensus) {
+                      <!-- 常規門診病人數（月底）：單位人；≈＝倒推估算、(截至M/D)＝當月未結束、(M/D)＝該月最後快照日非月底 -->
+                      @for (label of row.monthlyLabels; track $index) {
+                        <td [title]="row.monthlyTitles[$index]">{{ label }}</td>
+                      }
+                      <td class="total-col">—</td>
+                    } @else {
+                      @for (count of row.monthlyCounts; track $index) {
+                        <td>{{ count > 0 ? count : '' }}</td>
+                      }
+                      <td class="total-col">{{ row.yearlyTotal }}</td>
                     }
-                    <td class="total-col">{{ row.yearlyTotal }}</td>
                   </tr>
                 }
               </tbody>
