@@ -428,7 +428,7 @@ export class KiditReportComponent implements OnInit {
     }
   }
 
-  /** 載入「KiDit 待建檔清單」：本院初透/首透標記且 KiDit 基本資料未完整的病人（後端即時彙整） */
+  /** 載入「KiDit 待建檔清單」：本院初透標記且 KiDit 基本資料未完整的病人（後端即時彙整；2026-08-22 起純首透不入列） */
   async loadPendingRegList(): Promise<void> {
     this.isLoadingPendingReg.set(true);
     this.pendingRegRows.set([]);

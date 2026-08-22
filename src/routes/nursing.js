@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid'
 import XLSX from 'xlsx'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isEditor, isAdmin, isContributor, logAudit } from '../middleware/auth.js'
-import { getTaipeiTodayString, formatDateToTaipeiString } from '../utils/dateUtils.js'
+import { getTaipeiTodayString } from '../utils/dateUtils.js'
 import {
   syncEventsToKiditLogbook,
   getKiditLogbook,
@@ -1524,7 +1524,10 @@ router.put('/kidit-pending-exclusions/:patientId', ...isEditor, (req, res) => {
 
 /**
  * GET /api/nursing/kidit-pending-registrations
- * KiDit 待建檔清單：勾「本院初透」或「首透」狀態標記、且 KiDit 基本資料未完整的病人。
+ * KiDit 待建檔清單：勾「本院初透」狀態標記、且 KiDit 基本資料未完整的病人。
+ * ⚠️ 2026-08-22 起只認「本院初透」（使用者裁定）：只勾「首透」沒勾「本院初透」者不入列
+ *   （首透＝人生第一次透析，正常會連動本院初透；純首透多為舊資料或外院已建檔，KiDit 建檔以本院初透為準）。
+ *   舊規則「首透限近 3 個月入列」隨之移除。firstDialysisDate 仍回傳供標記欄顯示「本院初透＋首透」。
  * 完整定義＝任一 KiDit 事件已填 kidit_profile.idNumber、kidit_profile.diagnosisCategory（原發病存於病患資料）
  * 且同事件存過病史表單（kidit_history 物件存在；病史表單本身無原發病欄位）
  * （與前端 isKiDitDataComplete 一致）。回傳含標記日期、缺項、最近事件日期與標記日照顧護理師。
@@ -1533,14 +1536,10 @@ router.get('/kidit-pending-registrations', authenticate, (req, res) => {
   try {
     const db = getDatabase()
 
-    // 1. 找出有「本院初透」或「首透」標記的病人（排除已刪除）
+    // 1. 找出有「本院初透」標記的病人（排除已刪除）
     const patientRows = db
       .prepare('SELECT id, name, medical_record_number, patient_status, dialysis_orders FROM patients WHERE is_deleted = 0')
       .all()
-    // 僅靠「首透」入列者限近 3 個月（使用者指定，避免舊首透病人塞滿名單）；「本院初透」不設限
-    const cutoffDate = new Date()
-    cutoffDate.setMonth(cutoffDate.getMonth() - 3)
-    const firstDialysisCutoff = formatDateToTaipeiString(cutoffDate)
 
     const flagged = []
     for (const p of patientRows) {
@@ -1552,8 +1551,7 @@ router.get('/kidit-pending-registrations', authenticate, (req, res) => {
       }
       const hfd = ps?.hospitalFirstDialysis
       const fd = ps?.isFirstDialysis
-      if (!(hfd?.active || fd?.active)) continue
-      if (!hfd?.active && fd?.active && fd.date && fd.date < firstDialysisCutoff) continue
+      if (!hfd?.active) continue
       let mode = ''
       try {
         const orders = JSON.parse(p.dialysis_orders || '{}')

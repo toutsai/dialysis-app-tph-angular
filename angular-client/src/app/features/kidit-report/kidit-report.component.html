@@ -198,7 +198,7 @@
 
       <p class="pr-hint">
         <i class="fas fa-info-circle"></i>
-        名單＝勾選「本院初透」或「首透」標記、且 KiDit 病患資料/病史尚未填寫完整的病人（未填標記日期者不分月份恆顯示）。點擊列可直接開啟該病人所在日期的 KiDit 視窗補建檔；建檔完成後自動退出名單。
+        名單＝勾選「本院初透」標記、且 KiDit 病患資料/病史尚未填寫完整的病人（只勾「首透」未勾「本院初透」者不列；未填標記日期者不分月份恆顯示）。點擊列可直接開啟該病人所在日期的 KiDit 視窗補建檔；建檔完成後自動退出名單。
       </p>
 
       <p class="pr-hint pv-other-months" *ngIf="!isLoadingPendingReg() && otherMonthsPendingCount() > 0">
