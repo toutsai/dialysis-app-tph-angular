@@ -82,7 +82,8 @@ export class NursePatientCareDialogComponent implements OnChanges {
    * 保留期＝刪除當季的「季末次月月底」（2026-08-19 使用者需求，配合 KiDit 季度申報）：
    *   1-3 月刪除 → 保留到 4/30；4-6 月 → 7/31；7-9 月 → 10/31；10-12 月 → 次年 1/31。
    * 理由：當季有洗的病人，季度申報（季末次月）仍要申報他，須撐到季度資料輸入完成。
-   * 只影響卡片顯示；未分配池維持嚴格條件，避免已刪除病人被重新指派。
+   * 護理師卡片與未分配池都顯示（2026-08-21：未分配池也納入，讓刪除時尚未分配的病人能指派主護做季度輸入；
+   * 池內以灰底＋「已刪除」標籤區別，原「未分配池維持嚴格」的決策於此日放寬）。
    * 即時刪除 status 仍是 opd、預約刪除 cron 會改成 deleted+originalStatus，兩種都涵蓋。
    */
   isRetainedDeleted(p: Patient): boolean {
@@ -121,13 +122,18 @@ export class NursePatientCareDialogComponent implements OnChanges {
     return set;
   });
 
-  /** 未分配的門診病人（可搜尋） */
-  readonly unassignedPatients = computed(() => {
+  /** 未分配池成員：常規門診 + 仍在季度保留期內的已刪除病人，且未被任何護理師分配 */
+  private readonly unassignedPool = computed(() => {
     const assigned = this.assignedIdSet();
-    const search = this.searchTerm().trim().toLowerCase();
-    let result = this.patientStore
+    return this.patientStore
       .allPatients()
-      .filter((p) => p.id && this.isRegularOpd(p) && !assigned.has(p.id));
+      .filter((p) => !!p.id && (this.isRegularOpd(p) || this.isRetainedDeleted(p)) && !assigned.has(p.id!));
+  });
+
+  /** 未分配的門診病人（可搜尋）；已刪除保留者排在最後 */
+  readonly unassignedPatients = computed(() => {
+    const search = this.searchTerm().trim().toLowerCase();
+    let result = this.unassignedPool();
     if (search) {
       result = result.filter(
         (p) =>
@@ -135,15 +141,20 @@ export class NursePatientCareDialogComponent implements OnChanges {
           p.medicalRecordNumber?.toLowerCase().includes(search),
       );
     }
-    return [...result].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh-Hant'));
+    return [...result].sort((a, b) => {
+      const da = a['isDeleted'] ? 1 : 0;
+      const db = b['isDeleted'] ? 1 : 0;
+      if (da !== db) return da - db;
+      return (a.name || '').localeCompare(b.name || '', 'zh-Hant');
+    });
   });
 
-  readonly unassignedTotal = computed(() => {
-    const assigned = this.assignedIdSet();
-    return this.patientStore
-      .allPatients()
-      .filter((p) => p.id && this.isRegularOpd(p) && !assigned.has(p.id)).length;
-  });
+  readonly unassignedTotal = computed(() => this.unassignedPool().length);
+
+  /** 未分配池中已刪除保留者人數（標題列提示用） */
+  readonly unassignedDeletedCount = computed(
+    () => this.unassignedPool().filter((p) => p['isDeleted']).length,
+  );
 
   /** 每位護理師的卡片（常規門診者＋仍在季度保留期內的已刪除病人） */
   readonly nurseCards = computed<NurseCard[]>(() => {

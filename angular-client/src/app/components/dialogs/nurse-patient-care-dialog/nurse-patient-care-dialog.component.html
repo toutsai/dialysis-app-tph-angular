@@ -36,7 +36,15 @@
         (click)="moveSelectedTo(null)"
       >
         <div class="npc-section-header" (click)="$event.stopPropagation()">
-          <h3>未分配常規門診病人 <span class="npc-count">{{ unassignedTotal() }}</span></h3>
+          <h3>
+            未分配常規門診病人 <span class="npc-count">{{ unassignedTotal() }}</span>
+            <span
+              *ngIf="unassignedDeletedCount() > 0"
+              class="npc-count-note"
+              title="已刪除但仍在當季保留期內（季末次月月底前）的病人，可指派主護完成季度輸入"
+              >含已刪除保留 {{ unassignedDeletedCount() }}</span
+            >
+          </h3>
           <input
             type="text"
             class="npc-search"
@@ -51,10 +59,11 @@
             *ngFor="let p of unassignedPatients()"
             class="npc-chip"
             [class.selected]="selectedPatientId() === p.id"
-            [title]="'病歷號: ' + (p.medicalRecordNumber || '-')"
+            [class.deleted]="p['isDeleted']"
+            [title]="'病歷號: ' + (p.medicalRecordNumber || '-') + (p['isDeleted'] ? '｜已刪除，保留至當季季末次月月底後自動退場' : '')"
             (click)="togglePatient(p); $event.stopPropagation()"
           >
-            {{ p.name }}
+            {{ p.name }}<span class="npc-deleted-tag" *ngIf="p['isDeleted']">已刪除</span>
           </button>
           <span *ngIf="unassignedPatients().length === 0" class="npc-empty-text">
             {{ unassignedTotal() === 0 ? '所有門診病人皆已分配' : '沒有符合搜尋的病人' }}

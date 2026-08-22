@@ -111,6 +111,18 @@
   text-align: center;
   font-weight: 600;
 }
+/* 標題列「含已刪除保留 N」提示（未分配池內仍在季度保留期的已刪除病人） */
+.npc-count-note {
+  margin-left: 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #868e96;
+  border: 1px dashed #ced4da;
+  border-radius: 10px;
+  padding: 0 0.45em;
+  vertical-align: middle;
+  cursor: help;
+}
 .npc-search {
   padding: 0.3rem 0.6rem;
   border: 1px solid #ccc;
