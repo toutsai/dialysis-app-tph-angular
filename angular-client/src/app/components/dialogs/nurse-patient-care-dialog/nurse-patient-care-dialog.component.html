@@ -41,7 +41,7 @@
             <span
               *ngIf="unassignedDeletedCount() > 0"
               class="npc-count-note"
-              title="已刪除但仍在當季保留期內（季末次月月底前）的病人，可指派主護完成季度輸入"
+              title="已刪除但仍在保留期內的病人（滑到各 chip 可看刪除日與保留到幾月底），可指派主護完成季度輸入"
               >含已刪除保留 {{ unassignedDeletedCount() }}</span
             >
           </h3>
@@ -60,7 +60,7 @@
             class="npc-chip"
             [class.selected]="selectedPatientId() === p.id"
             [class.deleted]="p['isDeleted']"
-            [title]="'病歷號: ' + (p.medicalRecordNumber || '-') + (p['isDeleted'] ? '｜已刪除，保留至當季季末次月月底後自動退場' : '')"
+            [title]="'病歷號: ' + (p.medicalRecordNumber || '-') + (p['isDeleted'] ? '｜' + deletedRetentionHint(p) : '')"
             (click)="togglePatient(p); $event.stopPropagation()"
           >
             {{ p.name }}<span class="npc-deleted-tag" *ngIf="p['isDeleted']">已刪除</span>
@@ -107,7 +107,7 @@
                 class="npc-chip small"
                 [class.selected]="selectedPatientId() === p.id"
                 [class.deleted]="p['isDeleted']"
-                [title]="'病歷號: ' + (p.medicalRecordNumber || '-') + (p['isDeleted'] ? '｜已刪除，保留至當季季末次月月底後自動退場' : '')"
+                [title]="'病歷號: ' + (p.medicalRecordNumber || '-') + (p['isDeleted'] ? '｜' + deletedRetentionHint(p) : '')"
                 (click)="togglePatient(p); $event.stopPropagation()"
               >
                 {{ p.name }}<span class="npc-deleted-tag" *ngIf="p['isDeleted']">已刪除</span>

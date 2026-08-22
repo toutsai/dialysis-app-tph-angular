@@ -91,14 +91,30 @@ export class NursePatientCareDialogComponent implements OnChanges {
     const wasOpd = p.status === 'opd' || p['originalStatus'] === 'opd';
     if (!wasOpd) return false;
     if (!(p['patientCategory'] == null || p['patientCategory'] === 'opd_regular')) return false;
+    const span = this.retentionSpan(p);
+    return !!span && new Date() < span.expiry;
+  }
+
+  /** 刪除時間與保留期過期時點（季末次月的下個月 1 號；Q4 的 month 13 由 Date 自動進位到次年 2/1）；無法判讀回 null */
+  private retentionSpan(p: Patient): { deleted: Date; expiry: Date } | null {
     const deletedAt = p['deletedAt'] as string | null | undefined;
-    if (!deletedAt) return false;
+    if (!deletedAt) return null;
     const deleted = new Date(deletedAt);
-    if (isNaN(deleted.getTime())) return false;
-    // 季末次月的下個月 1 號 = 過期時點（Q4 的 month 13 由 Date 自動進位到次年 2/1）
+    if (isNaN(deleted.getTime())) return null;
     const quarter = Math.floor(deleted.getMonth() / 3);
-    const expiry = new Date(deleted.getFullYear(), quarter * 3 + 4, 1);
-    return new Date() < expiry;
+    return { deleted, expiry: new Date(deleted.getFullYear(), quarter * 3 + 4, 1) };
+  }
+
+  /**
+   * 已刪除 chip 的 tooltip：具體日期（例「於 8月5日 刪除，保留至 10月底 後自動退場」），
+   * 不寫抽象的「當季季末次月月底」（使用者反映看不懂，2026-08-22）。保留到期月＝過期時點的前一個月；跨年時加年份。
+   */
+  deletedRetentionHint(p: Patient): string {
+    const span = this.retentionSpan(p);
+    if (!span) return '已刪除';
+    const lastMonth = new Date(span.expiry.getFullYear(), span.expiry.getMonth() - 1, 1);
+    const yearPrefix = lastMonth.getFullYear() !== span.deleted.getFullYear() ? `${lastMonth.getFullYear()}年` : '';
+    return `於 ${span.deleted.getMonth() + 1}月${span.deleted.getDate()}日 刪除，保留至 ${yearPrefix}${lastMonth.getMonth() + 1}月底 後自動退場`;
   }
 
   // --- Computed ---
