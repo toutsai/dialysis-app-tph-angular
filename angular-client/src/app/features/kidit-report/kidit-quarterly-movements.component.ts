@@ -26,6 +26,8 @@ interface QuarterMovement {
   admissionDate: string;
   dischargeDate: string;
   isRegistered: boolean;
+  /** 刪除動態的刪除原因（獨立欄顯示；病程鏈內不再重複） */
+  deleteReason: string;
 }
 
 interface EpisodeRow {
@@ -39,6 +41,8 @@ interface EpisodeRow {
   physician: string;
   /** 病程備註鏈 */
   chain: string;
+  /** 刪除原因（該段歷程內刪除動態的原因，多筆以「、」併） */
+  deleteReason: string;
   registeredDone: number;
   registeredTotal: number;
 }
@@ -66,6 +70,9 @@ export class KiditQuarterlyMovementsComponent implements OnInit {
   readonly isLoading = signal(false);
   readonly groups = signal<GroupBlock[]>([]);
   readonly loadError = signal('');
+  /** 三區改頁籤（2026-08-22 使用者要求，免一直往下捲）；載入後自動停在第一個有資料的區 */
+  readonly activeGroup = signal<KiditPatientGroup>('regular');
+  readonly activeBlock = computed(() => this.groups().find((g) => g.key === this.activeGroup()) ?? null);
 
   readonly totalRows = computed(() => this.groups().reduce((sum, g) => sum + g.rows.length, 0));
 
@@ -119,7 +126,13 @@ export class KiditQuarterlyMovementsComponent implements OnInit {
       ]);
       const logs: any[] = Array.isArray(logsRes) ? logsRes : (logsRes?.data || []);
       const kiditLogs: any[] = Array.isArray(kiditRes) ? kiditRes : (kiditRes?.data || []);
-      this.groups.set(this.buildGroups(logs, kiditLogs, start, end));
+      const groups = this.buildGroups(logs, kiditLogs, start, end);
+      this.groups.set(groups);
+      // 目前頁籤若無資料，跳到第一個有資料的區（全空則留在原頁籤）
+      if (!groups.find((g) => g.key === this.activeGroup())?.rows.length) {
+        const firstNonEmpty = groups.find((g) => g.rows.length > 0);
+        if (firstNonEmpty) this.activeGroup.set(firstNonEmpty.key);
+      }
     } catch (e) {
       console.error('載入季度病人動態失敗:', e);
       this.loadError.set('載入季度病人動態失敗，請稍後再試。');
@@ -152,14 +165,16 @@ export class KiditQuarterlyMovementsComponent implements OnInit {
         const entry = byPatient.get(m.patientId) || { name: m.name, mrn: m.medicalRecordNumber || '', movements: [] };
         entry.name = m.name || entry.name;
         entry.mrn = m.medicalRecordNumber || entry.mrn;
+        const { detail, deleteReason } = this.splitDeleteReason(m);
         entry.movements.push({
           date: log.date,
           type: m.type || '動態',
-          detail: (m.remarks || m.reason || '').trim(),
+          detail,
           physician: (m.physician || '').trim(),
           admissionDate: (m.admissionDate || '').slice(0, 10),
           dischargeDate: (m.dischargeDate || '').slice(0, 10),
           isRegistered: registeredMap.get(kiditId) === true,
+          deleteReason,
         });
         byPatient.set(m.patientId, entry);
       }
@@ -181,9 +196,25 @@ export class KiditQuarterlyMovementsComponent implements OnInit {
     for (const key of KIDIT_GROUP_ORDER) {
       buckets[key].sort((a, b) => (a.admission || a.chain).localeCompare(b.admission || b.chain) || a.name.localeCompare(b.name, 'zh-Hant'));
     }
-    return KIDIT_GROUP_ORDER
-      .filter((key) => buckets[key].length > 0)
-      .map((key) => ({ key, label: KIDIT_GROUP_LABELS[key], rows: buckets[key] }));
+    // 三區固定都回傳（含空區）：頁籤位置穩定、空區頁籤顯示 0
+    return KIDIT_GROUP_ORDER.map((key) => ({ key, label: KIDIT_GROUP_LABELS[key], rows: buckets[key] }));
+  }
+
+  /**
+   * 刪除動態的原因獨立成欄（2026-08-22 使用者要求）：
+   * 後端刪除動態 remarks＝「從「門診」刪除；原因：xxx」、reason＝xxx（patients.js addMovementToDailyLog）。
+   * 病程鏈只留「從「門診」刪除」，原因放「刪除原因」欄；reason 空時從 remarks 的「原因：」後段解析（舊資料/其他寫入路徑相容）。
+   * 非刪除類型維持原樣（remarks || reason）。
+   */
+  private splitDeleteReason(m: any): { detail: string; deleteReason: string } {
+    const remarks = String(m.remarks || '').trim();
+    const reason = String(m.reason || '').trim();
+    const isDelete = String(m.type || '').includes('刪除');
+    if (!isDelete) return { detail: remarks || reason, deleteReason: '' };
+    const match = /[；;]?\s*原因[:：]\s*(.*)$/.exec(remarks);
+    const deleteReason = reason || (match ? match[1].trim() : '');
+    const detail = match ? remarks.slice(0, match.index).trim() : remarks;
+    return { detail, deleteReason };
   }
 
   /**
@@ -225,6 +256,7 @@ export class KiditQuarterlyMovementsComponent implements OnInit {
     const chain = episode
       .map((m) => `${this.toMd(m.date)} ${m.type}${m.detail ? '：' + m.detail : ''}`)
       .join(' → ');
+    const deleteReason = [...new Set(episode.map((m) => m.deleteReason).filter(Boolean))].join('、');
     return {
       patientId,
       name: entry.name,
@@ -234,6 +266,7 @@ export class KiditQuarterlyMovementsComponent implements OnInit {
       discharge: this.toMd(discharge),
       physician,
       chain,
+      deleteReason,
       registeredDone: episode.filter((m) => m.isRegistered).length,
       registeredTotal: episode.length,
     };

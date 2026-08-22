@@ -27,8 +27,8 @@
 
     <p class="qm-hint">
       <i class="fas fa-info-circle"></i>
-      彙整季度內工作日誌的病人動態：按病人分組、依住院／出院切列，病程欄自動串出前後動態。
-      分區規則：外院＝非常規門診且有填「原透析院所」；新病患＝非常規門診（多為住院初透）；其餘＝本院常規。
+      彙整季度內工作日誌的病人動態：按病人分組、依住院／出院切列，病程欄自動串出前後動態，刪除原因獨立成欄。
+      分區（上方頁籤）：外院＝非常規門診且有填「原透析院所」；新病患＝非常規門診（多為住院初透）；其餘＝本院常規。
       「登錄」顯示該列動態在 KiDit 日誌本勾選登錄的比例。
     </p>
 
@@ -37,27 +37,42 @@
         <i class="fas fa-circle-notch fa-spin"></i> 彙整中…
       </div>
       <div *ngIf="!isLoading() && loadError()" class="qm-error">{{ loadError() }}</div>
-      <div *ngIf="!isLoading() && !loadError() && groups().length === 0" class="qm-empty">
+      <div *ngIf="!isLoading() && !loadError() && totalRows() === 0" class="qm-empty">
         本季度尚無病人動態紀錄。
       </div>
 
-      <section *ngFor="let group of groups(); trackBy: trackByGroup" class="qm-group" [attr.data-group]="group.key">
-        <h4 class="qm-group-title">
+      <!-- 三區改頁籤（2026-08-22）：一次只看一區，免往下捲 -->
+      <ng-container *ngIf="!isLoading() && !loadError() && totalRows() > 0">
+      <div class="qm-tabs" role="tablist">
+        <button
+          *ngFor="let group of groups(); trackBy: trackByGroup"
+          type="button"
+          class="qm-tab"
+          role="tab"
+          [attr.data-group]="group.key"
+          [class.active]="activeGroup() === group.key"
+          (click)="activeGroup.set(group.key)"
+        >
           {{ group.label }}
           <span class="qm-group-count">{{ group.rows.length }}</span>
-        </h4>
-        <div class="qm-table-wrap">
+        </button>
+      </div>
+
+      <section *ngIf="activeBlock() as group" class="qm-group" [attr.data-group]="group.key">
+        <div *ngIf="group.rows.length === 0" class="qm-empty">本季度「{{ group.label }}」尚無病人動態。</div>
+        <div class="qm-table-wrap" *ngIf="group.rows.length > 0">
           <table class="qm-table">
             <thead>
               <tr>
-                <th style="width:9%">病歷號</th>
-                <th style="width:9%">姓名</th>
-                <th style="width:7%">住院</th>
-                <th style="width:7%">出院</th>
-                <th *ngIf="group.key === 'external'" style="width:11%">院所</th>
+                <th style="width:8%">病歷號</th>
+                <th style="width:8%">姓名</th>
+                <th style="width:6%">住院</th>
+                <th style="width:6%">出院</th>
+                <th *ngIf="group.key === 'external'" style="width:10%">院所</th>
                 <th>病程／備註</th>
+                <th style="width:14%">刪除原因</th>
                 <th style="width:7%">醫師</th>
-                <th style="width:8%" class="qm-center">登錄</th>
+                <th style="width:7%" class="qm-center">登錄</th>
               </tr>
             </thead>
             <tbody>
@@ -68,6 +83,7 @@
                 <td>{{ row.discharge || '-' }}</td>
                 <td *ngIf="group.key === 'external'">{{ row.hospital || '-' }}</td>
                 <td class="qm-chain">{{ row.chain }}</td>
+                <td class="qm-delete-reason" [class.qm-muted]="!row.deleteReason">{{ row.deleteReason || '-' }}</td>
                 <td>{{ row.physician || '-' }}</td>
                 <td class="qm-center">
                   <span
@@ -83,6 +99,7 @@
           </table>
         </div>
       </section>
+      </ng-container>
     </div>
   </div>
 </div>

@@ -129,26 +129,54 @@
   margin-bottom: 1.5rem;
 }
 
-.qm-group-title {
+/* 三區頁籤（2026-08-22 取代原本上下堆疊的三個區塊）；各區沿用原標題色 */
+.qm-tabs {
+  display: flex;
+  gap: 0.4rem;
+  border-bottom: 2px solid #e0e6ea;
+  margin-bottom: 0.75rem;
+}
+
+.qm-tab {
+  --qm-tab-color: #1565c0;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin: 0 0 0.5rem;
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: #1565c0;
-  border-left: 4px solid #1565c0;
-  padding-left: 0.5rem;
+  gap: 0.45rem;
+  border: 1px solid #dde3e7;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  background: #f5f7f8;
+  color: #546e7a;
+  font-size: 1.08rem;
+  font-weight: 600;
+  padding: 0.45rem 1.1rem;
+  cursor: pointer;
+  margin-bottom: -2px;
 }
 
-.qm-group[data-group='newPatient'] .qm-group-title {
-  color: #2e7d32;
-  border-left-color: #2e7d32;
+.qm-tab[data-group='newPatient'] { --qm-tab-color: #2e7d32; }
+.qm-tab[data-group='external'] { --qm-tab-color: #6a1b9a; }
+
+.qm-tab:hover {
+  background: #eceff1;
 }
 
-.qm-group[data-group='external'] .qm-group-title {
-  color: #6a1b9a;
-  border-left-color: #6a1b9a;
+.qm-tab.active {
+  background: #fff;
+  color: var(--qm-tab-color);
+  border-color: var(--qm-tab-color);
+  border-top: 3px solid var(--qm-tab-color);
+  border-bottom: 2px solid #fff;
+}
+
+.qm-tab.active .qm-group-count {
+  background: var(--qm-tab-color);
+  color: #fff;
+}
+
+.qm-delete-reason {
+  color: #c62828;
+  word-break: break-word;
 }
 
 .qm-group-count {
