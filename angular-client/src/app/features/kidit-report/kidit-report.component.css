@@ -159,11 +159,12 @@
 .basicdata-btn { border-color: #00695c; color: #00695c; }
 .basicdata-btn:hover:not(:disabled) { background: #e0f2f1; }
 
-/* ===== 版面：左側卡片導覽（1/3）＋右側內容（2/3）（2026-08-22，取代上方主頁籤列＋申報總覽頁） ===== */
+/* ===== 版面：左側卡片導覽＋右側內容（2026-08-22，取代上方主頁籤列＋申報總覽頁）
+   左欄原 1/3 使用者嫌太寬 → 改 1/6（約 16–20rem），其餘全給內容區 ===== */
 .kr-layout {
   display: grid;
-  grid-template-columns: minmax(18rem, 1fr) 2fr;
-  gap: 1.25rem;
+  grid-template-columns: minmax(15rem, 1fr) 5fr;
+  gap: 1.1rem;
   align-items: start;
 }
 .kr-side {
@@ -189,10 +190,10 @@
   border: 1px solid #eceff1;
   border-radius: 8px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
-  padding: 0.75rem 0.9rem;
+  padding: 0.65rem 0.75rem;
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.35rem;
   cursor: pointer;
   transition: box-shadow 0.15s, background 0.15s, transform 0.15s;
 }
@@ -246,9 +247,9 @@
 }
 .ov-desc {
   margin: 0;
-  font-size: 1.01rem;
+  font-size: 0.95rem;
   color: #607d8b;
-  line-height: 1.5;
+  line-height: 1.45;
   flex-grow: 1;
 }
 .ov-card.ov-wip .ov-desc { color: #a5b3ba; }
