@@ -173,6 +173,8 @@ export class ReportingComponent implements AfterViewInit {
       this.renderMonthlyBarChart(ctx);
     } else if (type === 'yearly') {
       this.renderYearlyBarChart(ctx);
+      // 保險：canvas 若在建立瞬間尚未取得寬度（版面時序），稍後補一次 resize 重繪（headless 實測年度圖曾畫成 0 寬）
+      setTimeout(() => this.chartInstance?.resize(), 300);
     }
   }
 
