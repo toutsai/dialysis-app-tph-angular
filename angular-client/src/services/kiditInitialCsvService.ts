@@ -61,6 +61,12 @@ export function buildPatientRow(p: any): string[] {
   ].map((v) => String(v ?? ''));
 }
 
+/** 33/34 肝炎標記官方碼 Y/N/O；站內 F（已作待追蹤）匯出視同 O */
+function hepatitisCode(v: any): string {
+  if (v === 'F') return 'O';
+  return v || '';
+}
+
 /** 值順序對應 HISTORY_CSV_HEADERS（同舊 Excel 病史原發病 sheet 的欄位對應，含 28/29 舊資料 fallback） */
 export function buildHistoryRow(p: any, h: any): string[] {
   return [
@@ -77,7 +83,8 @@ export function buildHistoryRow(p: any, h: any): string[] {
     h.initialLabBUN || h.initialBUN || '', h.initialLabCr || h.initialCr || '',
     h.initialK || '', h.initialCCr || '', h.initialAlb || '',
     h.initialWeight || '', h.initialHeight || '', h.initialEGFR || '',
-    h.hbsag || '', h.antihcv || '', h.indicationType || '',
+    // 33/34：站內「已作待追蹤(F)」非官方碼，匯出轉 O（未做）；追蹤日期為站內欄不匯出
+    hepatitisCode(h.hbsag), hepatitisCode(h.antihcv), h.indicationType || '',
     mapCheckboxes(h.selectedSymptoms, 15), h.symptomsOtherDescription || '',
     mapCheckboxes(h.selectedEmergencyReasons, 20), h.emergencyReasonsOtherDescription || '',
     toRocDate(h.emergencyLabDate), h.emergencyHct || '', h.emergencyHb || '',

@@ -193,11 +193,12 @@ export const KIDIT_HISTORY_OPTIONS: Record<string, KiditOption[] | KiditIndexedO
     { value: 'Y', label: '是' },
     { value: 'N', label: '否' },
   ] as KiditOption[],
-  // 33, 34 肝炎標記
+  // 33, 34 肝炎標記（Y/N/O 為官方碼；F＝站內「已作待追蹤」＋追蹤日期，匯出 CSV 時轉 O，見 kiditInitialCsvService）
   hepatitis: [
     { value: 'Y', label: '陽性(+)' },
     { value: 'N', label: '陰性(-)' },
     { value: 'O', label: '未做' },
+    { value: 'F', label: '已作待追蹤' },
   ] as KiditOption[],
   // 24 DM 型式
   dmType: [

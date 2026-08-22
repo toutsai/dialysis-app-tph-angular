@@ -92,6 +92,9 @@ export class KiditHistoryFormComponent implements OnChanges {
         initialEGFR: h.initialEGFR || '',
         hbsag: h.hbsag || 'O',
         antihcv: h.antihcv || 'O',
+        // 站內欄：33/34 選「已作待追蹤(F)」時的追蹤日期（不匯出）
+        hbsagFollowDate: h.hbsagFollowDate || '',
+        antihcvFollowDate: h.antihcvFollowDate || '',
         indicationType: h.indicationType || '1',
         selectedSymptoms: h.selectedSymptoms || [],
         symptomsOtherDescription: h.symptomsOtherDescription || '',

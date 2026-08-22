@@ -97,6 +97,16 @@
   display: inline-flex;
   flex-wrap: wrap;
   gap: 6px;
+  align-items: center;
+}
+/* 33/34 肝炎「已作待追蹤」旁的追蹤日期（站內欄） */
+.kd-follow-date {
+  margin-left: 4px;
+  padding: 2px 6px;
+  border: 1px solid #ffd8a8;
+  border-radius: 4px;
+  background: #fff9f0;
+  font-size: 0.95em;
 }
 
 .kd-choice {

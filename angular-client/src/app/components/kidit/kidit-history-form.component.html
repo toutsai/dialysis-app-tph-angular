@@ -255,6 +255,10 @@
                       [class.active]="formData.hbsag === opt.value"
                       (click)="formData.hbsag = opt.value">{{ opt.label }}</button>
             }
+            @if (formData.hbsag === 'F') {
+              <!-- 站內欄：已作待追蹤的追蹤日期（不匯出；匯出時 F→O 未做） -->
+              <input type="date" class="kd-follow-date" [(ngModel)]="formData.hbsagFollowDate" title="待追蹤日期" />
+            }
           </div>
         </div>
         <div class="kd-field">
@@ -264,6 +268,9 @@
               <button type="button" class="kd-choice"
                       [class.active]="formData.antihcv === opt.value"
                       (click)="formData.antihcv = opt.value">{{ opt.label }}</button>
+            }
+            @if (formData.antihcv === 'F') {
+              <input type="date" class="kd-follow-date" [(ngModel)]="formData.antihcvFollowDate" title="待追蹤日期" />
             }
           </div>
         </div>
