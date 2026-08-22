@@ -203,16 +203,20 @@ export class KiditQuarterlyMovementsComponent implements OnInit {
   /**
    * 刪除動態的原因獨立成欄（2026-08-22 使用者要求）：
    * 後端刪除動態 remarks＝「從「門診」刪除；原因：xxx」、reason＝xxx（patients.js addMovementToDailyLog）。
-   * 病程鏈只留「從「門診」刪除」，原因放「刪除原因」欄；reason 空時從 remarks 的「原因：」後段解析（舊資料/其他寫入路徑相容）。
-   * 非刪除類型維持原樣（remarks || reason）。
+   * 病程鏈只留「從「門診」刪除」，原因放「刪除原因」欄。
+   * ⚠️ 刪除動態的判定＝type 含「刪除」**或** remarks 含「刪除」：護理師編輯過的刪除動態 type 會變成「手動」
+   *   （實測 Q2-Q3 有 30+ 筆「手動／刪除排程／轉常規門診」但備註仍是「從「住院」刪除；原因：轉外院透析」），
+   *   只認 type 會漏掉一大半（2026-08-22 使用者回報）。
+   * 原因取值：優先 remarks「原因：」後段（最可靠，手動編輯後 reason 欄可能是護理師另外打的備註），其次 reason 欄。
+   * 非刪除動態維持原樣（remarks || reason）。
    */
   private splitDeleteReason(m: any): { detail: string; deleteReason: string } {
     const remarks = String(m.remarks || '').trim();
     const reason = String(m.reason || '').trim();
-    const isDelete = String(m.type || '').includes('刪除');
+    const isDelete = String(m.type || '').includes('刪除') || remarks.includes('刪除');
     if (!isDelete) return { detail: remarks || reason, deleteReason: '' };
-    const match = /[；;]?\s*原因[:：]\s*(.*)$/.exec(remarks);
-    const deleteReason = reason || (match ? match[1].trim() : '');
+    const match = /[；;]?\s*原因[:：]\s*([\s\S]*)$/.exec(remarks);
+    const deleteReason = (match ? match[1].trim() : '') || reason;
     const detail = match ? remarks.slice(0, match.index).trim() : remarks;
     return { detail, deleteReason };
   }
