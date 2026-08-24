@@ -133,7 +133,7 @@ const EPO_CODE_TO_TYPE: Record<string, string> = {
   INES2: '3', // NESP (Darbepoetin alfa)
   IREC1: '2', // Recormon (Epoetin beta)
 };
-const IRON_CODES = new Set(['IFER2']); // Fe-back（IV 鐵劑）
+const IRON_CODES = new Set(['IFER2']); // Good-Fe（IV 鐵劑）
 const VITD_CODES = new Set(['ICAC']); // Cacare（Calcitriol 活性維他命 D）
 
 // ---------------------------------------------------------------------------

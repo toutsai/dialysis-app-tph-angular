@@ -42,7 +42,7 @@ export class LabMedCorrelationViewComponent implements OnChanges {
         { code: 'INES2', tradeName: 'NESP', type: 'injection', unit: 'mcg' },
         { code: 'IREC1', tradeName: 'Recormon', type: 'injection', unit: 'KIU' },
         { code: 'OVAF', tradeName: 'Vafseo', type: 'oral', unit: '顆' },
-        { code: 'IFER2', tradeName: 'Fe-back', type: 'injection', unit: 'mg' },
+        { code: 'IFER2', tradeName: 'Good-Fe', type: 'injection', unit: 'mg' },
       ]
     },
     {

@@ -2,13 +2,14 @@
   <header class="page-header">
     <div class="header-main-content">
       <h1>書記專用</h1>
-      <p class="page-description">醫師班表列印、常規病人掛號與庫存管理。</p>
+      <p class="page-description">醫師班表列印、常規病人掛號、針劑發放名單與庫存管理。</p>
     </div>
   </header>
 
   <div class="main-tabs">
     <button [class.active]="mainTab() === 'physician'" (click)="mainTab.set('physician')">醫師班表列印</button>
     <button [class.active]="mainTab() === 'register'" (click)="mainTab.set('register')">常規病人掛號</button>
+    <button [class.active]="mainTab() === 'injection'" (click)="mainTab.set('injection')">針劑發放名單</button>
     <button [class.active]="mainTab() === 'inventory'" (click)="mainTab.set('inventory')">庫存管理</button>
   </div>
 
@@ -21,6 +22,12 @@
   @if (mainTab() === 'register') {
     <div class="clerk-tab-host">
       <app-clerk-registration />
+    </div>
+  }
+
+  @if (mainTab() === 'injection') {
+    <div class="clerk-tab-host">
+      <app-clerk-injection-print />
     </div>
   }
 

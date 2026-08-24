@@ -206,7 +206,7 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
   private readonly INJECTION_MEDS_MASTER: MedicationMaster[] = [
     { code: 'INES2', tradeName: 'NESP', unit: 'mcg' },
     { code: 'IREC1', tradeName: 'Recormon', unit: 'KIU' },
-    { code: 'IFER2', tradeName: 'Fe-back', unit: 'mg' },
+    { code: 'IFER2', tradeName: 'Good-Fe', unit: 'mg' },
     { code: 'ICAC', tradeName: 'Cacare', unit: 'amp' },
     { code: 'IPAR1', tradeName: 'Parsabiv', unit: 'mg' },
   ];

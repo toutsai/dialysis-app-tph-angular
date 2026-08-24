@@ -116,7 +116,7 @@ export class MedAdjustmentComponent implements OnInit {
     { label: 'NESP', codes: ['INES2'], unit: 'mcg' },
     { label: 'EPO (Recormon)', codes: ['IREC1'], unit: 'KIU' },
     { label: 'Vafseo', codes: ['OVAF'], unit: '顆' },
-    { label: 'Fe-back', codes: ['IFER2'], unit: 'mg' },
+    { label: 'Good-Fe', codes: ['IFER2'], unit: 'mg' },
   ];
   readonly CAPHO_DRUGS: DrugDef[] = [
     { label: 'Pro-Cal', codes: ['OCAA'], unit: '顆' },

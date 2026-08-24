@@ -1,0 +1,217 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dispense-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.date-nav,
+.shift-tabs,
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.date-input {
+  padding: 0.4rem 0.6rem;
+  font-size: 1rem;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+}
+
+.btn-nav,
+.btn-today,
+.shift-tabs button,
+.btn-refresh {
+  padding: 0.45rem 0.9rem;
+  font-size: 1rem;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  background: #fff;
+  color: #495057;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-nav {
+  padding: 0.45rem 0.7rem;
+  font-weight: 700;
+}
+
+.shift-tabs button.active {
+  background: #007bff;
+  border-color: #007bff;
+  color: #fff;
+  font-weight: 600;
+}
+
+.btn-nav:hover,
+.btn-today:hover,
+.btn-refresh:hover:not(:disabled),
+.shift-tabs button:hover:not(.active) {
+  background: #e9ecef;
+}
+
+.chk {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.95rem;
+  color: #495057;
+  cursor: pointer;
+  margin-right: 0.3rem;
+}
+
+.btn-print {
+  padding: 0.5rem 1.2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  background: #28a745;
+  color: #fff;
+  cursor: pointer;
+}
+
+.btn-print.secondary {
+  background: #17a2b8;
+}
+
+.btn-print:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+.btn-print:disabled,
+.btn-refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.hint {
+  color: #6c757d;
+  margin: 0.5rem 0;
+}
+
+.hint.error {
+  color: #dc3545;
+}
+
+.summary-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.summary {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #343a40;
+}
+
+.summary .warn {
+  color: #e67e22;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.totals {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #495057;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.total-chip {
+  background: #fff3cd;
+  border: 1px solid #ffe69c;
+  border-radius: 999px;
+  padding: 0.15rem 0.7rem;
+}
+
+.table-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+}
+
+.dispense-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 1.05rem;
+}
+
+.dispense-table th,
+.dispense-table td {
+  border-bottom: 1px solid #dee2e6;
+  border-right: 1px solid #dee2e6;
+  padding: 0.45rem 0.6rem;
+  text-align: center;
+}
+
+.dispense-table th:last-child,
+.dispense-table td:last-child {
+  border-right: none;
+}
+
+.dispense-table thead th {
+  position: sticky;
+  top: 0;
+  background: #f8f9fa;
+  z-index: 1;
+}
+
+.col-bed { width: 12%; }
+.col-name { width: 34%; text-align: left !important; }
+.col-med { width: 30%; }
+.col-dose { width: 24%; }
+
+tr.group-head td {
+  background: #e9f2ff;
+  text-align: left;
+  font-size: 1.05rem;
+}
+
+.team-badge {
+  display: inline-block;
+  min-width: 2.2rem;
+  padding: 0.1rem 0.6rem;
+  margin-right: 0.6rem;
+  background: #007bff;
+  color: #fff;
+  border-radius: 999px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.count {
+  margin-left: 0.8rem;
+  color: #6c757d;
+  font-size: 0.9rem;
+}

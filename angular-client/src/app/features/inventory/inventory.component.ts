@@ -8,6 +8,7 @@ import { ConsumptionEngineService, type ConsumptionResult } from '@services/cons
 import { AlertDialogComponent } from '@app/components/dialogs/alert-dialog/alert-dialog.component';
 import { ClerkPhysicianPrintComponent } from './clerk-physician-print.component';
 import { ClerkRegistrationComponent } from './clerk-registration.component';
+import { ClerkInjectionPrintComponent } from './clerk-injection-print.component';
 import {
   ApiManagerService,
   type ApiManager,
@@ -40,6 +41,7 @@ const DEFAULT_ITEMS: Record<string, string[]> = {
     AlertDialogComponent,
     ClerkPhysicianPrintComponent,
     ClerkRegistrationComponent,
+    ClerkInjectionPrintComponent,
   ],
   templateUrl: './inventory.component.html',
   styleUrl: './inventory.component.css',
@@ -62,8 +64,8 @@ export class InventoryComponent implements OnInit {
   readonly CATEGORY_NAMES = CATEGORY_NAMES;
   readonly categoryKeys = Object.keys(CATEGORY_NAMES);
 
-  /** 書記專用三大主頁籤：醫師班表列印 / 常規病人掛號 / 庫存管理 */
-  mainTab = signal<'physician' | 'register' | 'inventory'>('physician');
+  /** 書記專用主頁籤：醫師班表列印 / 常規病人掛號 / 針劑發放名單 / 庫存管理 */
+  mainTab = signal<'physician' | 'register' | 'injection' | 'inventory'>('physician');
 
   activeTab = signal('dashboard');
 

@@ -1,7 +1,7 @@
 const INJECTION_MEDS = {
   INES2: { tradeName: 'NESP', unit: 'mcg' },
   IREC1: { tradeName: 'Recormon', unit: 'KIU' },
-  IFER2: { tradeName: 'Fe-back', unit: 'mg' },
+  IFER2: { tradeName: 'Good-Fe', unit: 'mg' },
   ICAC: { tradeName: 'Cacare', unit: 'amp' },
   IPAR1: { tradeName: 'Parsabiv', unit: 'mg' },
 }

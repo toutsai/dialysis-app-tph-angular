@@ -1,0 +1,84 @@
+<div class="dispense-panel">
+  <div class="toolbar">
+    <div class="date-nav">
+      <button class="btn-nav" (click)="shiftDate(-1)" title="前一天">‹</button>
+      <input type="date" class="date-input" [ngModel]="selectedDate()" (ngModelChange)="onDateChange($event)" />
+      <button class="btn-nav" (click)="shiftDate(1)" title="後一天">›</button>
+      <button class="btn-today" (click)="goToday()">今天</button>
+    </div>
+    <div class="shift-tabs">
+      @for (opt of SHIFT_OPTIONS; track opt.code) {
+        <button [class.active]="selectedShift() === opt.code" (click)="selectedShift.set(opt.code)">{{ opt.label }}</button>
+      }
+    </div>
+    <div class="toolbar-right">
+      <label class="chk">
+        <input type="checkbox" [ngModel]="showAllMeds()" (ngModelChange)="showAllMeds.set($event)" />
+        顯示全部針劑
+      </label>
+      <button class="btn-refresh" (click)="refresh()" [disabled]="isLoading()">重新整理</button>
+      <button class="btn-print" (click)="printCurrentShift()" [disabled]="isLoading()">列印{{ currentView().label }}</button>
+      <button class="btn-print secondary" (click)="printWholeDay()" [disabled]="isLoading()">列印整天（三班）</button>
+    </div>
+  </div>
+
+  @if (isLoading()) {
+    <p class="hint">載入排程、護理分組與應打針劑中…</p>
+  } @else if (loadError()) {
+    <p class="hint error">{{ loadError() }}</p>
+  } @else {
+    <div class="summary-row">
+      <p class="summary">
+        {{ displayDate() }} {{ currentView().label }}
+        — {{ showAllMeds() ? '全部針劑' : 'Good-Fe / Cacare' }} 共 {{ currentView().rowCount }} 筆
+        @if (!hasTeamsData()) {
+          <span class="warn">（本日護理分組尚未存檔，全部列在「未分組」）</span>
+        }
+      </p>
+      @if (currentView().totals.length) {
+        <p class="totals">
+          備藥合計：
+          @for (t of currentView().totals; track t.name) {
+            <span class="total-chip">{{ t.name }} {{ t.count }} 人（{{ formatNumber(t.doseSum) }} {{ t.unit }}）</span>
+          }
+        </p>
+      }
+    </div>
+
+    @if (currentView().groups.length === 0) {
+      <p class="hint">本班沒有應發放的針劑。</p>
+    } @else {
+      <div class="table-scroll">
+        <table class="dispense-table">
+          <thead>
+            <tr>
+              <th class="col-bed">床號</th>
+              <th class="col-name">姓名</th>
+              <th class="col-med">藥名</th>
+              <th class="col-dose">劑量</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (g of currentView().groups; track g.team) {
+              <tr class="group-head">
+                <td colspan="4">
+                  <span class="team-badge">{{ g.team }}</span>
+                  負責護理師：<strong>{{ g.nurseName || '—' }}</strong>
+                  <span class="count">{{ g.rows.length }} 筆</span>
+                </td>
+              </tr>
+              @for (r of g.rows; track r.patientId + r.orderCode) {
+                <tr>
+                  <td class="col-bed">{{ r.bedLabel }}</td>
+                  <td class="col-name">{{ r.patientName }}</td>
+                  <td class="col-med">{{ r.orderName }}</td>
+                  <td class="col-dose">{{ r.dose }} {{ r.unit }}</td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+</div>
