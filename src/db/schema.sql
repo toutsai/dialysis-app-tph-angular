@@ -69,7 +69,8 @@ CREATE TABLE IF NOT EXISTS patients (
 
     -- 病人分類與狀態
     patient_category TEXT DEFAULT 'opd_regular',  -- opd_regular/non_regular
-    diseases TEXT DEFAULT '[]',       -- JSON array: 須注意疾病列表
+    diseases TEXT DEFAULT '[]',       -- JSON array: 須注意疾病列表（HBV/HCV/BC肝? 由 hepatitis_status 衍生）
+    hepatitis_status TEXT,            -- JSON: {hbsag,antihcv: Y/N/O/F, hbsagFollowDate, antihcvFollowDate}（與 KiDit 33/34 同碼，病人清單為權威）
 
     -- 病人狀態 (JSON 格式)
     patient_status TEXT DEFAULT '{}',  -- JSON: {isFirstDialysis, isPaused, hasBloodDraw}

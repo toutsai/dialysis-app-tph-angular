@@ -259,6 +259,9 @@
               <!-- 站內欄：已作待追蹤的追蹤日期（不匯出；匯出時 F→O 未做） -->
               <input type="date" class="kd-follow-date" [(ngModel)]="formData.hbsagFollowDate" title="待追蹤日期" />
             }
+            @if (hepatitisMismatch('hbsag'); as msg) {
+              <button type="button" class="kd-mismatch" (click)="applyListHepatitis('hbsag')" title="點擊改為病人清單的值">⚠ {{ msg }}</button>
+            }
           </div>
         </div>
         <div class="kd-field">
@@ -271,6 +274,9 @@
             }
             @if (formData.antihcv === 'F') {
               <input type="date" class="kd-follow-date" [(ngModel)]="formData.antihcvFollowDate" title="待追蹤日期" />
+            }
+            @if (hepatitisMismatch('antihcv'); as msg) {
+              <button type="button" class="kd-mismatch" (click)="applyListHepatitis('antihcv')" title="點擊改為病人清單的值">⚠ {{ msg }}</button>
             }
           </div>
         </div>

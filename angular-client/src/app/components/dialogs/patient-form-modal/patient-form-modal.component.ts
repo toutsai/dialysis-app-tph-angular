@@ -4,6 +4,14 @@ import { FormsModule } from '@angular/forms';
 import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@app/core/services/api-manager.service';
 import { UserDirectoryService } from '@app/core/services/user-directory.service';
 import { addDaysToDateString, getTaipeiWeekdayIndex, getToday } from '@/utils/dateUtils';
+import {
+  HEPATITIS_OPTIONS,
+  deriveHepatitisFromTags,
+  normalizeHepatitisStatus,
+  syncTagsFromHepatitis,
+  type HepatitisStatus,
+  type HepatitisValue,
+} from '@/utils/hepatitis';
 
 @Component({
   selector: 'app-patient-form-modal',
@@ -76,7 +84,13 @@ export class PatientFormModalComponent implements OnInit {
     '每周六': [5],
   };
   readonly VASC_ACCESSES = ['Double lumen', 'PERM', '左臂AVF', '右臂AVF', '左臂AVG', '右臂AVG'];
-  readonly DISEASES = ['HIV', 'RPR', 'BC肝?', 'HBV', 'HCV', 'C肝治癒', 'COVID', '隔離'];
+  // HBV/HCV/BC肝? 已改由下方 B/C 肝四態衍生（2026-08-27），此清單只剩其他標籤；C肝治癒獨立保留（治癒後 Anti-HCV 仍陽性）
+  readonly DISEASES = ['HIV', 'RPR', 'C肝治癒', 'COVID', '隔離'];
+  readonly HEPATITIS_OPTIONS = HEPATITIS_OPTIONS;
+  readonly HEPATITIS_FIELDS: { key: 'hbsag' | 'antihcv'; dateKey: 'hbsagFollowDate' | 'antihcvFollowDate'; label: string }[] = [
+    { key: 'hbsag', dateKey: 'hbsagFollowDate', label: 'HBsAg（B 肝）' },
+    { key: 'antihcv', dateKey: 'antihcvFollowDate', label: 'Anti-HCV（C 肝）' },
+  ];
 
   constructor() {
     this.baseSchedulesApi = this.apiManager.create<FirestoreRecord>('base_schedules');
@@ -101,6 +115,12 @@ export class PatientFormModalComponent implements OnInit {
     }
     if (!data.patientCategory) data.patientCategory = 'opd_regular';
     data.diseases = data.diseases || [];
+    // B/C 肝四態：舊資料沒有時由標籤推導（沒勾＝陰性、BC肝?＝待追蹤）；新病人預設空白（未填）強迫組長確認
+    data.hepatitisStatus = data.hepatitisStatus
+      ? normalizeHepatitisStatus(data.hepatitisStatus)
+      : data.id
+        ? deriveHepatitisFromTags(data.diseases)
+        : { hbsag: '', antihcv: '', hbsagFollowDate: '', antihcvFollowDate: '' };
     data.patientStatus = data.patientStatus || {
       isFirstDialysis: { active: false, date: null },
       isPaused: { active: false, date: null },
@@ -152,6 +172,18 @@ export class PatientFormModalComponent implements OnInit {
 
   isDiseaseSelected(disease: string): boolean {
     return (this.form.diseases || []).includes(disease);
+  }
+
+  get hepatitis(): HepatitisStatus {
+    return this.form.hepatitisStatus;
+  }
+
+  setHepatitis(key: 'hbsag' | 'antihcv', value: HepatitisValue): void {
+    const status = this.hepatitis;
+    status[key] = status[key] === value ? '' : value;
+    if (status[key] !== 'F') {
+      status[key === 'hbsag' ? 'hbsagFollowDate' : 'antihcvFollowDate'] = '';
+    }
   }
 
   toggleStatus(key: string): void {
@@ -499,6 +531,14 @@ export class PatientFormModalComponent implements OnInit {
         return;
       }
     }
+    // B/C 肝四態必填（組長建檔即確認；KiDit 病史 33/34 由此帶入）
+    if (!this.hepatitis?.hbsag || !this.hepatitis?.antihcv) {
+      alert('請確認 B/C 肝狀態（HBsAg 與 Anti-HCV 各選一項）！');
+      return;
+    }
+    this.form.hepatitisStatus = normalizeHepatitisStatus(this.hepatitis);
+    // 標籤由四態衍生：排程備註 B/C/BC?、護理分組肝炎優先、清單統計沿用 diseases 標籤
+    this.form.diseases = syncTagsFromHepatitis(this.form.diseases, this.form.hepatitisStatus);
     this.save.emit(this.form);
   }
 }

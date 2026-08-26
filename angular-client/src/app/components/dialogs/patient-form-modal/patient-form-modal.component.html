@@ -138,6 +138,25 @@
 
       <div class="form-section">
         <fieldset class="form-group">
+          <legend>B / C 肝狀態 <small class="hep-hint">（與 KiDit 建檔病史 33/34 同步帶入）</small></legend>
+          @for (f of HEPATITIS_FIELDS; track f.key) {
+            <div class="hep-row">
+              <span class="hep-label">{{ f.label }}</span>
+              <div class="hep-choice-group">
+                @for (opt of HEPATITIS_OPTIONS; track opt.value) {
+                  <button type="button" class="hep-choice"
+                          [class.active]="hepatitis[f.key] === opt.value"
+                          [class.positive]="opt.value === 'Y'"
+                          (click)="setHepatitis(f.key, opt.value)">{{ opt.label }}</button>
+                }
+                @if (hepatitis[f.key] === 'F') {
+                  <input type="date" class="hep-follow-date" [(ngModel)]="hepatitis[f.dateKey]" [name]="f.dateKey" title="待追蹤日期" />
+                }
+              </div>
+            </div>
+          }
+        </fieldset>
+        <fieldset class="form-group">
           <legend>須注意疾病</legend>
           <div class="custom-checkbox-container">
             @for (d of DISEASES; track d) {

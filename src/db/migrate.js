@@ -97,6 +97,31 @@ export function runMigrations() {
       if (addColumnIfNotExists(db, 'patients', 'original_status', 'TEXT')) migrationsApplied++
       // 新增刪除時間欄位
       if (addColumnIfNotExists(db, 'patients', 'deleted_at', 'TEXT')) migrationsApplied++
+
+      // B/C 肝四態（2026-08-27）：hbsag/antihcv = Y/N/O/F（與 KiDit 病史 33/34 同碼）＋待追蹤日期
+      // 回填規則（使用者裁定）：沒勾 HBV/HCV ＝ N；BC肝? ＝ F；HBV/HCV/C肝治癒 ＝ Y。含已刪除病人一併回填
+      if (addColumnIfNotExists(db, 'patients', 'hepatitis_status', 'TEXT')) migrationsApplied++
+      const hepRows = db.prepare('SELECT id, diseases FROM patients WHERE hepatitis_status IS NULL').all()
+      if (hepRows.length > 0) {
+        const upd = db.prepare('UPDATE patients SET hepatitis_status = ? WHERE id = ?')
+        const tx = db.transaction((rows) => {
+          for (const r of rows) {
+            let tags = []
+            try { tags = JSON.parse(r.diseases || '[]') } catch { tags = [] }
+            const pending = tags.includes('BC肝?')
+            const status = {
+              hbsag: tags.includes('HBV') ? 'Y' : pending ? 'F' : 'N',
+              antihcv: tags.includes('HCV') || tags.includes('C肝治癒') ? 'Y' : pending ? 'F' : 'N',
+              hbsagFollowDate: '',
+              antihcvFollowDate: ''
+            }
+            upd.run(JSON.stringify(status), r.id)
+          }
+        })
+        tx(hepRows)
+        console.log(`📋 回填 ${hepRows.length} 位病人的 B/C 肝四態（hepatitis_status）`)
+        migrationsApplied++
+      }
     }
 
     // ========================================

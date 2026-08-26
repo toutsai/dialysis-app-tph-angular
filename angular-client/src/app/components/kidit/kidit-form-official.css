@@ -109,6 +109,19 @@
   font-size: 0.95em;
 }
 
+/* 33/34 與病人清單 B/C 肝四態不符的提示（點擊套用清單值） */
+.kd-mismatch {
+  margin-left: 6px;
+  padding: 2px 8px;
+  border: 1px solid #ffa8a8;
+  border-radius: 4px;
+  background: #fff5f5;
+  color: #c92a2a;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+.kd-mismatch:hover { background: #ffe3e3; }
+
 .kd-choice {
   padding: 5px 14px;
   border: 1px solid #b9c4cf;

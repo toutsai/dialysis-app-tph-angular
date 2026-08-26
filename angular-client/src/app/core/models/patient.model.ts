@@ -34,6 +34,9 @@ export interface HospitalInfo {
 }
 
 /** 病人狀態旗標 (嵌入 JSON) */
+export type { HepatitisStatus } from '@/utils/hepatitis';
+import type { HepatitisStatus } from '@/utils/hepatitis';
+
 export interface PatientStatusFlags {
   isFirstDialysis?: boolean;
   isPaused?: boolean;
@@ -136,6 +139,8 @@ export interface Patient extends BaseEntity {
   // 分類與狀態
   patientCategory?: PatientCategory;
   diseases?: PatientDisease[] | string[];
+  /** B/C 肝四態（Y 陽性/N 陰性/O 未做/F 已作待追蹤，與 KiDit 病史 33/34 同碼）；病人清單為權威，HBV/HCV/BC肝? 標籤由此衍生 */
+  hepatitisStatus?: HepatitisStatus;
   patientStatus?: PatientStatusFlags;
   isHepatitis?: boolean;
 
