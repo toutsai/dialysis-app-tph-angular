@@ -53,9 +53,23 @@ interface CiOverviewSlot {
 /** 書記補登紙本申請的 form_data.source 標記（與後端 PAPER_SOURCE 一致） */
 const PAPER_SOURCE = 'clerk_paper';
 
+/** 重大傷病申請專用 PD 病人（後端 catastrophic_illness_pd_patients，不在 patients 表） */
+interface CiPdPatient {
+  id: string;
+  name: string;
+  medicalRecordNumber: string;
+  idNumber: string;
+  gender: string;
+  birthDate: string;
+  physician: string;
+  isPd: true;
+}
+
 interface CiOverviewRow {
   patientId: string;
   patientName: string;
+  /** PD 專用病人（總覽/提醒卡顯示 PD 標籤） */
+  isPd?: boolean;
   physicianName: string;
   /** 第 1 筆＝初次，之後依序再次/三次/四次…（缺該次時為 null） */
   applications: (CiOverviewSlot | null)[];
@@ -104,6 +118,16 @@ export class CatastrophicIllnessComponent implements OnInit {
   filteredPatients: Patient[] = []; // 模板勿用 getter 重算（CD 週期效能）
   selectedPatient = signal<Patient | null>(null);
 
+  // PD（腹膜透析）病人：不在 patients 表，另由 /catastrophic-illness/pd-patients 載入後併入搜尋
+  // 以 Patient 形狀承載（isPd=true 標記），選取/新增申請流程與 HD 病人共用
+  private pdPatients: Patient[] = [];
+  pdDialogOpen = false;
+  pdSaving = false;
+  pdDialogError = '';
+  /** PD 建檔視窗完成後選取的目標：主搜尋框（select）或書記補登框（expiry） */
+  private pdDialogTarget: 'select' | 'expiry' = 'select';
+  pdForm = { name: '', medicalRecordNumber: '', idNumber: '', gender: '', birthDate: '', physician: '' };
+
   // 書記新增到期日（舊病人在系統外已辦過重大傷病、無申請紀錄，直接補到期日進入追蹤）
   expirySearchText = '';
   expiryShowDropdown = false;
@@ -151,12 +175,103 @@ export class CatastrophicIllnessComponent implements OnInit {
     const role = this.auth.currentUser()?.role;
     this.isClerk = role === 'admin' || role === 'viewer';
     this.canWrite = role === 'admin' || role === 'contributor';
-    if (this.isClerk) void this.loadExpiryPhysicians();
+    // 醫師建 PD 病人也要主治醫師選單（PD 建檔視窗負責醫師欄）
+    if (this.isClerk || this.canWrite) void this.loadExpiryPhysicians();
     await Promise.all([
       // 書記（isClerk）也要病人清單：總覽「新增到期日」入口選病人用
       this.canWrite || this.isClerk ? this.patientStore.fetchPatientsIfNeeded() : Promise.resolve(),
+      this.canWrite || this.isClerk ? this.loadPdPatients() : Promise.resolve(),
       this.loadOverview(),
     ]);
+  }
+
+  // ---------------------------------------------------------------
+  // PD 病人（重大傷病申請專用，不在 patients 表）
+  // ---------------------------------------------------------------
+
+  private toPdPatient(p: CiPdPatient): Patient {
+    return {
+      id: p.id,
+      name: p.name,
+      medicalRecordNumber: p.medicalRecordNumber || '',
+      idNumber: p.idNumber || '',
+      gender: p.gender || '',
+      birthDate: p.birthDate || '',
+      physician: p.physician || '',
+      status: 'pd',
+      isPd: true,
+    } as Patient;
+  }
+
+  private async loadPdPatients(): Promise<void> {
+    try {
+      const rows = await firstValueFrom(this.api.get<CiPdPatient[]>('/catastrophic-illness/pd-patients'));
+      this.pdPatients = (Array.isArray(rows) ? rows : []).map((p) => this.toPdPatient(p));
+    } catch (err) {
+      console.error('載入 PD 病人清單失敗:', err);
+      this.pdPatients = [];
+    }
+  }
+
+  isPdPatient(p: Patient | null | undefined): boolean {
+    return !!p && p['isPd'] === true;
+  }
+
+  /** HD（patientStore）＋ PD 專用病人合併查找 */
+  private findAnyPatient(patientId: string): Patient | undefined {
+    return (
+      this.patientStore.allPatients().find((x) => String(x['id']) === patientId) ||
+      this.pdPatients.find((x) => String(x['id']) === patientId)
+    );
+  }
+
+  /** 搜尋查無病人 → 「是否為 PD 病人」入口：以搜尋字串預填姓名或病歷號 */
+  openPdDialog(target: 'select' | 'expiry'): void {
+    const kw = (target === 'select' ? this.searchText : this.expirySearchText).trim();
+    const looksLikeMrn = /^[0-9]+$/.test(kw);
+    const looksLikeId = /^[A-Za-z][0-9]{9}$/.test(kw);
+    this.pdForm = {
+      name: looksLikeMrn || looksLikeId ? '' : kw,
+      medicalRecordNumber: looksLikeMrn ? kw : '',
+      idNumber: looksLikeId ? kw.toUpperCase() : '',
+      gender: '',
+      birthDate: '',
+      physician: this.auth.currentUser()?.role === 'contributor' ? (this.auth.currentUser()?.displayName || this.auth.currentUser()?.name || '') : '',
+    };
+    this.pdDialogTarget = target;
+    this.pdDialogError = '';
+    this.pdDialogOpen = true;
+    this.showDropdown = false;
+    this.expiryShowDropdown = false;
+  }
+
+  closePdDialog(): void {
+    this.pdDialogOpen = false;
+  }
+
+  async savePdPatient(): Promise<void> {
+    if (!this.pdForm.name.trim()) {
+      this.pdDialogError = '姓名為必填';
+      return;
+    }
+    this.pdSaving = true;
+    this.pdDialogError = '';
+    try {
+      const created = await firstValueFrom(this.api.post<CiPdPatient>('/catastrophic-illness/pd-patients', this.pdForm));
+      const p = this.toPdPatient(created);
+      this.pdPatients = [p, ...this.pdPatients];
+      this.pdDialogOpen = false;
+      if (this.pdDialogTarget === 'expiry') {
+        this.pickExpiryPatient(p);
+      } else {
+        await this.selectPatient(p);
+      }
+    } catch (err) {
+      console.error('建立 PD 病人失敗:', err);
+      this.pdDialogError = (err as { error?: { message?: string } })?.error?.message || '建立失敗，請重試';
+    } finally {
+      this.pdSaving = false;
+    }
   }
 
   /** 從使用者管理載入「職稱=主治醫師」名單作為補登負責醫師選項，依偏好順序排序（比照 patient-form-modal） */
@@ -227,6 +342,7 @@ export class CatastrophicIllnessComponent implements OnInit {
       .map((r) => ({
         patientId: r.patientId,
         patientName: r.patientName,
+        isPd: !!r.isPd,
         physicianName: r.physicianName,
         expiryDate: r.expiryDate,
         isExpired: r.expiryDate < todayStr,
@@ -314,7 +430,7 @@ export class CatastrophicIllnessComponent implements OnInit {
   /** 點總覽列 → 選定該病人（醫師/管理員限定；病人可能已刪除則提示） */
   selectFromOverview(row: CiOverviewRow): void {
     if (!this.canWrite) return;
-    const p = this.patientStore.allPatients().find((x) => String(x['id']) === row.patientId);
+    const p = this.findAnyPatient(row.patientId);
     if (p) {
       void this.selectPatient(p);
     } else {
@@ -326,7 +442,7 @@ export class CatastrophicIllnessComponent implements OnInit {
   async editFromOverview(row: CiOverviewRow, slot: CiOverviewSlot, event: Event): Promise<void> {
     event.stopPropagation();
     if (!this.canWrite) return;
-    const p = this.patientStore.allPatients().find((x) => String(x['id']) === row.patientId);
+    const p = this.findAnyPatient(row.patientId);
     if (!p) {
       alert('此病人不在病人清單中（可能已刪除），無法開啟表單');
       return;
@@ -450,8 +566,8 @@ export class CatastrophicIllnessComponent implements OnInit {
 
   private searchPatients(keyword: string): Patient[] {
     const kw = keyword.trim().toLowerCase();
-    // 含已刪除病人（可查歷史申請／到期紀錄），未刪除者排前、已刪除者排後
-    const all = [...this.patientStore.allPatients()].sort(
+    // 含已刪除病人（可查歷史申請／到期紀錄），未刪除者排前、已刪除者排後；PD 專用病人一併納入
+    const all = [...this.patientStore.allPatients(), ...this.pdPatients].sort(
       (a, b) => Number(this.isDeletedPatient(a)) - Number(this.isDeletedPatient(b)),
     );
     return (!kw
@@ -619,6 +735,8 @@ export class CatastrophicIllnessComponent implements OnInit {
     const ifd = (ps['isFirstDialysis'] || {}) as Record<string, unknown>;
     f.firstDialysisDate = this.isoDate(ifd['date']) || this.isoDate(p['firstDialysisDate']);
     f.vascularAccessDate = this.isoDate(p['accessCreationDate']);
+    // PD 專用病人：透析方式預設腹膜透析
+    if (this.isPdPatient(p)) f.dialysisType = 'pd';
 
     // 最近檢驗值
     f.labDate = this.latestLabDate;
@@ -631,11 +749,11 @@ export class CatastrophicIllnessComponent implements OnInit {
     f.egfr = this.labStr('eGFR');
 
     if (this.activeTab === 'renewal') {
-      // 每週血液透析次數：由排程頻率的星期字數推估（例：一三五→3、二四→2）
+      // 每週血液透析次數：由排程頻率的星期字數推估（例：一三五→3、二四→2）；PD 病人無排程留空
       const rule = (p['scheduleRule'] || {}) as Record<string, unknown>;
       const freq = String(rule['freq'] || '');
       const dayCount = (freq.match(/[一二三四五六日]/g) || []).length;
-      f.weeklyHdCount = dayCount > 0 ? String(dayCount) : '';
+      f.weeklyHdCount = !this.isPdPatient(p) && dayCount > 0 ? String(dayCount) : '';
       f.applicationNo = '2';
     }
 

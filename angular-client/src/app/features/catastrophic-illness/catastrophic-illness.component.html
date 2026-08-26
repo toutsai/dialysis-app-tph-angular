@@ -45,12 +45,21 @@
                 <div class="picker-item" [class.picker-item-deleted]="isDeletedPatient(p)" (mousedown)="pickExpiryPatient(p)">
                   <span class="picker-name">{{ p.name }}</span>
                   <span class="picker-mrn">{{ p.medicalRecordNumber }}</span>
+                  @if (isPdPatient(p)) {
+                    <span class="pd-tag">PD</span>
+                  }
                   @if (isDeletedPatient(p)) {
                     <span class="picker-status picker-status-deleted">{{ deletedLabel(p) }}</span>
                   }
                 </div>
               } @empty {
-                <div class="picker-empty">查無符合病人</div>
+                <div class="picker-empty">
+                  查無符合病人
+                  @if (canWrite && expirySearchText.trim()) {
+                    <div class="pd-prompt">是否為 PD（腹膜透析）病人？</div>
+                    <button type="button" class="pd-prompt-btn" (mousedown)="openPdDialog('expiry')">是，建立 PD 病人</button>
+                  }
+                </div>
               }
             </div>
           }
@@ -99,6 +108,9 @@
                   <button class="patient-link" (click)="selectFromOverview(row)">{{ row.patientName }}</button>
                 } @else {
                   {{ row.patientName }}
+                }
+                @if (row.isPd) {
+                  <span class="pd-tag" title="腹膜透析病人（重大傷病申請專用，不在病人清單）">PD</span>
                 }
               </td>
               <td class="col-physician">{{ row.physicianName || '—' }}</td>
@@ -169,7 +181,7 @@
       @for (r of expiryReminders(); track r.patientId) {
         <div class="reminder-item" [class.expired]="r.isExpired">
           <div class="reminder-line">
-            <span class="reminder-name">{{ r.patientName }}</span>
+            <span class="reminder-name">{{ r.patientName }}@if (r.isPd) { <span class="pd-tag">PD</span> }</span>
             <span class="reminder-date">{{ r.expiryDate }}{{ r.isExpired ? ' 已到期' : ' 到期' }}</span>
           </div>
           <div class="reminder-action">協助掛 {{ r.physicianName || '負責醫師' }}</div>
@@ -202,14 +214,25 @@
             <div class="picker-item" [class.picker-item-deleted]="isDeletedPatient(p)" (mousedown)="selectPatient(p)">
               <span class="picker-name">{{ p.name }}</span>
               <span class="picker-mrn">{{ p.medicalRecordNumber }}</span>
+              @if (isPdPatient(p)) {
+                <span class="pd-tag">PD</span>
+              }
               @if (isDeletedPatient(p)) {
                 <span class="picker-status picker-status-deleted">{{ deletedLabel(p) }}</span>
+              } @else if (isPdPatient(p)) {
+                <span class="picker-status">腹膜透析</span>
               } @else {
                 <span class="picker-status">{{ p.status === 'opd' ? '門診' : p.status === 'ipd' ? '住院' : p.status === 'er' ? '急診' : '' }}</span>
               }
             </div>
           } @empty {
-            <div class="picker-empty">查無符合病人</div>
+            <div class="picker-empty">
+              查無符合病人
+              @if (searchText.trim()) {
+                <div class="pd-prompt">是否為 PD（腹膜透析）病人？</div>
+                <button type="button" class="pd-prompt-btn" (mousedown)="openPdDialog('select')">是，建立 PD 病人</button>
+              }
+            </div>
           }
         </div>
       }
@@ -220,6 +243,9 @@
   </div>
 
   @if (selectedPatient(); as patient) {
+    @if (isPdPatient(patient)) {
+      <div class="pd-banner"><span class="pd-tag">PD</span> 腹膜透析病人（重大傷病申請專用建檔，不在病人清單／排程）</div>
+    }
     <!-- 頁籤 -->
     <div class="tabs">
       <button class="tab" [class.active]="activeTab === 'initial'" (click)="setTab('initial')">初次申請</button>
@@ -465,4 +491,41 @@
     <div class="empty-state">請先搜尋並選擇病人</div>
   }
   } <!-- /canWrite -->
+
+  <!-- 建立 PD 病人視窗（搜尋查無病人 → 是否為 PD 病人） -->
+  @if (pdDialogOpen) {
+    <div class="pd-overlay" (click)="closePdDialog()">
+      <div class="pd-dialog" (click)="$event.stopPropagation()">
+        <h3><span class="pd-tag">PD</span> 建立腹膜透析病人</h3>
+        <p class="pd-dialog-hint">僅供重大傷病申請使用，不會進入病人清單、排程或 KiDit。</p>
+        <div class="pd-grid">
+          <label>姓名 *<input type="text" [(ngModel)]="pdForm.name" /></label>
+          <label>病歷號<input type="text" [(ngModel)]="pdForm.medicalRecordNumber" /></label>
+          <label>身分證字號<input type="text" [(ngModel)]="pdForm.idNumber" /></label>
+          <label>出生日期<input type="date" [(ngModel)]="pdForm.birthDate" /></label>
+          <label>性別
+            <span class="radio-row">
+              <label class="inline"><input type="radio" name="pdGender" value="男" [(ngModel)]="pdForm.gender" />男</label>
+              <label class="inline"><input type="radio" name="pdGender" value="女" [(ngModel)]="pdForm.gender" />女</label>
+            </span>
+          </label>
+          <label>負責醫師
+            <select [(ngModel)]="pdForm.physician">
+              <option value="">（未選）</option>
+              @for (name of expiryPhysicians; track name) {
+                <option [value]="name">{{ name }}</option>
+              }
+            </select>
+          </label>
+        </div>
+        @if (pdDialogError) {
+          <div class="pd-dialog-error">{{ pdDialogError }}</div>
+        }
+        <div class="pd-dialog-actions">
+          <button type="button" class="btn-close" (click)="closePdDialog()" [disabled]="pdSaving">取消</button>
+          <button type="button" class="btn-save" (click)="savePdPatient()" [disabled]="pdSaving">{{ pdSaving ? '建立中…' : '建立並選取' }}</button>
+        </div>
+      </div>
+    </div>
+  }
 </div>

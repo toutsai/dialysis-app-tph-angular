@@ -22,6 +22,29 @@ function isValidDateOrEmpty(v) {
   return v === '' || v === null || v === undefined || (typeof v === 'string' && DATE_RE.test(v))
 }
 
+function pdToApiShape(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    medicalRecordNumber: row.medical_record_number || '',
+    idNumber: row.id_number || '',
+    gender: row.gender || '',
+    birthDate: row.birth_date || '',
+    physician: row.physician || '',
+    isPd: true,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  }
+}
+
+/** 重大傷病申請頁的病人可在 patients 表或 PD 專用表；回 { name, physician } 或 null */
+function findCiPatient(db, patientId) {
+  const hd = db.prepare('SELECT name, physician FROM patients WHERE id = ?').get(patientId)
+  if (hd) return hd
+  const pd = db.prepare('SELECT name, physician FROM catastrophic_illness_pd_patients WHERE id = ?').get(patientId)
+  return pd || null
+}
+
 function toApiShape(row) {
   let formData = {}
   let createdBy = {}
@@ -98,6 +121,10 @@ router.get('/overview', ...isOverviewRole, (req, res) => {
       db.prepare('SELECT patient_id, expiry_date, renewal_registered_date, renewal_form_date, renewal_docs_date, physician_name, updated_at FROM catastrophic_illness_expiry').all()
         .map((r) => [r.patient_id, r])
     )
+    // PD 專用病人：總覽列標 PD 標籤；只有到期日的列姓名也由此表補查
+    const pdMap = new Map(
+      db.prepare('SELECT id, name FROM catastrophic_illness_pd_patients').all().map((r) => [r.id, r.name])
+    )
 
     // 依病人彙整：初次取最新一筆 initial；再次起為 renewal 依建立順序全列（第 N 筆＝第 N+1 次申請）
     const byPatient = new Map()
@@ -126,6 +153,7 @@ router.get('/overview', ...isOverviewRole, (req, res) => {
       return {
         patientId,
         patientName: entry.patientName,
+        isPd: pdMap.has(patientId),
         // 申請表填的負責醫師優先；沒有時退回書記補登時指定的醫師
         physicianName: entry.physicianName || expiry.physician_name || '',
         applications: [
@@ -149,7 +177,8 @@ router.get('/overview', ...isOverviewRole, (req, res) => {
         if (!expiry.expiry_date && !expiry.renewal_registered_date && !expiry.renewal_form_date && !expiry.renewal_docs_date) continue
         result.push({
           patientId,
-          patientName: patientNameStmt.get(patientId)?.name || '(查無病人)',
+          patientName: patientNameStmt.get(patientId)?.name || pdMap.get(patientId) || '(查無病人)',
+          isPd: pdMap.has(patientId),
           physicianName: expiry.physician_name || '',
           applications: [null],
           expiryDate: expiry.expiry_date || '',
@@ -219,7 +248,7 @@ router.post('/clerk-paper', ...isClerkRole, (req, res) => {
       return res.status(400).json({ error: true, message: '負責醫師格式錯誤' })
     }
     const db = getDatabase()
-    const patient = db.prepare('SELECT name, physician FROM patients WHERE id = ?').get(patientId)
+    const patient = findCiPatient(db, patientId) // HD（patients 表）或 PD 專用病人皆可
     if (!patient) {
       return res.status(404).json({ error: true, message: '病人不存在' })
     }
@@ -355,6 +384,163 @@ router.put('/renewal-prep/:patientId', ...isClerkRole, (req, res) => {
   } catch (error) {
     console.error('更新重大傷病續辦追蹤錯誤:', error)
     res.status(500).json({ error: true, message: '更新重大傷病續辦追蹤失敗' })
+  }
+})
+
+/**
+ * GET /api/catastrophic-illness/pd-patients
+ * 重大傷病申請專用 PD（腹膜透析）病人清單：不在 patients 表，僅此頁選人用
+ * 書記（viewer）也要：補登到期日入口選人
+ * ⚠️ 必須定義在 GET /:id 之前
+ */
+router.get('/pd-patients', ...isOverviewRole, (req, res) => {
+  try {
+    const db = getDatabase()
+    const rows = db.prepare('SELECT * FROM catastrophic_illness_pd_patients ORDER BY created_at DESC').all()
+    res.json(rows.map(pdToApiShape))
+  } catch (error) {
+    console.error('取得 PD 病人清單錯誤:', error)
+    res.status(500).json({ error: true, message: '取得 PD 病人清單失敗' })
+  }
+})
+
+/**
+ * POST /api/catastrophic-illness/pd-patients
+ * 建立 PD 病人（搜尋查無病人時「是否為 PD 病人」入口）
+ * body: { name, medicalRecordNumber?, idNumber?, gender?, birthDate?, physician? }
+ * 病歷號/身分證同時比對 patients 表與 PD 表，避免同一人兩個身分
+ */
+router.post('/pd-patients', ...isCatastrophicIllnessRole, (req, res) => {
+  try {
+    const { name, medicalRecordNumber, idNumber, gender, birthDate, physician } = req.body || {}
+    const str = (v) => (typeof v === 'string' ? v.trim() : '')
+    const nameVal = str(name)
+    if (!nameVal) {
+      return res.status(400).json({ error: true, message: '姓名為必填' })
+    }
+    const mrn = str(medicalRecordNumber)
+    const idNo = str(idNumber).toUpperCase()
+    const birth = str(birthDate)
+    if (!isValidDateOrEmpty(birth)) {
+      return res.status(400).json({ error: true, message: '出生日期格式必須為 YYYY-MM-DD' })
+    }
+    const genderVal = str(gender)
+    if (genderVal && !['男', '女'].includes(genderVal)) {
+      return res.status(400).json({ error: true, message: '性別必須為 男 或 女' })
+    }
+
+    const db = getDatabase()
+    if (mrn) {
+      const dupHd = db.prepare('SELECT name FROM patients WHERE medical_record_number = ? LIMIT 1').get(mrn)
+      if (dupHd) {
+        return res.status(409).json({ error: true, message: `病歷號 ${mrn} 已存在於病人清單（${dupHd.name}），請直接搜尋選取` })
+      }
+      const dupPd = db.prepare('SELECT name FROM catastrophic_illness_pd_patients WHERE medical_record_number = ? LIMIT 1').get(mrn)
+      if (dupPd) {
+        return res.status(409).json({ error: true, message: `病歷號 ${mrn} 已建立為 PD 病人（${dupPd.name}），請直接搜尋選取` })
+      }
+    }
+    if (idNo) {
+      const dupHd = db.prepare('SELECT name FROM patients WHERE UPPER(id_number) = ? LIMIT 1').get(idNo)
+      if (dupHd) {
+        return res.status(409).json({ error: true, message: `身分證 ${idNo} 已存在於病人清單（${dupHd.name}），請直接搜尋選取` })
+      }
+      const dupPd = db.prepare('SELECT name FROM catastrophic_illness_pd_patients WHERE UPPER(id_number) = ? LIMIT 1').get(idNo)
+      if (dupPd) {
+        return res.status(409).json({ error: true, message: `身分證 ${idNo} 已建立為 PD 病人（${dupPd.name}），請直接搜尋選取` })
+      }
+    }
+
+    const id = uuidv4()
+    const userJson = JSON.stringify({ uid: req.user.id, name: req.user.name })
+    db.prepare(`
+      INSERT INTO catastrophic_illness_pd_patients
+        (id, name, medical_record_number, id_number, gender, birth_date, physician, created_by, updated_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, nameVal, mrn || null, idNo || null, genderVal || null, birth || null, str(physician) || null, userJson, userJson)
+    const created = db.prepare('SELECT * FROM catastrophic_illness_pd_patients WHERE id = ?').get(id)
+    res.status(201).json(pdToApiShape(created))
+  } catch (error) {
+    console.error('建立 PD 病人錯誤:', error)
+    res.status(500).json({ error: true, message: '建立 PD 病人失敗' })
+  }
+})
+
+/**
+ * PUT /api/catastrophic-illness/pd-patients/:id
+ * 修改 PD 病人基本資料（守衛式部分更新：未帶欄位不動）
+ */
+router.put('/pd-patients/:id', ...isCatastrophicIllnessRole, (req, res) => {
+  try {
+    const db = getDatabase()
+    const existing = db.prepare('SELECT * FROM catastrophic_illness_pd_patients WHERE id = ?').get(req.params.id)
+    if (!existing) {
+      return res.status(404).json({ error: true, message: 'PD 病人不存在' })
+    }
+    const FIELD_MAP = {
+      name: 'name',
+      medicalRecordNumber: 'medical_record_number',
+      idNumber: 'id_number',
+      gender: 'gender',
+      birthDate: 'birth_date',
+      physician: 'physician'
+    }
+    const updates = []
+    const values = []
+    for (const [key, column] of Object.entries(FIELD_MAP)) {
+      if (req.body[key] === undefined) continue
+      if (typeof req.body[key] !== 'string') {
+        return res.status(400).json({ error: true, message: `${key} 格式錯誤` })
+      }
+      let v = req.body[key].trim()
+      if (key === 'name' && !v) return res.status(400).json({ error: true, message: '姓名不可為空' })
+      if (key === 'birthDate' && !isValidDateOrEmpty(v)) return res.status(400).json({ error: true, message: '出生日期格式必須為 YYYY-MM-DD' })
+      if (key === 'gender' && v && !['男', '女'].includes(v)) return res.status(400).json({ error: true, message: '性別必須為 男 或 女' })
+      if (key === 'idNumber') v = v.toUpperCase()
+      updates.push(`${column} = ?`)
+      values.push(key === 'name' ? v : (v || null))
+    }
+    if (updates.length === 0) {
+      return res.status(400).json({ error: true, message: '未提供任何欄位' })
+    }
+    db.prepare(`
+      UPDATE catastrophic_illness_pd_patients
+      SET ${updates.join(', ')}, updated_by = ?, updated_at = datetime('now', 'localtime')
+      WHERE id = ?
+    `).run(...values, JSON.stringify({ uid: req.user.id, name: req.user.name }), req.params.id)
+    // 姓名變更同步到申請紀錄的 patient_name（總覽顯示用）
+    if (req.body.name !== undefined) {
+      db.prepare('UPDATE catastrophic_illness_applications SET patient_name = ? WHERE patient_id = ?')
+        .run(req.body.name.trim(), req.params.id)
+    }
+    const updated = db.prepare('SELECT * FROM catastrophic_illness_pd_patients WHERE id = ?').get(req.params.id)
+    res.json(pdToApiShape(updated))
+  } catch (error) {
+    console.error('更新 PD 病人錯誤:', error)
+    res.status(500).json({ error: true, message: '更新 PD 病人失敗' })
+  }
+})
+
+/**
+ * DELETE /api/catastrophic-illness/pd-patients/:id
+ * 刪除 PD 病人（誤建補救）；已有申請紀錄或到期日者拒絕，需先刪除申請
+ */
+router.delete('/pd-patients/:id', ...isCatastrophicIllnessRole, (req, res) => {
+  try {
+    const db = getDatabase()
+    const hasApp = db.prepare('SELECT 1 FROM catastrophic_illness_applications WHERE patient_id = ? LIMIT 1').get(req.params.id)
+    const hasExpiry = db.prepare('SELECT 1 FROM catastrophic_illness_expiry WHERE patient_id = ? LIMIT 1').get(req.params.id)
+    if (hasApp || hasExpiry) {
+      return res.status(409).json({ error: true, message: '此 PD 病人已有申請紀錄或到期日，請先刪除相關紀錄' })
+    }
+    const result = db.prepare('DELETE FROM catastrophic_illness_pd_patients WHERE id = ?').run(req.params.id)
+    if (result.changes === 0) {
+      return res.status(404).json({ error: true, message: 'PD 病人不存在' })
+    }
+    res.json({ success: true })
+  } catch (error) {
+    console.error('刪除 PD 病人錯誤:', error)
+    res.status(500).json({ error: true, message: '刪除 PD 病人失敗' })
   }
 })
 

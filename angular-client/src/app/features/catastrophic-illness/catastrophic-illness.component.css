@@ -66,6 +66,23 @@
 .picker-item-deleted .picker-name { color: #868e96; }
 .picker-status-deleted { color: #c92a2a; background: #fff5f5; border-radius: 4px; padding: 0 6px; }
 .picker-empty { padding: 10px; color: #868e96; text-align: center; }
+.pd-prompt { margin-top: 6px; color: #495057; font-size: 0.9em; }
+.pd-prompt-btn { margin-top: 6px; padding: 4px 12px; border: 1px solid #1971c2; border-radius: 4px; background: #e7f5ff; color: #1971c2; cursor: pointer; font-size: 0.9em; }
+.pd-prompt-btn:hover { background: #d0ebff; }
+
+/* PD（腹膜透析）專用病人標籤 */
+.pd-tag { display: inline-block; background: #e5dbff; color: #5f3dc4; border: 1px solid #b197fc; border-radius: 4px; padding: 0 5px; margin-left: 4px; font-size: 0.75rem; font-weight: 700; line-height: 1.5; vertical-align: middle; }
+.pd-banner { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; padding: 6px 12px; background: #f3f0ff; border: 1px solid #d0bfff; border-radius: 5px; color: #5f3dc4; font-size: 0.9em; }
+.pd-overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; }
+.pd-dialog { background: #fff; border-radius: 8px; padding: 16px 20px; width: 520px; max-width: 95vw; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
+.pd-dialog h3 { margin: 0 0 4px; font-size: 1.1rem; color: #343a40; display: flex; align-items: center; gap: 6px; }
+.pd-dialog-hint { margin: 0 0 10px; color: #868e96; font-size: 0.85em; }
+.pd-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 14px; }
+.pd-grid label { display: flex; flex-direction: column; font-size: 0.85em; color: #495057; gap: 2px; }
+.pd-grid input[type="text"], .pd-grid input[type="date"], .pd-grid select { padding: 5px 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 1.05em; }
+.pd-dialog-error { margin-top: 8px; color: #c92a2a; font-size: 0.9em; }
+.pd-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.pd-dialog-actions button { padding: 6px 16px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.95em; }
 
 /* 書記補登到期日（無申請紀錄的舊病人） */
 .expiry-add-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }

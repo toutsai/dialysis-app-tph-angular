@@ -911,6 +911,23 @@ CREATE TABLE IF NOT EXISTS catastrophic_illness_expiry (
     updated_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
+-- 重大傷病申請專用 PD（腹膜透析）病人（2026-08-27）
+-- PD 病人不在 patients 表（無排程/KiDit），僅供重大傷病申請頁選人；
+-- 申請紀錄與到期日以此表 id 作為 patient_id，⚠️ 刻意不進 patients 表，避免流入排程/護理/KiDit
+CREATE TABLE IF NOT EXISTS catastrophic_illness_pd_patients (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    medical_record_number TEXT,
+    id_number TEXT,
+    gender TEXT,
+    birth_date TEXT,
+    physician TEXT,
+    created_by TEXT DEFAULT '{}',
+    updated_by TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
 -- ========================================
 -- 初始化預設資料
 -- ========================================

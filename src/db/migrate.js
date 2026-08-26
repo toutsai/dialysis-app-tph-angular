@@ -666,6 +666,31 @@ export function runMigrations() {
       migrationsApplied++
     }
 
+    // 重大傷病申請專用 PD 病人（2026-08-27）：腹膜透析病人不在 patients 表，另建小表供申請頁選人
+    // ⚠️ 刻意不寫入 patients 表（避免流入排程/護理/KiDit）；申請紀錄/到期日以此表 id 作為 patient_id
+    const ciPdExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='catastrophic_illness_pd_patients'")
+      .get()
+    if (!ciPdExists) {
+      console.log('📋 建立 catastrophic_illness_pd_patients 表格...')
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS catastrophic_illness_pd_patients (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          medical_record_number TEXT,
+          id_number TEXT,
+          gender TEXT,
+          birth_date TEXT,
+          physician TEXT,
+          created_by TEXT DEFAULT '{}',
+          updated_by TEXT DEFAULT '{}',
+          created_at TEXT DEFAULT (datetime('now', 'localtime')),
+          updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+      `)
+      migrationsApplied++
+    }
+
     // ========================================
     // 病史與問題列表（2026-08-19）：病人清單操作欄新彈窗
     // patient_problems = 問題列表（問題/起始/治療處置/解決時間）
