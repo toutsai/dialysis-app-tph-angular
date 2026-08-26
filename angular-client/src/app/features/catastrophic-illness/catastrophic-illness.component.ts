@@ -450,7 +450,10 @@ export class CatastrophicIllnessComponent implements OnInit {
 
   private searchPatients(keyword: string): Patient[] {
     const kw = keyword.trim().toLowerCase();
-    const all = this.patientStore.allPatients().filter((p) => !p['isDeleted'] && p['status'] !== 'deleted');
+    // 含已刪除病人（可查歷史申請／到期紀錄），未刪除者排前、已刪除者排後
+    const all = [...this.patientStore.allPatients()].sort(
+      (a, b) => Number(this.isDeletedPatient(a)) - Number(this.isDeletedPatient(b)),
+    );
     return (!kw
       ? all
       : all.filter((p) => {
@@ -460,6 +463,23 @@ export class CatastrophicIllnessComponent implements OnInit {
           return name.includes(kw) || mrn.includes(kw) || idNo.includes(kw);
         })
     ).slice(0, 30);
+  }
+
+  isDeletedPatient(p: Patient): boolean {
+    return !!p['isDeleted'] || p['status'] === 'deleted';
+  }
+
+  /** 已刪除病人下拉標籤：「已 M月D日 轉出」（跨年補年份；無刪除日則只顯示「已轉出」） */
+  deletedLabel(p: Patient): string {
+    const raw = p['deletedAt'];
+    if (!raw) return '已轉出';
+    const d = new Date(String(raw));
+    if (Number.isNaN(d.getTime())) return '已轉出';
+    const now = new Date();
+    const ymd = d.getFullYear() === now.getFullYear()
+      ? `${d.getMonth() + 1}月${d.getDate()}日`
+      : `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+    return `已 ${ymd} 轉出`;
   }
 
   updateFilter(): void {

@@ -42,9 +42,12 @@
           @if (expiryShowDropdown) {
             <div class="picker-dropdown">
               @for (p of expiryFilteredPatients; track p.id) {
-                <div class="picker-item" (mousedown)="pickExpiryPatient(p)">
+                <div class="picker-item" [class.picker-item-deleted]="isDeletedPatient(p)" (mousedown)="pickExpiryPatient(p)">
                   <span class="picker-name">{{ p.name }}</span>
                   <span class="picker-mrn">{{ p.medicalRecordNumber }}</span>
+                  @if (isDeletedPatient(p)) {
+                    <span class="picker-status picker-status-deleted">{{ deletedLabel(p) }}</span>
+                  }
                 </div>
               } @empty {
                 <div class="picker-empty">查無符合病人</div>
@@ -196,10 +199,14 @@
       @if (showDropdown) {
         <div class="picker-dropdown">
           @for (p of filteredPatients; track p.id) {
-            <div class="picker-item" (mousedown)="selectPatient(p)">
+            <div class="picker-item" [class.picker-item-deleted]="isDeletedPatient(p)" (mousedown)="selectPatient(p)">
               <span class="picker-name">{{ p.name }}</span>
               <span class="picker-mrn">{{ p.medicalRecordNumber }}</span>
-              <span class="picker-status">{{ p.status === 'opd' ? '門診' : p.status === 'ipd' ? '住院' : p.status === 'er' ? '急診' : '' }}</span>
+              @if (isDeletedPatient(p)) {
+                <span class="picker-status picker-status-deleted">{{ deletedLabel(p) }}</span>
+              } @else {
+                <span class="picker-status">{{ p.status === 'opd' ? '門診' : p.status === 'ipd' ? '住院' : p.status === 'er' ? '急診' : '' }}</span>
+              }
             </div>
           } @empty {
             <div class="picker-empty">查無符合病人</div>

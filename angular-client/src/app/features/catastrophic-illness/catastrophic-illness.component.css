@@ -63,6 +63,8 @@
 .picker-name { font-weight: 600; }
 .picker-mrn { color: #868e96; font-size: 0.85em; }
 .picker-status { margin-left: auto; color: #1971c2; font-size: 0.8em; }
+.picker-item-deleted .picker-name { color: #868e96; }
+.picker-status-deleted { color: #c92a2a; background: #fff5f5; border-radius: 4px; padding: 0 6px; }
 .picker-empty { padding: 10px; color: #868e96; text-align: center; }
 
 /* 書記補登到期日（無申請紀錄的舊病人） */
