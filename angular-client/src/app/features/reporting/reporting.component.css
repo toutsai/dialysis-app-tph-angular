@@ -527,6 +527,13 @@
   font-weight: 600;
 }
 
+.census-detail-table .merged {
+  margin-left: 0.35rem;
+  font-size: 0.75rem;
+  color: #8a94a6;
+  cursor: help;
+}
+
 .chip-gray { background: #e9ecef; color: #495057; }
 .chip-blue { background: #e3effc; color: #1c4f82; }
 .chip-amber { background: #fff3cd; color: #856404; }

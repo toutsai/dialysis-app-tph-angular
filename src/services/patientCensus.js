@@ -148,6 +148,17 @@ export function getMonthlyCensusChanges(db, year, month) {
     }
   }
 
+  // 同一人同日同類型（例：同日反覆刪除/復原）視為同一筆：保留最後一筆，mergedCount 標註合併筆數
+  const mergeSameDay = (list) => {
+    const map = new Map()
+    for (const it of list) {
+      const key = `${it.patientId}|${it.date}|${it.kind}`
+      const prev = map.get(key)
+      map.set(key, { ...it, mergedCount: (prev?.mergedCount || 0) + 1 })
+    }
+    return [...map.values()]
+  }
+
   const snapshotRow = db
     .prepare(
       `SELECT date, opd_regular_count, source FROM patient_census_daily
@@ -163,10 +174,10 @@ export function getMonthlyCensusChanges(db, year, month) {
       ? { date: snapshotRow.date, opdRegular: snapshotRow.opd_regular_count, source: snapshotRow.source }
       : null,
     historySince: earliest?.t ? toTaipeiDate(earliest.t) : null,
-    added,
-    deleted,
-    transferredIn,
-    transferredOut,
+    added: mergeSameDay(added),
+    deleted: mergeSameDay(deleted),
+    transferredIn: mergeSameDay(transferredIn),
+    transferredOut: mergeSameDay(transferredOut),
   }
 }
 

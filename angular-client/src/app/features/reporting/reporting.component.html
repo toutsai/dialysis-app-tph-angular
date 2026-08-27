@@ -283,7 +283,7 @@
                         <td>{{ formatMd(it.date) }}</td>
                         <td>{{ it.medicalRecordNumber || '' }}</td>
                         <td>{{ it.name }}</td>
-                        <td>{{ it.kindLabel }}</td>
+                        <td>{{ it.kindLabel }}@if ((it.mergedCount || 1) > 1) { <span class="merged" title="當日反覆操作 {{ it.mergedCount }} 筆已合併為一筆">×{{ it.mergedCount }}</span> }</td>
                         <td>
                           @if (it.isDeletedNow) { <span class="chip chip-gray">已刪除</span> }
                           @else if (it.currentStatus === 'ipd') { <span class="chip chip-amber">住院</span> }
@@ -311,7 +311,7 @@
                         </td>
                         <td>{{ it.medicalRecordNumber || '' }}</td>
                         <td>{{ it.name }}</td>
-                        <td class="reason">{{ it.reason || '—' }}</td>
+                        <td class="reason">{{ it.reason || '—' }}@if ((it.mergedCount || 1) > 1) { <span class="merged" title="當日反覆操作 {{ it.mergedCount }} 筆已合併為一筆">×{{ it.mergedCount }}</span> }</td>
                         <td>
                           @if (it.isDeletedNow) { <span class="chip chip-gray">已刪除</span> }
                           @else { <span class="chip chip-green">已復原</span> }

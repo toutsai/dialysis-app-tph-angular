@@ -35,6 +35,8 @@ interface CensusChangeItem {
   reason?: string;
   fromStatusLabel?: string;
   toStatusLabel?: string;
+  /** 同人同日同類型合併後的原始筆數（>1 表示當日反覆操作已合併為一筆） */
+  mergedCount?: number;
 }
 
 interface CensusChangesResponse {
