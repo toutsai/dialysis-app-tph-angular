@@ -682,6 +682,43 @@ async function handleNursingScheduleUpload(req, res) {
       })
     }
 
+    // 5b. 重新上傳同月份：沿用既有分組與已確認標記（2026-08-27 使用者裁定選 (a)）
+    //   - weekConfirmed 整個沿用（只增不減，與 PUT 合併規則一致）
+    //   - 每位護理師「班別沒變」的日子沿用 groups[i] 與 standby75Days；班別變了的格子清空重排
+    //   - 新班表沒有的護理師其分組自然消失；新加入的護理師沒有分組
+    //   原本整份覆蓋會讓組長月中重傳修正班表後整月分組+綠色標記全部重來
+    let existingSchedule = null
+    try {
+      const prev = db.prepare('SELECT schedule_data FROM nursing_schedules WHERE id = ?').get(yearMonth)
+      if (prev?.schedule_data) existingSchedule = JSON.parse(prev.schedule_data)
+    } catch (e) {
+      console.warn(`[NursingSchedule] 讀取既有 ${yearMonth} 班表失敗，視為首次上傳:`, e.message)
+    }
+    let carriedGroups = 0
+    if (existingSchedule?.scheduleByNurse) {
+      for (const [nurseId, n] of Object.entries(scheduleByNurse)) {
+        const old = existingSchedule.scheduleByNurse[nurseId]
+        if (!old) continue
+        const oldShifts = Array.isArray(old.shifts) ? old.shifts : []
+        const oldGroups = Array.isArray(old.groups) ? old.groups : []
+        const oldStandby = new Set(Array.isArray(old.standby75Days) ? old.standby75Days : [])
+        const groups = new Array(maxDaysInMonth).fill('')
+        const standby75Days = []
+        for (let i = 0; i < maxDaysInMonth; i++) {
+          const same = String(n.shifts[i] || '').trim() === String(oldShifts[i] || '').trim()
+          if (!same) continue
+          if (oldGroups[i]) {
+            groups[i] = oldGroups[i]
+            carriedGroups++
+          }
+          if (oldStandby.has(i)) standby75Days.push(i)
+        }
+        n.groups = groups
+        n.standby75Days = standby75Days
+      }
+    }
+    if (carriedGroups > 0) console.log(`[NursingSchedule] 重新上傳沿用既有分組 ${carriedGroups} 格 (${yearMonth})`)
+
     // 6. 儲存到資料庫
     const dataToSave = {
       title,
@@ -690,6 +727,7 @@ async function handleNursingScheduleUpload(req, res) {
       scheduleByNurse,
       scheduleByWeek,
       processingOrder,
+      ...(existingSchedule?.weekConfirmed ? { weekConfirmed: existingSchedule.weekConfirmed } : {}),
       lastUpdatedAt: new Date().toISOString(),
       updatedBy: { uid: req.user.id, name: req.user.name },
     }
