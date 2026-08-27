@@ -100,6 +100,21 @@ export function syncDialysisOrigin(patientStatus: any, setBy: string): void {
   }
 }
 
+/**
+ * KiDit 獨有六欄（patient_kidit_profile 1:1，GET /patients/:id 單筆才回；列表不帶）。
+ * 與 KiDit 事件上的 kidit_profile 申報快照不同：此處是病人層級權威（2026-08-27 期 1）。
+ */
+export interface PatientKiditProfile {
+  dialysisCode?: string | null;
+  kiditStatus?: string | null;
+  hospitalStartDate?: string | null;
+  diagnosisCategory?: string | null;
+  diagnosisSubcategory?: string | null;
+  catastrophicCardNo?: string | null;
+  updatedAt?: string | null;
+  updatedBy?: UserRef | Record<string, unknown> | null;
+}
+
 /** 病人主檔 */
 export interface Patient extends BaseEntity {
   medicalRecordNumber: string;
@@ -121,6 +136,31 @@ export interface Patient extends BaseEntity {
   address?: string;
   emergencyContact?: string;
   emergencyPhone?: string;
+  /** 聯絡人關係（KiDit 14 關係碼） */
+  contactRelationship?: string;
+  mobile?: string;
+  postalCode?: string;
+  registeredCity?: string;
+  /** 外籍（'Y'/'N'） */
+  isForeign?: string;
+  bloodType?: string;
+  /** KiDit 06 婚姻碼 */
+  maritalStatus?: string;
+  /** KiDit 11 教育程度碼 */
+  education?: string;
+  /** KiDit 12 職業碼 */
+  occupation?: string;
+  /** 'Y'/'N' */
+  isIndigenous?: string;
+  /** 'Y'/'N' */
+  isWelfare?: string;
+  /** KiDit 02 病患類別（00 健保/11 自費）；與 patientCategory(opd_regular/non_regular) 無關 */
+  kiditPatientCategory?: string;
+  /** 基本資料最後寫入來源：manual / kidit / kidit_backfill / his */
+  basicSource?: string;
+  hisSyncedAt?: string | null;
+  /** KiDit 獨有六欄；GET /patients/:id 單筆才有，列表為 undefined */
+  kiditProfile?: PatientKiditProfile | null;
 
   // 醫療資訊
   physician?: string;

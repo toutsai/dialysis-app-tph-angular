@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { KIDIT_OPTIONS, KiditOption } from '@/utils/kiditHelpers';
 import { kiditService } from '@/services/kiditService';
+import { isoToRocDisplay, rocInputToIso } from '@/utils/rocDate';
 
 @Component({
   selector: 'app-kidit-patient-form',
@@ -58,29 +59,31 @@ export class KiditPatientFormComponent implements OnChanges {
     if (this.initialData) {
       this.formData = JSON.parse(JSON.stringify(this.initialData));
     } else if (this.masterPatient) {
+      // 尚無事件快照 → 從病人層級權威帶入（2026-08-27 期 1）：
+      // 平面人口學欄位在 patients（GET /patients/:id），KiDit 獨有六欄在 patient.kiditProfile（patient_kidit_profile）。
       const p = this.masterPatient;
       const k = p.kiditProfile || {};
       this.formData = {
         name: p.name || '',
-        idNumber: k.idNumber || p.idNumber || '',
-        medicalRecordNumber: k.medicalRecordNumber || p.medicalRecordNumber || '',
-        patientCategory: k.patientCategory || '00',
-        birthDate: k.birthDate || p.birthDate || '',
-        gender: k.gender || (p.gender === '男' ? '1' : '2'),
-        bloodType: k.bloodType || '',
-        isIndigenous: k.isIndigenous || 'N',
-        isWelfare: k.isWelfare || 'N',
+        idNumber: p.idNumber || '',
+        medicalRecordNumber: p.medicalRecordNumber || '',
+        patientCategory: p.kiditPatientCategory || '00',
+        birthDate: p.birthDate || '',
+        gender: p.gender ? (p.gender === '男' ? '1' : '2') : '',
+        bloodType: p.bloodType || '',
+        isIndigenous: p.isIndigenous || 'N',
+        isWelfare: p.isWelfare || 'N',
         catastrophicCardNo: k.catastrophicCardNo || '',
-        address: k.address || '',
-        phone: k.phone || '',
-        maritalStatus: k.maritalStatus || '',
-        education: k.education || '',
-        occupation: k.occupation || '',
-        contactPerson: k.contactPerson || '',
-        relationship: k.relationship || '',
+        address: p.address || '',
+        phone: p.phone || '',
+        maritalStatus: p.maritalStatus || '',
+        education: p.education || '',
+        occupation: p.occupation || '',
+        contactPerson: p.emergencyContact || '',
+        relationship: p.contactRelationship || '',
         dialysisCode: k.dialysisCode || '',
-        status: k.status || '1',
-        firstDialysisDate: k.firstDialysisDate || '',
+        status: k.kiditStatus || '1',
+        firstDialysisDate: p.firstDialysisDate || '',
         hospitalStartDate: k.hospitalStartDate || '',
         diagnosisCategory: k.diagnosisCategory || '',
         diagnosisSubcategory: k.diagnosisSubcategory || '',
@@ -88,54 +91,30 @@ export class KiditPatientFormComponent implements OnChanges {
     } else {
       this.formData = {};
     }
-    this.rocBirthInput = this.isoToRocDisplay(this.formData?.birthDate || '');
+    this.rocBirthInput = isoToRocDisplay(this.formData?.birthDate || '');
     this.rocBirthError = false;
   }
 
   /** 西元日期欄輸入 → 同步民國顯示欄（官方版面兩欄並列，任填一欄自動換算） */
   onIsoBirthChange(value: string): void {
     this.formData.birthDate = value || '';
-    this.rocBirthInput = this.isoToRocDisplay(this.formData.birthDate);
+    this.rocBirthInput = isoToRocDisplay(this.formData.birthDate);
     this.rocBirthError = false;
   }
 
-  /** 西元 YYYY-MM-DD → 民國顯示（45/08/15）；無法解析回空字串 */
-  private isoToRocDisplay(iso: string): string {
-    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
-    if (!m) return '';
-    const y = Number(m[1]) - 1911;
-    if (y <= 0) return '';
-    return `${y}/${m[2]}/${m[3]}`;
-  }
-
   /**
-   * 民國年輸入 → 西元存檔。接受「45/08/15」「45.8.15」「45-8-15」或連碼「450815」「0450815」。
+   * 民國年輸入 → 西元存檔（換算規則在 utils/rocDate.ts，與基本資料頁籤共用）。
    * 解析成功才更新 birthDate；清空輸入＝清空生日。
    */
   onRocBirthChange(value: string): void {
     this.rocBirthInput = value;
-    const t = String(value || '').trim();
-    if (!t) {
-      this.formData.birthDate = '';
-      this.rocBirthError = false;
+    const iso = rocInputToIso(value);
+    if (iso === null) {
+      this.rocBirthError = true;
       return;
     }
-    let y = 0, mo = 0, d = 0;
-    const sep = /^(\d{1,3})[\/.\-年](\d{1,2})[\/.\-月](\d{1,2})日?$/.exec(t);
-    if (sep) {
-      y = Number(sep[1]); mo = Number(sep[2]); d = Number(sep[3]);
-    } else if (/^\d{6,7}$/.test(t)) {
-      y = Number(t.slice(0, t.length - 4));
-      mo = Number(t.slice(t.length - 4, t.length - 2));
-      d = Number(t.slice(t.length - 2));
-    }
-    if (y >= 1 && y <= 200 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
-      const p2 = (n: number) => String(n).padStart(2, '0');
-      this.formData.birthDate = `${y + 1911}-${p2(mo)}-${p2(d)}`;
-      this.rocBirthError = false;
-    } else {
-      this.rocBirthError = true;
-    }
+    this.formData.birthDate = iso;
+    this.rocBirthError = false;
   }
 
   async saveData(): Promise<void> {

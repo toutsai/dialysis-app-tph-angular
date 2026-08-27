@@ -62,6 +62,17 @@
       <span *ngIf="loading()" class="loading-tag">載入中…</span>
     </div>
 
+    <!-- 子頁籤：基本資料 / 本院履歷（樣式沿用病人清單 stat-tag） -->
+    <div class="sub-tabs">
+      <button type="button" class="stat-tag" [class.active]="subTab() === 'basic'" (click)="subTab.set('basic')">基本資料</button>
+      <button type="button" class="stat-tag" [class.active]="subTab() === 'history'" (click)="subTab.set('history')">本院履歷</button>
+    </div>
+
+    @if (subTab() === 'basic') {
+      <app-patient-basic-profile [patient]="$any(p)" (saved)="onBasicProfileSaved($any($event))"></app-patient-basic-profile>
+    }
+
+    @if (subTab() === 'history') {
     <!-- 基本醫療資訊 -->
     <div class="section">
       <div class="grid-2">
@@ -161,6 +172,7 @@
       </div>
       <ng-template #noHist><div class="sub">無歷史醫囑紀錄</div></ng-template>
     </div>
+    }
   </div>
 
   <!-- 動向歷史彈窗 -->

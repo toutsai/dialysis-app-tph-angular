@@ -122,6 +122,55 @@ export function runMigrations() {
         console.log(`📋 回填 ${hepRows.length} 位病人的 B/C 肝四態（hepatitis_status）`)
         migrationsApplied++
       }
+
+      // 病人基本資料單一權威（2026-08-27）：KiDit 建檔表單／病人清單「基本資料」共用病人層級欄位。
+      // Y/N 類欄位存 KiDit 碼字串；kidit_patient_category = KiDit 02 病患類別（00 健保/11 自費），
+      // 與既有 patient_category（opd_regular/non_regular）意義不同，勿混用。
+      // basic_source = 最後寫入來源（manual/kidit/kidit_backfill/his）；his_synced_at 供未來 HIS 串接。
+      for (const [col, def] of [
+        ['mobile', 'TEXT'],
+        ['postal_code', 'TEXT'],
+        ['registered_city', 'TEXT'],
+        ['is_foreign', 'TEXT'],
+        ['blood_type', 'TEXT'],
+        ['marital_status', 'TEXT'],
+        ['education', 'TEXT'],
+        ['occupation', 'TEXT'],
+        ['is_indigenous', 'TEXT'],
+        ['is_welfare', 'TEXT'],
+        ['kidit_patient_category', 'TEXT'],
+        ['contact_relationship', 'TEXT'],
+        ['basic_source', "TEXT DEFAULT 'manual'"],
+        ['his_synced_at', 'TEXT'],
+      ]) {
+        if (addColumnIfNotExists(db, 'patients', col, def)) migrationsApplied++
+      }
+    }
+
+    // ========================================
+    // patient_kidit_profile：KiDit 獨有 6 欄（1:1 病人），與 patients 人口學欄位合為病人基本資料權威（2026-08-27）
+    // KiDit 事件上的 kidit_profile 保留為申報快照；此表由 PUT /patients/:id/basic-profile 與 KiDit 存檔回寫
+    // ========================================
+    const patientKiditProfileExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='patient_kidit_profile'")
+      .get()
+    if (!patientKiditProfileExists) {
+      console.log('📋 建立 patient_kidit_profile 表格...')
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS patient_kidit_profile (
+          patient_id TEXT PRIMARY KEY,
+          dialysis_code TEXT,
+          kidit_status TEXT,
+          hospital_start_date TEXT,
+          diagnosis_category TEXT,
+          diagnosis_subcategory TEXT,
+          catastrophic_card_no TEXT,
+          updated_by TEXT DEFAULT '{}',
+          created_at TEXT DEFAULT (datetime('now', 'localtime')),
+          updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+      `)
+      migrationsApplied++
     }
 
     // ========================================

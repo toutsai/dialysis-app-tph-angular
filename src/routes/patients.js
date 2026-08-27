@@ -12,6 +12,12 @@ import { removeAutoMovementFromDailyLog } from '../services/dailyLogMovementSync
 import { normalizeDialysisMode, normalizeDialysisOrdersMode } from '../utils/dialysisMode.js'
 import { normalizeHepatitisStatus, deriveHepatitisFromTags, syncTagsFromHepatitis, parseHepatitisStatus } from '../utils/hepatitis.js'
 import { recordPatientHistory, createPatientSnapshot } from '../services/patientHistory.js'
+import {
+  BASIC_FIELD_MAP,
+  KIDIT_PROFILE_FIELD_MAP,
+  formatKiditProfile,
+  upsertPatientBasicProfile,
+} from '../services/patientBasicProfile.js'
 
 const router = Router()
 
@@ -335,6 +341,21 @@ function formatPatient(row) {
     address: row.address,
     emergencyContact: row.emergency_contact,
     emergencyPhone: row.emergency_phone,
+    // 病人基本資料單一權威（2026-08-27）：與 KiDit 建檔共用；Y/N 類為 KiDit 碼字串
+    mobile: row.mobile ?? null,
+    postalCode: row.postal_code ?? null,
+    registeredCity: row.registered_city ?? null,
+    isForeign: row.is_foreign ?? null,
+    bloodType: row.blood_type ?? null,
+    maritalStatus: row.marital_status ?? null,
+    education: row.education ?? null,
+    occupation: row.occupation ?? null,
+    isIndigenous: row.is_indigenous ?? null,
+    isWelfare: row.is_welfare ?? null,
+    kiditPatientCategory: row.kidit_patient_category ?? null,
+    contactRelationship: row.contact_relationship ?? null,
+    basicSource: row.basic_source ?? 'manual',
+    hisSyncedAt: row.his_synced_at ?? null,
     physician: row.physician,
     firstDialysisDate: row.first_dialysis_date,
     vascAccess: row.vasc_access,
@@ -407,6 +428,21 @@ function toDbFormat(data, existingPatient = null) {
   if (data.address !== undefined) result.address = data.address
   if (data.emergencyContact !== undefined) result.emergency_contact = data.emergencyContact
   if (data.emergencyPhone !== undefined) result.emergency_phone = data.emergencyPhone
+  // 病人基本資料單一權威（2026-08-27）
+  if (data.mobile !== undefined) result.mobile = data.mobile
+  if (data.postalCode !== undefined) result.postal_code = data.postalCode
+  if (data.registeredCity !== undefined) result.registered_city = data.registeredCity
+  if (data.isForeign !== undefined) result.is_foreign = data.isForeign
+  if (data.bloodType !== undefined) result.blood_type = data.bloodType
+  if (data.maritalStatus !== undefined) result.marital_status = data.maritalStatus
+  if (data.education !== undefined) result.education = data.education
+  if (data.occupation !== undefined) result.occupation = data.occupation
+  if (data.isIndigenous !== undefined) result.is_indigenous = data.isIndigenous
+  if (data.isWelfare !== undefined) result.is_welfare = data.isWelfare
+  if (data.kiditPatientCategory !== undefined) result.kidit_patient_category = data.kiditPatientCategory
+  if (data.contactRelationship !== undefined) result.contact_relationship = data.contactRelationship
+  if (data.basicSource !== undefined) result.basic_source = data.basicSource
+  if (data.hisSyncedAt !== undefined) result.his_synced_at = data.hisSyncedAt
   if (data.physician !== undefined) result.physician = data.physician
   if (data.firstDialysisDate !== undefined) result.first_dialysis_date = data.firstDialysisDate
   if (data.vascAccess !== undefined) result.vasc_access = data.vascAccess
@@ -1298,7 +1334,9 @@ router.get('/:id', authenticate, (req, res) => {
       })
     }
 
-    res.json(formatPatient(patient))
+    // 單筆多回 kiditProfile（KiDit 獨有六欄；列表端點不加）
+    const kiditRow = db.prepare('SELECT * FROM patient_kidit_profile WHERE patient_id = ?').get(id)
+    res.json({ ...formatPatient(patient), kiditProfile: formatKiditProfile(kiditRow) })
 
   } catch (error) {
     console.error('取得病人錯誤:', error)
@@ -1698,6 +1736,71 @@ async function updatePatientHandler(req, res) {
     })
   }
 }
+
+/**
+ * PUT /api/patients/:id/basic-profile
+ * 病人基本資料（單一權威，2026-08-27）：平面人口學欄位 + kiditProfile{}（KiDit 獨有六欄）
+ * 與 PUT /:id 分開：不觸發身分/模式/刪除副作用、不寫 patient_history／工作日誌。
+ * 白名單見 BASIC_FIELD_MAP / KIDIT_PROFILE_FIELD_MAP；medicalRecordNumber/firstDialysisDate 只補空。
+ */
+router.put('/:id/basic-profile', ...isEditor, async (req, res) => {
+  try {
+    const { id } = req.params
+    const body = req.body || {}
+    const db = getDatabase()
+
+    const existing = db.prepare('SELECT id FROM patients WHERE id = ?').get(id)
+    if (!existing) {
+      return res.status(404).json({ error: true, message: '病人不存在' })
+    }
+
+    const fields = {}
+    for (const key of Object.keys(BASIC_FIELD_MAP)) {
+      if (body[key] === undefined) continue
+      const v = body[key]
+      if (v !== null && typeof v !== 'string' && typeof v !== 'number' && typeof v !== 'boolean') {
+        return res.status(400).json({ error: true, message: `${key} 格式錯誤` })
+      }
+      if (typeof v === 'string' && v.length > 500) {
+        return res.status(400).json({ error: true, message: `${key} 過長` })
+      }
+      fields[key] = v
+    }
+    const kiditProfile = {}
+    const kp = body.kiditProfile
+    if (kp !== undefined && kp !== null && (typeof kp !== 'object' || Array.isArray(kp))) {
+      return res.status(400).json({ error: true, message: 'kiditProfile 需為物件' })
+    }
+    for (const key of Object.keys(KIDIT_PROFILE_FIELD_MAP)) {
+      if (!kp || kp[key] === undefined) continue
+      const v = kp[key]
+      if (v !== null && typeof v !== 'string' && typeof v !== 'number') {
+        return res.status(400).json({ error: true, message: `kiditProfile.${key} 格式錯誤` })
+      }
+      if (typeof v === 'string' && v.length > 500) {
+        return res.status(400).json({ error: true, message: `kiditProfile.${key} 過長` })
+      }
+      kiditProfile[key] = v
+    }
+
+    const written = upsertPatientBasicProfile(db, id, fields, kiditProfile, {
+      source: 'manual',
+      user: req.user,
+    })
+
+    await logAudit('PATIENT_BASIC_PROFILE_UPDATE', req.user.id, req.user.name, 'patients', id, {
+      patientFieldsWritten: written.patientFieldsWritten,
+      kiditFieldsWritten: written.kiditFieldsWritten,
+    })
+
+    const updated = db.prepare(`SELECT ${PATIENT_SELECT_COLUMNS} FROM patients p WHERE p.id = ?`).get(id)
+    const kiditRow = db.prepare('SELECT * FROM patient_kidit_profile WHERE patient_id = ?').get(id)
+    res.json({ ...formatPatient(updated), kiditProfile: formatKiditProfile(kiditRow) })
+  } catch (error) {
+    console.error('更新病人基本資料錯誤:', error)
+    res.status(500).json({ error: true, message: '更新病人基本資料失敗' })
+  }
+})
 
 router.put('/:id', ...isContributor, updatePatientHandler)
 

@@ -1,0 +1,141 @@
+.bp-wrapper {
+  padding: 4px 0;
+}
+.bp-hint {
+  margin: 0 18px 8px;
+  padding: 8px 12px;
+  background: #fff8e6;
+  border: 1px solid #ffe2a8;
+  border-radius: 6px;
+  color: #8a5a00;
+  font-size: 13px;
+}
+.bp-hint i {
+  margin-right: 4px;
+}
+.bp-source {
+  color: #9a7b3a;
+}
+
+.bp-section {
+  padding: 12px 18px;
+  border-bottom: 1px solid #f2f2f2;
+}
+.bp-section:last-of-type {
+  border-bottom: none;
+}
+.bp-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #37474f;
+}
+.bp-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 20px;
+  margin-bottom: 10px;
+}
+.bp-row:last-child {
+  margin-bottom: 0;
+}
+.bp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.bp-field label {
+  font-size: 12px;
+  color: #888;
+}
+.bp-grow {
+  flex: 1 1 320px;
+}
+.bp-check label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  color: #333;
+  padding-bottom: 6px;
+  cursor: pointer;
+}
+.bp-static {
+  padding: 6px 0;
+  font-weight: 500;
+}
+.mono {
+  font-family: ui-monospace, Consolas, monospace;
+  letter-spacing: 0.5px;
+}
+
+.bp-field input[type='text'],
+.bp-field input[type='date'],
+.bp-field select {
+  padding: 6px 8px;
+  border: 1px solid #cfd8e3;
+  border-radius: 6px;
+  font-size: 14px;
+  background: #fff;
+}
+.bp-field input:disabled,
+.bp-field select:disabled {
+  background: #f5f6f8;
+  color: #555;
+}
+.w-xs { width: 80px; }
+.w-sm { width: 140px; }
+.w-md { width: 180px; }
+.w-lg { width: 100%; min-width: 320px; }
+.w-full { width: 100%; }
+.roc-error {
+  border-color: #e53935 !important;
+  background: #fff5f5;
+}
+.bp-note {
+  font-size: 12px;
+  color: #999;
+  padding-bottom: 6px;
+}
+.bp-note.bad {
+  color: #c62828;
+}
+
+.bp-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  border-top: 1px solid #f2f2f2;
+}
+.bp-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  background: #1976d2;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+.bp-save:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.bp-status {
+  font-size: 13px;
+  color: #777;
+}
+.bp-status.ok {
+  color: #2e7d32;
+}
+.bp-status.bad {
+  color: #c62828;
+}
+.bp-readonly-note {
+  padding: 8px 18px 12px;
+  font-size: 12px;
+  color: #999;
+}

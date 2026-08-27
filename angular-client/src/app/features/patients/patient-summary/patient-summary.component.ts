@@ -8,6 +8,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiService } from '@services/api.service';
 import { PatientStoreService, type Patient } from '@services/patient-store.service';
 import { PatientHistoryModalComponent } from '@app/components/dialogs/patient-history-modal/patient-history-modal.component';
+import { PatientBasicProfileComponent } from '../patient-basic-profile/patient-basic-profile.component';
 
 interface DialysisDate {
   date: string;
@@ -29,7 +30,7 @@ interface OrderHistoryEntry {
 @Component({
   selector: 'app-patient-summary',
   standalone: true,
-  imports: [CommonModule, FormsModule, PatientHistoryModalComponent],
+  imports: [CommonModule, FormsModule, PatientHistoryModalComponent, PatientBasicProfileComponent],
   templateUrl: './patient-summary.component.html',
   styleUrl: './patient-summary.component.css',
 })
@@ -43,6 +44,17 @@ export class PatientSummaryComponent implements OnInit {
 
   /** 動向歷史彈窗（原清單「動向歷史」鈕移入履歷內） */
   readonly showHistoryModal = signal(false);
+
+  /** 摘要卡子頁籤：基本資料（病人層級權威編輯入口）/ 本院履歷（既有區塊）；預設本院履歷 */
+  readonly subTab = signal<'basic' | 'history'>('history');
+
+  /** 基本資料存檔後，以後端回應（含 kiditProfile）更新顯示中的病人 */
+  onBasicProfileSaved(updated: Patient): void {
+    const cur = this.patient();
+    if (cur && updated && (!updated.id || updated.id === cur.id)) {
+      this.patient.set({ ...cur, ...updated });
+    }
+  }
 
   ngOnInit(): void {
     if (this.initialPatientId) {

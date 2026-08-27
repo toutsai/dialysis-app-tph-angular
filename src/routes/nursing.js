@@ -13,6 +13,11 @@ import {
   listKiditLogbooks,
 } from '../services/kiditSync.js'
 import { normalizeDialysisMode } from '../utils/dialysisMode.js'
+import {
+  upsertPatientBasicProfile,
+  mapKiditProfileToBasic,
+  mapKiditProfileToKidit,
+} from '../services/patientBasicProfile.js'
 
 const router = Router()
 
@@ -1850,7 +1855,22 @@ router.put('/kidit-logbook/:date/events/:eventId', ...isEditor, async (req, res)
     const { date, eventId } = req.params
     const updates = req.body || {}
 
+    // 單事件更新若帶 kidit_profile，與 DB 現況比對後回寫病人基本資料（同整包路徑）
+    let profileChanged = null
+    if (updates.kidit_profile && typeof updates.kidit_profile === 'object') {
+      try {
+        const db = getDatabase()
+        const row = db.prepare('SELECT events FROM kidit_logbook WHERE date = ?').get(date)
+        const old = (JSON.parse(row?.events || '[]') || []).find((e) => e?.id === eventId)
+        if (old?.patientId && JSON.stringify(updates.kidit_profile) !== JSON.stringify(old.kidit_profile ?? null)) {
+          profileChanged = { patientId: old.patientId, profile: updates.kidit_profile }
+        }
+      } catch {}
+    }
+
     const result = updateKiditEvent(date, eventId, updates)
+
+    if (profileChanged) syncBasicProfileFromKidit([profileChanged], req.user)
 
     res.json({
       success: true,
@@ -1880,6 +1900,7 @@ function stampKiditSavedMeta(date, events, user) {
   } catch {}
   const oldById = new Map(oldEvents.filter((e) => e?.id).map((e) => [e.id, e]))
   const now = new Date().toLocaleString('sv-SE')
+  const changedProfiles = []
   for (const e of events) {
     if (!e || !e.id) continue
     const old = oldById.get(e.id)
@@ -1889,13 +1910,38 @@ function stampKiditSavedMeta(date, events, user) {
       if (e[field] && JSON.stringify(e[field]) !== JSON.stringify(old?.[field] ?? null)) {
         e[byKey] = user?.name || ''
         e[atKey] = now
+        if (field === 'kidit_profile' && e.patientId) {
+          changedProfiles.push({ patientId: e.patientId, profile: e.kidit_profile })
+        }
       } else {
         if (old?.[byKey] != null) e[byKey] = old[byKey]
         if (old?.[atKey] != null) e[atKey] = old[atKey]
       }
     }
   }
-  return events
+  return { events, changedProfiles }
+}
+
+/**
+ * KiDit 建檔存檔 → 回寫病人基本資料（單一權威，2026-08-27）
+ * 護理師剛在 KiDit 編輯＝最新意圖，故覆寫 patients 人口學欄位與 patient_kidit_profile；
+ * MRN/初透日只補空（服務層規則）。回寫失敗只 warn，絕不讓 KiDit 存檔失敗。
+ * 事件上的 kidit_profile 快照不動；syncEventsToKiditLogbook 重建路徑不經此 hook。
+ */
+function syncBasicProfileFromKidit(changedProfiles, user) {
+  if (!changedProfiles || changedProfiles.length === 0) return
+  const db = getDatabase()
+  for (const { patientId, profile } of changedProfiles) {
+    try {
+      upsertPatientBasicProfile(db, patientId, mapKiditProfileToBasic(profile), mapKiditProfileToKidit(profile), {
+        source: 'kidit',
+        user,
+        skipEmpty: true, // KiDit 空白＝沒填，不清除病人層級既有值
+      })
+    } catch (error) {
+      console.warn(`[KIDIT] 回寫病人基本資料失敗 patientId=${patientId}:`, error?.message || error)
+    }
+  }
 }
 
 /**
@@ -1907,7 +1953,11 @@ router.put('/kidit-logbook/:date/events', ...isEditor, (req, res) => {
     const { date } = req.params
     const { events } = req.body
 
-    const result = updateKiditEvents(date, stampKiditSavedMeta(date, events || [], req.user))
+    const stamped = stampKiditSavedMeta(date, events || [], req.user)
+    const result = updateKiditEvents(date, stamped.events)
+
+    // 事件已存檔後才回寫病人基本資料；失敗不影響本次存檔
+    syncBasicProfileFromKidit(stamped.changedProfiles, req.user)
 
     res.json({
       success: true,

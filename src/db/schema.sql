@@ -72,6 +72,22 @@ CREATE TABLE IF NOT EXISTS patients (
     diseases TEXT DEFAULT '[]',       -- JSON array: 須注意疾病列表（HBV/HCV/BC肝? 由 hepatitis_status 衍生）
     hepatitis_status TEXT,            -- JSON: {hbsag,antihcv: Y/N/O/F, hbsagFollowDate, antihcvFollowDate}（與 KiDit 33/34 同碼，病人清單為權威）
 
+    -- 病人基本資料（單一權威，2026-08-27；KiDit 建檔表單與病人清單「基本資料」共用；Y/N 類存 KiDit 碼字串）
+    mobile TEXT,
+    postal_code TEXT,
+    registered_city TEXT,
+    is_foreign TEXT,                  -- KiDit 08 外籍 Y/N
+    blood_type TEXT,
+    marital_status TEXT,
+    education TEXT,
+    occupation TEXT,
+    is_indigenous TEXT,               -- Y/N
+    is_welfare TEXT,                  -- 低收入戶 Y/N
+    kidit_patient_category TEXT,      -- KiDit 02 病患類別（00 健保/11 自費），與 patient_category 不同義
+    contact_relationship TEXT,        -- 聯絡人關係（聯絡人沿用 emergency_contact）
+    basic_source TEXT DEFAULT 'manual', -- 最後寫入來源 manual/kidit/kidit_backfill/his
+    his_synced_at TEXT,
+
     -- 病人狀態 (JSON 格式)
     patient_status TEXT DEFAULT '{}',  -- JSON: {isFirstDialysis, isPaused, hasBloodDraw}
     is_hepatitis INTEGER DEFAULT 0,    -- 是否為肝炎病人
@@ -924,6 +940,21 @@ CREATE TABLE IF NOT EXISTS catastrophic_illness_pd_patients (
     birth_date TEXT,
     physician TEXT,
     created_by TEXT DEFAULT '{}',
+    updated_by TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+-- 病人 KiDit 獨有基本資料（1:1，2026-08-27）：與 patients 人口學欄位合為病人基本資料單一權威；
+-- KiDit 事件的 kidit_profile 保留為申報快照（不追溯）。updated_by JSON {uid,name}
+CREATE TABLE IF NOT EXISTS patient_kidit_profile (
+    patient_id TEXT PRIMARY KEY,
+    dialysis_code TEXT,
+    kidit_status TEXT,
+    hospital_start_date TEXT,
+    diagnosis_category TEXT,
+    diagnosis_subcategory TEXT,
+    catastrophic_card_no TEXT,
     updated_by TEXT DEFAULT '{}',
     created_at TEXT DEFAULT (datetime('now', 'localtime')),
     updated_at TEXT DEFAULT (datetime('now', 'localtime'))

@@ -99,6 +99,34 @@
   font-size: 13px;
 }
 
+/* 子頁籤（沿用 patients.component 的 stat-tag 外觀） */
+.sub-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px 14px 0;
+  border-bottom: 1px solid #eee;
+  background: #fbfcfe;
+}
+.stat-tag {
+  background-color: transparent;
+  border: none;
+  padding: 8px 16px;
+  font-size: 1.05rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-bottom: 3px solid transparent;
+  border-radius: 4px 4px 0 0;
+  color: #495057;
+}
+.stat-tag:hover {
+  background-color: #f8f9fa;
+}
+.stat-tag.active {
+  color: var(--primary-color, #1976d2);
+  border-bottom-color: var(--primary-color, #1976d2);
+}
+
 .section {
   padding: 14px 18px;
   border-bottom: 1px solid #f2f2f2;
