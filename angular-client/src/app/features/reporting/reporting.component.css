@@ -544,6 +544,12 @@
   margin-left: 0.5rem;
 }
 
+.census-detail-table .later-note {
+  margin-left: 0.3rem;
+  font-size: 0.78rem;
+  color: #8a94a6;
+}
+
 .chip-gray { background: #e9ecef; color: #495057; }
 .chip-blue { background: #e3effc; color: #1c4f82; }
 .chip-amber { background: #fff3cd; color: #856404; }

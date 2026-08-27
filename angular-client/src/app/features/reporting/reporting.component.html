@@ -259,7 +259,7 @@
           <div class="census-modal-formula">
             {{ censusFormula() }}
             @if (d.monthEndSnapshot && d.monthEndSnapshot.opdRegular !== d.monthEnd.count) {
-              <span class="note">（快照 {{ d.monthEndSnapshot.date }} 為 {{ d.monthEndSnapshot.opdRegular }}，差異來自分類變更等未留歷史的異動）</span>
+              <span class="note">（報表格子的快照 {{ d.monthEndSnapshot.date }} 為 {{ d.monthEndSnapshot.opdRegular }}：快照日不同、或為定義變更前／分類變更未留歷史所致）</span>
             }
             @if (d.prevMonthEnd.beforeHistory) {
               <span class="note">（上月底早於異動紀錄起點 {{ d.historySince }}，人數不可靠）</span>
@@ -282,7 +282,7 @@
               } @else {
                 <table class="census-detail-table">
                   <thead>
-                    <tr><th>日期</th><th>病歷號</th><th>姓名</th><th>方式</th><th>目前狀態</th></tr>
+                    <tr><th>日期</th><th>病歷號</th><th>姓名</th><th>方式</th><th>月底身分</th></tr>
                   </thead>
                   <tbody>
                     @for (it of d.added; track it.patientId) {
@@ -292,10 +292,10 @@
                         <td>{{ it.name }}</td>
                         <td>{{ it.howLabel }}</td>
                         <td>
-                          @if (it.isDeletedNow) { <span class="chip chip-gray">已刪除</span> }
-                          @else if (it.currentStatus === 'ipd') { <span class="chip chip-amber">住院</span> }
-                          @else if (it.currentStatus === 'er') { <span class="chip chip-red">急診</span> }
+                          @if (it.monthEndStatus === 'ipd') { <span class="chip chip-amber">住院</span> }
+                          @else if (it.monthEndStatus === 'er') { <span class="chip chip-red">急診</span> }
                           @else { <span class="chip chip-blue">門診</span> }
+                          @if (it.isDeletedNow) { <span class="later-note">（{{ formatMd(it.laterDeletedAt) || '之後' }} 已刪除）</span> }
                         </td>
                       </tr>
                     }
@@ -318,16 +318,12 @@
                         <td>{{ it.name }}</td>
                         <td>
                           @if (it.howLabel === '刪除') { <span class="chip chip-gray">刪除</span> }
-                          @else if (it.howLabel === '轉住院') { <span class="chip chip-amber">轉住院</span> }
-                          @else if (it.howLabel === '轉急診') { <span class="chip chip-red">轉急診</span> }
                           @else { <span>{{ it.howLabel }}</span> }
                         </td>
                         <td class="reason">{{ it.reason || '—' }}</td>
                         <td>
                           @if (it.isDeletedNow) { <span class="chip chip-gray">已刪除</span> }
-                          @else if (it.currentStatus === 'ipd') { <span class="chip chip-amber">住院</span> }
-                          @else if (it.currentStatus === 'er') { <span class="chip chip-red">急診</span> }
-                          @else { <span class="chip chip-blue">門診</span> }
+                          @else { <span class="chip chip-green">已復原</span> }
                         </td>
                       </tr>
                     }
@@ -338,7 +334,7 @@
           </div>
 
           <div class="census-modal-footer">
-            以「上月底名單 vs 當月底名單」比對：月中新增又刪除者不列。由病人異動紀錄倒推（紀錄自 {{ d.historySince || '—' }} 起）；常規門診＝門診且非「非常規」病人，分類以現值判斷。
+            以「上月底名單 vs 當月底名單」比對：月中新增又刪除者不列；常規病人暫轉住院/急診仍算常規門診人數。由病人異動紀錄倒推（紀錄自 {{ d.historySince || '—' }} 起）；常規門診＝未刪除且非「非常規」分類（分類以現值判斷）。
           </div>
           }
         }

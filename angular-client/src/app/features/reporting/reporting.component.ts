@@ -30,7 +30,12 @@ interface CensusChangeItem {
   operatedAt?: string | null;
   isDeletedNow: boolean;
   currentStatus: string | null;
-  /** 新建檔／復原／住院→門診；刪除／轉住院／轉急診／改為非常規 */
+  /** 月底當時身分 opd/ipd/er 與中文 */
+  monthEndStatus: string | null;
+  monthEndStatusLabel: string;
+  /** 月底以後才被刪除的日期（isDeletedNow 時） */
+  laterDeletedAt: string | null;
+  /** 新建檔／復原／改為常規；刪除／改為非常規 */
   howLabel: string;
   reason?: string;
 }

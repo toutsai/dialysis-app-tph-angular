@@ -1,92 +1,32 @@
 // 每日病人數快照（patient_census_daily）
-// 用途：年度報表「常規門診病人數（月底）」列——取每月最後一天的快照。
-// 常規門診定義與主護病人照護清單一致：status='opd'、未刪除、patient_category 空或 'opd_regular'。
-// 寫入者：scheduler.js 每晚 23:45 cron（source='cron'）；scripts/backfill-patient-census.mjs 倒推歷史（source='backfill'，估算）。
+// 用途：年度報表「常規門診病人數（月底）」列——取每月最後一天的快照；點格子開「月底對月底」異動明細。
+//
+// 常規門診定義（2026-08-28 使用者裁定）：
+//   未刪除 且 patient_category 空或 'opd_regular' 且（目前為門診 或 該時點以前曾經是門診）
+// ——常規病人暫時轉住院/急診仍算常規門診人數；建檔即住院/急診且從未門診者不算（舊資料常漏標 non_regular，用「曾為門診」補強）。
+// ⚠️ 與主護病人照護清單（只算 status='opd'）刻意不同。
+// 三個消費端（cron 快照 countCurrentCensus／scripts/backfill-patient-census.mjs／彈窗 getMonthlyCensusChanges）
+// 都走同一個 loadCensusReplay() 倒放引擎，定義只在這裡改。
 
 import { getTaipeiTodayString } from '../utils/dateUtils.js'
 
-/** 以目前 patients 表計算當下各身分人數 */
-export function countCurrentCensus(db) {
-  const rows = db
-    .prepare(
-      `SELECT status, patient_category, COUNT(*) AS c
-       FROM patients
-       WHERE is_deleted = 0
-       GROUP BY status, patient_category`,
-    )
-    .all()
-  const census = { opdRegular: 0, opd: 0, ipd: 0, er: 0 }
-  for (const r of rows) {
-    const n = Number(r.c) || 0
-    if (r.status === 'opd') {
-      census.opd += n
-      if (!r.patient_category || r.patient_category === 'opd_regular') census.opdRegular += n
-    } else if (r.status === 'ipd') {
-      census.ipd += n
-    } else if (r.status === 'er') {
-      census.er += n
-    }
-  }
-  return census
-}
-
-/** 記錄某日快照（同日覆蓋；cron 覆蓋 backfill、backfill 不覆蓋 cron） */
-export function recordDailyCensus(db, date, census, source = 'cron') {
-  if (source === 'backfill') {
-    const existing = db.prepare('SELECT source FROM patient_census_daily WHERE date = ?').get(date)
-    if (existing && existing.source === 'cron') return false
-  }
-  db.prepare(
-    `INSERT INTO patient_census_daily (date, opd_regular_count, opd_count, ipd_count, er_count, source, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
-     ON CONFLICT(date) DO UPDATE SET
-       opd_regular_count = excluded.opd_regular_count,
-       opd_count = excluded.opd_count,
-       ipd_count = excluded.ipd_count,
-       er_count = excluded.er_count,
-       source = excluded.source,
-       created_at = excluded.created_at`,
-  ).run(date, census.opdRegular, census.opd, census.ipd, census.er, source)
-  return true
-}
-
 const STATUS_LABEL = { opd: '門診', ipd: '住院', er: '急診' }
+const REPLAY_EVENT_TYPES = ['CREATE', 'DELETE', 'TRANSFER', 'STATUS_CHANGE', 'RESTORE', 'RESTORE_AND_TRANSFER']
+
+export const isRegularCategory = (category) => !category || category === 'opd_regular'
 
 /** patient_history.timestamp 多為 ISO(UTC)，轉台北本地 YYYY-MM-DD */
-function toTaipeiDate(ts) {
+export function toTaipeiDate(ts) {
   const d = new Date(ts)
   if (isNaN(d.getTime())) return String(ts || '').slice(0, 10)
   return d.toLocaleString('sv-SE', { timeZone: 'Asia/Taipei' }).slice(0, 10)
 }
 
-/** 純日期字串運算（不涉時區）：某年某月的最後一天 / 前一個月的最後一天 */
-function utcDateStr(y, m0, d) {
-  return new Date(Date.UTC(y, m0, d)).toISOString().slice(0, 10)
-}
-
-const isRegularOpd = (v) => !v.deleted && v.status === 'opd' && (!v.category || v.category === 'opd_regular')
-
 /**
- * 某月常規門診人數「月底對月底」的異動明細（使用者定義，2026-08-28）：
- *   上月底人數 ＋ 新增 － 轉出 ＝ 當月底人數
- * - 新增＝上月底不在常規門診名單、當月底在名單上的人（月中新增又刪除者不算）
- * - 轉出＝上月底在名單、當月底不在的人（附該月最後一次離開的日期與原因：刪除原因／轉住院／轉急診）
- * 名單由目前 patients 表＋patient_history 事件倒放還原（方法同 backfill 腳本，屬估算：
- * patient_category 未留歷史→以現值判斷；歷史起點之前無法還原）。
- * 當月尚未結束＝以今天為「月底」。
- * @param {import('better-sqlite3').Database} db
- * @param {number} year
- * @param {number} month 1–12
+ * 載入倒放引擎：以目前 patients 表為終點，patient_history 由新到舊 undo() 可把 state 退回任一日期。
+ * 呼叫端自行依序 undo 所有 date > 目標日 的事件（events 已是 DESC），再用 isRegularAt / countAt 計算。
  */
-export function getMonthlyCensusChanges(db, year, month) {
-  const today = getTaipeiTodayString()
-  const monthStart = utcDateStr(year, month - 1, 1)
-  const prevEnd = utcDateStr(year, month - 1, 0)
-  const lastDay = utcDateStr(year, month, 0)
-  const asOf = lastDay < today ? lastDay : today
-  const isPartial = asOf !== lastDay
-
-  // 終點狀態（現在）
+export function loadCensusReplay(db) {
   const state = new Map()
   for (const p of db.prepare('SELECT id, name, medical_record_number, status, is_deleted, patient_category FROM patients').all()) {
     state.set(p.id, {
@@ -99,18 +39,34 @@ export function getMonthlyCensusChanges(db, year, month) {
     .prepare(
       `SELECT patient_id, patient_name, event_type, event_details, snapshot, timestamp
        FROM patient_history
-       WHERE event_type IN ('CREATE','DELETE','TRANSFER','STATUS_CHANGE','RESTORE','RESTORE_AND_TRANSFER')
+       WHERE event_type IN (${REPLAY_EVENT_TYPES.map(() => '?').join(',')})
        ORDER BY timestamp DESC`,
     )
-    .all()
+    .all(...REPLAY_EVENT_TYPES)
     .map((e) => {
       let d = {}, s = {}
       try { d = JSON.parse(e.event_details || '{}') } catch {}
       try { s = JSON.parse(e.snapshot || '{}') } catch {}
       return { pid: e.patient_id, pname: e.patient_name, type: e.event_type, d, s, date: toTaipeiDate(e.timestamp) }
     })
+  const earliest = events.length ? events[events.length - 1].date : null
 
-  /** 倒放一個事件：把 state 退回事件發生「之前」（同 backfill 腳本） */
+  // 每位病人「最早曾為門診」的日期（由舊到新掃一次）；歷史裡看不到但目前是門診者＝早於歷史起點
+  const firstOpd = new Map()
+  const mark = (pid, date) => { if (!firstOpd.has(pid) || firstOpd.get(pid) > date) firstOpd.set(pid, date) }
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i]
+    const d = e.d || {}
+    const wasOpd =
+      (e.type === 'CREATE' && (d.status || 'opd') === 'opd') ||
+      d.fromStatus === 'opd' || d.toStatus === 'opd' || d.restoredTo === 'opd' || e.s?.status === 'opd'
+    if (wasOpd) mark(e.pid, e.date)
+  }
+  for (const [id, v] of state) {
+    if (v.status === 'opd' && !v.deleted && !firstOpd.has(id)) firstOpd.set(id, '0000-00-00')
+  }
+
+  /** 倒放一個事件：把 state 退回事件發生「之前」 */
   const undo = (ev) => {
     const cur = state.get(ev.pid) || {
       status: ev.s?.status || 'opd', deleted: true, category: '',
@@ -135,18 +91,99 @@ export function getMonthlyCensusChanges(db, year, month) {
         break
     }
   }
-  const regularSet = () => new Set([...state.entries()].filter(([, v]) => isRegularOpd(v)).map(([id]) => id))
+
+  /** 某病人在 date 當時是否算「常規門診」（state 須已退回到 date） */
+  const isRegularAt = (id, v, date) =>
+    !v.deleted && isRegularCategory(v.category) && (v.status === 'opd' || (firstOpd.get(id) ?? '9999-99-99') <= date)
+
+  /** state 已退回到 date 時的各項人數 */
+  const countAt = (date) => {
+    const c = { opdRegular: 0, opd: 0, ipd: 0, er: 0 }
+    for (const [id, v] of state) {
+      if (v.deleted) continue
+      if (isRegularAt(id, v, date)) c.opdRegular++
+      if (v.status === 'opd') c.opd++
+      else if (v.status === 'ipd') c.ipd++
+      else if (v.status === 'er') c.er++
+    }
+    return c
+  }
+
+  return { state, events, earliest, undo, isRegularAt, countAt }
+}
+
+/** 以目前 patients 表（＋曾為門診判定）計算當下各身分人數 */
+export function countCurrentCensus(db) {
+  return loadCensusReplay(db).countAt(getTaipeiTodayString())
+}
+
+/** 記錄某日快照（同日覆蓋；cron 覆蓋 backfill、backfill 不覆蓋 cron） */
+export function recordDailyCensus(db, date, census, source = 'cron') {
+  if (source === 'backfill') {
+    const existing = db.prepare('SELECT source FROM patient_census_daily WHERE date = ?').get(date)
+    if (existing && existing.source === 'cron') return false
+  }
+  db.prepare(
+    `INSERT INTO patient_census_daily (date, opd_regular_count, opd_count, ipd_count, er_count, source, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+     ON CONFLICT(date) DO UPDATE SET
+       opd_regular_count = excluded.opd_regular_count,
+       opd_count = excluded.opd_count,
+       ipd_count = excluded.ipd_count,
+       er_count = excluded.er_count,
+       source = excluded.source,
+       created_at = excluded.created_at`,
+  ).run(date, census.opdRegular, census.opd, census.ipd, census.er, source)
+  return true
+}
+
+/** 純日期字串運算（不涉時區）：某年某月第 d 天（d=0 為上月最後一天） */
+function utcDateStr(y, m0, d) {
+  return new Date(Date.UTC(y, m0, d)).toISOString().slice(0, 10)
+}
+
+/**
+ * 某月常規門診人數「月底對月底」的異動明細（使用者定義，2026-08-28）：
+ *   上月底人數 ＋ 新增 － 轉出 ＝ 當月底人數
+ * - 新增＝上月底不在常規門診名單、當月底在名單上的人（月中新增又刪除者不算）
+ * - 轉出＝上月底在名單、當月底不在的人（附該月最後一次刪除的日期與原因）；常規病人轉住院/急診不算轉出
+ * - 每筆附「月底當時身分」；若月底以後已刪除，另附刪除日供辨識
+ * 當月尚未結束＝以今天為「月底」。
+ * @param {import('better-sqlite3').Database} db
+ * @param {number} year
+ * @param {number} month 1–12
+ */
+export function getMonthlyCensusChanges(db, year, month) {
+  const today = getTaipeiTodayString()
+  const monthStart = utcDateStr(year, month - 1, 1)
+  const prevEnd = utcDateStr(year, month - 1, 0)
+  const lastDay = utcDateStr(year, month, 0)
+  const asOf = lastDay < today ? lastDay : today
+  const isPartial = asOf !== lastDay
+
+  const { state, events, earliest, undo, isRegularAt } = loadCensusReplay(db)
+  const regularSet = (date) => new Set([...state.entries()].filter(([id, v]) => isRegularAt(id, v, date)).map(([id]) => id))
+  const snapshotInfo = () => new Map([...state.entries()].map(([id, v]) => [id, { ...v }]))
 
   let idx = 0
   while (idx < events.length && events[idx].date > asOf) undo(events[idx++])
-  const endSet = regularSet()
-  const endInfo = new Map([...state.entries()].map(([id, v]) => [id, { ...v }]))
+  const endSet = regularSet(asOf)
+  const endInfo = snapshotInfo()
   while (idx < events.length && events[idx].date > prevEnd) undo(events[idx++])
-  const prevSet = regularSet()
-  const prevInfo = new Map([...state.entries()].map(([id, v]) => [id, { ...v }]))
+  const prevSet = regularSet(prevEnd)
+  const prevInfo = snapshotInfo()
 
-  const earliest = events.length ? events[events.length - 1].date : null
   const monthEvents = events.filter((e) => e.date > prevEnd && e.date <= asOf) // DESC：第一個命中＝該月最後一次
+
+  // 月底以後才刪除者：取月底之後最早一筆 DELETE（events 為 DESC，取最後一個符合者）
+  const laterDeletedAt = (id) => {
+    let found = null
+    for (const e of events) {
+      if (e.date <= asOf) break
+      if (e.pid === id && e.type === 'DELETE') found = e.d.eventDate || e.date
+    }
+    return found
+  }
 
   const base = (id, info) => ({
     patientId: id,
@@ -154,38 +191,36 @@ export function getMonthlyCensusChanges(db, year, month) {
     medicalRecordNumber: info?.mrn || null,
     isDeletedNow: !!info?.isDeletedNow,
     currentStatus: info?.currentStatus || null,
+    monthEndStatus: info?.status || null,
+    monthEndStatusLabel: STATUS_LABEL[info?.status] || info?.status || '',
+    laterDeletedAt: info?.isDeletedNow ? laterDeletedAt(id) : null,
   })
 
   const added = []
   for (const id of endSet) {
     if (prevSet.has(id)) continue
     const info = endInfo.get(id)
-    // 該月最後一次「進入門診」的事件
+    // 該月最後一次「進入名單」的事件（建檔／復原）
     const ev = monthEvents.find((e) => e.pid === id && (
-      e.type === 'CREATE' || e.type === 'RESTORE' || e.type === 'RESTORE_AND_TRANSFER' ||
-      ((e.type === 'TRANSFER' || e.type === 'STATUS_CHANGE') && (e.d.toStatus || e.s?.status) === 'opd')))
-    let howLabel = '—'
+      e.type === 'CREATE' || e.type === 'RESTORE' || e.type === 'RESTORE_AND_TRANSFER'))
+    let howLabel = '改為常規' // 無建檔/復原事件＝分類由非常規改為常規或住院轉門診（分類未留歷史，僅能推定）
     if (ev?.type === 'CREATE') howLabel = '新建檔'
-    else if (ev?.type === 'RESTORE' || ev?.type === 'RESTORE_AND_TRANSFER') howLabel = '復原'
-    else if (ev) howLabel = `${STATUS_LABEL[ev.d.fromStatus] || ev.d.fromStatus || '?'}→門診`
+    else if (ev) howLabel = '復原'
+    else if (monthEvents.some((e) => e.pid === id && e.d?.toStatus === 'opd')) howLabel = '首次轉門診'
     added.push({ ...base(id, info), date: ev?.date || null, howLabel })
   }
 
   const removed = []
   for (const id of prevSet) {
     if (endSet.has(id)) continue
-    const info = endInfo.get(id) || prevInfo.get(id)
-    // 該月最後一次「離開門診」的事件
-    const ev = monthEvents.find((e) => e.pid === id && (
-      e.type === 'DELETE' ||
-      ((e.type === 'TRANSFER' || e.type === 'STATUS_CHANGE') && e.d.fromStatus === 'opd')))
-    let howLabel = '—', reason = ''
-    if (ev?.type === 'DELETE') { howLabel = '刪除'; reason = ev.d.reason || '' }
-    else if (ev) { howLabel = `轉${STATUS_LABEL[ev.d.toStatus] || ev.d.toStatus || '?'}`; reason = ev.d.reason || '' }
-    else if (info && info.category && info.category !== 'opd_regular') { howLabel = '改為非常規' }
+    const info = { ...(prevInfo.get(id) || {}), ...(endInfo.get(id) ? { isDeletedNow: endInfo.get(id).isDeletedNow, currentStatus: endInfo.get(id).currentStatus } : {}) }
+    // 該月最後一次刪除事件
+    const ev = monthEvents.find((e) => e.pid === id && e.type === 'DELETE')
+    let howLabel = '改為非常規', reason = ''
+    if (ev) { howLabel = '刪除'; reason = ev.d.reason || '' }
     removed.push({
       ...base(id, info),
-      date: ev?.type === 'DELETE' ? (ev.d.eventDate || ev.date) : (ev?.date || null),
+      date: ev ? (ev.d.eventDate || ev.date) : null,
       operatedAt: ev?.date || null,
       howLabel,
       reason,
