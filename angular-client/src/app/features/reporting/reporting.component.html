@@ -256,15 +256,22 @@
           <div class="census-modal-state error">{{ censusDetailError() }}</div>
         } @else {
           @if (censusDetail(); as d) {
+          <div class="census-modal-formula">
+            {{ censusFormula() }}
+            @if (d.monthEndSnapshot && d.monthEndSnapshot.opdRegular !== d.monthEnd.count) {
+              <span class="note">（快照 {{ d.monthEndSnapshot.date }} 為 {{ d.monthEndSnapshot.opdRegular }}，差異來自分類變更等未留歷史的異動）</span>
+            }
+            @if (d.prevMonthEnd.beforeHistory) {
+              <span class="note">（上月底早於異動紀錄起點 {{ d.historySince }}，人數不可靠）</span>
+            }
+          </div>
+
           <div class="census-modal-tabs">
             <button type="button" [class.active]="censusDetailTab() === 'added'" (click)="censusDetailTab.set('added')">
               新增 <span class="cnt">{{ d.added.length }}</span>
             </button>
-            <button type="button" [class.active]="censusDetailTab() === 'deleted'" (click)="censusDetailTab.set('deleted')">
-              刪除 <span class="cnt">{{ d.deleted.length }}</span>
-            </button>
-            <button type="button" [class.active]="censusDetailTab() === 'transfer'" (click)="censusDetailTab.set('transfer')">
-              轉入／轉出門診 <span class="cnt">{{ d.transferredIn.length }}／{{ d.transferredOut.length }}</span>
+            <button type="button" [class.active]="censusDetailTab() === 'removed'" (click)="censusDetailTab.set('removed')">
+              轉出 <span class="cnt">{{ d.removed.length }}</span>
             </button>
           </div>
 
@@ -278,12 +285,12 @@
                     <tr><th>日期</th><th>病歷號</th><th>姓名</th><th>方式</th><th>目前狀態</th></tr>
                   </thead>
                   <tbody>
-                    @for (it of d.added; track it.historyId) {
+                    @for (it of d.added; track it.patientId) {
                       <tr>
                         <td>{{ formatMd(it.date) }}</td>
                         <td>{{ it.medicalRecordNumber || '' }}</td>
                         <td>{{ it.name }}</td>
-                        <td>{{ it.kindLabel }}@if ((it.mergedCount || 1) > 1) { <span class="merged" title="當日反覆操作 {{ it.mergedCount }} 筆已合併為一筆">×{{ it.mergedCount }}</span> }</td>
+                        <td>{{ it.howLabel }}</td>
                         <td>
                           @if (it.isDeletedNow) { <span class="chip chip-gray">已刪除</span> }
                           @else if (it.currentStatus === 'ipd') { <span class="chip chip-amber">住院</span> }
@@ -295,57 +302,33 @@
                   </tbody>
                 </table>
               }
-            } @else if (censusDetailTab() === 'deleted') {
-              @if (d.deleted.length === 0) {
-                <div class="census-modal-state">本月無刪除常規門診病人</div>
+            } @else {
+              @if (d.removed.length === 0) {
+                <div class="census-modal-state">本月無轉出常規門診病人</div>
               } @else {
                 <table class="census-detail-table">
                   <thead>
-                    <tr><th>刪除日期</th><th>病歷號</th><th>姓名</th><th>刪除原因</th><th>目前狀態</th></tr>
+                    <tr><th>日期</th><th>病歷號</th><th>姓名</th><th>方式</th><th>原因</th><th>目前狀態</th></tr>
                   </thead>
                   <tbody>
-                    @for (it of d.deleted; track it.historyId) {
+                    @for (it of d.removed; track it.patientId) {
                       <tr>
-                        <td [title]="it.eventDate !== it.date ? '操作日 ' + it.date : ''">
-                          {{ it.eventDate || it.date }}
-                        </td>
+                        <td [title]="it.operatedAt && it.operatedAt !== it.date ? '操作日 ' + it.operatedAt : ''">{{ it.date || '—' }}</td>
                         <td>{{ it.medicalRecordNumber || '' }}</td>
                         <td>{{ it.name }}</td>
-                        <td class="reason">{{ it.reason || '—' }}@if ((it.mergedCount || 1) > 1) { <span class="merged" title="當日反覆操作 {{ it.mergedCount }} 筆已合併為一筆">×{{ it.mergedCount }}</span> }</td>
+                        <td>
+                          @if (it.howLabel === '刪除') { <span class="chip chip-gray">刪除</span> }
+                          @else if (it.howLabel === '轉住院') { <span class="chip chip-amber">轉住院</span> }
+                          @else if (it.howLabel === '轉急診') { <span class="chip chip-red">轉急診</span> }
+                          @else { <span>{{ it.howLabel }}</span> }
+                        </td>
+                        <td class="reason">{{ it.reason || '—' }}</td>
                         <td>
                           @if (it.isDeletedNow) { <span class="chip chip-gray">已刪除</span> }
-                          @else { <span class="chip chip-green">已復原</span> }
+                          @else if (it.currentStatus === 'ipd') { <span class="chip chip-amber">住院</span> }
+                          @else if (it.currentStatus === 'er') { <span class="chip chip-red">急診</span> }
+                          @else { <span class="chip chip-blue">門診</span> }
                         </td>
-                      </tr>
-                    }
-                  </tbody>
-                </table>
-              }
-            } @else {
-              @if (d.transferredIn.length === 0 && d.transferredOut.length === 0) {
-                <div class="census-modal-state">本月無門診與住院/急診間的身分轉換</div>
-              } @else {
-                <table class="census-detail-table">
-                  <thead>
-                    <tr><th>日期</th><th>病歷號</th><th>姓名</th><th>異動</th><th>原因</th></tr>
-                  </thead>
-                  <tbody>
-                    @for (it of d.transferredIn; track it.historyId) {
-                      <tr>
-                        <td>{{ formatMd(it.date) }}</td>
-                        <td>{{ it.medicalRecordNumber || '' }}</td>
-                        <td>{{ it.name }}</td>
-                        <td><span class="chip chip-blue">{{ it.fromStatusLabel }} → 門診</span></td>
-                        <td class="reason">{{ it.reason || '' }}</td>
-                      </tr>
-                    }
-                    @for (it of d.transferredOut; track it.historyId) {
-                      <tr>
-                        <td>{{ formatMd(it.date) }}</td>
-                        <td>{{ it.medicalRecordNumber || '' }}</td>
-                        <td>{{ it.name }}</td>
-                        <td><span class="chip chip-amber">門診 → {{ it.toStatusLabel }}</span></td>
-                        <td class="reason">{{ it.reason || '' }}</td>
                       </tr>
                     }
                   </tbody>
@@ -355,7 +338,7 @@
           </div>
 
           <div class="census-modal-footer">
-            由病人異動紀錄整理（紀錄自 {{ d.historySince || '—' }} 起）；常規門診＝門診且非「非常規」病人，分類以現值判斷。
+            以「上月底名單 vs 當月底名單」比對：月中新增又刪除者不列。由病人異動紀錄倒推（紀錄自 {{ d.historySince || '—' }} 起）；常規門診＝門診且非「非常規」病人，分類以現值判斷。
           </div>
           }
         }

@@ -20,34 +20,32 @@ interface MonthlyCensusCell {
   source: 'cron' | 'backfill' | 'live' | string;
 }
 
-/** 常規門診人數彈窗：某月異動明細一筆（GET /system/patient-census-changes） */
+/** 常規門診人數彈窗：月底對月底的異動一筆（GET /system/patient-census-changes） */
 interface CensusChangeItem {
-  historyId: string;
   patientId: string;
-  name: string;
+  name: string | null;
   medicalRecordNumber: string | null;
-  date: string;
+  /** 新增＝該月最後一次進入門診日；轉出＝刪除事件日（出院日）或轉出日 */
+  date: string | null;
+  operatedAt?: string | null;
   isDeletedNow: boolean;
   currentStatus: string | null;
-  kind: 'create' | 'restore' | 'delete' | 'transfer_in' | 'transfer_out';
-  kindLabel: string;
-  eventDate?: string;
+  /** 新建檔／復原／住院→門診；刪除／轉住院／轉急診／改為非常規 */
+  howLabel: string;
   reason?: string;
-  fromStatusLabel?: string;
-  toStatusLabel?: string;
-  /** 同人同日同類型合併後的原始筆數（>1 表示當日反覆操作已合併為一筆） */
-  mergedCount?: number;
 }
 
 interface CensusChangesResponse {
   year: number;
   month: number;
+  /** 上月底常規門診人數（倒推還原） */
+  prevMonthEnd: { date: string; count: number; beforeHistory: boolean };
+  /** 當月底（未結束＝今天）常規門診人數（倒推還原） */
+  monthEnd: { date: string; count: number; isPartial: boolean };
   monthEndSnapshot: { date: string; opdRegular: number; source: string } | null;
   historySince: string | null;
   added: CensusChangeItem[];
-  deleted: CensusChangeItem[];
-  transferredIn: CensusChangeItem[];
-  transferredOut: CensusChangeItem[];
+  removed: CensusChangeItem[];
 }
 
 Chart.register(...registerables);
@@ -107,12 +105,16 @@ export class ReportingComponent implements AfterViewInit {
   censusDetailError = signal<string>('');
   censusDetail = signal<CensusChangesResponse | null>(null);
   censusDetailMonth = signal<number>(0); // 1–12
-  censusDetailTab = signal<'added' | 'deleted' | 'transfer'>('added');
+  censusDetailTab = signal<'added' | 'removed'>('added');
 
-  censusDetailTitle = computed(() => {
+  censusDetailTitle = computed(() => `${this.selectedYear()} 年 ${this.censusDetailMonth()} 月 常規門診人數異動`);
+
+  /** 上月底 ＋ 新增 － 轉出 ＝ 月底 */
+  censusFormula = computed(() => {
     const d = this.censusDetail();
-    return `${this.selectedYear()} 年 ${this.censusDetailMonth()} 月 常規門診人數異動` +
-      (d?.monthEndSnapshot ? `（${d.monthEndSnapshot.date} 人數 ${d.monthEndSnapshot.opdRegular}${d.monthEndSnapshot.source === 'backfill' ? '≈' : ''}）` : '');
+    if (!d) return '';
+    const end = d.monthEnd.isPartial ? `截至 ${this.formatMd(d.monthEnd.date)}` : `${this.censusDetailMonth()} 月底`;
+    return `上月底 ${d.prevMonthEnd.count} ＋ 新增 ${d.added.length} － 轉出 ${d.removed.length} ＝ ${end} ${d.monthEnd.count}`;
   });
 
   reportTitle = computed(() => {

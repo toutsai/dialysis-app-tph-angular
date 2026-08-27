@@ -527,11 +527,21 @@
   font-weight: 600;
 }
 
-.census-detail-table .merged {
-  margin-left: 0.35rem;
-  font-size: 0.75rem;
-  color: #8a94a6;
-  cursor: help;
+.census-modal-formula {
+  margin: 0.7rem 1.2rem 0;
+  padding: 0.5rem 0.9rem;
+  background: #eef5ff;
+  border-radius: 6px;
+  color: #1c4f82;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.census-modal-formula .note {
+  font-weight: 400;
+  color: #6c757d;
+  font-size: 0.82rem;
+  margin-left: 0.5rem;
 }
 
 .chip-gray { background: #e9ecef; color: #495057; }
