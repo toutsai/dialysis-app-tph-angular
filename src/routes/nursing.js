@@ -284,15 +284,13 @@ router.put('/schedules/:id', ...isAdmin, async (req, res) => {
       existingData = JSON.parse(existingRecord.schedule_data)
     }
 
-    // 合併資料：新資料覆蓋舊資料，但保留舊資料中的必要欄位
+    // 合併資料：以既有文件為底，新資料只覆蓋有帶的欄位（PUT 是部分更新語意）。
+    // ⚠️ 2026-08-27 修正：原本只白名單保留 yearMonth/title/... 五欄，
+    // 「班別編輯」存檔（只帶 scheduleByNurse）會把 weekConfirmed 整個洗掉，
+    // 之後再存某一週就只剩該週「已確認」——前幾週的綠色標記全部消失（實際發生於 2026-08）。
     const mergedData = {
-      // 保留原有的重要欄位（如果存在的話）
+      ...existingData,
       yearMonth: existingData.yearMonth || id,
-      title: existingData.title,
-      maxDaysInMonth: existingData.maxDaysInMonth,
-      processingOrder: existingData.processingOrder,
-      scheduleByWeek: existingData.scheduleByWeek,
-      // 合併新資料（會覆蓋上面的欄位如果新資料有提供的話）
       ...scheduleData,
     }
 
