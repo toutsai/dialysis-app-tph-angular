@@ -375,6 +375,42 @@ export class PatientsComponent implements OnInit, OnDestroy {
     void this.handleSavePatient(p);
   }
 
+  // 門診頁籤：「非常規分類」清單彈窗（status=opd 但 patientCategory='non_regular'，可直接改為常規）
+  readonly nonRegularOpdVisible = signal(false);
+  readonly nonRegularOpdSavingId = signal<string | null>(null);
+  readonly nonRegularOpdPatients = computed(() => {
+    const allPatients = this.patientStore.allPatients() || [];
+    return allPatients
+      .filter((p: any) => p.status === 'opd' && !p.isDeleted && p.patientCategory === 'non_regular')
+      .slice()
+      .sort((a: any, b: any) => String(a.medicalRecordNumber || '').localeCompare(String(b.medicalRecordNumber || '')));
+  });
+
+  openNonRegularOpdList(): void {
+    this.nonRegularOpdVisible.set(true);
+  }
+
+  closeNonRegularOpdList(): void {
+    this.nonRegularOpdVisible.set(false);
+  }
+
+  /** 將門診頁籤中分類為「非常規」的病人改為常規門診 */
+  async markPatientAsRegular(patient: any): Promise<void> {
+    if (this.isPageLocked() || !patient?.id || this.nonRegularOpdSavingId()) return;
+    this.nonRegularOpdSavingId.set(patient.id);
+    try {
+      const updatedAt = new Date().toISOString();
+      await this.patientsApi.save(patient.id, { patientCategory: 'opd_regular', updatedAt });
+      this.patientStore.updatePatientInStore(patient.id, { patientCategory: 'opd_regular', updatedAt } as any);
+      this.notificationService.createNotification(`病人分類改為常規門診：${patient.name}`, 'patient');
+      await this.recalculateStatsLocally();
+    } catch (error: any) {
+      this.showAlert('操作失敗', `更新病人分類失敗: ${error.message}`);
+    } finally {
+      this.nonRegularOpdSavingId.set(null);
+    }
+  }
+
   readonly displayedPatients = computed(() => {
     const allPatients = this.patientStore.allPatients();
     if (!allPatients) return [];

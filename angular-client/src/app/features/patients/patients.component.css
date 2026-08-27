@@ -194,6 +194,78 @@
   flex-wrap: wrap;
   margin-bottom: 15px;
 }
+
+/* 門診頁籤：非常規分類清單按鈕與彈窗 */
+.btn-non-regular {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid #d9a441;
+  background: #fff8e6;
+  color: #8a5a00;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+.btn-non-regular:hover { background: #ffefc2; }
+.btn-non-regular .badge {
+  background: #d9a441;
+  color: #fff;
+  border-radius: 999px;
+  padding: 0 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.nr-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  padding: 1rem;
+}
+.nr-modal {
+  background: #fff;
+  border-radius: 10px;
+  width: min(760px, 100%);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+.nr-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1.2rem;
+  border-bottom: 1px solid #e3e8ee;
+  flex-shrink: 0;
+}
+.nr-header h3 { margin: 0; font-size: 1.05rem; color: #8a5a00; }
+.nr-count { font-size: 0.9rem; font-weight: 400; color: #6c757d; margin-left: 0.4rem; }
+.nr-close { border: none; background: transparent; font-size: 1.2rem; cursor: pointer; color: #6c757d; line-height: 1; }
+.nr-hint { padding: 0.6rem 1.2rem 0; font-size: 0.85rem; color: #6c757d; flex-shrink: 0; }
+.nr-body { overflow: auto; min-height: 0; padding: 0.8rem 1.2rem 1rem; }
+.nr-empty { padding: 1.5rem; text-align: center; color: #6c757d; }
+.nr-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.nr-table th, .nr-table td { padding: 0.45rem 0.6rem; border-bottom: 1px solid #edf1f5; text-align: left; white-space: nowrap; }
+.nr-table th { position: sticky; top: 0; background: #f0f4f8; color: #34495e; font-weight: 600; }
+.nr-action { text-align: right; }
+.btn-mark-regular {
+  padding: 0.3rem 0.8rem;
+  border: 1px solid #1c7c54;
+  background: #e6f4ee;
+  color: #1c7c54;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.btn-mark-regular:hover:not(:disabled) { background: #1c7c54; color: #fff; }
+.btn-mark-regular:disabled { opacity: 0.6; cursor: not-allowed; }
 .controls-left {
   display: flex;
   align-items: center;

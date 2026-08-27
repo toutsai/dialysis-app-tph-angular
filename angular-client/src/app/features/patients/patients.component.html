@@ -84,8 +84,56 @@
             <input *ngIf="activeTab() === 'ipd'" type="text" [ngModel]="ipdListFilter()" (ngModelChange)="ipdListFilter.set($event)" placeholder="篩選列表..." />
             <input *ngIf="activeTab() === 'opd'" type="text" [ngModel]="opdListFilter()" (ngModelChange)="opdListFilter.set($event)" placeholder="篩選列表..." />
           </div>
+          <button *ngIf="activeTab() === 'opd'" type="button" class="btn-non-regular" (click)="openNonRegularOpdList()"
+                  title="門診頁籤中分類為「非固定/非常規」的病人；確認為常規門診病人可直接改分類">
+            非常規分類清單
+            <span class="badge" *ngIf="nonRegularOpdPatients().length > 0">{{ nonRegularOpdPatients().length }}</span>
+          </button>
         </div>
       </div>
+
+      <!-- 門診非常規分類清單彈窗 -->
+      @if (nonRegularOpdVisible()) {
+        <div class="nr-overlay" (click)="closeNonRegularOpdList()">
+          <div class="nr-modal" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+            <div class="nr-header">
+              <h3>門診頁籤・非常規分類病人 <span class="nr-count">{{ nonRegularOpdPatients().length }} 人</span></h3>
+              <button type="button" class="nr-close" (click)="closeNonRegularOpdList()" aria-label="關閉">✕</button>
+            </div>
+            <div class="nr-hint">
+              這些病人目前在門診，但分類為「非固定病人」，不計入常規門診人數、主護照護清單等。若確認是常規門診病人，點「改為常規門診」即刻生效。
+            </div>
+            <div class="nr-body">
+              @if (nonRegularOpdPatients().length === 0) {
+                <div class="nr-empty">目前門診頁籤沒有分類為非常規的病人</div>
+              } @else {
+                <table class="nr-table">
+                  <thead>
+                    <tr><th>病歷號</th><th>姓名</th><th>床位/頻率</th><th>主治醫師</th><th></th></tr>
+                  </thead>
+                  <tbody>
+                    @for (p of nonRegularOpdPatients(); track p.id) {
+                      <tr>
+                        <td>{{ p.medicalRecordNumber }}</td>
+                        <td>{{ p.name }}</td>
+                        <td>{{ p.scheduleRule?.bedNumber || '' }} {{ p.scheduleRule?.freq || '' }}</td>
+                        <td>{{ p.physician || '' }}</td>
+                        <td class="nr-action">
+                          <button type="button" class="btn-mark-regular"
+                                  [disabled]="isPageLocked() || nonRegularOpdSavingId() === p.id"
+                                  (click)="markPatientAsRegular(p)">
+                            {{ nonRegularOpdSavingId() === p.id ? '儲存中…' : '改為常規門診' }}
+                          </button>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
+            </div>
+          </div>
+        </div>
+      }
       <div class="table-wrapper">
         <div class="flex-table-wrapper">
           <div class="flex-table-header">
