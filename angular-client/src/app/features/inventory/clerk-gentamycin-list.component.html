@@ -1,0 +1,46 @@
+<div class="genta-view">
+  <div class="genta-toolbar">
+    <div class="genta-title">
+      <h3>Gentamycin 開立清單</h3>
+      <span class="genta-sub">來源：透析醫囑血管通路為 <b>Perm</b> 或 <b>D/L</b> 者｜Perm {{ permCount() }}・D/L {{ dlCount() }}・未輸入 {{ missingCount() }}・共 {{ rows().length }} 人</span>
+    </div>
+    <div class="genta-actions">
+      <label class="genta-toggle">
+        <input type="checkbox" [ngModel]="opdOnly()" (ngModelChange)="opdOnly.set($event)" /> 只列門診
+      </label>
+      <input type="text" class="genta-search" [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)" placeholder="搜尋姓名/病歷號/床號" />
+      <button type="button" class="btn-print" (click)="print()" [disabled]="filteredRows().length === 0">列印</button>
+    </div>
+  </div>
+
+  @if (filteredRows().length === 0) {
+    <div class="genta-empty">目前沒有符合的病人</div>
+  } @else {
+    <div class="genta-table-wrap">
+      <table class="genta-table">
+        <thead>
+          <tr><th>頻率</th><th>班別</th><th>床號</th><th>病歷號</th><th>姓名</th><th>血管通路</th></tr>
+        </thead>
+        <tbody>
+          @for (r of filteredRows(); track r.patientId) {
+            <tr [class.no-rule]="!r.shiftLabel">
+              <td>{{ r.freq || '—' }}</td>
+              <td>{{ r.shiftLabel || '—' }}</td>
+              <td>{{ r.bedLabel || '—' }}</td>
+              <td class="mrn">{{ r.medicalRecordNumber }}</td>
+              <td>{{ r.name }} @if (r.statusBadge) { <span class="badge">{{ r.statusBadge }}</span> }</td>
+              <td>
+                @if (r.vascAccess) {
+                  <span class="va" [class.va-dl]="r.vascAccess.toLowerCase() !== 'perm'">{{ r.vascAccess }}</span>
+                } @else {
+                  <span class="va va-missing">未輸入</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    <div class="genta-note">「未輸入」＝透析醫囑尚未填血管通路，請確認後補登；「—」＝床位總表無此病人的排程規則（無班別/床號），排在同頻率最後；勾「只列門診」關閉可含住院/急診（含 D/L）。</div>
+  }
+</div>

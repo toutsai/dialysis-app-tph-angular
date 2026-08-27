@@ -1,0 +1,23 @@
+.genta-view { display: flex; flex-direction: column; gap: 0.8rem; }
+.genta-toolbar { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; flex-wrap: wrap; }
+.genta-title h3 { margin: 0 0 0.2rem; font-size: 1.1rem; color: #2c3e50; }
+.genta-sub { font-size: 0.85rem; color: #6c757d; }
+.genta-actions { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.genta-toggle { font-size: 0.9rem; color: #34495e; display: inline-flex; align-items: center; gap: 0.3rem; cursor: pointer; }
+.genta-search { padding: 0.4rem 0.6rem; border: 1px solid #cfd8e3; border-radius: 6px; min-width: 200px; }
+.btn-print { padding: 0.45rem 1rem; border: none; border-radius: 6px; background: #1c4f82; color: #fff; cursor: pointer; }
+.btn-print:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-print:hover:not(:disabled) { background: #163f68; }
+.genta-empty { padding: 2rem; text-align: center; color: #6c757d; }
+.genta-table-wrap { overflow-x: auto; }
+.genta-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; background: #fff; }
+.genta-table th, .genta-table td { padding: 0.5rem 0.7rem; border-bottom: 1px solid #e3e8ee; text-align: left; white-space: nowrap; }
+.genta-table th { background: #f0f4f8; color: #34495e; font-weight: 600; position: sticky; top: 0; }
+.genta-table tbody tr:hover td { background: #f7fafc; }
+.genta-table tr.no-rule td { color: #8a94a6; }
+.genta-table td.mrn { font-family: Consolas, monospace; }
+.badge { display: inline-block; margin-left: 0.3rem; padding: 0 0.45rem; border-radius: 999px; background: #fff3cd; color: #856404; font-size: 0.78rem; }
+.va { display: inline-block; padding: 0.1rem 0.55rem; border-radius: 999px; background: #e3effc; color: #1c4f82; font-weight: 600; font-size: 0.85rem; }
+.va.va-dl { background: #fde2e1; color: #a12622; }
+.va.va-missing { background: #fff3cd; color: #856404; border: 1px dashed #d9a441; }
+.genta-note { font-size: 0.8rem; color: #8a94a6; }

@@ -10,6 +10,7 @@
     <button [class.active]="mainTab() === 'physician'" (click)="mainTab.set('physician')">醫師班表列印</button>
     <button [class.active]="mainTab() === 'register'" (click)="mainTab.set('register')">常規病人掛號</button>
     <button [class.active]="mainTab() === 'injection'" (click)="mainTab.set('injection')">針劑發放名單</button>
+    <button [class.active]="mainTab() === 'gentamycin'" (click)="mainTab.set('gentamycin')">Gentamycin 開立清單</button>
     <button [class.active]="mainTab() === 'inventory'" (click)="mainTab.set('inventory')">庫存管理</button>
   </div>
 
@@ -28,6 +29,12 @@
   @if (mainTab() === 'injection') {
     <div class="clerk-tab-host">
       <app-clerk-injection-print />
+    </div>
+  }
+
+  @if (mainTab() === 'gentamycin') {
+    <div class="clerk-tab-host">
+      <app-clerk-gentamycin-list />
     </div>
   }
 
