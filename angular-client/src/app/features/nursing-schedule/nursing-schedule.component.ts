@@ -1168,6 +1168,7 @@ export class NursingScheduleComponent implements OnInit {
           week3: false,
           week4: false,
           week5: false,
+          week6: false, // 六週的月份（如 2026-08）原本漏掉 week6，整月存檔會把 5 鍵物件寫死進 DB
         };
     }
     // 停留在使用者已選的週（原本強制跳統計頁=0，組長得再點一次週次，使用者要求移除）

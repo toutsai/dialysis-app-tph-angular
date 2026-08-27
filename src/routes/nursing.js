@@ -294,6 +294,17 @@ router.put('/schedules/:id', ...isAdmin, async (req, res) => {
       ...scheduleData,
     }
 
+    // weekConfirmed 逐鍵合併且只增不減：前端兩條分組存檔路徑會整包送出「頁面載入時」的 map，
+    // 若另一位組長在此期間確認了別週（或整月存檔送了 `|| {}` 空物件），整包覆蓋會把它取消。
+    // 目前沒有任何 UI 會「取消確認」，所以 true 一律保留。
+    if (existingData.weekConfirmed || scheduleData.weekConfirmed) {
+      const merged = { ...(existingData.weekConfirmed || {}) }
+      for (const [k, v] of Object.entries(scheduleData.weekConfirmed || {})) {
+        merged[k] = merged[k] === true || v === true
+      }
+      mergedData.weekConfirmed = merged
+    }
+
     // 如果 scheduleByNurse 已存在，需要深度合併而不是完全覆蓋
     if (existingData.scheduleByNurse && scheduleData.scheduleByNurse) {
       const mergedScheduleByNurse = { ...existingData.scheduleByNurse }
