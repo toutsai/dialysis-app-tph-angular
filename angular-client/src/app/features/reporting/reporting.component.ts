@@ -20,6 +20,34 @@ interface MonthlyCensusCell {
   source: 'cron' | 'backfill' | 'live' | string;
 }
 
+/** 常規門診人數彈窗：某月異動明細一筆（GET /system/patient-census-changes） */
+interface CensusChangeItem {
+  historyId: string;
+  patientId: string;
+  name: string;
+  medicalRecordNumber: string | null;
+  date: string;
+  isDeletedNow: boolean;
+  currentStatus: string | null;
+  kind: 'create' | 'restore' | 'delete' | 'transfer_in' | 'transfer_out';
+  kindLabel: string;
+  eventDate?: string;
+  reason?: string;
+  fromStatusLabel?: string;
+  toStatusLabel?: string;
+}
+
+interface CensusChangesResponse {
+  year: number;
+  month: number;
+  monthEndSnapshot: { date: string; opdRegular: number; source: string } | null;
+  historySince: string | null;
+  added: CensusChangeItem[];
+  deleted: CensusChangeItem[];
+  transferredIn: CensusChangeItem[];
+  transferredOut: CensusChangeItem[];
+}
+
 Chart.register(...registerables);
 
 @Component({
@@ -71,6 +99,20 @@ export class ReportingComponent implements AfterViewInit {
   yearlyTableRows = signal<any[]>([]);
   staffingTableRows = signal<any[]>([]);
 
+  // 常規門診人數彈窗（年度報表點月份格子）
+  censusDetailOpen = signal<boolean>(false);
+  censusDetailLoading = signal<boolean>(false);
+  censusDetailError = signal<string>('');
+  censusDetail = signal<CensusChangesResponse | null>(null);
+  censusDetailMonth = signal<number>(0); // 1–12
+  censusDetailTab = signal<'added' | 'deleted' | 'transfer'>('added');
+
+  censusDetailTitle = computed(() => {
+    const d = this.censusDetail();
+    return `${this.selectedYear()} 年 ${this.censusDetailMonth()} 月 常規門診人數異動` +
+      (d?.monthEndSnapshot ? `（${d.monthEndSnapshot.date} 人數 ${d.monthEndSnapshot.opdRegular}${d.monthEndSnapshot.source === 'backfill' ? '≈' : ''}）` : '');
+  });
+
   reportTitle = computed(() => {
     if (!this.hasGenerated()) return '';
     if (this.reportType() === 'daily') return `${this.reportDateRange().start} 人次日報表`;
@@ -103,6 +145,38 @@ export class ReportingComponent implements AfterViewInit {
   selectReportType(type: string): void {
     this.reportType.set(type);
     this.generateReport();
+  }
+
+  /** 年度報表點「常規門診人數」某月格子 → 開啟該月新增/刪除/轉入轉出明細 */
+  async openCensusDetail(monthIndex: number): Promise<void> {
+    const month = monthIndex + 1;
+    const year = this.selectedYear();
+    this.censusDetailMonth.set(month);
+    this.censusDetailTab.set('added');
+    this.censusDetail.set(null);
+    this.censusDetailError.set('');
+    this.censusDetailOpen.set(true);
+    this.censusDetailLoading.set(true);
+    try {
+      const resp: CensusChangesResponse | null = await localApi.get(`/system/patient-census-changes?year=${year}&month=${month}`);
+      if (!resp) throw new Error('查無資料');
+      this.censusDetail.set(resp);
+    } catch (err: any) {
+      console.error('取得常規門診人數異動明細失敗:', err);
+      this.censusDetailError.set(err?.message || '取得異動明細失敗');
+    } finally {
+      this.censusDetailLoading.set(false);
+    }
+  }
+
+  closeCensusDetail(): void {
+    this.censusDetailOpen.set(false);
+  }
+
+  /** 顯示 M/D */
+  formatMd(date: string | null | undefined): string {
+    if (!date || date.length < 10) return date || '';
+    return `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
   }
 
   onDateChange(date: string): void {

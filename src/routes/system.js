@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isAdmin, isEditor, isContributor, logAudit, requireAnyRole } from '../middleware/auth.js'
 import { getTaipeiTodayString } from '../utils/dateUtils.js'
-import { countCurrentCensus, getMonthlyCensus } from '../services/patientCensus.js'
+import { countCurrentCensus, getMonthlyCensus, getMonthlyCensusChanges } from '../services/patientCensus.js'
 
 const router = Router()
 const isInventoryRole = [authenticate, requireAnyRole('admin', 'viewer')]
@@ -2376,6 +2376,29 @@ router.get('/patient-census', authenticate, (req, res) => {
   } catch (error) {
     console.error('取得病人數快照錯誤:', error)
     res.status(500).json({ error: true, message: '取得病人數快照失敗' })
+  }
+})
+
+/**
+ * GET /api/system/patient-census-changes?year=YYYY&month=M
+ * 某月常規門診人數的異動明細（新增/刪除含日期原因/轉入轉出門診），由 patient_history 整理。
+ * 供年度報表點「常規門診人數」格子開啟彈窗。
+ */
+router.get('/patient-census-changes', authenticate, (req, res) => {
+  try {
+    const year = Number(req.query.year)
+    const month = Number(req.query.month)
+    if (!year || year < 2000 || year > 2100) {
+      return res.status(400).json({ error: true, message: 'year 需為 4 位數年份' })
+    }
+    if (!Number.isInteger(month) || month < 1 || month > 12) {
+      return res.status(400).json({ error: true, message: 'month 需為 1–12' })
+    }
+    const db = getDatabase()
+    res.json(getMonthlyCensusChanges(db, year, month))
+  } catch (error) {
+    console.error('取得病人數異動明細錯誤:', error)
+    res.status(500).json({ error: true, message: '取得病人數異動明細失敗' })
   }
 })
 
