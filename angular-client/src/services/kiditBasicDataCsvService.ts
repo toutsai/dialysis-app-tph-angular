@@ -8,6 +8,8 @@ export interface MonthlyBasicDataRow {
   patientId: string;
   name: string;
   medicalRecordNumber: string;
+  /** 主治醫師（patients.physician；清單顯示用，官方格式 CSV 不含此欄） */
+  physician?: string;
   hospitalFirstDialysisDate: string;
   /** 歸月日期：本院初透日，未填時退建檔資料的本院開始治療日期/建檔儲存日 */
   effectiveDate: string;

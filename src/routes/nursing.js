@@ -1590,7 +1590,7 @@ router.get('/kidit-pending-registrations', authenticate, (req, res) => {
 
     // 1. 找出有「本院初透」標記的病人（排除已刪除）
     const patientRows = db
-      .prepare('SELECT id, name, medical_record_number, patient_status, dialysis_orders FROM patients WHERE is_deleted = 0')
+      .prepare('SELECT id, name, medical_record_number, physician, patient_status, dialysis_orders FROM patients WHERE is_deleted = 0')
       .all()
 
     const flagged = []
@@ -1613,6 +1613,7 @@ router.get('/kidit-pending-registrations', authenticate, (req, res) => {
         patientId: p.id,
         name: p.name,
         medicalRecordNumber: p.medical_record_number || '',
+        physician: p.physician || '',
         hospitalFirstDialysisDate: hfd?.active ? hfd.date || '' : null,
         firstDialysisDate: fd?.active ? fd.date || '' : null,
         dialysisMode: mode,
@@ -1733,7 +1734,7 @@ router.get('/kidit-monthly-basic-data', authenticate, (req, res) => {
     const db = getDatabase()
 
     const patientRows = db
-      .prepare('SELECT id, name, medical_record_number, patient_status, is_deleted FROM patients')
+      .prepare('SELECT id, name, medical_record_number, physician, patient_status, is_deleted FROM patients')
       .all()
     // 先收全部標記者（不分月），歸月要等建檔資料補上日期 fallback 後才能判斷
     const flagged = []
@@ -1750,6 +1751,7 @@ router.get('/kidit-monthly-basic-data', authenticate, (req, res) => {
         patientId: p.id,
         name: p.name,
         medicalRecordNumber: p.medical_record_number || '',
+        physician: p.physician || '',
         hospitalFirstDialysisDate: String(hfd.date || ''),
         isDeleted: !!p.is_deleted,
       })

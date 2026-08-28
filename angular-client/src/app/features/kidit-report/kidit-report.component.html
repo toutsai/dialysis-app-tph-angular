@@ -181,6 +181,7 @@
             <tr>
               <th>姓名</th>
               <th>病歷號</th>
+              <th>主治醫師</th>
               <th>標記</th>
               <th>標記日期</th>
               <th>透析模式</th>
@@ -194,6 +195,7 @@
             <tr *ngFor="let r of monthPendingRegRows()" class="pr-row" (click)="openPendingRegTarget(r)">
               <td>{{ r.name || '—' }}</td>
               <td>{{ r.medicalRecordNumber || '—' }}</td>
+              <td>{{ r.physician || '—' }}</td>
               <td>{{ pendingRegFlagLabel(r) }}</td>
               <td>{{ r.hospitalFirstDialysisDate || r.firstDialysisDate || '—' }}</td>
               <td>{{ r.dialysisMode || '—' }}</td>
@@ -277,6 +279,7 @@
             <tr>
               <th>姓名</th>
               <th>病歷號</th>
+              <th>主治醫師</th>
               <th>本院初透日</th>
               <th>建檔者</th>
               <th>建檔日期</th>
@@ -298,6 +301,7 @@
                 <span class="va-deleted-tag" *ngIf="r.isDeleted">已刪除</span>
               </td>
               <td>{{ r.profile?.['medicalRecordNumber'] || r.medicalRecordNumber || '—' }}</td>
+              <td>{{ r.physician || '—' }}</td>
               <td>
                 {{ r.hospitalFirstDialysisDate || r.effectiveDate || '—' }}
                 <span class="bd-date-missing" *ngIf="r.dateMissing" title="病人清單的本院初透標記未填日期，以建檔日期歸月">未填日期</span>
