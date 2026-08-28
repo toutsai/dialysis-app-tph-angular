@@ -18,6 +18,12 @@
           <label><span class="fnum">04</span>身分證號</label>
           <input type="text" class="w-md" [(ngModel)]="formData.idNumber" placeholder="10碼" />
         </div>
+        <!-- 站內欄：KiDit 網站基本資料頁需輸入主治醫師，此欄唯讀帶病人清單主治醫師供抄錄，不匯出 CSV（匯入格式無此欄） -->
+        <div class="kd-field">
+          <label>主治醫師</label>
+          <input type="text" class="w-sm" [ngModel]="masterPatient?.physician || ''" disabled
+                 title="來源＝病人清單主治醫師（站內參考欄，不匯出）" />
+        </div>
       </div>
 
       <div class="kd-row">
