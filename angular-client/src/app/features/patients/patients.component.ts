@@ -33,6 +33,7 @@ import {
 import { doNotMoveRangeText } from '@/utils/doNotMove';
 import { escapeHtml } from '@/utils/sanitize';
 import { displayDiseaseTag } from '@/utils/hepatitis';
+import { KeepInViewportDirective } from '@app/core/directives/keep-in-viewport.directive';
 import { createDialysisOrderAndUpdatePatient } from '@/services/optimizedApiService';
 import { syncDialysisOrigin } from '@app/core/models/patient.model';
 import { kiditService } from '@/services/kiditService';
@@ -70,6 +71,7 @@ interface PatientStats {
   imports: [
     CommonModule,
     FormsModule,
+    KeepInViewportDirective,
     PatientFormModalComponent,
     SelectionDialogComponent,
     AlertDialogComponent,

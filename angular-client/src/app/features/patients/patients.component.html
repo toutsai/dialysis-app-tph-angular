@@ -25,7 +25,7 @@
                   {{ kind.label }} <span class="count">{{ patientStats().disease[kind.tag] || 0 }}</span>
                 </button>
                 @if (activePopover() === 'hep-' + kind.tag) {
-                  <div class="stats-popover hepatitis-list-popover">
+                  <div class="stats-popover hepatitis-list-popover" appKeepInViewport>
                     @for (group of hepatitisListByStatus(kind.tag); track group.status) {
                       <div class="popover-section-title">{{ group.label }} <span class="popover-count">{{ group.patients.length }}</span></div>
                       @if (group.patients.length === 0) {
@@ -46,7 +46,7 @@
           </div>
           <div class="stats-popover-wrapper">
             <button class="stat-popover-trigger" (click)="togglePopover('opdChanges'); $event.stopPropagation()">門診變動</button>
-            <div *ngIf="activePopover() === 'opdChanges'" class="stats-popover opd-changes-popover">
+            <div *ngIf="activePopover() === 'opdChanges'" class="stats-popover opd-changes-popover" appKeepInViewport>
               <div class="popover-section-title">上個月</div>
               <div class="popover-item"><span>新增</span><span>{{ patientStats().opdChanges.lastMonth.new }}</span></div>
               <div class="popover-item"><span>轉出</span><span>{{ patientStats().opdChanges.lastMonth.transferOut }}</span></div>
@@ -571,7 +571,7 @@
   <!-- 狀態快速編輯浮動面板 -->
   @if (statusEditVisible() && statusEditPatient()) {
     <div class="status-edit-backdrop" (click)="closeStatusEdit()"></div>
-    <div class="status-edit-panel" [style.left.px]="statusEditPos().x" [style.top.px]="statusEditPos().y" (click)="$event.stopPropagation()">
+    <div class="status-edit-panel" [style.left.px]="statusEditPos().x" [style.top.px]="statusEditPos().y" (click)="$event.stopPropagation()" appKeepInViewport>
       <div class="status-edit-header">
         <span class="status-edit-title">{{ statusEditPatient().name }} · 狀態</span>
         <button class="status-edit-close" (click)="closeStatusEdit()" title="關閉"><i class="fas fa-times"></i></button>
