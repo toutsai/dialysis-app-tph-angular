@@ -102,11 +102,11 @@ export function deriveHepatitisFromTags(diseases: unknown): HepatitisStatus {
 
 /** 既有四態缺項（舊格式）時由標籤補齊，其餘原樣（含 C 肝治癒：舊資料無鍵才由標籤補） */
 export function upgradeHepatitisStatus(status: unknown, diseases: unknown): HepatitisStatus {
-  const raw = (status && typeof status === 'object' ? status : {}) as Record<string, unknown>;
-  const s = normalizeHepatitisStatus(raw);
+  const s = normalizeHepatitisStatus(status);
   const derived = deriveHepatitisFromTags(diseases);
   for (const key of INFECTION_KEYS) if (!s[key]) s[key] = derived[key];
-  if (raw['antihcvCured'] === undefined && derived.antihcvCured) s.antihcvCured = 'Y';
+  // 無治癒旗標但有 C肝治癒 標籤 → 補 Y（標籤由狀態衍生，取消治癒時標籤一併移除，不衝突；與後端一致）
+  if (!s.antihcvCured && derived.antihcvCured) s.antihcvCured = 'Y';
   return s;
 }
 

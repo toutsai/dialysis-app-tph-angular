@@ -86,12 +86,12 @@ export function deriveHepatitisFromTags(diseases) {
 
 /** 既有四態缺項（舊格式）時由標籤補齊，其餘原樣；回傳完整四項（含 C 肝治癒） */
 export function upgradeHepatitisStatus(status, diseases) {
-  const raw = status && typeof status === 'object' ? status : {}
-  const s = normalizeHepatitisStatus(raw)
+  const s = normalizeHepatitisStatus(status)
   const derived = deriveHepatitisFromTags(diseases)
   for (const key of INFECTION_KEYS) if (!s[key]) s[key] = derived[key]
-  // 舊資料沒有 antihcvCured 鍵 → 由 C肝治癒 標籤補（有鍵就尊重，包含刻意取消治癒）
-  if (raw.antihcvCured === undefined && derived.antihcvCured) s.antihcvCured = 'Y'
+  // 舊資料無治癒旗標但有 C肝治癒 標籤 → 補 Y（標籤由狀態衍生，取消治癒時標籤會一併移除，不會衝突；
+  // 注意 parseHepatitisStatus 已正規化、鍵永遠存在，不能用「無鍵」判定）
+  if (!s.antihcvCured && derived.antihcvCured) s.antihcvCured = 'Y'
   return s
 }
 
