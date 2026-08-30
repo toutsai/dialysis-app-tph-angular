@@ -1,10 +1,31 @@
-// B/C 肝狀態（病人清單四態，與 KiDit 病史表單 33/34 同碼）
-// hbsag / antihcv：Y 陽性、N 陰性、O 未做、F 已作待追蹤（＋追蹤日期站內欄）
-// 病人清單為權威；diseases 標籤（HBV/HCV/BC肝?）由四態衍生，供排程備註/分組/統計等既有消費端沿用
+// 血液傳染病四項四態（病人清單）：HBsAg / Anti-HCV / HIV / RPR（梅毒）
+// 每項值：Y 陽性、N 陰性、O 未做、F 已作待追蹤；每項另有「檢驗日期」（Y/N/F 皆應填，O 不填）
+// B/C 肝兩項與 KiDit 病史表單 33/34 同碼（HIV/RPR 不進 KiDit）。
+// 病人清單為權威；diseases 標籤由四態衍生（Y→HBV/HCV/HIV/RPR；F→「HBV待追蹤」等；N/O 不出標籤），
+// 供排程備註縮寫（B/C/H/R，待追蹤 B?/C?/H?/R?）、分組、統計等既有消費端沿用。
 //
-// 既有資料回填規則（2026-08-27 使用者裁定）：沒勾 HBV/HCV ＝ 陰性 N；勾 BC肝? ＝ 已作待追蹤 F；勾 HBV/HCV/C肝治癒 ＝ 陽性 Y
+// 沿革：2026-08-27 B/C 肝四態上線（沒勾＝N、BC肝?＝F、HBV/HCV/C肝治癒＝Y）；
+// 2026-08-30 擴為四項＋檢驗日期（舊 *FollowDate → *Date；HIV/RPR 舊標籤有＝Y、無＝N），BC肝? 標籤停用。
+// 前端對應 angular-client/src/utils/hepatitis.ts（規則須一致）
 
 export const HEPATITIS_VALUES = ['Y', 'N', 'O', 'F']
+export const INFECTION_KEYS = ['hbsag', 'antihcv', 'hiv', 'rpr']
+export const INFECTION_META = {
+  hbsag: { tag: 'HBV', abbr: 'B', label: 'HBsAg（B 肝）' },
+  antihcv: { tag: 'HCV', abbr: 'C', label: 'Anti-HCV（C 肝）' },
+  hiv: { tag: 'HIV', abbr: 'H', label: 'HIV' },
+  rpr: { tag: 'RPR', abbr: 'R', label: 'RPR（梅毒）' },
+}
+export const PENDING_SUFFIX = '待追蹤'
+export const dateKeyOf = (key) => `${key}Date`
+export const pendingTagOf = (key) => `${INFECTION_META[key].tag}${PENDING_SUFFIX}`
+
+/** 由四態管理的標籤（寫入時先剝掉再依四態重建） */
+const MANAGED_TAGS = new Set([
+  ...INFECTION_KEYS.map((k) => INFECTION_META[k].tag),
+  ...INFECTION_KEYS.map(pendingTagOf),
+  'BC肝?',
+])
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
@@ -17,37 +38,68 @@ function normDate(v) {
   return typeof v === 'string' && DATE_RE.test(v.trim()) ? v.trim() : ''
 }
 
-/** 正規化前端送來的 hepatitisStatus；非法值視為空字串（未填） */
+/** 正規化前端送來的 hepatitisStatus；非法值視為空字串（未填）；O 不保留日期；相容舊 *FollowDate 鍵 */
 export function normalizeHepatitisStatus(input) {
   const src = input && typeof input === 'object' ? input : {}
-  const hbsag = normValue(src.hbsag)
-  const antihcv = normValue(src.antihcv)
-  return {
-    hbsag,
-    antihcv,
-    hbsagFollowDate: hbsag === 'F' ? normDate(src.hbsagFollowDate) : '',
-    antihcvFollowDate: antihcv === 'F' ? normDate(src.antihcvFollowDate) : ''
+  const out = {}
+  for (const key of INFECTION_KEYS) {
+    const value = normValue(src[key])
+    out[key] = value
+    out[dateKeyOf(key)] =
+      value && value !== 'O' ? normDate(src[dateKeyOf(key)]) || normDate(src[`${key}FollowDate`]) : ''
   }
+  return out
 }
 
-/** 由舊 diseases 標籤推導四態（回填與舊寫入路徑用） */
+/** 由 diseases 標籤推導四態（回填與舊寫入路徑用）；日期一律空 */
 export function deriveHepatitisFromTags(diseases) {
   const tags = Array.isArray(diseases) ? diseases.map(String) : []
-  const pending = tags.includes('BC肝?')
-  const hbsag = tags.includes('HBV') ? 'Y' : pending ? 'F' : 'N'
-  const antihcv = tags.includes('HCV') || tags.includes('C肝治癒') ? 'Y' : pending ? 'F' : 'N'
-  return { hbsag, antihcv, hbsagFollowDate: '', antihcvFollowDate: '' }
+  const legacyPending = tags.includes('BC肝?')
+  const pick = (key, extraPositive = []) => {
+    const meta = INFECTION_META[key]
+    if (tags.includes(meta.tag) || extraPositive.some((t) => tags.includes(t))) return 'Y'
+    if (tags.includes(pendingTagOf(key))) return 'F'
+    if (legacyPending && (key === 'hbsag' || key === 'antihcv')) return 'F'
+    return 'N'
+  }
+  const out = {}
+  for (const key of INFECTION_KEYS) {
+    out[key] = pick(key, key === 'antihcv' ? ['C肝治癒'] : [])
+    out[dateKeyOf(key)] = ''
+  }
+  return out
 }
 
-/** 依四態同步 diseases 標籤：Y→HBV/HCV；任一為 O 或 F→BC肝?；其他標籤（HIV/RPR/C肝治癒/COVID/隔離）原樣保留 */
+/** 既有四態缺項（舊兩項格式）時由標籤補齊，其餘原樣；回傳完整四項 */
+export function upgradeHepatitisStatus(status, diseases) {
+  const s = normalizeHepatitisStatus(status)
+  const derived = deriveHepatitisFromTags(diseases)
+  for (const key of INFECTION_KEYS) if (!s[key]) s[key] = derived[key]
+  return s
+}
+
+/** 依四態同步 diseases 標籤：Y→HBV/HCV/HIV/RPR；F→「X待追蹤」；N/O 無標籤；其他標籤（C肝治癒/COVID/隔離）原樣保留 */
 export function syncTagsFromHepatitis(diseases, status) {
   const s = normalizeHepatitisStatus(status)
-  const base = (Array.isArray(diseases) ? diseases.map(String) : [])
-    .filter((t) => !['HBV', 'HCV', 'BC肝?'].includes(t))
-  if (s.hbsag === 'Y') base.push('HBV')
-  if (s.antihcv === 'Y') base.push('HCV')
-  if (['O', 'F'].includes(s.hbsag) || ['O', 'F'].includes(s.antihcv)) base.push('BC肝?')
+  const base = (Array.isArray(diseases) ? diseases.map(String) : []).filter((t) => !MANAGED_TAGS.has(t))
+  for (const key of INFECTION_KEYS) {
+    if (s[key] === 'Y') base.push(INFECTION_META[key].tag)
+    else if (s[key] === 'F') base.push(pendingTagOf(key))
+  }
   return base
+}
+
+/** 排程備註縮寫：標籤 → B/C/H/R、待追蹤 → B?/C?/H?/R?（舊 BC肝? → BC?） */
+export function infectionAbbrFromTags(diseases) {
+  const tags = Array.isArray(diseases) ? diseases.map(String) : []
+  const out = []
+  for (const key of INFECTION_KEYS) {
+    const meta = INFECTION_META[key]
+    if (tags.includes(meta.tag)) out.push(meta.abbr)
+    else if (tags.includes(pendingTagOf(key))) out.push(`${meta.abbr}?`)
+  }
+  if (tags.includes('BC肝?')) out.push('BC?')
+  return out
 }
 
 export function parseHepatitisStatus(raw) {

@@ -93,9 +93,9 @@ export class KiditHistoryFormComponent implements OnChanges {
         // 33/34：病人清單 B/C 肝四態（組長建檔確認、同碼）為權威帶入；舊 kiditProfile 病史值次之
         hbsag: this.listHepatitis?.hbsag || h.hbsag || 'O',
         antihcv: this.listHepatitis?.antihcv || h.antihcv || 'O',
-        // 站內欄：33/34 選「已作待追蹤(F)」時的追蹤日期（不匯出）
-        hbsagFollowDate: this.listHepatitis?.hbsagFollowDate || h.hbsagFollowDate || '',
-        antihcvFollowDate: this.listHepatitis?.antihcvFollowDate || h.antihcvFollowDate || '',
+        // 站內欄：33/34 選「已作待追蹤(F)」時的追蹤日期（不匯出）；病人清單自 2026-08-30 改存 *Date（檢驗日期）
+        hbsagFollowDate: this.listHepatitis?.hbsagDate || h.hbsagFollowDate || '',
+        antihcvFollowDate: this.listHepatitis?.antihcvDate || h.antihcvFollowDate || '',
         indicationType: h.indicationType || '1',
         selectedSymptoms: h.selectedSymptoms || [],
         symptomsOtherDescription: h.symptomsOtherDescription || '',
@@ -128,7 +128,7 @@ export class KiditHistoryFormComponent implements OnChanges {
   }
 
   /** 病人清單的 B/C 肝四態（GET /patients/:id 的 hepatitisStatus；未回填的舊列後端已由標籤推導） */
-  get listHepatitis(): { hbsag?: string; antihcv?: string; hbsagFollowDate?: string; antihcvFollowDate?: string } | null {
+  get listHepatitis(): { hbsag?: string; antihcv?: string; hbsagDate?: string; antihcvDate?: string } | null {
     const s = this.masterPatient?.hepatitisStatus;
     return s && (s.hbsag || s.antihcv) ? s : null;
   }
@@ -147,7 +147,8 @@ export class KiditHistoryFormComponent implements OnChanges {
     if (!s?.[key]) return;
     this.formData[key] = s[key];
     const dateKey = key === 'hbsag' ? 'hbsagFollowDate' : 'antihcvFollowDate';
-    this.formData[dateKey] = s[key] === 'F' ? s[dateKey] || '' : '';
+    const listDate = key === 'hbsag' ? s.hbsagDate : s.antihcvDate;
+    this.formData[dateKey] = s[key] === 'F' ? listDate || '' : '';
   }
 
   onTransferFromOtherChange(val: string): void {

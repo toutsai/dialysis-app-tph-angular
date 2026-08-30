@@ -405,6 +405,11 @@
   border: 1px solid var(--danger-color);
   border-radius: 4px;
 }
+:host ::ng-deep .disease-tag.pending {
+  color: #b35c00;
+  border-color: #e8a33d;
+  background: #fff7e6;
+}
 .status-icon-container {
   display: flex;
   gap: 8px;

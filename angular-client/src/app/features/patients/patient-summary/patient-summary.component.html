@@ -113,6 +113,7 @@
                 class="infect-tag"
                 [class.hbv]="t === 'HBV'"
                 [class.hcv]="t === 'HCV'"
+                [class.pending]="isPendingInfectionTag(t)"
                 >{{ t }}</span
               >
             </ng-container>

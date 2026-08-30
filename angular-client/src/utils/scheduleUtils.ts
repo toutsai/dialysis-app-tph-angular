@@ -1,4 +1,5 @@
 // 檔案: src/utils/scheduleUtils.ts (增強最終版)
+import { infectionAbbrFromTags } from '@/utils/hepatitis';
 
 /** 排程文件 */
 export interface ScheduleDocument {
@@ -136,13 +137,10 @@ export function generateAutoNote(patient: SchedulePatient | null | undefined): s
 
   // 疾病相關標籤
   if (patient.diseases && Array.isArray(patient.diseases)) {
-    if (patient.diseases.includes('HBV')) autoNotes.add('B')
-    if (patient.diseases.includes('HCV')) autoNotes.add('C')
-    if (patient.diseases.includes('HIV')) autoNotes.add('H')
-    if (patient.diseases.includes('RPR')) autoNotes.add('R')
+    // 傳染病縮寫 B/C/H/R、待追蹤 B?/C?/H?/R?（規則在 utils/hepatitis.ts，與後端 scheduleSync 同源）
+    for (const abbr of infectionAbbrFromTags(patient.diseases)) autoNotes.add(abbr)
     if (patient.diseases.includes('隔離')) autoNotes.add('隔')
     if (patient.diseases.includes('COVID')) autoNotes.add('冠')
-    if (patient.diseases.includes('BC肝?')) autoNotes.add('BC?')
     if (patient.diseases.includes('C肝治癒')) autoNotes.add('C癒')
   }
 

@@ -65,7 +65,8 @@ export class PatientSummaryComponent implements OnInit {
   }
 
   // 須注意/感染類標記(對應病人表單 DISEASES 清單)
-  private readonly INFECTION_TAGS = ['HBV', 'HCV', 'HIV', 'RPR', 'BC肝?', 'C肝治癒', 'COVID', '隔離'];
+  private readonly INFECTION_TAGS = ['HBV', 'HCV', 'HIV', 'RPR', 'HBV待追蹤', 'HCV待追蹤', 'HIV待追蹤', 'RPR待追蹤', 'BC肝?', 'C肝治癒', 'COVID', '隔離'];
+  readonly isPendingInfectionTag = (t: string): boolean => t.endsWith('待追蹤') || t === 'BC肝?';
   readonly shiftLabel: Record<string, string> = { early: '早', noon: '午', late: '晚' };
 
   // --- Picker ---

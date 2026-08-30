@@ -3,6 +3,7 @@ import Database from 'better-sqlite3'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { existsSync } from 'fs'
+import { parseHepatitisStatus, upgradeHepatitisStatus, syncTagsFromHepatitis } from '../utils/hepatitis.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -120,6 +121,27 @@ export function runMigrations() {
         })
         tx(hepRows)
         console.log(`📋 回填 ${hepRows.length} 位病人的 B/C 肝四態（hepatitis_status）`)
+        migrationsApplied++
+      }
+
+      // 血液傳染病四項（2026-08-30）：hepatitis_status 由 B/C 兩項擴為 hbsag/antihcv/hiv/rpr ＋ 各自檢驗日期 *Date
+      // （舊 *FollowDate 改名；HIV/RPR 舊標籤有＝Y、無＝N；日期只有原 F 有，Y/N 待組長補填）。
+      // diseases 標籤同步重算：BC肝? 停用，改為「HBV待追蹤」等；含已刪除病人。以 JSON 內含 "hiv" 鍵判定已升級。
+      const infRows = db
+        .prepare(`SELECT id, diseases, hepatitis_status FROM patients WHERE hepatitis_status IS NULL OR hepatitis_status NOT LIKE '%"hiv"%'`)
+        .all()
+      if (infRows.length > 0) {
+        const upd = db.prepare('UPDATE patients SET hepatitis_status = ?, diseases = ? WHERE id = ?')
+        const tx = db.transaction((rows) => {
+          for (const r of rows) {
+            let tags = []
+            try { tags = JSON.parse(r.diseases || '[]') } catch { tags = [] }
+            const status = upgradeHepatitisStatus(parseHepatitisStatus(r.hepatitis_status), tags)
+            upd.run(JSON.stringify(status), JSON.stringify(syncTagsFromHepatitis(tags, status)), r.id)
+          }
+        })
+        tx(infRows)
+        console.log(`📋 升級 ${infRows.length} 位病人的血液傳染病四項（hepatitis_status：+hiv/rpr、*FollowDate→*Date；標籤重算）`)
         migrationsApplied++
       }
 

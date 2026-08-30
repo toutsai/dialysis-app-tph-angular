@@ -69,8 +69,8 @@ CREATE TABLE IF NOT EXISTS patients (
 
     -- 病人分類與狀態
     patient_category TEXT DEFAULT 'opd_regular',  -- opd_regular/non_regular
-    diseases TEXT DEFAULT '[]',       -- JSON array: 須注意疾病列表（HBV/HCV/BC肝? 由 hepatitis_status 衍生）
-    hepatitis_status TEXT,            -- JSON: {hbsag,antihcv: Y/N/O/F, hbsagFollowDate, antihcvFollowDate}（與 KiDit 33/34 同碼，病人清單為權威）
+    diseases TEXT DEFAULT '[]',       -- JSON array: 須注意疾病列表（HBV/HCV/HIV/RPR/「X待追蹤」由 hepatitis_status 衍生）
+    hepatitis_status TEXT,            -- JSON: {hbsag,antihcv,hiv,rpr: Y/N/O/F, hbsagDate,antihcvDate,hivDate,rprDate}（B/C 與 KiDit 33/34 同碼，病人清單為權威）
 
     -- 病人基本資料（單一權威，2026-08-27；KiDit 建檔表單與病人清單「基本資料」共用；Y/N 類存 KiDit 碼字串）
     mobile TEXT,

@@ -6,11 +6,16 @@ import { UserDirectoryService } from '@app/core/services/user-directory.service'
 import { addDaysToDateString, getTaipeiWeekdayIndex, getToday } from '@/utils/dateUtils';
 import {
   HEPATITIS_OPTIONS,
-  deriveHepatitisFromTags,
+  INFECTION_KEYS,
+  INFECTION_META,
+  dateKeyOf,
   normalizeHepatitisStatus,
   syncTagsFromHepatitis,
+  upgradeHepatitisStatus,
   type HepatitisStatus,
   type HepatitisValue,
+  type InfectionDateKey,
+  type InfectionKey,
 } from '@/utils/hepatitis';
 
 @Component({
@@ -84,13 +89,13 @@ export class PatientFormModalComponent implements OnInit {
     '每周六': [5],
   };
   readonly VASC_ACCESSES = ['Double lumen', 'PERM', '左臂AVF', '右臂AVF', '左臂AVG', '右臂AVG'];
-  // HBV/HCV/BC肝? 已改由下方 B/C 肝四態衍生（2026-08-27），此清單只剩其他標籤；C肝治癒獨立保留（治癒後 Anti-HCV 仍陽性）
-  readonly DISEASES = ['HIV', 'RPR', 'C肝治癒', 'COVID', '隔離'];
+  // HBV/HCV/HIV/RPR（與待追蹤）標籤皆由「血液傳染病」四項四態衍生（2026-08-30），此清單只剩其他標籤；
+  // C肝治癒獨立保留（治癒後 Anti-HCV 仍陽性）
+  readonly DISEASES = ['C肝治癒', 'COVID', '隔離'];
   readonly HEPATITIS_OPTIONS = HEPATITIS_OPTIONS;
-  readonly HEPATITIS_FIELDS: { key: 'hbsag' | 'antihcv'; dateKey: 'hbsagFollowDate' | 'antihcvFollowDate'; label: string }[] = [
-    { key: 'hbsag', dateKey: 'hbsagFollowDate', label: 'HBsAg（B 肝）' },
-    { key: 'antihcv', dateKey: 'antihcvFollowDate', label: 'Anti-HCV（C 肝）' },
-  ];
+  readonly INFECTION_FIELDS: { key: InfectionKey; dateKey: InfectionDateKey; label: string }[] = INFECTION_KEYS.map(
+    (key) => ({ key, dateKey: dateKeyOf(key), label: INFECTION_META[key].label }),
+  );
 
   constructor() {
     this.baseSchedulesApi = this.apiManager.create<FirestoreRecord>('base_schedules');
@@ -115,12 +120,10 @@ export class PatientFormModalComponent implements OnInit {
     }
     if (!data.patientCategory) data.patientCategory = 'opd_regular';
     data.diseases = data.diseases || [];
-    // B/C 肝四態：舊資料沒有時由標籤推導（沒勾＝陰性、BC肝?＝待追蹤）；新病人預設空白（未填）強迫組長確認
-    data.hepatitisStatus = data.hepatitisStatus
-      ? normalizeHepatitisStatus(data.hepatitisStatus)
-      : data.id
-        ? deriveHepatitisFromTags(data.diseases)
-        : { hbsag: '', antihcv: '', hbsagFollowDate: '', antihcvFollowDate: '' };
+    // 血液傳染病四項四態：既有病人缺項（舊兩項格式）由標籤補齊；新病人預設空白（未填）強迫組長確認
+    data.hepatitisStatus = data.id
+      ? upgradeHepatitisStatus(data.hepatitisStatus, data.diseases)
+      : normalizeHepatitisStatus(data.hepatitisStatus || {});
     data.patientStatus = data.patientStatus || {
       isFirstDialysis: { active: false, date: null },
       isPaused: { active: false, date: null },
@@ -178,12 +181,17 @@ export class PatientFormModalComponent implements OnInit {
     return this.form.hepatitisStatus;
   }
 
-  setHepatitis(key: 'hbsag' | 'antihcv', value: HepatitisValue): void {
+  setHepatitis(key: InfectionKey, value: HepatitisValue): void {
     const status = this.hepatitis;
     status[key] = status[key] === value ? '' : value;
-    if (status[key] !== 'F') {
-      status[key === 'hbsag' ? 'hbsagFollowDate' : 'antihcvFollowDate'] = '';
-    }
+    // 未做（O）或清空 → 檢驗日期無意義，一併清掉；Y/N/F 保留（切換陰/陽不必重填日期）
+    if (!status[key] || status[key] === 'O') status[dateKeyOf(key)] = '';
+  }
+
+  /** 檢驗日期缺漏（Y/N/F 皆應填）：高亮該列，存檔時擋下 */
+  isInfectionDateMissing(key: InfectionKey): boolean {
+    const v = this.hepatitis?.[key];
+    return !!v && v !== 'O' && !this.hepatitis[dateKeyOf(key)];
   }
 
   toggleStatus(key: string): void {
@@ -531,13 +539,19 @@ export class PatientFormModalComponent implements OnInit {
         return;
       }
     }
-    // B/C 肝四態必填（組長建檔即確認；KiDit 病史 33/34 由此帶入）
-    if (!this.hepatitis?.hbsag || !this.hepatitis?.antihcv) {
-      alert('請確認 B/C 肝狀態（HBsAg 與 Anti-HCV 各選一項）！');
+    // 血液傳染病四項必填（組長建檔即確認；B/C 由此帶入 KiDit 病史 33/34），Y/N/F 另須檢驗日期
+    const missingValue = INFECTION_KEYS.filter((k) => !this.hepatitis?.[k]).map((k) => INFECTION_META[k].label);
+    if (missingValue.length > 0) {
+      alert(`請確認血液傳染病狀態：${missingValue.join('、')} 尚未選擇！`);
+      return;
+    }
+    const missingDate = INFECTION_KEYS.filter((k) => this.isInfectionDateMissing(k)).map((k) => INFECTION_META[k].label);
+    if (missingDate.length > 0) {
+      alert(`請填寫檢驗日期：${missingDate.join('、')}（陽性／陰性／待追蹤皆須填）！`);
       return;
     }
     this.form.hepatitisStatus = normalizeHepatitisStatus(this.hepatitis);
-    // 標籤由四態衍生：排程備註 B/C/BC?、護理分組肝炎優先、清單統計沿用 diseases 標籤
+    // 標籤由四態衍生：排程備註 B/C/H/R（待追蹤 B?/C?/H?/R?）、護理分組肝炎優先、清單統計沿用 diseases 標籤
     this.form.diseases = syncTagsFromHepatitis(this.form.diseases, this.form.hepatitisStatus);
     this.save.emit(this.form);
   }

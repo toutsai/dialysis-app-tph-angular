@@ -82,7 +82,7 @@ const CLINICAL_BED_LAYOUT: number[] = [
 const CLINICAL_PERIPHERAL_COUNT = 6;
 
 // 列印簡表僅保留的 B/C 肝相關標籤（來源同格內 note 的標籤集，與排程格線 generateAutoNotes 同一套代碼）
-const HEPATITIS_PRINT_TAGS = new Set(['B', 'C', 'BC?', 'C癒']);
+const HEPATITIS_PRINT_TAGS = new Set(['B', 'C', 'B?', 'C?', 'BC?', 'C癒']);
 
 /** 臨床查閱簡表的一格（無病人時為 null） */
 interface ClinicalCell {

@@ -11,7 +11,7 @@ import { rebuildSingleDaySchedule, isTodayScheduleFrozen } from '../services/sch
 import { removeAutoMovementFromDailyLog } from '../services/dailyLogMovementSync.js'
 import { snapshotNurseAssignmentForDate } from '../services/nurseAssignmentRevisions.js'
 import { normalizeDialysisMode, normalizeDialysisOrdersMode } from '../utils/dialysisMode.js'
-import { normalizeHepatitisStatus, deriveHepatitisFromTags, syncTagsFromHepatitis, parseHepatitisStatus } from '../utils/hepatitis.js'
+import { normalizeHepatitisStatus, deriveHepatitisFromTags, syncTagsFromHepatitis, parseHepatitisStatus, upgradeHepatitisStatus } from '../utils/hepatitis.js'
 import { recordPatientHistory, createPatientSnapshot } from '../services/patientHistory.js'
 import {
   BASIC_FIELD_MAP,
@@ -371,7 +371,8 @@ function formatPatient(row) {
     patientCategory: row.patient_category || 'opd_regular',
     diseases: JSON.parse(row.diseases || '[]'),
     // B/C 肝四態（Y/N/O/F，與 KiDit 33/34 同碼）；舊列未回填時由標籤推導
-    hepatitisStatus: parseHepatitisStatus(row.hepatitis_status) || deriveHepatitisFromTags(JSON.parse(row.diseases || '[]')),
+    // 四項四態；舊兩項格式（無 hiv/rpr）由標籤補齊
+    hepatitisStatus: upgradeHepatitisStatus(parseHepatitisStatus(row.hepatitis_status), JSON.parse(row.diseases || '[]')),
     patientStatus: JSON.parse(row.patient_status || '{}'),
     isHepatitis: row.is_hepatitis === 1,
     scheduleRule: JSON.parse(row.schedule_rule || '{}'),
@@ -458,7 +459,8 @@ function toDbFormat(data, existingPatient = null) {
   if (data.remarks !== undefined) result.notes = data.remarks
   // 病人分類與疾病
   if (data.patientCategory !== undefined) result.patient_category = data.patientCategory
-  // B/C 肝：hepatitisStatus（四態）為權威，diseases 的 HBV/HCV/BC肝? 標籤由它衍生；
+  // 血液傳染病（HBsAg/Anti-HCV/HIV/RPR 四態＋檢驗日期）：hepatitisStatus 為權威，
+  // diseases 的 HBV/HCV/HIV/RPR/「X待追蹤」標籤由它衍生；
   // 只帶 diseases 未帶 hepatitisStatus 的舊路徑則反向由標籤推導四態，兩欄永遠一致
   if (data.hepatitisStatus !== undefined && data.hepatitisStatus !== null) {
     const status = normalizeHepatitisStatus(data.hepatitisStatus)
@@ -470,8 +472,10 @@ function toDbFormat(data, existingPatient = null) {
     result.diseases = JSON.stringify(syncTagsFromHepatitis(baseTags, status))
   } else if (data.diseases !== undefined) {
     result.diseases = JSON.stringify(data.diseases)
-    // 標籤沒變（HBV/HCV/BC肝? 與既有四態衍生結果一致）就保留既有四態（O/F 區分與追蹤日期不丟）
-    const existingStatus = parseHepatitisStatus(existingPatient?.hepatitis_status)
+    // 標籤沒變（與既有四態衍生結果一致）就保留既有四態（O/F 區分與檢驗日期不丟）
+    const existingStatus = existingPatient
+      ? upgradeHepatitisStatus(parseHepatitisStatus(existingPatient.hepatitis_status), JSON.parse(existingPatient.diseases || '[]'))
+      : null
     const derived = deriveHepatitisFromTags(data.diseases)
     const sameTags = existingStatus
       && JSON.stringify(syncTagsFromHepatitis([], existingStatus).sort()) === JSON.stringify(syncTagsFromHepatitis([], derived).sort())

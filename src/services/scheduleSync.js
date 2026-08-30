@@ -17,6 +17,8 @@ const FREQ_NUMBER_MAP = {
   '二六': '26',
 }
 
+import { infectionAbbrFromTags } from '../utils/hepatitis.js'
+
 /**
  * 根據病人資料產生自動備註
  */
@@ -46,13 +48,10 @@ function generateAutoNote(patient) {
     diseases = JSON.parse(diseases || '[]')
   }
   if (Array.isArray(diseases)) {
-    if (diseases.includes('HBV')) autoNotes.add('B')
-    if (diseases.includes('HCV')) autoNotes.add('C')
-    if (diseases.includes('HIV')) autoNotes.add('H')
-    if (diseases.includes('RPR')) autoNotes.add('R')
+    // 傳染病縮寫 B/C/H/R、待追蹤 B?/C?/H?/R?（規則在 utils/hepatitis.js，與前端 scheduleUtils 同源）
+    for (const abbr of infectionAbbrFromTags(diseases)) autoNotes.add(abbr)
     if (diseases.includes('隔離')) autoNotes.add('隔')
     if (diseases.includes('COVID')) autoNotes.add('冠')
-    if (diseases.includes('BC肝?')) autoNotes.add('BC?')
     if (diseases.includes('C肝治癒')) autoNotes.add('C癒')
   }
 

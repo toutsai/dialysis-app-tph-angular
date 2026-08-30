@@ -576,8 +576,9 @@ export class PatientsComponent implements OnInit, OnDestroy {
 
   generateDiseaseTags(diseases: string[]): string {
     if (!diseases?.length) return '';
+    // 「X待追蹤」（已抽血待追蹤）用琥珀色區分於陽性紅字；陰性/未做不出標籤
     return diseases
-      .map((tag: string) => `<span class="disease-tag">${escapeHtml(tag)}</span>`)
+      .map((tag: string) => `<span class="disease-tag${tag.endsWith('待追蹤') || tag === 'BC肝?' ? ' pending' : ''}">${escapeHtml(tag)}</span>`)
       .join('');
   }
 
