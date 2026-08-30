@@ -1204,9 +1204,10 @@ export class PatientsComponent implements OnInit, OnDestroy {
         const createdId = (savedPatient as any).id;
         const createdFreq =
           (dataToCreate.freq ?? dataToCreate.dialysisOrders?.freq ?? null) || null;
+        const isInpatient = this.modalType() === 'ipd' || this.modalType() === 'er';
         this.showConfirm(
           '安排常規床位',
-          `病人「${dataToCreate.name}」已新增${createdFreq ? `（頻率：${createdFreq}）` : '（未設定頻率）'}。\n\n是否現在排入總床位表？\n\n臨時／不排常規床位者請按「取消」，之後由組長以加洗方式排入當日排程。`,
+          `病人「${dataToCreate.name}」已新增${createdFreq ? `（頻率：${createdFreq}）` : '（未設定頻率）'}。\n\n是否現在排入總床位表${isInpatient ? '（住院時段床位）' : ''}？\n\n臨時／不排常規床位者請按「取消」，之後由組長以加洗方式排入當日排程。`,
           () => {
             this.bedDialogMode = 'new-patient';
             this.bedAssignContext.set({
@@ -1541,6 +1542,49 @@ export class PatientsComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** 總表規則 → 「X床／早班／一三五」 */
+  private formatRuleLabel(rule: any): string {
+    if (!rule) return '';
+    const bedText = String(rule.bedNum).startsWith('peripheral')
+      ? `外圍 ${String(rule.bedNum).split('-')[1]}`
+      : `${rule.bedNum}床`;
+    const shiftText = ['早', '午', '晚'][Number(rule.shiftIndex)] || '';
+    return `${bedText}／${shiftText}班／${rule.freq || '未設頻率'}`;
+  }
+
+  /**
+   * 轉入住院/急診後的常規床位檢查（2026-08-30 使用者提案：任務導向提示，不跳頁）：
+   * 無常規床位 → 問是否現在排入總表；已有常規床位（通常是門診安排）→ 問住院期間是否改排。
+   * 「是」都就地開總表床位指派元件（bedDialogMode='new-patient' 路徑會 upsert 規則）。
+   */
+  private promptInpatientBedCheck(patientId: string, name: string, leadMsg: string): void {
+    const rule: any = (this.patientStore.masterScheduleRules() as Record<string, any>)[patientId] || null;
+    const patient: any = this.patientStore.patientMap().get(patientId) || { id: patientId, name };
+    const presetFreq = (rule?.freq || patient?.freq || '') as string;
+    const openDialog = () => {
+      this.bedDialogMode = 'new-patient';
+      this.bedAssignContext.set({
+        mode: 'change_freq_and_bed',
+        patient: { ...patient, id: patientId },
+        presetFreq: presetFreq && presetFreq !== '臨時' ? presetFreq : '',
+      });
+      this.isBedAssignDialogVisible.set(true);
+    };
+    if (!rule) {
+      this.showConfirm(
+        '轉移成功 — 尚無常規床位',
+        `${leadMsg}\n\n此病人目前沒有常規床位。是否現在排入總床位表（住院時段）？\n\n臨時透析者請按「取消」，由組長以加洗方式排入當日排程。`,
+        openDialog,
+      );
+      return;
+    }
+    this.showConfirm(
+      '轉移成功 — 常規床位確認',
+      `${leadMsg}\n\n此病人目前常規床位：${this.formatRuleLabel(rule)}（門診安排）。\n住院／急診期間是否改排其他床位或班別？\n\n維持原床位請按「取消」。`,
+      openDialog,
+    );
+  }
+
   /** 床位元件取消：編輯攔截=中止本次存檔；新增病人=不排常規床位（臨時走這條） */
   handleBedDialogClose(): void {
     this.isBedAssignDialogVisible.set(false);
@@ -1642,15 +1686,19 @@ export class PatientsComponent implements OnInit, OnDestroy {
             `轉移病人：${patient.name} 至 ${targetStatusText[newStatus] || '未知'}`,
             'patient'
           );
-          this.showAlert(
-            '轉移成功',
+          const successMsg =
             scope === 'current'
               ? `${patient.name} 已成功轉至${targetStatusText[newStatus] || '未知'}。\n本班起即顯示新身分（已結束的班次維持原顯示）。`
               : scope === 'next'
                 ? `${patient.name} 已成功轉至${targetStatusText[newStatus] || '未知'}。\n今日已開始的班次維持原顯示；下一班起即顯示新身分。`
-                : `${patient.name} 已成功轉至${targetStatusText[newStatus] || '未知'}。\n今日排程維持不動；明日起排程將依新身分自動更新。`,
-          );
+                : `${patient.name} 已成功轉至${targetStatusText[newStatus] || '未知'}。\n今日排程維持不動；明日起排程將依新身分自動更新。`;
           this.globalSearchTerm.set('');
+          // 轉入住院/急診：接著檢查常規床位（無床位→排入；有門診床位→是否改排住院床位）
+          if (newStatus === 'ipd' || newStatus === 'er') {
+            this.promptInpatientBedCheck(patientId, patient.name, successMsg);
+          } else {
+            this.showAlert('轉移成功', successMsg);
+          }
         } catch (err: any) {
           this.showAlert('操作失敗', err.message || '轉床失敗！');
         }
