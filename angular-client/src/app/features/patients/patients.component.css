@@ -440,6 +440,12 @@ button.hepatitis-badge:hover { filter: brightness(1.08); }
 .status-icon-blood {
   color: #3b82f6;
 }
+.status-bed-restore {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 1px 7px; border-radius: 10px; font-size: 0.78rem; font-weight: 600;
+  color: #b35c00; background: #fff7e6; border: 1px solid #e8a33d; cursor: pointer; white-space: nowrap;
+}
+.status-bed-restore:hover { background: #ffe8c2; }
 .status-blood-tag {
   display: inline-flex;
   align-items: center;

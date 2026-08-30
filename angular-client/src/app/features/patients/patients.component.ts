@@ -223,7 +223,9 @@ export class PatientsComponent implements OnInit, OnDestroy {
     | { type: 'remove' }
     | { type: 'none' }
     | null = null;
-  private bedDialogMode: 'edit-save' | 'new-patient' | null = null;
+  private bedDialogMode: 'edit-save' | 'new-patient' | 'relocate-occupant' | null = null;
+  /** 恢復長期床位進行中：佔用者改床後要自動復位的病人與其快照 */
+  private bedRestorePending: { patientId: string; snap: any } | null = null;
   private bedDialogSavePayload: any = null;
   private cachedPatientHistory: any[] | null = null;
   private pendingNewStatus: string | null = null;
@@ -639,22 +641,30 @@ export class PatientsComponent implements OnInit, OnDestroy {
     this.isAlertDialogVisible.set(true);
   }
 
-  showConfirm(title: string, message: string, onConfirm: () => void): void {
+  private confirmCancelAction: (() => void) | null = null;
+
+  showConfirm(title: string, message: string, onConfirm: () => void, onCancel?: () => void): void {
     this.confirmDialogTitle.set(title);
     this.confirmDialogMessage.set(message);
     this.confirmAction = onConfirm;
+    this.confirmCancelAction = onCancel || null;
     this.isConfirmDialogVisible.set(true);
   }
 
   handleConfirm(): void {
-    if (typeof this.confirmAction === 'function') this.confirmAction();
+    const action = this.confirmAction;
     this.isConfirmDialogVisible.set(false);
     this.confirmAction = null;
+    this.confirmCancelAction = null;
+    if (typeof action === 'function') action();
   }
 
   handleCancel(): void {
+    const action = this.confirmCancelAction;
     this.isConfirmDialogVisible.set(false);
     this.confirmAction = null;
+    this.confirmCancelAction = null;
+    if (typeof action === 'function') action();
   }
 
   // --- Tab & Sort ---
@@ -1504,6 +1514,31 @@ export class PatientsComponent implements OnInit, OnDestroy {
     this.isBedAssignDialogVisible.set(false);
     this.bedAssignContext.set(null);
 
+    if (this.bedDialogMode === 'relocate-occupant') {
+      // 為佔用者改床：新床不可仍與待恢復的長期床位衝突
+      const pending = this.bedRestorePending;
+      if (pending && String(bedNum) === String(pending.snap.bedNum) && shiftIndex === Number(pending.snap.shiftIndex) && hasFrequencyConflict(finalFreq, pending.snap.freq)) {
+        this.showAlert('床位未變', `這是待恢復的長期床位（${this.formatRuleLabel(pending.snap)}），請為 ${patient?.name || '佔用者'} 選擇其他床位。`);
+        this.bedAssignContext.set({ mode: 'change_freq_and_bed', patient: { ...(patient || {}), id: patientId }, presetFreq: finalFreq });
+        this.isBedAssignDialogVisible.set(true);
+        return;
+      }
+      this.bedDialogMode = null;
+      this.bedRestorePending = null;
+      try {
+        if (patient && patient.freq !== finalFreq) {
+          await this.patientsApi.save(patientId, { freq: finalFreq });
+          this.patientStore.updatePatientInStore(patientId, { freq: finalFreq } as any);
+        }
+        await this.patientStore.upsertRuleInMasterSchedule(patientId, ruleData);
+      } catch (err: any) {
+        this.showAlert('操作失敗', `為 ${patient?.name || ''} 改床失敗：${err.message || ''}。長期床位未恢復。`);
+        return;
+      }
+      if (pending) await this.restoreLongTermBed(pending.patientId, pending.snap);
+      return;
+    }
+
     if (this.bedDialogMode === 'edit-save') {
       const payload = this.bedDialogSavePayload;
       this.bedDialogMode = null;
@@ -1585,10 +1620,132 @@ export class PatientsComponent implements OnInit, OnDestroy {
     );
   }
 
-  /** 床位元件取消：編輯攔截=中止本次存檔；新增病人=不排常規床位（臨時走這條） */
+  // --- 長期床位快照：常規門診轉住院/急診 → 轉回門診恢復（2026-08-30 使用者原則：長期床位是標準，佔用者改床） ---
+  private isRegularCategory(p: any): boolean {
+    return !p?.patientCategory || p.patientCategory === 'opd_regular';
+  }
+
+  /** 轉入住院/急診當下的長期床位快照；非常規或無總表規則者不記 */
+  private buildPreInpatientSnapshot(patient: any): any | null {
+    if (!this.isRegularCategory(patient)) return null;
+    const rule: any = (this.patientStore.masterScheduleRules() as Record<string, any>)[patient.id];
+    if (!rule || rule.bedNum === undefined || rule.bedNum === null || rule.shiftIndex === undefined) return null;
+    return {
+      bedNum: rule.bedNum,
+      shiftIndex: Number(rule.shiftIndex),
+      freq: rule.freq || patient.freq || '',
+      savedAt: new Date().toLocaleString('sv-SE'),
+    };
+  }
+
+  private sameRule(a: any, b: any): boolean {
+    return (
+      !!a && !!b &&
+      String(a.bedNum) === String(b.bedNum) &&
+      Number(a.shiftIndex) === Number(b.shiftIndex) &&
+      (a.freq || '') === (b.freq || '')
+    );
+  }
+
+  private async clearPreInpatientRule(patientId: string): Promise<void> {
+    const p: any = this.patientStore.patientMap().get(patientId);
+    if (!p?.patientStatus?.preInpatientRule) return;
+    const ps = { ...p.patientStatus };
+    delete ps.preInpatientRule;
+    await this.patientsApi.save(patientId, { patientStatus: ps });
+    this.patientStore.updatePatientInStore(patientId, { patientStatus: ps } as any);
+  }
+
+  /** 佔用原床位（同床同班且頻率衝突）的其他總表規則 */
+  private findOccupantRule(patientId: string, snap: any): { pid: string; rule: any } | null {
+    const rules = this.patientStore.masterScheduleRules() as Record<string, any>;
+    for (const pid in rules) {
+      if (pid === patientId) continue;
+      const r = rules[pid];
+      if (String(r.bedNum) === String(snap.bedNum) && Number(r.shiftIndex) === Number(snap.shiftIndex) && hasFrequencyConflict(snap.freq, r.freq)) {
+        return { pid, rule: r };
+      }
+    }
+    return null;
+  }
+
+  /** 轉回門診（或清單標記點擊）：與目前規則相同→靜默清快照；不同→問是否恢復 */
+  promptRestoreLongTermBed(patientId: string, name: string, leadMsg = ''): void {
+    const p: any = this.patientStore.patientMap().get(patientId);
+    const snap = p?.patientStatus?.preInpatientRule;
+    if (!snap) {
+      if (leadMsg) this.showAlert('轉移成功', leadMsg);
+      return;
+    }
+    const current: any = (this.patientStore.masterScheduleRules() as Record<string, any>)[patientId] || null;
+    if (current && this.sameRule(current, snap)) {
+      void this.clearPreInpatientRule(patientId);
+      if (leadMsg) this.showAlert('轉移成功', leadMsg);
+      return;
+    }
+    const head = leadMsg ? `${leadMsg}\n\n` : '';
+    this.showConfirm(
+      '恢復長期床位',
+      `${head}${name} 住院前的長期床位：${this.formatRuleLabel(snap)}\n目前總表：${current ? this.formatRuleLabel(current) : '無常規床位'}\n\n是否恢復長期床位？（若原床位已被其他病人使用，將先為該病人改床）\n\n按「取消」＝接受目前床位為新的長期床位。`,
+      () => { void this.restoreLongTermBed(patientId, snap); },
+      () => { void this.clearPreInpatientRule(patientId); },
+    );
+  }
+
+  /** 寫回長期床位；原床被其他總表規則佔用 → 先為佔用者開床位指派，完成後自動復位 */
+  private async restoreLongTermBed(patientId: string, snap: any): Promise<void> {
+    const patient: any = this.patientStore.patientMap().get(patientId);
+    const occupant = this.findOccupantRule(patientId, snap);
+    if (occupant) {
+      const occPatient: any = this.patientStore.patientMap().get(occupant.pid) || { id: occupant.pid, name: '其他病人' };
+      this.bedRestorePending = { patientId, snap };
+      this.bedDialogMode = 'relocate-occupant';
+      this.bedAssignContext.set({
+        mode: 'change_freq_and_bed',
+        patient: { ...occPatient, id: occupant.pid },
+        presetFreq: occupant.rule.freq && occupant.rule.freq !== '臨時' ? occupant.rule.freq : '',
+      });
+      this.showAlert(
+        '原床位已被使用',
+        `${this.formatRuleLabel(snap)} 目前由 ${occPatient.name}（${occupant.rule.freq || '未設頻率'}）長期使用。\n依規則長期床位以 ${patient?.name || ''} 為準，請先為 ${occPatient.name} 選擇新床位，完成後 ${patient?.name || ''} 會自動復位。`,
+      );
+      this.isBedAssignDialogVisible.set(true);
+      return;
+    }
+    try {
+      const rules = this.patientStore.masterScheduleRules() as Record<string, any>;
+      const existingRule = rules[patientId] || {};
+      const ruleData = {
+        ...existingRule,
+        bedNum: snap.bedNum,
+        shiftIndex: Number(snap.shiftIndex),
+        freq: snap.freq || existingRule.freq || patient?.freq,
+        autoNote: generateAutoNote({ ...(patient || {}), freq: snap.freq || patient?.freq }),
+        manualNote: existingRule.manualNote || patient?.baseNote || '',
+      };
+      if (patient && snap.freq && patient.freq !== snap.freq) {
+        await this.patientsApi.save(patientId, { freq: snap.freq });
+        this.patientStore.updatePatientInStore(patientId, { freq: snap.freq } as any);
+      }
+      await this.patientStore.upsertRuleInMasterSchedule(patientId, ruleData);
+      await this.clearPreInpatientRule(patientId);
+      await this.recalculateStatsLocally();
+      this.showAlert('已恢復長期床位', `${patient?.name || ''} 已恢復 ${this.formatRuleLabel(snap)}，明日起自動產生排程。\n住院期間排到該床的調班若有衝突，會在排程/護理分組標示。`);
+    } catch (err: any) {
+      this.showAlert('操作失敗', `恢復長期床位失敗：${err.message || ''}。請至總床位表處理。`);
+    }
+  }
+
+  /** 床位元件取消：編輯攔截=中止本次存檔；新增病人=不排常規床位（臨時走這條）；佔用者改床取消=兩邊不動 */
   handleBedDialogClose(): void {
     this.isBedAssignDialogVisible.set(false);
     this.bedAssignContext.set(null);
+    if (this.bedDialogMode === 'relocate-occupant') {
+      this.bedDialogMode = null;
+      this.bedRestorePending = null;
+      this.showAlert('未恢復長期床位', '佔用者未改床，兩邊床位皆未變動。病人清單會標示「待恢復長期床位」，之後可點該標記再處理。');
+      return;
+    }
     if (this.bedDialogMode === 'edit-save') {
       this.bedDialogMode = null;
       this.bedDialogSavePayload = null;
@@ -1677,6 +1834,11 @@ export class PatientsComponent implements OnInit, OnDestroy {
             updateData.wardNumber = null;
             updateData.physician = null;
           }
+          // 常規門診轉住院/急診：記住長期床位（轉回門診時提醒恢復；ipd↔er 互轉不覆蓋）
+          if (patient.status === 'opd' && (newStatus === 'ipd' || newStatus === 'er')) {
+            const snap = this.buildPreInpatientSnapshot(patient);
+            if (snap) updateData.patientStatus = { ...(patient.patientStatus || {}), preInpatientRule: snap };
+          }
           // 旗標只送 API（後端決定今日快照範圍），不進本地 store
           await this.patientsApi.save(patientId, scope ? { ...updateData, effectiveShiftScope: scope } : updateData);
           this.patientStore.updatePatientInStore(patientId, updateData);
@@ -1694,8 +1856,11 @@ export class PatientsComponent implements OnInit, OnDestroy {
                 : `${patient.name} 已成功轉至${targetStatusText[newStatus] || '未知'}。\n今日排程維持不動；明日起排程將依新身分自動更新。`;
           this.globalSearchTerm.set('');
           // 轉入住院/急診：接著檢查常規床位（無床位→排入；有門診床位→是否改排住院床位）
+          // 轉回門診：檢查是否要恢復住院前的長期床位
           if (newStatus === 'ipd' || newStatus === 'er') {
             this.promptInpatientBedCheck(patientId, patient.name, successMsg);
+          } else if (newStatus === 'opd' && patient.patientStatus?.preInpatientRule) {
+            this.promptRestoreLongTermBed(patientId, patient.name, successMsg);
           } else {
             this.showAlert('轉移成功', successMsg);
           }
@@ -1864,12 +2029,16 @@ export class PatientsComponent implements OnInit, OnDestroy {
         }
       }
 
-      this.showAlert(
-        '復原成功',
+      const restoreMsg =
         `${patient.name} 已復原並移至「${targetStatusText}」清單。如需排班，請至總床位表設定。` +
-          (clearedBloodDraw ? '\n\n（原「已抽血」紀錄已超過 3 個月，已自動清除，請記得重新抽透析品質血。）' : '') +
-          originNote
-      );
+        (clearedBloodDraw ? '\n\n（原「已抽血」紀錄已超過 3 個月，已自動清除，請記得重新抽透析品質血。）' : '') +
+        originNote;
+      // 復原到門診且住院前有長期床位快照 → 接著問是否恢復
+      if (targetStatus === 'opd' && patient.patientStatus?.preInpatientRule) {
+        this.promptRestoreLongTermBed(patientId, patient.name, restoreMsg);
+      } else {
+        this.showAlert('復原成功', restoreMsg);
+      }
     } catch (err) {
       this.showAlert('操作失敗', '復原病人時發生錯誤！');
     } finally {

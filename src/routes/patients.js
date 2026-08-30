@@ -1485,6 +1485,20 @@ async function updatePatientHandler(req, res) {
         }
       } catch { /* patient_status 解析失敗就不動 */ }
     }
+    // 長期床位快照 preInpatientRule（常規門診轉住院時前端記下，轉回門診提醒恢復）：
+    // 分類改非常規即失義，清除；刪除刻意保留（復原到門診時仍可提醒恢復）（2026-08-30）
+    const effectiveCategory = dbData.patient_category !== undefined ? dbData.patient_category : existing.patient_category
+    if (effectiveCategory && effectiveCategory !== 'opd_regular') {
+      try {
+        const ps = dbData.patient_status !== undefined
+          ? JSON.parse(dbData.patient_status || '{}')
+          : JSON.parse(existing.patient_status || '{}')
+        if (ps && ps.preInpatientRule) {
+          delete ps.preInpatientRule
+          dbData.patient_status = JSON.stringify(ps)
+        }
+      } catch { /* patient_status 解析失敗就不動 */ }
+    }
 
     const updates = Object.keys(dbData).map(k => {
       if (k === 'updated_at') return `${k} = datetime('now', 'localtime')`

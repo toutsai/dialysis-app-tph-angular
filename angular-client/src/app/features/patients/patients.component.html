@@ -211,6 +211,9 @@
                   <i class="fas fa-lock status-icon-do-not-move" [class.status-off]="!p.patientStatus?.doNotMove?.active"
                      (click)="openStatusEdit(p, 'doNotMove', $event)"
                      [title]="p.patientStatus?.doNotMove?.active ? doNotMoveTitle(p) : '勿動（未設定，點擊編輯）'"></i>
+                  <span *ngIf="p.status === 'opd' && p.patientStatus?.preInpatientRule" class="status-bed-restore"
+                        (click)="promptRestoreLongTermBed(p.id, p.name); $event.stopPropagation()"
+                        title="住院前長期床位尚未恢復，點擊處理"><i class="fas fa-bed"></i> 待恢復長期床位</span>
                 </div>
               </div>
               <div class="flex-cell col-actions">
