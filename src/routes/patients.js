@@ -9,6 +9,7 @@ import { syncEventsToKiditLogbook } from '../services/kiditSync.js'
 import { emitExceptionChange, emitScheduleSaved } from '../services/eventBus.js'
 import { rebuildSingleDaySchedule, isTodayScheduleFrozen } from '../services/scheduleSync.js'
 import { removeAutoMovementFromDailyLog } from '../services/dailyLogMovementSync.js'
+import { snapshotNurseAssignmentForDate } from '../services/nurseAssignmentRevisions.js'
 import { normalizeDialysisMode, normalizeDialysisOrdersMode } from '../utils/dialysisMode.js'
 import { normalizeHepatitisStatus, deriveHepatitisFromTags, syncTagsFromHepatitis, parseHepatitisStatus } from '../utils/hepatitis.js'
 import { recordPatientHistory, createPatientSnapshot } from '../services/patientHistory.js'
@@ -1460,6 +1461,12 @@ async function updatePatientHandler(req, res) {
     if (effectiveStatus === 'opd' || effectiveDeleted === 1) {
       dbData.ward_number = null
     }
+    // 會診醫師（physician 欄在住院/急診身分的語意）同病房號：原身分是住院/急診而本次轉門診或刪除，
+    // 一併清除，避免轉回門診後被當成「收案醫師」顯示（2026-08-30）。門診病人的收案醫師不動。
+    const wasInpatient = ['ipd', 'er'].includes(existing.status)
+    if (wasInpatient && (effectiveStatus === 'opd' || effectiveDeleted === 1)) {
+      dbData.physician = null
+    }
 
     // 從急診/住院刪除時一併清勿動紀錄（勿動是排程床位鎖，刪除後即失義；
     // 歷史快照保留原貌、復原不自動恢復。DELETE /:id 路徑亦有同步邏輯，2026-08-19）
@@ -1550,6 +1557,7 @@ async function updatePatientHandler(req, res) {
         if (todayRow) {
           const todaySchedule = JSON.parse(todayRow.schedule || '{}')
           let snapshotWritten = false
+          const removedShifts = new Set()
           for (const [slotKey, slot] of Object.entries(todaySchedule)) {
             if (slot?.patientId !== id) continue
             const slotShift = slot.shiftId || String(slotKey).split('-').pop()
@@ -1557,6 +1565,7 @@ async function updatePatientHandler(req, res) {
               // 生效範圍內的格：刪除 → 自今日排程移除；其他變更 → 不快照即時渲染新資料
               if (isDeleting && effectiveShiftScope !== 'all') {
                 delete todaySchedule[slotKey]
+                removedShifts.add(slotShift)
                 snapshotWritten = true
               }
               continue
@@ -1577,13 +1586,36 @@ async function updatePatientHandler(req, res) {
               `UPDATE schedules SET schedule = ?, updated_at = datetime('now', 'localtime') WHERE date = ?`,
             ).run(JSON.stringify(todaySchedule), todayStr)
             const bumped = db.prepare(`SELECT version FROM schedules WHERE date = ?`).get(todayStr)
+            // 今日格被移除的班別，一併清掉護理分組的 `${patientId}-${shift}` key（避免孤兒分組）
+            let teamsVersion = null
+            if (removedShifts.size > 0) {
+              const teamsRow = db.prepare(`SELECT teams FROM nurse_assignments WHERE date = ?`).get(todayStr)
+              if (teamsRow) {
+                const teamsData = JSON.parse(teamsRow.teams || '{}')
+                const teamsMap = teamsData.teams || teamsData // 兼容舊格式（整包即 teams）
+                let teamsChanged = false
+                for (const shift of removedShifts) {
+                  if (teamsMap[`${id}-${shift}`] !== undefined) {
+                    delete teamsMap[`${id}-${shift}`]
+                    teamsChanged = true
+                  }
+                }
+                if (teamsChanged) {
+                  snapshotNurseAssignmentForDate(db, todayStr, { type: 'pre_save', createdBy: modifiedBy })
+                  db.prepare(
+                    `UPDATE nurse_assignments SET teams = ?, updated_at = datetime('now', 'localtime') WHERE date = ?`,
+                  ).run(JSON.stringify(teamsData), todayStr)
+                  teamsVersion = db.prepare(`SELECT version FROM nurse_assignments WHERE date = ?`).get(todayStr)?.version ?? null
+                }
+              }
+            }
             try {
               emitScheduleSaved({
-                kind: 'schedule',
+                kind: teamsVersion !== null ? 'both' : 'schedule',
                 date: todayStr,
                 savedBy: req.user ? { uid: req.user.id, name: req.user.name } : null,
                 scheduleVersion: bumped?.version ?? null,
-                teamsVersion: null,
+                teamsVersion,
                 ts: Date.now(),
               })
             } catch (emitErr) {
@@ -1696,7 +1728,8 @@ async function updatePatientHandler(req, res) {
           patientId: id,
           medicalRecordNumber: existing.medical_record_number,
           dischargeDate: getTaipeiTodayString(),
-          physician: updated.physician || '',
+          // 轉出時 physician 已被清除，動態記錄用轉出前的會診醫師
+          physician: existing.physician || '',
           reason: '',
           remarks: `從「${STATUS_MAP[fromStatus]}」轉回「${STATUS_MAP[toStatus]}」`,
         })
@@ -1716,7 +1749,7 @@ async function updatePatientHandler(req, res) {
             medicalRecordNumber: existing.medical_record_number,
             ...(toStatus === 'ipd' ? { admissionDate: getTaipeiTodayString() } : {}),
             ...(toStatus === 'opd' ? { dischargeDate: getTaipeiTodayString() } : {}),
-            physician: updated.physician || '',
+            physician: (toStatus === 'opd' ? existing.physician : updated.physician) || '',
             reason: data.inpatientReason || '',
             remarks:
               toStatus === 'ipd'
@@ -1868,12 +1901,15 @@ router.delete('/:id', ...isEditor, async (req, res) => {
       } catch { /* patient_status 解析失敗就不動 */ }
     }
 
+    // 住院/急診刪除時會診醫師一併清除（同 PUT 軟刪路徑，2026-08-30）
+    const clearPhysician = ['ipd', 'er'].includes(existing.status)
     db.prepare(`
       UPDATE patients
       SET is_deleted = 1,
           original_status = ?,
           delete_reason = ?,
           ward_number = NULL,
+          physician = CASE WHEN ? = 1 THEN NULL ELSE physician END,
           patient_status = ?,
           deleted_at = datetime('now', 'localtime'),
           last_modified_by = ?,
@@ -1882,6 +1918,7 @@ router.delete('/:id', ...isEditor, async (req, res) => {
     `).run(
       existing.status,
       reason || '未提供原因',
+      clearPhysician ? 1 : 0,
       patientStatusJson,
       JSON.stringify({ uid: req.user.id, name: req.user.name }),
       id

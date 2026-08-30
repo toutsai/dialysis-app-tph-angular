@@ -13,6 +13,7 @@ import { BedAssignmentDialogComponent } from '@app/components/dialogs/bed-assign
 import { StatsToolbarComponent } from '@app/components/stats-toolbar/stats-toolbar.component';
 import { ScheduleTableComponent } from '@app/components/schedule-table/schedule-table.component';
 import { updatePatient } from '@/services/optimizedApiService';
+import { fetchTeamsByDate, updateTeams } from '@/services/nurseAssignmentsService';
 import { ORDERED_SHIFT_CODES, getShiftDisplayName } from '@/constants/scheduleConstants';
 import {
   EffectiveShiftScope,
@@ -698,6 +699,28 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
       schedule[newKey] = { ...schedule[oldKey] };
       delete schedule[oldKey];
       await this.schedulesApi.update(rec.id, { date: dateStr, schedule, expectedVersion: rec.version });
+      // 換到不同班別時，護理分組的 `${patientId}-${shift}` key 一併搬過去（同床同班則 key 不變）
+      if (newShift !== currentShift) {
+        try {
+          const teamsRec: any = await fetchTeamsByDate(dateStr);
+          const teams: Record<string, any> = { ...(teamsRec?.teams || {}) };
+          const oldTeamKey = `${patientId}-${currentShift}`;
+          if (teams[oldTeamKey] !== undefined) {
+            const newTeamKey = `${patientId}-${newShift}`;
+            if (teams[newTeamKey] === undefined) teams[newTeamKey] = teams[oldTeamKey];
+            delete teams[oldTeamKey];
+            await updateTeams(dateStr, {
+              date: dateStr,
+              teams,
+              names: teamsRec?.names || {},
+              takeoffEnabled: teamsRec?.takeoffEnabled || false,
+              ...(typeof teamsRec?.version === 'number' ? { expectedVersion: teamsRec.version } : {}),
+            });
+          }
+        } catch (teamErr) {
+          console.warn('今日護理分組 key 搬移失敗（排程已換床）:', teamErr);
+        }
+      }
       this.statusText.set(`總表已更新，${name} 今日${getShiftDisplayName(currentShift)}已同步換床`);
     } catch (error: any) {
       console.error('今日本班換床失敗:', error);

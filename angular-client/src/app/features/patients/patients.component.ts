@@ -1593,7 +1593,9 @@ export class PatientsComponent implements OnInit, OnDestroy {
         try {
           const updateData: any = { status: newStatus, updatedAt: new Date().toISOString() };
           if ((patient.status === 'ipd' || patient.status === 'er') && newStatus === 'opd') {
+            // 病房號與會診醫師只屬住院/急診身分，轉回門診一併清除（後端亦強制清）
             updateData.wardNumber = null;
+            updateData.physician = null;
           }
           // 旗標只送 API（後端決定今日快照範圍），不進本地 store
           await this.patientsApi.save(patientId, scope ? { ...updateData, effectiveShiftScope: scope } : updateData);
@@ -1679,6 +1681,8 @@ export class PatientsComponent implements OnInit, OnDestroy {
       await this.patientStore.removeRuleFromMasterSchedule(patientId);
       this.patientStore.updatePatientInStore(patientId, {
         isDeleted: true, originalStatus: patient.status, deleteReason: reason, wardNumber: null,
+        // 住院/急診刪除：會診醫師隨病房號清除（與後端一致）
+        ...(patient.status === 'ipd' || patient.status === 'er' ? { physician: null } : {}),
         deletedAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       } as any);
       await this.recalculateStatsLocally();
