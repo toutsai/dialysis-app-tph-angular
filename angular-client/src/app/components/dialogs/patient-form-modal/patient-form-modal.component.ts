@@ -219,7 +219,7 @@ export class PatientFormModalComponent implements OnInit {
     if (!status[key] || status[key] === 'O') status[dateKeyOf(key)] = '';
   }
 
-  /** 檢驗日期缺漏（Y/N/F 皆應填）：高亮該列，存檔時擋下 */
+  /** 檢驗日期缺漏（Y/N/F 皆應填）：只高亮該列提醒，不擋存檔 */
   isInfectionDateMissing(key: InfectionKey): boolean {
     const v = this.hepatitis?.[key];
     return !!v && v !== 'O' && !this.hepatitis[dateKeyOf(key)];
@@ -576,11 +576,7 @@ export class PatientFormModalComponent implements OnInit {
       alert(`請確認血液傳染病狀態：${missingValue.join('、')} 尚未選擇！`);
       return;
     }
-    const missingDate = INFECTION_KEYS.filter((k) => this.isInfectionDateMissing(k)).map((k) => INFECTION_META[k].label);
-    if (missingDate.length > 0) {
-      alert(`請填寫檢驗日期：${missingDate.join('、')}（陽性／陰性／待追蹤皆須填）！`);
-      return;
-    }
+    // 檢驗日期不強制（2026-08-30 使用者裁定：只以淡橘色列提醒，不擋存檔）
     this.form.hepatitisStatus = normalizeHepatitisStatus(this.hepatitis);
     // 其他隔離疾病「其他」文字：有勾且有填才存為 `其他:文字`
     const otherText = this.isolationOtherActive ? (this.isolationOther || '').trim() : '';

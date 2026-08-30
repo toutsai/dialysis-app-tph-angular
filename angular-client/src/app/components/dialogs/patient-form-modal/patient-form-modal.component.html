@@ -114,7 +114,7 @@
       <!-- 區塊 2：血液傳染病（四項四態＋檢驗日期） -->
       <div class="form-section">
         <fieldset class="form-group">
-          <legend>血液傳染病 <small class="hep-hint">（陽性／陰性／待追蹤皆須填檢驗日期；B/C 肝帶入 KiDit 病史 33/34）</small></legend>
+          <legend>血液傳染病 <small class="hep-hint">（請盡量填檢驗日期，未填不擋存檔；B/C 肝帶入 KiDit 病史 33/34）</small></legend>
           <div class="infection-grid">
             @for (f of INFECTION_FIELDS; track f.key) {
               <div class="hep-row" [class.missing-date]="isInfectionDateMissing(f.key)">
