@@ -1,10 +1,12 @@
 // 每日病人數快照（patient_census_daily）
 // 用途：年度報表「常規門診病人數（月底）」列——取每月最後一天的快照；點格子開「月底對月底」異動明細。
 //
-// 常規門診定義（2026-08-28 使用者裁定）：
-//   未刪除 且 patient_category 空或 'opd_regular' 且（目前為門診 或 該時點以前曾經是門診）
-// ——常規病人暫時轉住院/急診仍算常規門診人數；建檔即住院/急診且從未門診者不算（舊資料常漏標 non_regular，用「曾為門診」補強）。
+// 常規門診定義（2026-08-30 使用者裁定，取代 08-28 版）：
+//   未刪除 且 patient_category 空或 'opd_regular' ——只看分類，不看身分
+// ——常規病人暫時轉住院/急診仍算常規門診人數，直到被刪除（轉出）或改成非常規；
+//   分類漏標（建檔即住院卻仍是 opd_regular）由組長用病人清單「非常規分類清單」修正，不再以「曾為門診」補強。
 // ⚠️ 與主護病人照護清單（只算 status='opd'）刻意不同。
+// 注意：patient_history 不記錄分類變更，倒放時分類一律取 patients 現值。
 // 三個消費端（cron 快照 countCurrentCensus／scripts/backfill-patient-census.mjs／彈窗 getMonthlyCensusChanges）
 // 都走同一個 loadCensusReplay() 倒放引擎，定義只在這裡改。
 
@@ -51,21 +53,6 @@ export function loadCensusReplay(db) {
     })
   const earliest = events.length ? events[events.length - 1].date : null
 
-  // 每位病人「最早曾為門診」的日期（由舊到新掃一次）；歷史裡看不到但目前是門診者＝早於歷史起點
-  const firstOpd = new Map()
-  const mark = (pid, date) => { if (!firstOpd.has(pid) || firstOpd.get(pid) > date) firstOpd.set(pid, date) }
-  for (let i = events.length - 1; i >= 0; i--) {
-    const e = events[i]
-    const d = e.d || {}
-    const wasOpd =
-      (e.type === 'CREATE' && (d.status || 'opd') === 'opd') ||
-      d.fromStatus === 'opd' || d.toStatus === 'opd' || d.restoredTo === 'opd' || e.s?.status === 'opd'
-    if (wasOpd) mark(e.pid, e.date)
-  }
-  for (const [id, v] of state) {
-    if (v.status === 'opd' && !v.deleted && !firstOpd.has(id)) firstOpd.set(id, '0000-00-00')
-  }
-
   /** 倒放一個事件：把 state 退回事件發生「之前」 */
   const undo = (ev) => {
     const cur = state.get(ev.pid) || {
@@ -92,9 +79,9 @@ export function loadCensusReplay(db) {
     }
   }
 
-  /** 某病人在 date 當時是否算「常規門診」（state 須已退回到 date） */
-  const isRegularAt = (id, v, date) =>
-    !v.deleted && isRegularCategory(v.category) && (v.status === 'opd' || (firstOpd.get(id) ?? '9999-99-99') <= date)
+  /** 某病人在 date 當時是否算「常規門診」（state 須已退回到 date）：未刪除且分類常規，不看身分 */
+  // eslint-disable-next-line no-unused-vars
+  const isRegularAt = (id, v, date) => !v.deleted && isRegularCategory(v.category)
 
   /** state 已退回到 date 時的各項人數 */
   const countAt = (date) => {
@@ -112,7 +99,7 @@ export function loadCensusReplay(db) {
   return { state, events, earliest, undo, isRegularAt, countAt }
 }
 
-/** 以目前 patients 表（＋曾為門診判定）計算當下各身分人數 */
+/** 以目前 patients 表計算當下各身分人數 */
 export function countCurrentCensus(db) {
   return loadCensusReplay(db).countAt(getTaipeiTodayString())
 }
