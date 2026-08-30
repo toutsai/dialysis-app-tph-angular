@@ -115,6 +115,8 @@
     [isVisible]="isConfirmDialogVisible()"
     [title]="confirmDialogTitle()"
     [message]="confirmDialogMessage()"
+    [confirmText]="confirmDialogConfirmText()"
+    [cancelText]="confirmDialogCancelText()"
     (confirm)="handleConfirm()"
     (cancel)="handleCancel()"
   ></app-confirm-dialog>

@@ -1498,8 +1498,11 @@ async function updatePatientHandler(req, res) {
     // 當日異動保護：身分/模式變更或刪除時，把「變更前」的快照寫進今天排程格的
     // archivedPatientInfo，今日的統計/身分底色/模式顯示維持變更前狀態。
     // 已有快照的格子不覆蓋（保留當天最早的狀態，多次變更以第一次為準）。
-    // 「下一班起生效」（effectiveFromNextShift=true）：只快照「已開始的班別」格，
-    // 未開始的班別無快照 → 即時渲染新身分（2026-08-04，班別開始時間為使用者定義）。
+    // 生效範圍 effectiveShiftScope（2026-08-30，取代舊 effectiveFromNextShift 布林，仍相容）：
+    //   'all'（未帶）：今天所有格都快照 → 今日整天維持變更前顯示（舊行為）
+    //   'next'：只快照「已開始的班別」格；未開始的班別即時渲染新身分（2026-08-04）
+    //   'current'：只快照「已結束的班別」格；進行中的本班與之後的班別即時渲染新身分
+    // 刪除時，'next'/'current' 未快照的格（=生效範圍內）直接自今日排程移除。
     try {
       const oldOrders = JSON.parse(existing.dialysis_orders || '{}')
       const newOrders = JSON.parse(updated.dialysis_orders || '{}')
@@ -1507,20 +1510,40 @@ async function updatePatientHandler(req, res) {
       const modeChanged = (newOrders.mode || null) !== (oldOrders.mode || null)
       const freqChanged = (newOrders.freq || null) !== (oldOrders.freq || null)
       const todayStr = getTaipeiTodayString()
-      const effectiveFromNextShift = data.effectiveFromNextShift === true
+      const effectiveShiftScope =
+        data.effectiveShiftScope === 'current'
+          ? 'current'
+          : data.effectiveShiftScope === 'next' || data.effectiveFromNextShift === true
+            ? 'next'
+            : 'all'
+      const SHIFT_ORDER = ['early', 'noon', 'late']
       const SHIFT_START_TIMES = { early: '07:30', noon: '12:30', late: '17:30' }
       const nowTaipeiHM = new Date()
         .toLocaleTimeString('en-GB', { timeZone: 'Asia/Taipei', hour12: false })
         .slice(0, 5)
-      // 未知班別（外圍等非標準 key 已涵蓋於 early/noon/late 尾碼；防呆保守視為已開始 → 照舊快照）
+      // 目前進行中的班別 = 最後一個已開始的班別（07:30 前為 null）
+      const currentShift = SHIFT_ORDER.filter((s) => nowTaipeiHM >= SHIFT_START_TIMES[s]).pop() || null
+      // 未知班別（外圍等非標準 key 已涵蓋於 early/noon/late 尾碼；防呆保守視為已開始/已結束 → 照舊快照）
       const isShiftStarted = (shift) => {
         const start = SHIFT_START_TIMES[shift]
         return start ? nowTaipeiHM >= start : true
       }
+      const isShiftEnded = (shift) => {
+        const idx = SHIFT_ORDER.indexOf(shift)
+        if (idx < 0) return true
+        return currentShift ? idx < SHIFT_ORDER.indexOf(currentShift) : false
+      }
+      // 該格是否在「維持原顯示」範圍（要寫快照）
+      const shouldSnapshot = (shift) => {
+        if (effectiveShiftScope === 'next') return isShiftStarted(shift)
+        if (effectiveShiftScope === 'current') return isShiftEnded(shift)
+        return true
+      }
+      const isDeleting = !wasDeleted && isNowDeleted
       // 僅在今日凍結窗（06:00 起）內寫快照：凌晨的變更依既有設計本來就算今天的，
       // 不該把變更前狀態凍進今天（與 isTodayScheduleFrozen 的重建放行邊界一致）
       if (
-        (statusChanged || modeChanged || freqChanged || (!wasDeleted && isNowDeleted)) &&
+        (statusChanged || modeChanged || freqChanged || isDeleting) &&
         isTodayScheduleFrozen(todayStr)
       ) {
         const todayRow = db.prepare(`SELECT schedule FROM schedules WHERE date = ?`).get(todayStr)
@@ -1528,9 +1551,17 @@ async function updatePatientHandler(req, res) {
           const todaySchedule = JSON.parse(todayRow.schedule || '{}')
           let snapshotWritten = false
           for (const [slotKey, slot] of Object.entries(todaySchedule)) {
-            if (slot?.patientId === id && !slot.archivedPatientInfo) {
-              const slotShift = slot.shiftId || String(slotKey).split('-').pop()
-              if (effectiveFromNextShift && !isShiftStarted(slotShift)) continue
+            if (slot?.patientId !== id) continue
+            const slotShift = slot.shiftId || String(slotKey).split('-').pop()
+            if (!shouldSnapshot(slotShift)) {
+              // 生效範圍內的格：刪除 → 自今日排程移除；其他變更 → 不快照即時渲染新資料
+              if (isDeleting && effectiveShiftScope !== 'all') {
+                delete todaySchedule[slotKey]
+                snapshotWritten = true
+              }
+              continue
+            }
+            if (!slot.archivedPatientInfo) {
               slot.archivedPatientInfo = {
                 status: existing.status || 'unknown',
                 mode: oldOrders.mode || null,

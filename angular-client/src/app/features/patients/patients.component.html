@@ -495,6 +495,16 @@
     (cancel)="handleScheduleConflictCancel()"
   ></app-confirm-dialog>
 
+  <app-confirm-dialog
+    *ngIf="isShiftScopeDialogVisible()"
+    [title]="shiftScopeTitle()"
+    [message]="shiftScopeMessage()"
+    confirmText="從本班開始"
+    cancelText="從下一班開始"
+    (confirm)="handleShiftScopeSelected('current')"
+    (cancel)="handleShiftScopeSelected('next')"
+  ></app-confirm-dialog>
+
   <app-patient-update-scheduler-dialog
     *ngIf="isSchedulerDialogVisible()"
     [patient]="schedulerPatient()"

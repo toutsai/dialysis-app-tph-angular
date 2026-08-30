@@ -13,7 +13,15 @@ import { BedAssignmentDialogComponent } from '@app/components/dialogs/bed-assign
 import { StatsToolbarComponent } from '@app/components/stats-toolbar/stats-toolbar.component';
 import { ScheduleTableComponent } from '@app/components/schedule-table/schedule-table.component';
 import { updatePatient } from '@/services/optimizedApiService';
-import { ORDERED_SHIFT_CODES } from '@/constants/scheduleConstants';
+import { ORDERED_SHIFT_CODES, getShiftDisplayName } from '@/constants/scheduleConstants';
+import {
+  EffectiveShiftScope,
+  buildScheduleKey,
+  buildShiftScopeMessage,
+  getCurrentShiftCode,
+  getShiftCodeFromSlotKey,
+  isShiftEndedToday,
+} from '@/utils/shiftTime';
 import {
   generateAutoNote,
   getUnifiedCellStyle,
@@ -94,6 +102,10 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
   confirmDialogTitle = signal('');
   confirmDialogMessage = signal('');
   confirmAction = signal<(() => void) | null>(null);
+  /** 「本班/下一班」二選一時，取消鈕也是一個選項（從下一班開始） */
+  cancelAction = signal<(() => void) | null>(null);
+  confirmDialogConfirmText = signal('確認');
+  confirmDialogCancelText = signal('取消');
   isPatientSelectDialogVisible = signal(false);
   currentSlotId = signal<string | null>(null);
   searchQueryValue = signal('');
@@ -391,7 +403,7 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
     }
 
     const freqChanged = !!(newFreq && patient.freq !== newFreq);
-    const applyAssignment = async (): Promise<void> => {
+    const applyAssignment = async (scope: EffectiveShiftScope): Promise<void> => {
       if (freqChanged) {
         try {
           await updatePatient(patientId, { freq: newFreq });
@@ -414,13 +426,14 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
 
       await this.updateRuleInCloud(patientId, newRuleData);
       this.isAssignmentDialogVisible.set(false);
+      if (scope === 'current') await this.applyRuleToTodayCurrentShift(patientId, bedNum, newShiftIndex);
     };
 
     await this.confirmSameDayRuleChange(
       patientId,
       freqChanged ? '床位/班別/頻率' : '床位/班別',
-      () => {
-        void applyAssignment();
+      (scope) => {
+        void applyAssignment(scope);
       }
     );
   }
@@ -495,8 +508,11 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
     }
 
     const newRuleData = { ...sourceRuleData, bedNum, shiftIndex };
-    await this.confirmSameDayRuleChange(sourcePatientId, '床位/班別', () => {
-      void this.updateRuleInCloud(sourcePatientId, newRuleData);
+    await this.confirmSameDayRuleChange(sourcePatientId, '床位/班別', (scope) => {
+      void (async () => {
+        await this.updateRuleInCloud(sourcePatientId, newRuleData);
+        if (scope === 'current') await this.applyRuleToTodayCurrentShift(sourcePatientId, bedNum, shiftIndex);
+      })();
     });
     this.draggedItem.set(null);
   }
@@ -561,52 +577,135 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
 
   handleConfirm(): void {
     const action = this.confirmAction();
+    this.resetConfirmDialog();
     if (typeof action === 'function') action();
-    this.isConfirmDialogVisible.set(false);
-    this.confirmAction.set(null);
   }
 
   handleCancel(): void {
-    this.isConfirmDialogVisible.set(false);
-    this.confirmAction.set(null);
+    const action = this.cancelAction();
+    this.resetConfirmDialog();
+    if (typeof action === 'function') action();
   }
 
-  /** 病人今天是否已有排程（守門用；查不到當日排程視為否） */
-  private async checkPatientInTodaySchedule(patientId: string): Promise<boolean> {
+  private resetConfirmDialog(): void {
+    this.isConfirmDialogVisible.set(false);
+    this.confirmAction.set(null);
+    this.cancelAction.set(null);
+    this.confirmDialogConfirmText.set('確認');
+    this.confirmDialogCancelText.set('取消');
+  }
+
+  /** 病人今天有排程的班別清單（守門用；查不到當日排程視為空） */
+  private async getPatientTodayShifts(patientId: string): Promise<string[]> {
     try {
       const dateStr = new Date().toLocaleDateString('sv-SE');
       const dailyRecords = (await this.schedulesApi.fetchWhere({ date: dateStr })) as any[];
-      if (!dailyRecords || dailyRecords.length === 0) return false;
-      const schedule: any = dailyRecords[0].schedule || {};
-      return Object.values(schedule).some((slot: any) => slot?.patientId === patientId);
+      const schedule: any = dailyRecords?.[0]?.schedule || {};
+      return Object.entries(schedule)
+        .filter(([, slot]: [string, any]) => slot?.patientId === patientId)
+        .map(([key]) => getShiftCodeFromSlotKey(key));
     } catch {
-      return false;
+      return [];
     }
   }
 
-  /** 統一守門：改到會寫入今日歷史的欄位（床位/班別/頻率）時，今天有排程先確認再套用 */
+  /**
+   * 統一守門：改到會寫入今日歷史的欄位（床位/班別/頻率）時，今天有排程先確認再套用。
+   * 確認後若病人在「進行中的本班」有格子，接著問「從本班開始／從下一班開始」；
+   * 否則 scope 一律 'next'（今日排程不動，明日起依新規則）。
+   */
   private async confirmSameDayRuleChange(
     patientId: string,
     changeDesc: string,
-    onConfirm: () => void
+    onConfirm: (scope: EffectiveShiftScope) => void
   ): Promise<void> {
     // 凌晨（<06:00）不走守門：今日尚未凍結，變更依既有設計算今天的
     if (new Date().getHours() < 6) {
-      onConfirm();
+      onConfirm('next');
       return;
     }
-    const inToday = await this.checkPatientInTodaySchedule(patientId);
-    if (!inToday) {
-      onConfirm();
+    const todayShifts = await this.getPatientTodayShifts(patientId);
+    if (todayShifts.length === 0) {
+      onConfirm('next');
       return;
     }
     const patient: any = this.patientStore.patientMap().get(patientId);
+    const patientName = patient?.name || '';
+    const currentShift = getCurrentShiftCode();
+    const askScope = currentShift && todayShifts.includes(currentShift);
+
     this.confirmDialogTitle.set('今日有排程 — 確認立即變更');
     this.confirmDialogMessage.set(
-      `病人「${patient?.name || ''}」今天有排程透析，本次修改：${changeDesc}。\n\n按「確定」立即套用：\n・今日排程維持不動（不受影響）\n・明日起排程依新規則生效\n\n若變更是未來日期才發生，請按「取消」改用預約變更。`
+      `病人「${patientName}」今天有排程透析，本次修改：${changeDesc}。\n\n按「確定」立即套用：\n・明日起排程依新規則生效\n・${
+        askScope
+          ? `本班（${getShiftDisplayName(currentShift)}）尚未結束，接著會問今日要從本班還是下一班開始換床`
+          : '今日排程維持不動（不受影響）'
+      }\n\n若變更是未來日期才發生，請按「取消」改用預約變更。`
     );
-    this.confirmAction.set(onConfirm);
+    this.confirmAction.set(() => {
+      if (!askScope) {
+        onConfirm('next');
+        return;
+      }
+      // 第二段：本班/下一班
+      this.confirmDialogTitle.set(`${getShiftDisplayName(currentShift)}尚未結束 — 從哪一班開始？`);
+      this.confirmDialogMessage.set(buildShiftScopeMessage(patientName, currentShift, '床位變更'));
+      this.confirmDialogConfirmText.set('從本班開始');
+      this.confirmDialogCancelText.set('從下一班開始');
+      this.confirmAction.set(() => onConfirm('current'));
+      this.cancelAction.set(() => onConfirm('next'));
+      this.isConfirmDialogVisible.set(true);
+    });
     this.isConfirmDialogVisible.set(true);
+  }
+
+  /**
+   * 「從本班開始」：總表更新後，把病人今日「本班」的格子就地搬到新床位（走 PUT /schedules/:date，
+   * 與護理分組頁當天換床同一條路徑，不經調班申請；今日凍結守門不擋此路徑）。
+   * 新班別今天已結束、目標床被佔、或病人本班無格子 → 今日不動並提示。
+   */
+  private async applyRuleToTodayCurrentShift(patientId: string, bedNum: any, shiftIndex: number): Promise<void> {
+    const patient: any = this.patientStore.patientMap().get(patientId);
+    const name = patient?.name || '';
+    const currentShift = getCurrentShiftCode();
+    if (!currentShift) return;
+    const newShift = ORDERED_SHIFT_CODES[Number(shiftIndex)];
+    if (!newShift) return;
+    if (isShiftEndedToday(newShift)) {
+      this.showAlert('今日未換床', `新班別（${getShiftDisplayName(newShift)}）今天已結束，今日排程維持不動，明日起依新規則生效。`);
+      return;
+    }
+    try {
+      const dateStr = new Date().toLocaleDateString('sv-SE');
+      const rec: any = ((await this.schedulesApi.fetchWhere({ date: dateStr })) as any[])?.[0];
+      if (!rec?.id) return;
+      const schedule: Record<string, any> = { ...(rec.schedule || {}) };
+      const oldKey = Object.keys(schedule).find(
+        (k) => schedule[k]?.patientId === patientId && getShiftCodeFromSlotKey(k) === currentShift
+      );
+      if (!oldKey) return;
+      const newKey = buildScheduleKey(bedNum, newShift);
+      if (newKey === oldKey) return;
+      const occupant = schedule[newKey];
+      if (occupant?.patientId && occupant.patientId !== patientId) {
+        const occupantName = occupant.patientName || this.patientStore.patientMap().get(occupant.patientId)?.name || '其他病人';
+        this.showAlert(
+          '今日未換床',
+          `目標床位今天${getShiftDisplayName(newShift)}已有 ${occupantName}，今日排程維持不動（明日起依新規則生效）。\n今日若需調整，請至護理分組或每日排程頁手動換床。`
+        );
+        return;
+      }
+      schedule[newKey] = { ...schedule[oldKey] };
+      delete schedule[oldKey];
+      await this.schedulesApi.update(rec.id, { date: dateStr, schedule, expectedVersion: rec.version });
+      this.statusText.set(`總表已更新，${name} 今日${getShiftDisplayName(currentShift)}已同步換床`);
+    } catch (error: any) {
+      console.error('今日本班換床失敗:', error);
+      this.showAlert(
+        '今日未換床',
+        `總表已更新，但今日排程同步失敗：${error?.message || '未知錯誤'}\n今日請至護理分組或每日排程頁手動換床。`
+      );
+    }
   }
 
   private showAlert(title: string, message: string): void {
@@ -629,7 +728,7 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
           [patientId]: newRuleData,
         },
       });
-      this.statusText.set('總表已更新（今日排程維持不動，明日起套用）');
+      this.statusText.set('總表已更新（明日起套用）');
       await this.loadAllData();
     } catch (error: any) {
       this.statusText.set('儲存失敗');
@@ -644,7 +743,7 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
     const patientName = this.actionTarget().patientName;
     if (!patientId) return;
 
-    const inToday = await this.checkPatientInTodaySchedule(patientId);
+    const inToday = (await this.getPatientTodayShifts(patientId)).length > 0;
     this.confirmDialogTitle.set('刪除排班規則');
     this.confirmDialogMessage.set(
       `您確定要將 ${patientName} 從總表中移除嗎？\n\n此操作將立即從後台刪除其固定規則，並自動取消所有相關的未來調班申請。${
