@@ -18,8 +18,31 @@
         </div>
         <div class="detailed-stats">
           <div class="hepatitis-stats">
-            <span class="hepatitis-badge hbv">B肝 <span class="count">{{ patientStats().disease['HBV'] || 0 }}</span></span>
-            <span class="hepatitis-badge hcv">C肝 <span class="count">{{ patientStats().disease['HCV'] || 0 }}</span></span>
+            @for (kind of HEPATITIS_BADGES; track kind.tag) {
+              <div class="stats-popover-wrapper">
+                <button type="button" class="hepatitis-badge" [class.hbv]="kind.tag === 'HBV'" [class.hcv]="kind.tag === 'HCV'"
+                        (click)="togglePopover('hep-' + kind.tag); $event.stopPropagation()" title="點擊看名單">
+                  {{ kind.label }} <span class="count">{{ patientStats().disease[kind.tag] || 0 }}</span>
+                </button>
+                @if (activePopover() === 'hep-' + kind.tag) {
+                  <div class="stats-popover hepatitis-list-popover">
+                    @for (group of hepatitisListByStatus(kind.tag); track group.status) {
+                      <div class="popover-section-title">{{ group.label }} <span class="popover-count">{{ group.patients.length }}</span></div>
+                      @if (group.patients.length === 0) {
+                        <div class="popover-empty">—</div>
+                      }
+                      @for (p of group.patients; track p.id) {
+                        <div class="popover-patient" (click)="openPatientFromHepatitisList(p)">
+                          <span class="popover-patient-name">{{ p.name }}</span>
+                          <span class="popover-patient-mrn">{{ p.medicalRecordNumber }}</span>
+                          @if (p.pending) { <span class="popover-patient-pending">待追蹤</span> }
+                        </div>
+                      }
+                    }
+                  </div>
+                }
+              </div>
+            }
           </div>
           <div class="stats-popover-wrapper">
             <button class="stat-popover-trigger" (click)="togglePopover('opdChanges'); $event.stopPropagation()">門診變動</button>

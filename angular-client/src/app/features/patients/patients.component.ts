@@ -587,6 +587,38 @@ export class PatientsComponent implements OnInit, OnDestroy {
     return this.FREQ_COLOR_MAP[freq] || 'freq-grey';
   }
 
+  // --- B/C 肝徽章名單彈窗（依門診／急診／住院分組；陽性為主，待追蹤者附註） ---
+  readonly HEPATITIS_BADGES = [
+    { tag: 'HBV', label: 'B肝' },
+    { tag: 'HCV', label: 'C肝' },
+  ];
+  private readonly HEP_STATUS_GROUPS = [
+    { status: 'opd', label: '門診' },
+    { status: 'er', label: '急診' },
+    { status: 'ipd', label: '住院' },
+  ];
+
+  hepatitisListByStatus(tag: string): { status: string; label: string; patients: any[] }[] {
+    const pendingTag = `${tag}待追蹤`;
+    const all = this.patientStore.allPatients().filter((p: any) => !p.isDeleted);
+    return this.HEP_STATUS_GROUPS.map((g) => ({
+      ...g,
+      patients: all
+        .filter((p: any) => p.status === g.status && (p.diseases?.includes(tag) || p.diseases?.includes(pendingTag)))
+        .map((p: any) => ({ id: p.id, name: p.name, medicalRecordNumber: p.medicalRecordNumber, pending: !p.diseases?.includes(tag) }))
+        .sort((a: any, b: any) => Number(a.pending) - Number(b.pending) || String(a.name).localeCompare(String(b.name), 'zh-Hant')),
+    }));
+  }
+
+  /** 點名單：切到該病人的身分頁籤並帶入搜尋，關閉彈窗 */
+  openPatientFromHepatitisList(p: any): void {
+    this.activePopover.set(null);
+    const patient: any = this.patientStore.allPatients().find((x) => x.id === p.id);
+    if (patient?.status && patient.status !== this.activeTab()) this.changeTab(patient.status as PatientTab);
+    this.globalSearchTerm.set(p.medicalRecordNumber || p.name || '');
+    this.handleGlobalSearch(this.globalSearchTerm());
+  }
+
   // --- Popover / Dialog Helpers ---
   togglePopover(popoverName: string): void {
     this.activePopover.set(

@@ -119,6 +119,17 @@
 .hepatitis-badge.hcv {
   background-color: #0c8599;
 }
+button.hepatitis-badge { border: none; cursor: pointer; font-family: inherit; }
+button.hepatitis-badge:hover { filter: brightness(1.08); }
+.hepatitis-list-popover { width: 300px; max-height: 60vh; overflow-y: auto; left: 0; right: auto; }
+.hepatitis-list-popover .popover-section-title { display: flex; justify-content: space-between; margin-top: 0.4rem; }
+.hepatitis-list-popover .popover-count { color: #868e96; font-weight: 500; }
+.hepatitis-list-popover .popover-empty { color: #adb5bd; padding: 0.2rem 0.4rem; font-size: 0.85em; }
+.popover-patient { display: flex; align-items: center; gap: 8px; padding: 0.3rem 0.4rem; border-radius: 4px; cursor: pointer; font-size: 0.92em; }
+.popover-patient:hover { background: #f1f3f5; }
+.popover-patient-name { font-weight: 600; color: #212529; }
+.popover-patient-mrn { color: #868e96; font-size: 0.88em; margin-left: auto; }
+.popover-patient-pending { color: #b35c00; background: #fff7e6; border: 1px solid #e8a33d; border-radius: 4px; padding: 0 5px; font-size: 0.78em; }
 .hepatitis-badge .count {
   background-color: rgba(255, 255, 255, 0.25);
   padding: 1px 8px;
