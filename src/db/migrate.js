@@ -126,9 +126,10 @@ export function runMigrations() {
 
       // 血液傳染病四項（2026-08-30）：hepatitis_status 由 B/C 兩項擴為 hbsag/antihcv/hiv/rpr ＋ 各自檢驗日期 *Date
       // （舊 *FollowDate 改名；HIV/RPR 舊標籤有＝Y、無＝N；日期只有原 F 有，Y/N 待組長補填）。
-      // diseases 標籤同步重算：BC肝? 停用，改為「HBV待追蹤」等；含已刪除病人。以 JSON 內含 "hiv" 鍵判定已升級。
+      // diseases 標籤同步重算：BC肝? 停用，改為「HBV待追蹤」等；含已刪除病人。
+      // C 肝治癒併入四態（antihcvCured/antihcvCuredDate，由 C肝治癒 標籤補）。以 JSON 內含 "antihcvCured" 鍵判定已升級。
       const infRows = db
-        .prepare(`SELECT id, diseases, hepatitis_status FROM patients WHERE hepatitis_status IS NULL OR hepatitis_status NOT LIKE '%"hiv"%'`)
+        .prepare(`SELECT id, diseases, hepatitis_status FROM patients WHERE hepatitis_status IS NULL OR hepatitis_status NOT LIKE '%"antihcvCured"%'`)
         .all()
       if (infRows.length > 0) {
         const upd = db.prepare('UPDATE patients SET hepatitis_status = ?, diseases = ? WHERE id = ?')

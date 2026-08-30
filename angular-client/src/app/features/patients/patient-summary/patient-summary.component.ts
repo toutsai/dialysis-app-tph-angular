@@ -65,7 +65,9 @@ export class PatientSummaryComponent implements OnInit {
   }
 
   // 須注意/感染類標記(對應病人表單 DISEASES 清單)
-  private readonly INFECTION_TAGS = ['HBV', 'HCV', 'HIV', 'RPR', 'HBV待追蹤', 'HCV待追蹤', 'HIV待追蹤', 'RPR待追蹤', 'BC肝?', 'C肝治癒', 'COVID', '隔離'];
+  private readonly INFECTION_TAGS = ['HBV', 'HCV', 'HIV', 'RPR', 'HBV待追蹤', 'HCV待追蹤', 'HIV待追蹤', 'RPR待追蹤', 'BC肝?', 'C肝治癒', 'COVID', '疥瘡', '多重抗藥菌', '隔離'];
+  /** 其他隔離疾病「其他」自由文字存 `其他:xxx`，顯示去前綴 */
+  readonly displayInfectionTag = (t: string): string => (t.startsWith('其他:') ? t.slice(3) : t);
   readonly isPendingInfectionTag = (t: string): boolean => t.endsWith('待追蹤') || t === 'BC肝?';
   readonly shiftLabel: Record<string, string> = { early: '早', noon: '午', late: '晚' };
 
@@ -144,7 +146,7 @@ export class PatientSummaryComponent implements OnInit {
   readonly infectionTags = computed<string[]>(() => {
     const raw = (this.patient()?.['diseases'] as unknown[]) || [];
     const names = raw.map((d) => (typeof d === 'string' ? d : (d as any)?.name)).filter(Boolean);
-    return names.filter((n) => this.INFECTION_TAGS.includes(n));
+    return names.filter((n) => this.INFECTION_TAGS.includes(n) || n.startsWith('其他:'));
   });
 
   // 目前透析醫囑摘要欄位

@@ -25,6 +25,11 @@
 .hep-choice.active { background: #1565c0; border-color: #1565c0; color: #fff; font-weight: 700; }
 .hep-choice.active.positive { background: #c62828; border-color: #c62828; }
 .hep-choice.active.pending { background: #e08a00; border-color: #e08a00; }
+.hep-choice.cured { border-style: dashed; }
+.hep-choice.active.cured { background: #2e7d32; border-color: #2e7d32; }
+.hep-cured-sep { width: 1px; height: 18px; background: #ced4da; margin: 0 4px; }
+.custom-checkbox.legacy { border-style: dashed; color: #868e96; }
+.isolation-other-input { padding: 4px 9px; border: 1px solid #ced4da; border-radius: 6px; font-size: 0.92rem; min-width: 160px; }
 .hep-date { display: inline-flex; align-items: center; gap: 4px; font-size: 0.86rem; color: #6c757d; }
 .hep-follow-date { padding: 2px 6px; border: 1px solid #ced4da; border-radius: 4px; background: #fff; font-size: 0.92rem; }
 .hep-row.missing-date .hep-follow-date { border-color: #f5b971; background: #fff9f0; }

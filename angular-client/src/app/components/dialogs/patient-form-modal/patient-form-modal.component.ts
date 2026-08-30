@@ -7,7 +7,10 @@ import { addDaysToDateString, getTaipeiWeekdayIndex, getToday } from '@/utils/da
 import {
   HEPATITIS_OPTIONS,
   INFECTION_KEYS,
+  INFECTION_MANAGED_TAGS,
   INFECTION_META,
+  ISOLATION_OPTIONS,
+  ISOLATION_OTHER_PREFIX,
   dateKeyOf,
   normalizeHepatitisStatus,
   syncTagsFromHepatitis,
@@ -89,9 +92,11 @@ export class PatientFormModalComponent implements OnInit {
     '每周六': [5],
   };
   readonly VASC_ACCESSES = ['Double lumen', 'PERM', '左臂AVF', '右臂AVF', '左臂AVG', '右臂AVG'];
-  // HBV/HCV/HIV/RPR（與待追蹤）標籤皆由「血液傳染病」四項四態衍生（2026-08-30），此清單只剩其他標籤；
-  // C肝治癒獨立保留（治癒後 Anti-HCV 仍陽性）
-  readonly DISEASES = ['C肝治癒', 'COVID', '隔離'];
+  // HBV/HCV/HIV/RPR（與待追蹤）、C肝治癒 標籤皆由「血液傳染病」四態衍生（2026-08-30）；
+  // 「其他隔離疾病」= diseases 自由標籤：COVID／疥瘡／多重抗藥菌／其他（存 `其他:文字`）
+  readonly ISOLATION_OPTIONS = ISOLATION_OPTIONS;
+  isolationOtherActive = false;
+  isolationOther = '';
   readonly HEPATITIS_OPTIONS = HEPATITIS_OPTIONS;
   readonly INFECTION_FIELDS: { key: InfectionKey; dateKey: InfectionDateKey; label: string }[] = INFECTION_KEYS.map(
     (key) => ({ key, dateKey: dateKeyOf(key), label: INFECTION_META[key].label }),
@@ -120,6 +125,13 @@ export class PatientFormModalComponent implements OnInit {
     }
     if (!data.patientCategory) data.patientCategory = 'opd_regular';
     data.diseases = data.diseases || [];
+    // 其他隔離疾病「其他」自由文字：從 diseases 抽出到獨立欄位編輯，存檔時再組回 `其他:文字`
+    const otherTag = (data.diseases as string[]).find((t) => t.startsWith(ISOLATION_OTHER_PREFIX));
+    if (otherTag) {
+      this.isolationOther = otherTag.slice(ISOLATION_OTHER_PREFIX.length);
+      this.isolationOtherActive = true;
+      data.diseases = (data.diseases as string[]).filter((t) => !t.startsWith(ISOLATION_OTHER_PREFIX));
+    }
     // 血液傳染病四項四態：既有病人缺項（舊兩項格式）由標籤補齊；新病人預設空白（未填）強迫組長確認
     data.hepatitisStatus = data.id
       ? upgradeHepatitisStatus(data.hepatitisStatus, data.diseases)
@@ -175,6 +187,25 @@ export class PatientFormModalComponent implements OnInit {
 
   isDiseaseSelected(disease: string): boolean {
     return (this.form.diseases || []).includes(disease);
+  }
+
+  /** 既有但已不在選項內的隔離標籤（如舊「隔離」）：顯示讓組長可取消，不再提供新勾選 */
+  get legacyIsolationTags(): string[] {
+    return ((this.form.diseases || []) as string[]).filter(
+      (t) => !INFECTION_MANAGED_TAGS.includes(t) && !this.ISOLATION_OPTIONS.includes(t) && !t.startsWith(ISOLATION_OTHER_PREFIX),
+    );
+  }
+
+  toggleIsolationOther(): void {
+    this.isolationOtherActive = !this.isolationOtherActive;
+    if (!this.isolationOtherActive) this.isolationOther = '';
+  }
+
+  /** C 肝已治癒：關閉時清治癒日期 */
+  toggleCured(): void {
+    const s = this.hepatitis;
+    s.antihcvCured = s.antihcvCured === 'Y' ? '' : 'Y';
+    if (s.antihcvCured !== 'Y') s.antihcvCuredDate = '';
   }
 
   get hepatitis(): HepatitisStatus {
@@ -551,8 +582,12 @@ export class PatientFormModalComponent implements OnInit {
       return;
     }
     this.form.hepatitisStatus = normalizeHepatitisStatus(this.hepatitis);
-    // 標籤由四態衍生：排程備註 B/C/H/R（待追蹤 B?/C?/H?/R?）、護理分組肝炎優先、清單統計沿用 diseases 標籤
-    this.form.diseases = syncTagsFromHepatitis(this.form.diseases, this.form.hepatitisStatus);
+    // 其他隔離疾病「其他」文字：有勾且有填才存為 `其他:文字`
+    const otherText = this.isolationOtherActive ? (this.isolationOther || '').trim() : '';
+    const baseDiseases = ((this.form.diseases || []) as string[]).filter((t) => !t.startsWith(ISOLATION_OTHER_PREFIX));
+    if (otherText) baseDiseases.push(`${ISOLATION_OTHER_PREFIX}${otherText}`);
+    // 標籤由四態衍生：排程備註 B/C/H/R（待追蹤 B?/C?/H?/R?）/C癒、護理分組肝炎優先、清單統計沿用 diseases 標籤
+    this.form.diseases = syncTagsFromHepatitis(baseDiseases, this.form.hepatitisStatus);
     this.save.emit(this.form);
   }
 }

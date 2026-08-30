@@ -20,11 +20,20 @@ export const PENDING_SUFFIX = '待追蹤'
 export const dateKeyOf = (key) => `${key}Date`
 export const pendingTagOf = (key) => `${INFECTION_META[key].tag}${PENDING_SUFFIX}`
 
+/** C 肝已治癒（治癒後 Anti-HCV 仍陽性）：antihcvCured 'Y'|''，antihcvCuredDate 治癒日期；標籤 C肝治癒 由此衍生 */
+export const CURED_TAG = 'C肝治癒'
+
+/** 其他隔離疾病（diseases 自由標籤，非四態）：COVID／疥瘡／多重抗藥菌／其他（存 `其他:文字`） */
+export const ISOLATION_OPTIONS = ['COVID', '疥瘡', '多重抗藥菌']
+export const ISOLATION_OTHER_PREFIX = '其他:'
+const ISOLATION_ABBR = { COVID: '冠', 疥瘡: '疥', 多重抗藥菌: 'MDR', 隔離: '隔' }
+
 /** 由四態管理的標籤（寫入時先剝掉再依四態重建） */
 const MANAGED_TAGS = new Set([
   ...INFECTION_KEYS.map((k) => INFECTION_META[k].tag),
   ...INFECTION_KEYS.map(pendingTagOf),
   'BC肝?',
+  CURED_TAG,
 ])
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
@@ -48,6 +57,9 @@ export function normalizeHepatitisStatus(input) {
     out[dateKeyOf(key)] =
       value && value !== 'O' ? normDate(src[dateKeyOf(key)]) || normDate(src[`${key}FollowDate`]) : ''
   }
+  const cured = src.antihcvCured === 'Y' || src.antihcvCured === true
+  out.antihcvCured = cured ? 'Y' : ''
+  out.antihcvCuredDate = cured ? normDate(src.antihcvCuredDate) : ''
   return out
 }
 
@@ -64,17 +76,22 @@ export function deriveHepatitisFromTags(diseases) {
   }
   const out = {}
   for (const key of INFECTION_KEYS) {
-    out[key] = pick(key, key === 'antihcv' ? ['C肝治癒'] : [])
+    out[key] = pick(key, key === 'antihcv' ? [CURED_TAG] : [])
     out[dateKeyOf(key)] = ''
   }
+  out.antihcvCured = tags.includes(CURED_TAG) ? 'Y' : ''
+  out.antihcvCuredDate = ''
   return out
 }
 
-/** 既有四態缺項（舊兩項格式）時由標籤補齊，其餘原樣；回傳完整四項 */
+/** 既有四態缺項（舊格式）時由標籤補齊，其餘原樣；回傳完整四項（含 C 肝治癒） */
 export function upgradeHepatitisStatus(status, diseases) {
-  const s = normalizeHepatitisStatus(status)
+  const raw = status && typeof status === 'object' ? status : {}
+  const s = normalizeHepatitisStatus(raw)
   const derived = deriveHepatitisFromTags(diseases)
   for (const key of INFECTION_KEYS) if (!s[key]) s[key] = derived[key]
+  // 舊資料沒有 antihcvCured 鍵 → 由 C肝治癒 標籤補（有鍵就尊重，包含刻意取消治癒）
+  if (raw.antihcvCured === undefined && derived.antihcvCured) s.antihcvCured = 'Y'
   return s
 }
 
@@ -86,7 +103,19 @@ export function syncTagsFromHepatitis(diseases, status) {
     if (s[key] === 'Y') base.push(INFECTION_META[key].tag)
     else if (s[key] === 'F') base.push(pendingTagOf(key))
   }
+  if (s.antihcvCured === 'Y') base.push(CURED_TAG)
   return base
+}
+
+/** 其他隔離疾病縮寫：COVID→冠、疥瘡→疥、多重抗藥菌→MDR、其他:xxx／舊 隔離→隔 */
+export function isolationAbbrFromTags(diseases) {
+  const tags = Array.isArray(diseases) ? diseases.map(String) : []
+  const out = []
+  for (const t of tags) {
+    if (ISOLATION_ABBR[t]) out.push(ISOLATION_ABBR[t])
+    else if (t.startsWith(ISOLATION_OTHER_PREFIX)) out.push('隔')
+  }
+  return Array.from(new Set(out))
 }
 
 /** 排程備註縮寫：標籤 → B/C/H/R、待追蹤 → B?/C?/H?/R?（舊 BC肝? → BC?） */

@@ -114,7 +114,7 @@
                 [class.hbv]="t === 'HBV'"
                 [class.hcv]="t === 'HCV'"
                 [class.pending]="isPendingInfectionTag(t)"
-                >{{ t }}</span
+                >{{ displayInfectionTag(t) }}</span
               >
             </ng-container>
             <ng-template #noTag><span class="sub">無</span></ng-template>

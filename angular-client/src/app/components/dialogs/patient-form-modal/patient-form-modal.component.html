@@ -134,22 +134,43 @@
                     <input type="date" class="hep-follow-date" [(ngModel)]="hepatitis[f.dateKey]" [name]="f.dateKey" />
                   </label>
                 }
+                @if (f.key === 'antihcv') {
+                  <!-- C 肝已治癒（治癒後 Anti-HCV 仍陽性）：併入 C 肝列，取代原「須注意疾病」的 C肝治癒 勾選 -->
+                  <span class="hep-cured-sep"></span>
+                  <button type="button" class="hep-choice cured" [class.active]="hepatitis.antihcvCured === 'Y'" (click)="toggleCured()">已治癒</button>
+                  @if (hepatitis.antihcvCured === 'Y') {
+                    <label class="hep-date">
+                      <span>治癒日期</span>
+                      <input type="date" class="hep-follow-date" [(ngModel)]="hepatitis.antihcvCuredDate" name="antihcvCuredDate" />
+                    </label>
+                  }
+                }
               </div>
             }
           </div>
         </fieldset>
       </div>
 
-      <!-- 區塊 3：須注意疾病 ＋ 狀態標記（同一列） -->
+      <!-- 區塊 3：其他隔離疾病 ＋ 狀態標記（同一列） -->
       <div class="form-section">
         <div class="flags-row">
           <fieldset class="form-group flags-col">
-            <legend>須注意疾病</legend>
+            <legend>其他隔離疾病</legend>
             <div class="custom-checkbox-container">
-              @for (d of DISEASES; track d) {
+              @for (d of ISOLATION_OPTIONS; track d) {
                 <div class="custom-checkbox" [class.selected]="isDiseaseSelected(d)" (click)="toggleDisease(d)">
                   {{ d }}
                 </div>
+              }
+              @for (d of legacyIsolationTags; track d) {
+                <!-- 舊標籤（如 隔離）：仍可取消，但不再提供新勾選 -->
+                <div class="custom-checkbox legacy" [class.selected]="isDiseaseSelected(d)" (click)="toggleDisease(d)" title="舊標籤，取消後不再提供">
+                  {{ d }}
+                </div>
+              }
+              <div class="custom-checkbox" [class.selected]="isolationOtherActive" (click)="toggleIsolationOther()">其他</div>
+              @if (isolationOtherActive) {
+                <input type="text" class="isolation-other-input" [(ngModel)]="isolationOther" name="isolationOther" placeholder="請填隔離疾病名稱" (click)="$event.stopPropagation()" />
               }
             </div>
           </fieldset>
