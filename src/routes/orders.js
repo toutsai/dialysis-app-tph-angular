@@ -1417,45 +1417,93 @@ router.post('/lab-reports/upload', ...isDoctorRole, async (req, res) => {
       }
     }
 
-    // 批次寫入資料庫
+    // 批次寫入資料庫：同病人同報告日已有 excel_import 報告時「合併更新」而非再插一列
+    // （重傳舊檔可補新對應到的細項如 MCV/RDW；同 key 以本次上傳值為準）。
+    // 既有重複列（歷史純 INSERT 造成，會加權污染研究頁月平均）一併收斂成一列：
+    // 保留最早一列，results 依 created_at 先後疊合後蓋上本次資料，其餘列刪除。
+    let insertedCount = 0
+    let mergedCount = 0
+    let removedDupCount = 0
     if (reports.size > 0) {
+      const findStmt = db.prepare(`
+        SELECT id, results FROM lab_reports
+        WHERE patient_id = ? AND report_date = ? AND report_type = 'excel_import'
+        ORDER BY created_at, rowid
+      `)
       const insertStmt = db.prepare(`
         INSERT INTO lab_reports (id, patient_id, report_date, report_type, results, file_path, uploaded_by)
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `)
+      const updateStmt = db.prepare(`
+        UPDATE lab_reports
+        SET results = ?, file_path = ?, uploaded_by = ?, updated_at = datetime('now', 'localtime')
+        WHERE id = ?
+      `)
+      const deleteStmt = db.prepare('DELETE FROM lab_reports WHERE id = ?')
+      const uploadedBy = JSON.stringify({ uid: req.user.id, name: req.user.name })
 
-      const insertMany = db.transaction((reportList) => {
+      const upsertMany = db.transaction((reportList) => {
         for (const report of reportList) {
-          insertStmt.run(
-            report.id,
-            report.patientId,
-            report.reportDate,
-            'excel_import',
-            JSON.stringify(report.data),
-            report.sourceFile,
-            JSON.stringify({ uid: req.user.id, name: req.user.name }),
-          )
+          const existing = findStmt.all(report.patientId, report.reportDate)
+          if (existing.length === 0) {
+            insertStmt.run(
+              report.id,
+              report.patientId,
+              report.reportDate,
+              'excel_import',
+              JSON.stringify(report.data),
+              report.sourceFile,
+              uploadedBy,
+            )
+            insertedCount++
+            continue
+          }
+          const merged = {}
+          for (const row of existing) {
+            try {
+              Object.assign(merged, JSON.parse(row.results || '{}'))
+            } catch {
+              // 壞 JSON 列忽略，內容由本次上傳資料取代
+            }
+          }
+          Object.assign(merged, report.data)
+          updateStmt.run(JSON.stringify(merged), report.sourceFile, uploadedBy, existing[0].id)
+          mergedCount++
+          for (const row of existing.slice(1)) {
+            deleteStmt.run(row.id)
+            removedDupCount++
+          }
         }
       })
 
-      insertMany(Array.from(reports.values()))
+      upsertMany(Array.from(reports.values()))
     }
 
     invalidateListCache() // 匯入後立即清快取，避免「匯入卻看不到」
 
     await logAudit('LAB_REPORT_UPLOAD', req.user.id, req.user.name, 'lab_reports', fileName, {
       processedCount: reports.size,
+      insertedCount,
+      mergedCount,
+      removedDupCount,
       errorCount: errors.length,
     })
 
     console.log(
-      `[LabReport] 處理完成，成功匯入 ${reports.size} 份報告，${errors.length} 個問題行。`,
+      `[LabReport] 處理完成：新增 ${insertedCount} 份、合併更新 ${mergedCount} 份（清除 ${removedDupCount} 筆重複列），${errors.length} 個問題行。`,
     )
 
+    const mergedNote =
+      mergedCount > 0
+        ? `、合併更新 ${mergedCount} 份既有報告${removedDupCount > 0 ? `（清除 ${removedDupCount} 筆重複）` : ''}`
+        : ''
     res.json({
       success: true,
-      message: `處理完成！成功聚合並匯入 ${reports.size} 份報告，發現 ${errors.length} 個問題行。`,
+      message: `處理完成！新增 ${insertedCount} 份報告${mergedNote}，發現 ${errors.length} 個問題行。`,
       processedCount: reports.size,
+      insertedCount,
+      mergedCount,
+      removedDupCount,
       errorCount: errors.length,
       errors: errors.slice(0, 50),
     })

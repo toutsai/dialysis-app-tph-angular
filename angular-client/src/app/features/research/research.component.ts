@@ -96,7 +96,7 @@ interface StudyResponse {
 interface TrendDrugPoint { month: string; users: number; meanWeekly: number | null }
 interface TrendLabPoint { month: string; n: number; mean: number | null }
 interface TrendDrug { key: string; label: string; unit: string; points: TrendDrugPoint[] }
-interface TrendLab { key: string; label: string; unit: string; points: TrendLabPoint[] }
+interface TrendLab { key: string; label: string; unit: string; quarterly?: boolean; points: TrendLabPoint[] }
 interface TrendBlockData { key: string; title: string; drugs: TrendDrug[]; labs: TrendLab[] }
 interface TrendsResponse { generatedAt: string | null; months: string[]; blocks: TrendBlockData[] }
 
@@ -143,7 +143,7 @@ interface MiniChart {
   maxBar: number;
 }
 
-interface TrendChartCard { label: string; unit: string; chart: MiniChart | null }
+interface TrendChartCard { label: string; unit: string; quarterly?: boolean; chart: MiniChart | null }
 interface TrendBlockView { key: string; title: string; drugCharts: TrendChartCard[]; labCharts: TrendChartCard[] }
 
 const CHART_W = 680;
@@ -228,9 +228,11 @@ export class ResearchComponent implements OnInit {
       labCharts: b.labs.map((l) => ({
         label: l.label,
         unit: l.unit,
+        quarterly: l.quarterly,
         chart: this.buildMiniChart(
           l.points.map((p) => ({ month: p.month, value: p.mean, count: p.n })),
           '#c62828',
+          l.quarterly,
         ),
       })),
     }));
@@ -384,7 +386,12 @@ export class ResearchComponent implements OnInit {
   private buildMiniChart(
     points: { month: string; value: number | null; count: number }[],
     color: string,
+    quarterlyOnly = false,
   ): MiniChart | null {
+    // 季抽項目（Ferritin/TSAT/iPTH，抽 3/6/9/12 月）x 軸只留季月，空月不佔位
+    if (quarterlyOnly) {
+      points = points.filter((p) => [3, 6, 9, 12].includes(Number(p.month.slice(5, 7))));
+    }
     const withValue = points.filter((p) => p.value !== null);
     if (!withValue.length) return null;
     const n = points.length;

@@ -72,11 +72,12 @@
 
       <section class="card">
         <h3>{{ blk.title }}｜檢驗月平均</h3>
-        <p class="section-hint">淡色柱 = 當月檢驗筆數、紅線 = 全中心月平均。與上方藥物圖同一時間軸，可上下對照。</p>
+        <p class="section-hint">淡色柱 = 當月檢驗筆數、紅線 = 全中心月平均。月抽項目與上方藥物圖同一時間軸；標「季抽」者 x 軸只列 3/6/9/12 月。</p>
         <div class="mini-grid">
           @for (lc of blk.labCharts; track lc.label) {
             <div class="mini-card">
               <div class="mini-title">{{ lc.label }} <span class="unit">{{ lc.unit }}</span>
+                @if (lc.quarterly) { <span class="unit">季抽（3/6/9/12 月）</span> }
                 @if (lc.chart) { <span class="bar-max">筆數峰值 {{ lc.chart.maxBar }}</span> }
               </div>
               @if (lc.chart; as c) {

@@ -213,9 +213,11 @@ const TREND_BLOCKS = [
     ],
     labs: [
       { key: 'Hb', label: 'Hb', unit: 'g/dL', dec: 2 },
-      { key: 'Ferritin', label: 'Ferritin', unit: 'ng/mL', dec: 0 },
-      { key: 'TSAT', label: 'TSAT', unit: '%', dec: 1 },
-      { key: 'iPTH', label: 'iPTH', unit: 'pg/mL', dec: 1 }
+      { key: 'MCV', label: 'MCV', unit: 'fL', dec: 1 },
+      { key: 'RDW', label: 'RDW', unit: '%', dec: 1 },
+      { key: 'Ferritin', label: 'Ferritin', unit: 'ng/mL', dec: 0, quarterly: true },
+      { key: 'TSAT', label: 'TSAT', unit: '%', dec: 1, quarterly: true },
+      { key: 'iPTH', label: 'iPTH', unit: 'pg/mL', dec: 1, quarterly: true }
     ]
   },
   {
@@ -229,7 +231,7 @@ const TREND_BLOCKS = [
     labs: [
       { key: 'Ca', label: 'Ca', unit: 'mg/dL', dec: 2 },
       { key: 'P', label: 'P', unit: 'mg/dL', dec: 2 },
-      { key: 'iPTH', label: 'iPTH', unit: 'pg/mL', dec: 1 }
+      { key: 'iPTH', label: 'iPTH', unit: 'pg/mL', dec: 1, quarterly: true }
     ]
   }
 ]
@@ -270,7 +272,7 @@ export function buildMonthlyTrends(userConfig = {}) {
     try { data = JSON.parse(lr.results || '{}') } catch { continue }
     let bucket = labMonthly.get(mi)
     if (!bucket) { bucket = {}; labMonthly.set(mi, bucket) }
-    for (const key of ['Hb', 'Ferritin', 'iPTH', 'Ca', 'P']) {
+    for (const key of ['Hb', 'MCV', 'RDW', 'Ferritin', 'iPTH', 'Ca', 'P']) {
       const v = parseFloat(data[key])
       if (!Number.isFinite(v)) continue
       ;(bucket[key] = bucket[key] || []).push(v)
@@ -320,6 +322,7 @@ export function buildMonthlyTrends(userConfig = {}) {
       key: l.key,
       label: l.label,
       unit: l.unit,
+      quarterly: !!l.quarterly,
       points: monthIdxs.map((mi) => {
         const vals = (labMonthly.get(mi) || {})[l.key] || []
         return { month: monthKeyFromIndex(mi), n: vals.length, mean: vals.length ? round(mean(vals), l.dec) : null }
