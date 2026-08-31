@@ -9,7 +9,7 @@ import { PatientStoreService } from '@services/patient-store.service';
 import { LabAlertDetailModalComponent } from '@app/components/dialogs/lab-alert-detail-modal/lab-alert-detail-modal.component';
 import { queryWithInChunks } from '@/utils/firestoreUtils';
 import { LAB_ITEM_DISPLAY_NAMES } from '@/constants/labAlertConstants';
-import { formatDateToYYYYMM, formatDateToYYYYMMDD } from '@/utils/dateUtils';
+import { createDateString, formatDateToYYYYMM, formatDateToYYYYMMDD } from '@/utils/dateUtils';
 import { escapeHtml } from '@/utils/sanitize';
 
 @Component({
@@ -148,6 +148,16 @@ export class LabReportsComponent implements OnInit, OnDestroy {
   private readonly QUARTERLY_ITEMS = [...this.MONTHLY_ITEMS, 'Cholesterol', 'Triglyceride', 'HDL', 'LDL', 'iPTH', 'Ferritin', 'TIBC'];
   private readonly SEMI_ANNUAL_ITEMS = [...this.QUARTERLY_ITEMS, 'TotalProtein'];
   private readonly ANNUAL_ITEMS = [...this.QUARTERLY_ITEMS, 'TotalProtein', 'HBsAg', 'AntiHBs', 'AntiHCV'];
+
+  /** 該月 [YYYY-MM-01, 次月-01) 半開區間字串，純字串運算不經 Date/時區 */
+  private monthRangeStrings(year: number, month: number): { startDateStr: string; endDateStr: string } {
+    const nextYear = month === 12 ? year + 1 : year;
+    const nextMonth = month === 12 ? 1 : month + 1;
+    return {
+      startDateStr: createDateString(year, month, 1),
+      endDateStr: createDateString(nextYear, nextMonth, 1),
+    };
+  }
 
   /** 依月份(1-12)回傳該月應驗的項目 data 短碼清單 */
   private requiredItemsForMonth(monthNum: number): string[] {
@@ -695,15 +705,15 @@ export class LabReportsComponent implements OnInit, OnDestroy {
     }
 
     const [year, month] = this.groupMonth().split('-').map(Number);
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 1);
+    // 月份區間用純字串組（勿經 toISOString：本地 UTC+8 午夜轉 UTC 會退一天，害月底 30/31 號的報告被排除）
+    const { startDateStr, endDateStr } = this.monthRangeStrings(year, month);
     const allReportsInMonth: any[] = await queryWithInChunks('lab_reports', 'patientId', patientIdsInGroup, []);
     // Local date filter
     const filteredReports = allReportsInMonth.filter((r: any) => {
       const rd = r.reportDate;
       if (!rd) return false;
-      const rdStr = typeof rd === 'string' ? rd : (rd.toDate ? rd.toDate().toISOString().slice(0, 10) : '');
-      return rdStr >= startDate.toISOString().slice(0, 10) && rdStr < endDate.toISOString().slice(0, 10);
+      const rdStr = typeof rd === 'string' ? rd : (rd.toDate ? formatDateToYYYYMMDD(rd.toDate()) : '');
+      return rdStr >= startDateStr && rdStr < endDateStr;
     });
 
     const aggregatedReports = new Map<string, any>();
@@ -928,8 +938,9 @@ export class LabReportsComponent implements OnInit, OnDestroy {
       }
 
       const [year, month] = this.manualEntryMonth().split('-').map(Number);
-      const startDate = new Date(year, month - 1, 1);
-      const endDate = new Date(year, month, 1);
+      // 月份區間用純字串組（勿經 toISOString：本地 UTC+8 午夜轉 UTC 會退一天，害月底 30/31 號的補登
+      // 永遠被判為「不在該月」→ 病人一直留在缺漏名單；2026-08-31 林芳杏案）
+      const { startDateStr, endDateStr } = this.monthRangeStrings(year, month);
       const allReportsChunked: any[] = await queryWithInChunks(
         'lab_reports',
         'patientId',
@@ -937,8 +948,6 @@ export class LabReportsComponent implements OnInit, OnDestroy {
         [],
       );
       // Local date filter
-      const startDateStr = startDate.toISOString().slice(0, 10);
-      const endDateStr = endDate.toISOString().slice(0, 10);
       const reportsInMonth = allReportsChunked.filter((r: any) => {
         const rd = typeof r.reportDate === 'string' ? r.reportDate : '';
         return rd >= startDateStr && rd < endDateStr;
