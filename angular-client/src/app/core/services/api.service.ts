@@ -43,7 +43,8 @@ export const COLLECTION_ROUTE_MAP: Record<string, string> = {
   site_config: '/system/site-config',
   // 庫存管理 (TPH: 全部在 /system/inventory 下)
   inventory_purchases: '/system/inventory/purchases',
-  inventory_counts: '/system/inventory/monthly/count',
+  // 盤點（inventory_count_docs）：GET 列表 / GET :date / GET latest / PUT :date / DELETE :date
+  inventory_counts: '/system/inventory/counts',
   // 耗材月報表：讀 orders.js GET /consumables（與 POST /consumables/upload 同一張表、同一資料形狀）。
   // 舊值 /system/inventory/consumables/query 需帶 month 且假設另一種資料形狀，fetchAll() 永遠回空陣列。
   consumables_reports: '/orders/consumables',

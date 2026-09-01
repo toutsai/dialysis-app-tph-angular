@@ -953,505 +953,278 @@ router.delete('/inventory/purchases/:id', ...isInventoryRole, async (req, res) =
   }
 })
 
-/**
- * GET /api/system/inventory/monthly/calculation
- * 計算每月盤點
- */
-router.get('/inventory/monthly/calculation', ...isInventoryRole, (req, res) => {
+// ========================================
+// 盤點文件 API（2026-09-01 整合）
+// 盤點 = 某盤點日各品項「實際數量」一份文件（單位：個；count_boxes 另存箱數輸入）。
+// 週二週盤點與月底盤點是同一種紀錄。庫存總覽/每週訂單/月報表以「最近一次盤點」為基準：
+//   推估庫存   = 盤點量 + 盤點日後已到貨(arrived) − 盤點日後消耗
+//               （消耗：有上傳實際區間的日子用實際紀錄，缺的日子用排程推估；算法在前端 inventory-stock.service.ts）
+//   下週訂單量 = max(0, 安全庫存(日均消耗 × 9 天) − 推估庫存 − 已叫貨待到貨)
+// 舊的 /inventory/monthly/*、/inventory/weekly/*、/inventory/consumables/{upload,query}、/inventory/consumption/monthly-summary
+// 讀寫的是 Vue 時代 report_data 扁平格式（row.consumableCounts），與現行 ranges 格式不符且前端無人呼叫，已於同日移除。
+// ========================================
+
+const COUNT_CATEGORIES = ['artificialKidney', 'dialysateCa', 'bicarbonateType']
+const COUNT_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+function parseJsonObject(text) {
   try {
-    const { startDate, endDate } = req.query
-    const db = getDatabase()
+    const value = JSON.parse(text || '{}')
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+  } catch {
+    return {}
+  }
+}
 
-    // 取得所有品項
-    const items = db.prepare('SELECT id, name, category, units_per_box FROM inventory_items').all()
+function isValidCountDate(value) {
+  if (typeof value !== 'string' || !COUNT_DATE_RE.test(value)) return false
+  const [y, m, d] = value.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d
+}
 
-    const result = {
-      artificialKidney: {},
-      dialysateCa: {},
-      bicarbonateType: {},
+/** 只保留三類別 × 品名 → 非負數字；其餘鍵值丟棄 */
+function sanitizeCountMap(input) {
+  const out = {}
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return out
+  for (const category of COUNT_CATEGORIES) {
+    const src = input[category]
+    if (!src || typeof src !== 'object' || Array.isArray(src)) continue
+    out[category] = {}
+    for (const [name, value] of Object.entries(src)) {
+      const key = String(name).trim()
+      if (!key) continue
+      const n = Number(value)
+      out[category][key] = Number.isFinite(n) && n >= 0 ? n : 0
     }
+  }
+  return out
+}
 
-    // 預先取得所有相關資料，避免 N+1
-    // 1. 進貨
-    // 只算已到貨（入庫）的；已叫貨待到貨(status='ordered')不計入庫存
-    const purchases = db.prepare(`
-      SELECT item_id, quantity, purchase_date FROM inventory_purchases
-      WHERE purchase_date <= ? AND (status IS NULL OR status = 'arrived')
-    `).all(endDate)
+function mapCountDocRow(row) {
+  const parseActor = (text) => {
+    const obj = parseJsonObject(text)
+    return obj.name || obj.uid ? obj : null
+  }
+  return {
+    id: row.count_date,
+    countDate: row.count_date,
+    counts: parseJsonObject(row.counts),
+    countBoxes: parseJsonObject(row.count_boxes),
+    notes: row.notes || '',
+    createdBy: parseActor(row.created_by),
+    updatedBy: parseActor(row.updated_by),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
 
-    // 2. 消耗 (報表)
-    // 消耗比較麻煩，因為它是 JSON。我們只能撈出範圍內的報表，然後在記憶體處理。
-    // 假設我們只需要 startDate 之後的消耗來計算區間消耗。
-    // 至於期初庫存... 
-    // 簡單化策略: 
-    // 期初 = 0 (或上次盤點? 太複雜暫不實作) + startDate 之前的進貨 - startDate 之前的消耗
-    // 這樣可以算出 startDate 當下的理論庫存。
-    // 如果系統剛上線，這樣是 0 + 0 - 0 = 0。
-    
-    // 讓我們改用更簡單的邏輯符合 UI:
-    // UI 顯示 "期初結存 (Start 之前)", "區間進貨", "區間消耗", "期末結存".
-    // Previous Stock = Sum(Purchase < Start) - Sum(Consumption < Start) + Initial(0)
-    // Interval Purchase = Sum(Purchase >= Start AND <= End)
-    // Interval Consume = Sum(Consumption >= Start AND <= End)
-    
-    const reports = db.prepare(`
-      SELECT report_date, report_data FROM consumables_reports
-      WHERE report_date <= ?
-    `).all(endDate)
+/**
+ * 品項反查表：`${category}:${name}` → id[]（inventory_items 對 (category,name) 沒有 UNIQUE，
+ * 重複品項一律全部套用，避免只有其中一筆吃到盤點數量）
+ */
+function buildInventoryItemIdMap(db) {
+  const items = db.prepare('SELECT id, name, category FROM inventory_items').all()
+  const map = new Map()
+  for (const i of items) {
+    const key = `${i.category}:${i.name}`
+    if (!map.has(key)) map.set(key, [])
+    map.get(key).push(i.id)
+  }
+  return map
+}
 
-    const itemMap = items.reduce((acc, item) => {
-      acc[item.name] = item // Map name to item for consumption mapping
-      acc[item.id] = item   // Map id to item for purchase mapping
-      return acc
-    }, {})
-
-    // 初始化結果結構
-    items.forEach(item => {
-      if (result[item.category]) {
-        result[item.category][item.name] = {
-          previousStock: 0,
-          purchased: 0,
-          consumed: 0,
-          currentStock: 0,
-          unitsPerBox: item.units_per_box
-        }
+/** 把某盤點文件的數量套到 inventory_items.current_quantity（品名+分類反查；查無者略過，不自動建品項） */
+function applyCountDocToItemQuantities(db, counts) {
+  const itemMap = buildInventoryItemIdMap(db)
+  const updateQty = db.prepare('UPDATE inventory_items SET current_quantity = ? WHERE id = ?')
+  let applied = 0
+  for (const category of Object.keys(counts)) {
+    for (const [name, qty] of Object.entries(counts[category])) {
+      for (const itemId of itemMap.get(`${category}:${name}`) || []) {
+        updateQty.run(qty, itemId)
+        applied++
       }
-    })
+    }
+  }
+  return applied
+}
 
-    // 計算進貨
-    purchases.forEach(p => {
-      const item = itemMap[p.item_id]
-      if (item && result[item.category] && result[item.category][item.name]) {
-        const target = result[item.category][item.name]
-        if (p.purchase_date < startDate) {
-          target.previousStock += (p.quantity || 0)
-        } else {
-          target.purchased += (p.quantity || 0)
-        }
-      }
-    })
-
-    // 計算消耗
-    reports.forEach(report => {
-      try {
-        const rows = JSON.parse(report.report_data || '[]')
-        const isBeforeStart = report.report_date < startDate
-        
-        rows.forEach(row => {
-           if (row.consumableCounts) {
-             Object.entries(row.consumableCounts).forEach(([itemName, count]) => {
-               const item = itemMap[itemName]
-               if (item && result[item.category] && result[item.category][itemName]) {
-                 const target = result[item.category][itemName]
-                 const numCount = Number(count) || 0
-                 if (isBeforeStart) {
-                   target.previousStock -= numCount
-                 } else {
-                   target.consumed += numCount
-                 }
-               }
-             })
-           }
-        })
-      } catch (e) { }
-    })
-
-    // 計算期末
-    Object.keys(result).forEach(cat => {
-      Object.values(result[cat]).forEach(data => {
-        // 校正負數 (期初不應為負? 但如果是計算出來的...)
-        // data.previousStock = Math.max(0, data.previousStock) 
-        data.currentStock = data.previousStock + data.purchased - data.consumed
-      })
-    })
-
-    res.json(result)
-
+/**
+ * GET /api/system/inventory/counts?from=YYYY-MM-DD&to=YYYY-MM-DD&limit=N
+ * 盤點文件列表（新→舊）
+ */
+router.get('/inventory/counts', ...isInventoryRole, (req, res) => {
+  try {
+    const { from, to, limit } = req.query
+    const db = getDatabase()
+    let sql = 'SELECT * FROM inventory_count_docs WHERE 1=1'
+    const params = []
+    if (from && isValidCountDate(String(from))) {
+      sql += ' AND count_date >= ?'
+      params.push(String(from))
+    }
+    if (to && isValidCountDate(String(to))) {
+      sql += ' AND count_date <= ?'
+      params.push(String(to))
+    }
+    sql += ' ORDER BY count_date DESC LIMIT ?'
+    const lim = Math.min(Math.max(parseInt(limit, 10) || 500, 1), 500)
+    params.push(lim)
+    const rows = db.prepare(sql).all(...params)
+    res.json(rows.map(mapCountDocRow))
   } catch (error) {
-    console.error('計算庫存錯誤:', error)
-    res.status(500).json({
-      error: true,
-      message: '計算庫存失敗',
-    })
+    console.error('取得盤點列表錯誤:', error)
+    res.status(500).json({ error: true, message: '取得盤點列表失敗' })
   }
 })
 
 /**
- * POST /api/system/inventory/monthly/count
- * 儲存盤點結果
+ * GET /api/system/inventory/counts/latest?before=YYYY-MM-DD
+ * 取 before（預設今天，台北）當天或之前最近一次盤點；沒有回 404
  */
-router.post('/inventory/monthly/count', ...isInventoryRole, async (req, res) => {
+router.get('/inventory/counts/latest', ...isInventoryRole, (req, res) => {
   try {
-    const { countDate, counts } = req.body // counts: { category: { itemName: { adjustment, currentStock... } } }
+    const before = req.query.before && isValidCountDate(String(req.query.before))
+      ? String(req.query.before)
+      : getTaipeiTodayString()
     const db = getDatabase()
-    
-    // 我們需要將 counts 轉換為 inventory_counts 紀錄
-    // 並更新 inventory_items.current_quantity
-    
-    const items = db.prepare('SELECT id, name, category FROM inventory_items').all()
-    const itemMap = items.reduce((acc, i) => ({ ...acc, [`${i.category}:${i.name}`]: i.id }), {})
-    const createdBy = JSON.stringify({ uid: req.user.id, name: req.user.name })
+    const row = db
+      .prepare('SELECT * FROM inventory_count_docs WHERE count_date <= ? ORDER BY count_date DESC LIMIT 1')
+      .get(before)
+    if (!row) {
+      return res.status(404).json({ error: true, message: `${before} 之前沒有盤點紀錄` })
+    }
+    res.json(mapCountDocRow(row))
+  } catch (error) {
+    console.error('取得最近盤點錯誤:', error)
+    res.status(500).json({ error: true, message: '取得最近盤點失敗' })
+  }
+})
 
-    const insertStmt = db.prepare(`
+/**
+ * GET /api/system/inventory/counts/:date
+ */
+router.get('/inventory/counts/:date', ...isInventoryRole, (req, res) => {
+  try {
+    const { date } = req.params
+    if (!isValidCountDate(date)) {
+      return res.status(400).json({ error: true, message: '盤點日格式須為 YYYY-MM-DD' })
+    }
+    const db = getDatabase()
+    const row = db.prepare('SELECT * FROM inventory_count_docs WHERE count_date = ?').get(date)
+    if (!row) {
+      return res.status(404).json({ error: true, message: `${date} 沒有盤點紀錄` })
+    }
+    res.json(mapCountDocRow(row))
+  } catch (error) {
+    console.error('取得盤點錯誤:', error)
+    res.status(500).json({ error: true, message: '取得盤點失敗' })
+  }
+})
+
+/**
+ * PUT /api/system/inventory/counts/:date
+ * 新增/覆寫該盤點日文件。body: { counts:{category:{item:個數}}, countBoxes:{category:{item:箱數}}, notes }
+ * 同交易內：重寫 inventory_counts 該日流水；若此日是（含）最新盤點，套用到 inventory_items.current_quantity。
+ */
+router.put('/inventory/counts/:date', ...isInventoryRole, async (req, res) => {
+  try {
+    const { date } = req.params
+    if (!isValidCountDate(date)) {
+      return res.status(400).json({ error: true, message: '盤點日格式須為 YYYY-MM-DD' })
+    }
+    const body = req.body && typeof req.body === 'object' ? req.body : {}
+    const counts = sanitizeCountMap(body.counts)
+    const countBoxes = sanitizeCountMap(body.countBoxes)
+    const notes = typeof body.notes === 'string' ? body.notes.trim() : ''
+    const actor = JSON.stringify({ uid: req.user.id, name: req.user.name })
+    const db = getDatabase()
+
+    const latest = db.prepare('SELECT MAX(count_date) AS d FROM inventory_count_docs').get()
+    const isLatest = !latest?.d || date >= latest.d
+
+    const upsert = db.prepare(`
+      INSERT INTO inventory_count_docs (count_date, counts, count_boxes, notes, created_by, updated_by)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(count_date) DO UPDATE SET
+        counts = excluded.counts,
+        count_boxes = excluded.count_boxes,
+        notes = excluded.notes,
+        updated_by = excluded.updated_by,
+        updated_at = datetime('now', 'localtime')
+    `)
+    const deleteRows = db.prepare('DELETE FROM inventory_counts WHERE count_date = ?')
+    const insertRow = db.prepare(`
       INSERT INTO inventory_counts (id, item_id, counted_quantity, count_date, discrepancy, notes, counted_by)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `)
 
-    const updateItemStmt = db.prepare(`
-      UPDATE inventory_items SET current_quantity = ? WHERE id = ?
-    `)
-
-    const transaction = db.transaction(() => {
-      for (const category in counts) {
-        for (const [itemName, data] of Object.entries(counts[category])) {
-          const itemId = itemMap[`${category}:${itemName}`]
-          if (itemId) {
-            const finalQuantity = (data.currentStock || 0) + (data.adjustment || 0)
-            
-            insertStmt.run(
-              uuidv4(),
-              itemId,
-              finalQuantity,
-              countDate,
-              data.adjustment || 0,
-              '', // notes
-              createdBy
-            )
-            
-            updateItemStmt.run(finalQuantity, itemId)
+    db.transaction(() => {
+      upsert.run(date, JSON.stringify(counts), JSON.stringify(countBoxes), notes, actor, actor)
+      deleteRows.run(date)
+      const itemMap = buildInventoryItemIdMap(db)
+      for (const category of Object.keys(counts)) {
+        for (const [name, qty] of Object.entries(counts[category])) {
+          for (const itemId of itemMap.get(`${category}:${name}`) || []) {
+            insertRow.run(uuidv4(), itemId, qty, date, 0, 'count-doc', actor)
           }
         }
       }
-    })
-    
-    transaction()
+      if (isLatest) applyCountDocToItemQuantities(db, counts)
+    })()
 
-    res.json({
-      success: true,
-      message: '盤點結果已儲存',
+    await logAudit('INVENTORY_COUNT_SAVE', req.user.id, req.user.name, 'inventory_count_docs', date, {
+      itemCount: Object.values(counts).reduce((n, m) => n + Object.keys(m).length, 0),
+      isLatest,
     })
 
+    const row = db.prepare('SELECT * FROM inventory_count_docs WHERE count_date = ?').get(date)
+    res.json(mapCountDocRow(row))
   } catch (error) {
     console.error('儲存盤點錯誤:', error)
-    res.status(500).json({
-      error: true,
-      message: '儲存盤點失敗',
-    })
+    res.status(500).json({ error: true, message: '儲存盤點失敗' })
   }
 })
 
 /**
- * GET /api/system/inventory/weekly/data
- * 取得每週訂單資料 (盤點與消耗預估)
+ * DELETE /api/system/inventory/counts/:date
+ * 刪除盤點文件與該日 inventory_counts 流水；若刪的是最新盤點，品項 current_quantity 改套用新的最新盤點。
  */
-router.get('/inventory/weekly/data', ...isInventoryRole, (req, res) => {
+router.delete('/inventory/counts/:date', ...isInventoryRole, async (req, res) => {
   try {
-    const { date, month } = req.query
+    const { date } = req.params
+    if (!isValidCountDate(date)) {
+      return res.status(400).json({ error: true, message: '盤點日格式須為 YYYY-MM-DD' })
+    }
     const db = getDatabase()
-
-    // 1. 取得當日盤點 (如果有)
-    const counts = db.prepare(`
-      SELECT c.item_id, c.counted_quantity, i.name as item_name, i.category
-      FROM inventory_counts c
-      LEFT JOIN inventory_items i ON c.item_id = i.id
-      WHERE c.count_date = ?
-    `).all(date)
-
-    const weeklyCounts = {
-      artificialKidney: {},
-      dialysateCa: {},
-      bicarbonateType: {},
+    const existing = db.prepare('SELECT count_date FROM inventory_count_docs WHERE count_date = ?').get(date)
+    if (!existing) {
+      return res.status(404).json({ error: true, message: `${date} 沒有盤點紀錄` })
     }
+    const latest = db.prepare('SELECT MAX(count_date) AS d FROM inventory_count_docs').get()
+    const wasLatest = latest?.d === date
 
-    counts.forEach(row => {
-      if (row.category && weeklyCounts[row.category]) {
-        weeklyCounts[row.category][row.item_name] = row.counted_quantity
+    db.transaction(() => {
+      db.prepare('DELETE FROM inventory_count_docs WHERE count_date = ?').run(date)
+      db.prepare('DELETE FROM inventory_counts WHERE count_date = ?').run(date)
+      if (wasLatest) {
+        const next = db.prepare('SELECT counts FROM inventory_count_docs ORDER BY count_date DESC LIMIT 1').get()
+        if (next) applyCountDocToItemQuantities(db, parseJsonObject(next.counts))
       }
+    })()
+
+    await logAudit('INVENTORY_COUNT_DELETE', req.user.id, req.user.name, 'inventory_count_docs', date, {
+      wasLatest,
     })
 
-    // 2. 取得月消耗 (用於預估)
-    const reports = db.prepare(`
-      SELECT report_data FROM consumables_reports 
-      WHERE strftime('%Y-%m', report_date) = ?
-    `).all(month)
-
-    const monthlyConsumption = {
-      artificialKidney: {},
-      dialysateCa: {},
-      bicarbonateType: {},
-    }
-    
-    // Mapping item->category
-    const items = db.prepare('SELECT name, category FROM inventory_items').all()
-    const itemMap = items.reduce((acc, i) => {
-      acc[i.name] = i.category
-      return acc
-    }, {})
-
-    reports.forEach(report => {
-      try {
-        const rows = JSON.parse(report.report_data || '[]')
-        rows.forEach(row => {
-           if (row.consumableCounts) {
-             Object.entries(row.consumableCounts).forEach(([itemName, count]) => {
-               const cat = itemMap[itemName]
-               if (cat && monthlyConsumption[cat]) {
-                 monthlyConsumption[cat][itemName] = (monthlyConsumption[cat][itemName] || 0) + (Number(count) || 0)
-               }
-             })
-           }
-        })
-      } catch (e) { }
-    })
-
-
-    res.json({
-      weeklyCounts,
-      monthlyConsumption
-    })
-
+    res.json({ success: true, message: '盤點紀錄已刪除', countDate: date })
   } catch (error) {
-    console.error('取得週資料錯誤:', error)
-    res.status(500).json({
-      error: true,
-      message: '取得週資料失敗',
-    })
+    console.error('刪除盤點錯誤:', error)
+    res.status(500).json({ error: true, message: '刪除盤點失敗' })
   }
 })
 
-/**
- * POST /api/system/inventory/weekly/count
- * 儲存週盤點
- */
-router.post('/inventory/weekly/count', ...isInventoryRole, async (req, res) => {
-  try {
-    const { countDate, counts } = req.body // counts: { category: { itemName: quantity } }
-    const db = getDatabase()
-    
-    const items = db.prepare('SELECT id, name, category FROM inventory_items').all()
-    const itemMap = items.reduce((acc, i) => ({ ...acc, [`${i.category}:${i.name}`]: i.id }), {})
-    const createdBy = JSON.stringify({ uid: req.user.id, name: req.user.name })
-
-    const insertStmt = db.prepare(`
-      INSERT INTO inventory_counts (id, item_id, counted_quantity, count_date, discrepancy, notes, counted_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `)
-
-    // 是否更新 current_quantity? 每週盤點是否視為正式庫存更新?
-    // 通常是。
-    const updateItemStmt = db.prepare(`
-      UPDATE inventory_items SET current_quantity = ? WHERE id = ?
-    `)
-
-    const transaction = db.transaction(() => {
-      // 先刪除當天已有的盤點? 避免重複?
-      // 簡單起見，直接插入新的 (雖然會有多筆)。 
-      // 或者先 DELETE FROM inventory_counts WHERE count_date = ? AND item_id = ...
-      // 這裡簡單插入。
-      
-      for (const category in counts) {
-        for (const [itemName, quantity] of Object.entries(counts[category])) {
-          const itemId = itemMap[`${category}:${itemName}`]
-          if (itemId) {
-            insertStmt.run(
-              uuidv4(),
-              itemId,
-              quantity,
-              countDate,
-              0, // discrepancy unknown
-              'Weekly Count',
-              createdBy
-            )
-            updateItemStmt.run(quantity, itemId)
-          }
-        }
-      }
-    })
-    
-    transaction()
-
-    res.json({
-      success: true,
-      message: '週盤點已儲存',
-    })
-
-  } catch (error) {
-    console.error('儲存週盤點錯誤:', error)
-    res.status(500).json({
-      error: true,
-      message: '儲存週盤點失敗',
-    })
-  }
-})
-
-
-
-/**
- * POST /api/system/inventory/consumables/upload
- * 上傳耗材報表
- */
-router.post('/inventory/consumables/upload', ...isInventoryRole, async (req, res) => {
-  try {
-    const { reportDate, reportData } = req.body
-    const db = getDatabase()
-    const id = uuidv4()
-    const createdBy = JSON.stringify({ uid: req.user.id, name: req.user.name })
-
-    db.prepare(
-      `
-      INSERT INTO consumables_reports (id, report_date, report_data, created_by)
-      VALUES (?, ?, ?, ?)
-    `,
-    ).run(id, reportDate, JSON.stringify(reportData), createdBy)
-
-
-    res.status(201).json({
-      success: true,
-      message: '耗材報表上傳成功',
-    })
-  } catch (error) {
-    console.error('上傳耗材報表錯誤:', error)
-    res.status(500).json({
-      error: true,
-      message: '上傳耗材報表失敗',
-    })
-  }
-})
-
-/**
- * GET /api/system/inventory/consumables/query
- * 查詢耗材消耗 (從已上傳的報表中聚合)
- */
-router.get('/inventory/consumables/query', ...isInventoryRole, (req, res) => {
-  try {
-    const { month, freq, shift } = req.query
-    const db = getDatabase()
-
-    // 1. 取得當月所有報表
-    const reports = db
-      .prepare(
-        `
-      SELECT report_data FROM consumables_reports 
-      WHERE strftime('%Y-%m', report_date) = ?
-      ORDER BY created_at DESC
-    `,
-      )
-      .all(month)
-
-
-    let aggregatedData = []
-
-    // 2. 聚合資料 (假設 report_data 是 JSON 陣列)
-    for (const report of reports) {
-      try {
-        const rows = JSON.parse(report.report_data || '[]')
-        aggregatedData = aggregatedData.concat(rows)
-      } catch (e) {
-        console.error('Parse report data error:', e)
-      }
-    }
-
-    // 3. 篩選
-    if (freq && freq !== 'all') {
-      if (freq === 'other') {
-        aggregatedData = aggregatedData.filter((row) => !['一三五', '二四六'].includes(row.freq))
-      } else {
-        aggregatedData = aggregatedData.filter((row) => row.freq === freq)
-      }
-    }
-
-    if (shift && shift !== 'all') {
-      // 轉換班別名稱對照
-      const shiftMap = { early: '早班', noon: '午班', late: '晚班' }
-      const targetShiftName = shiftMap[shift]
-      if (targetShiftName) {
-        aggregatedData = aggregatedData.filter((row) =>
-          row.shift ? row.shift.includes(targetShiftName) : false,
-        )
-      }
-    }
-
-    res.json(aggregatedData)
-  } catch (error) {
-    console.error('查詢耗材錯誤:', error)
-    res.status(500).json({
-      error: true,
-      message: '查詢耗材失敗',
-    })
-  }
-})
-
-/**
- * GET /api/system/inventory/consumption/monthly-summary
- * 取得當月消耗總量 (從已上傳的報表中聚合)
- */
-router.get('/inventory/consumption/monthly-summary', ...isInventoryRole, (req, res) => {
-  try {
-    const { month } = req.query
-    const db = getDatabase()
-
-    // 1. 取得當月所有報表
-    const reports = db
-      .prepare(
-        `
-      SELECT report_data FROM consumables_reports 
-      WHERE strftime('%Y-%m', report_date) = ?
-    `,
-      )
-      .all(month)
-
-
-    const summary = {
-      artificialKidney: {},
-      dialysateCa: {},
-      bicarbonateType: {},
-    }
-
-    // 2. 聚合統計
-    // 假設資料結構: row.consumableCounts = { 'FX80': 12, '3.5': 6, ... }
-    // 需要知道品項屬於哪個 category, 這邊可能需要遍歷所有 keys 並猜測?
-    // 或者前端上傳時已經確保資料結構?
-    // 前端 InventoryView.vue 的 dynamicHeaders 是動態的。
-    // 簡單起見，我們遍歷所有 row 的 counts，並嘗試分類。
-    // 但是分類需要 Item -> Category 的 mapping。
-    // 我們可以從 inventory_items 獲取 mapping map。
-
-    // 重新連線取得 mapping
-    const items = db.prepare('SELECT name, category FROM inventory_items').all()
-
-    const itemCategoryMap = {}
-    items.forEach((i) => {
-      itemCategoryMap[i.name] = i.category
-    })
-
-    for (const report of reports) {
-      try {
-        const rows = JSON.parse(report.report_data || '[]')
-        for (const row of rows) {
-          if (row.consumableCounts) {
-            for (const [itemName, count] of Object.entries(row.consumableCounts)) {
-              const category = itemCategoryMap[itemName]
-              const numCount = Number(count) || 0
-              if (category && summary[category] && numCount > 0) {
-                summary[category][itemName] = (summary[category][itemName] || 0) + numCount
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.error('Summary agg error:', e)
-      }
-    }
-
-    res.json(summary)
-  } catch (error) {
-    console.error('取得耗材總量錯誤:', error)
-    res.status(500).json({
-      error: true,
-      message: '取得耗材總量失敗',
-    })
-  }
-})
 
 // ========================================
 // 站點配置 API

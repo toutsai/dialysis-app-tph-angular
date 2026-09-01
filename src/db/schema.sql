@@ -540,6 +540,19 @@ CREATE TABLE IF NOT EXISTS inventory_counts (
     created_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
+-- 盤點文件（2026-09-01）：每個盤點日一份，counts/count_boxes 為 { category: { itemName: number } } JSON。
+-- 週二週盤點與月底盤點都是同一種紀錄；inventory_counts 逐品項流水由 PUT /inventory/counts/:date 同步重寫。
+CREATE TABLE IF NOT EXISTS inventory_count_docs (
+    count_date TEXT PRIMARY KEY,
+    counts TEXT NOT NULL DEFAULT '{}',
+    count_boxes TEXT NOT NULL DEFAULT '{}',
+    notes TEXT,
+    created_by TEXT DEFAULT '{}',
+    updated_by TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
 -- ========================================
 -- 藥物訂單
 -- ========================================

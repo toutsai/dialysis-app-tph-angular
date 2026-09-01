@@ -283,10 +283,8 @@ async function testReadApis(token) {
     '/api/system/notifications',
     '/api/system/inventory',
     '/api/system/inventory/purchases',
-    '/api/system/inventory/monthly/calculation?month=2026-04',
-    '/api/system/inventory/weekly/data?date=2026-04-26',
-    '/api/system/inventory/consumables/query',
-    '/api/system/inventory/consumption/monthly-summary?month=2026-04',
+    '/api/system/inventory/counts',
+    '/api/system/inventory/counts?from=2026-04-01&to=2026-04-30',
     '/api/system/site-config/marquee',
     '/api/system/auto-assign-config/current',
     '/api/system/scheduled-updates',
@@ -379,11 +377,63 @@ async function testCrud(token) {
       },
       token,
     );
-    await expectStatus(
-      'inventory monthly summary after CRUD',
-      'GET',
-      '/api/system/inventory/consumption/monthly-summary?month=2026-04',
+    // 盤點文件：PUT upsert → GET by date → latest → DELETE
+    const countDate = '2026-04-21';
+    const countDoc = await expectStatus(
+      'inventory count upsert',
+      'PUT',
+      `/api/system/inventory/counts/${countDate}`,
       200,
+      {
+        counts: { artificialKidney: { [`${prefix} item`]: 42 } },
+        countBoxes: { artificialKidney: { [`${prefix} item`]: 42 } },
+        notes: 'smoke count',
+      },
+      token,
+    );
+    if (countDoc.data?.counts?.artificialKidney?.[`${prefix} item`] !== 42) {
+      fail('inventory count upsert 回應 counts 不正確', JSON.stringify(countDoc.data));
+    }
+    const countGet = await expectStatus(
+      'inventory count get',
+      'GET',
+      `/api/system/inventory/counts/${countDate}`,
+      200,
+      undefined,
+      token,
+    );
+    if (countGet.data?.countDate !== countDate) {
+      fail('inventory count get 回應 countDate 不正確', JSON.stringify(countGet.data));
+    }
+    await expectStatus(
+      'inventory count latest',
+      'GET',
+      `/api/system/inventory/counts/latest?before=${countDate}`,
+      200,
+      undefined,
+      token,
+    );
+    await expectStatus(
+      'inventory count invalid date',
+      'PUT',
+      '/api/system/inventory/counts/2026-4-1',
+      400,
+      { counts: {} },
+      token,
+    );
+    await expectStatus(
+      'inventory count delete',
+      'DELETE',
+      `/api/system/inventory/counts/${countDate}`,
+      200,
+      undefined,
+      token,
+    );
+    await expectStatus(
+      'inventory count get after delete',
+      'GET',
+      `/api/system/inventory/counts/${countDate}`,
+      404,
       undefined,
       token,
     );

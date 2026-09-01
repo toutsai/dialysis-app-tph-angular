@@ -47,7 +47,7 @@
     <button [class.active]="activeTab() === 'purchase'" (click)="activeTab.set('purchase')">叫貨/到貨紀錄</button>
     <button [class.active]="activeTab() === 'consumption'" (click)="activeTab.set('consumption')">消耗紀錄</button>
     <button [class.active]="activeTab() === 'weekly'" (click)="activeTab.set('weekly'); loadWeeklyData()">每週訂單</button>
-    <button [class.active]="activeTab() === 'monthly'" (click)="activeTab.set('monthly')">每月盤點</button>
+    <button [class.active]="activeTab() === 'counts'" (click)="openCountsTab()">盤點</button>
   </div>
 
   <main class="page-main-content">
@@ -57,8 +57,14 @@
       <div class="panel-header">
         <div>
           <h3>庫存總覽</h3>
-          @if (dashboardLastCountDate()) {
-            <p class="panel-description">依據 {{ dashboardLastCountDate() }} 盤點基礎推算</p>
+          @if (dashboardHasCount()) {
+            <p class="panel-description">
+              盤點基礎：{{ dashboardLastCountDate() }}（{{ dashboardCountAgeDays() }} 天前）
+              ｜推估庫存 = 盤點量 + 盤點後到貨 − 盤點後消耗
+            </p>
+            @if (dashboardConsumptionNote()) {
+              <p class="panel-description">安全庫存 = 日均 × 9 天；{{ dashboardConsumptionNote() }}</p>
+            }
           }
         </div>
         <button class="btn-primary" (click)="loadDashboard()" [disabled]="dashboardLoading()">
@@ -75,8 +81,13 @@
         </div>
       } @else {
         <!-- Stock Level Cards -->
-        @if (dashboardItems().length === 0) {
-          <div class="empty-state">無庫存資料（請先進行每月盤點）</div>
+        @if (!dashboardHasCount()) {
+          <div class="empty-state">
+            <p>尚無盤點紀錄，請先到「盤點」頁籤盤點。</p>
+            <p style="color: #6c757d; font-size: 0.9rem;">推估庫存以最近一次盤點為基準，沒有盤點就無法推算（下方每日預估消耗仍可參考）。</p>
+          </div>
+        } @else if (dashboardItems().length === 0) {
+          <div class="empty-state">盤點紀錄中沒有任何品項數量。</div>
         }
 
         @for (category of categoryKeys; track category) {
@@ -714,132 +725,200 @@
     </div>
     }
 
-    <!-- ========== Tab 3: 每月盤點 ========== -->
-    @if (activeTab() === 'monthly') {
+    <!-- ========== Tab 3: 盤點（原「每月盤點」+「週二盤點」已合併） ========== -->
+    @if (activeTab() === 'counts') {
     <div class="tab-panel">
       <div class="panel-header">
-        <h3>每月盤點</h3>
+        <div>
+          <h3>盤點</h3>
+          <p class="panel-description">
+            一天一份盤點紀錄。庫存總覽、每週訂單、月報表都以「最近一次盤點」為基準自動推算。
+          </p>
+        </div>
       </div>
 
       <div class="filter-bar">
         <div class="filter-field">
           <label>盤點日</label>
           <div class="date-nav">
-            <button type="button" class="date-nav-btn" title="前一天" (click)="stepDate(monthlyFilter, 'countDate', -1, 'date')">‹</button>
-            <input type="date" [(ngModel)]="monthlyFilter.countDate" />
-            <button type="button" class="date-nav-btn" title="後一天" (click)="stepDate(monthlyFilter, 'countDate', 1, 'date')">›</button>
+            <button type="button" class="date-nav-btn" title="前一天" (click)="stepDate(countFilter, 'date', -1, 'date'); loadCountDoc()">‹</button>
+            <input type="date" [(ngModel)]="countFilter.date" (change)="loadCountDoc()" />
+            <button type="button" class="date-nav-btn" title="後一天" (click)="stepDate(countFilter, 'date', 1, 'date'); loadCountDoc()">›</button>
           </div>
         </div>
-        <div class="filter-field">
-          <label>盤點區間（起）</label>
-          <div class="date-nav">
-            <button type="button" class="date-nav-btn" title="前一天" (click)="stepDate(monthlyFilter, 'startDate', -1, 'date')">‹</button>
-            <input type="date" [(ngModel)]="monthlyFilter.startDate" />
-            <button type="button" class="date-nav-btn" title="後一天" (click)="stepDate(monthlyFilter, 'startDate', 1, 'date')">›</button>
-          </div>
-        </div>
-        <div class="filter-field">
-          <label>盤點區間（迄）</label>
-          <div class="date-nav">
-            <button type="button" class="date-nav-btn" title="前一天" (click)="stepDate(monthlyFilter, 'endDate', -1, 'date')">‹</button>
-            <input type="date" [(ngModel)]="monthlyFilter.endDate" />
-            <button type="button" class="date-nav-btn" title="後一天" (click)="stepDate(monthlyFilter, 'endDate', 1, 'date')">›</button>
-          </div>
-        </div>
-        <button class="btn-primary" (click)="calculateMonthlyInventory()" [disabled]="monthlyLoading()">
-          {{ monthlyLoading() ? '計算中...' : '計算庫存' }}
+        <button class="btn-primary" (click)="saveCountDoc()" [disabled]="countsSaving() || countsLoading()">
+          {{ countsSaving() ? '儲存中...' : '儲存盤點' }}
         </button>
-        <button class="btn-secondary" (click)="loadSavedMonthlyCount()" [disabled]="monthlyLoading()">
-          載入歷史紀錄
-        </button>
-        <button class="btn-success" (click)="saveMonthlyCount()" [disabled]="!monthlyCalculated() || monthlyLoading()">
-          儲存盤點結果
+        <button class="btn-secondary" (click)="deleteCountDoc()" [disabled]="!countDocExists() || countsSaving()">
+          刪除此日盤點
         </button>
       </div>
 
-      @if (monthlySavedInfo()) {
-        <div style="padding: 0.5rem 1rem; background: #d1ecf1; border-radius: 6px; margin-bottom: 0.75rem; font-size: 0.9rem; color: #0c5460;">
-          📋 已載入歷史紀錄 — 儲存者：{{ monthlySavedInfo()!.createdBy }}，儲存時間：{{ monthlySavedInfo()!.createdAt }}
+      @if (countsLoading()) {
+        <div class="loading-state">載入盤點紀錄中...</div>
+      } @else {
+        @if (countDocInfo(); as info) {
+          <div style="padding: 0.5rem 1rem; background: #d1ecf1; border-radius: 6px; margin-bottom: 0.75rem; font-size: 0.9rem; color: #0c5460;">
+            📋 已有 {{ countFilter.date }} 的盤點 — 建檔者：{{ info.createdBy }}｜最後更新：{{ info.updatedBy }} {{ info.updatedAt }}
+          </div>
+        } @else {
+          <div style="padding: 0.5rem 1rem; background: #fff3cd; border-radius: 6px; margin-bottom: 0.75rem; font-size: 0.9rem; color: #856404;">
+            {{ countFilter.date }} 尚無盤點紀錄，輸入箱數後按「儲存盤點」即可新增。
+          </div>
+        }
+
+        <div class="weekly-section">
+          <div class="section-header">
+            <h4>盤點數量輸入</h4>
+            <span class="unit-hint">每箱個數依「品項設定」；每箱 1 個者箱數即個數</span>
+          </div>
+          <div class="inventory-grid">
+            @for (category of categoryKeys; track category) {
+              <div class="category-section">
+                <h5>{{ CATEGORY_NAMES[category] }}</h5>
+                <div class="item-inputs">
+                  @for (item of getItemsForCategory(category); track item) {
+                    <div class="item-row">
+                      <label>{{ item }}</label>
+                      <div class="box-input-group">
+                        <input
+                          type="number"
+                          [(ngModel)]="countBoxes[category][item]"
+                          (ngModelChange)="syncCountUnits()"
+                          placeholder="箱數"
+                          min="0"
+                          class="box-input"
+                        />
+                        <span class="box-unit">箱</span>
+                        @if (countBoxes[category]?.[item]) {
+                          <span class="unit-hint">= {{ countUnits[category][item] }} 個</span>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+          <div class="item-row" style="margin-top: 0.75rem;">
+            <label>備註</label>
+            <input type="text" [(ngModel)]="countNotes" placeholder="例如：每週訂單盤點 / 月底盤點" style="flex: 1; min-width: 240px;" />
+          </div>
+        </div>
+
+        <!-- 盤點紀錄列表 -->
+        <div class="weekly-section">
+          <div class="section-header">
+            <h4>盤點紀錄（最近 30 筆）</h4>
+            <button class="btn-sm btn-primary" (click)="loadCountRecords()">重新整理</button>
+          </div>
+          @if (countRecords().length === 0) {
+            <div class="placeholder-text">尚無任何盤點紀錄。</div>
+          } @else {
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>盤點日</th>
+                    <th>盤點人</th>
+                    <th>更新時間</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (rec of countRecords(); track rec.countDate) {
+                    <tr [class.result-cell]="rec.countDate === countFilter.date">
+                      <td>{{ rec.countDate }}</td>
+                      <td>{{ rec.by }}</td>
+                      <td>{{ rec.updatedAt }}</td>
+                      <td>
+                        <button class="btn-sm btn-secondary" (click)="selectCountRecord(rec.countDate)">載入</button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
         </div>
       }
 
-      @if (monthlyCalculated()) {
-        <div class="monthly-summary">
-          <div class="summary-card">
-            <h4>期初結存</h4>
-            <p>{{ monthlyFilter.startDate }} 之前</p>
+      <!-- 月報表 -->
+      <div class="weekly-section">
+        <div class="section-header">
+          <h4>月報表</h4>
+          <span class="unit-hint">期初 = 該月月初前最近一次盤點推估到月初；消耗為實際優先、缺的日子以排程推估</span>
+        </div>
+        <div class="filter-bar">
+          <div class="filter-field">
+            <label>月份</label>
+            <div class="date-nav">
+              <button type="button" class="date-nav-btn" title="上個月" (click)="stepDate(countReportFilter, 'month', -1, 'month')">‹</button>
+              <input type="month" [(ngModel)]="countReportFilter.month" />
+              <button type="button" class="date-nav-btn" title="下個月" (click)="stepDate(countReportFilter, 'month', 1, 'month')">›</button>
+            </div>
           </div>
-          <div class="summary-card">
-            <span class="operator">+</span>
-            <h4>區間進貨</h4>
-            <p>{{ monthlyFilter.startDate }} ~ {{ monthlyFilter.endDate }}</p>
-          </div>
-          <div class="summary-card">
-            <span class="operator">-</span>
-            <h4>區間消耗</h4>
-            <p>{{ monthlyFilter.startDate }} ~ {{ monthlyFilter.endDate }}</p>
-          </div>
-          <div class="summary-card result">
-            <span class="operator">=</span>
-            <h4>期末結存</h4>
-            <p>盤點日：{{ monthlyFilter.countDate }}</p>
-          </div>
+          <button class="btn-primary" (click)="loadCountMonthReport()" [disabled]="countReportLoading()">
+            {{ countReportLoading() ? '計算中...' : '產生月報表' }}
+          </button>
         </div>
 
-        <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th rowspan="2">類別</th>
-                <th rowspan="2">品項</th>
-                <th colspan="2">期初結存</th>
-                <th colspan="2">區間進貨</th>
-                <th colspan="2">區間消耗</th>
-                <th colspan="2">期末結存</th>
-                <th rowspan="2">調整(個)</th>
-              </tr>
-              <tr>
-                <th>個數</th>
-                <th>箱數</th>
-                <th>個數</th>
-                <th>箱數</th>
-                <th>個數</th>
-                <th>箱數</th>
-                <th>個數</th>
-                <th>箱數</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (category of categoryKeys; track category) {
-                @for (entry of getMonthlyInventoryEntries(category); track entry.item) {
+        @if (countReportNote()) {
+          <div style="padding: 0.5rem 1rem; background: #fff3cd; border-radius: 6px; margin-bottom: 0.75rem; font-size: 0.9rem; color: #856404;">
+            {{ countReportNote() }}
+          </div>
+        }
+
+        @if (countReportLoading()) {
+          <div class="loading-state">計算月報表中...</div>
+        } @else if (!countReportLoaded()) {
+          <div class="placeholder-text">選擇月份並點擊「產生月報表」。</div>
+        } @else if (countReportRows().length === 0) {
+          <div class="placeholder-text">該月沒有任何盤點、到貨或消耗資料。</div>
+        } @else {
+          <p class="panel-description">
+            期初基準盤點：{{ countReportBaseDate() || '—' }}
+            @if (countReportLastCountDate()) {
+              ｜當月最後一次盤點：{{ countReportLastCountDate() }}（差異 = 盤點量 − 推估到該日的庫存）
+            }
+          </p>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>類別</th>
+                  <th>品項</th>
+                  <th>期初</th>
+                  <th>當月到貨</th>
+                  <th>當月消耗</th>
+                  <th>期末推估</th>
+                  <th>當月盤點量</th>
+                  <th>差異</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of countReportRows(); track row.category + '|' + row.item) {
                   <tr>
-                    <td>{{ CATEGORY_NAMES[category] }}</td>
-                    <td>{{ entry.item }}</td>
-                    <td>{{ entry.data.previousStock }}</td>
-                    <td class="box-cell">{{ calculateBoxes(category, entry.item, entry.data.previousStock) }}</td>
-                    <td class="positive">+{{ entry.data.purchased }}</td>
-                    <td class="box-cell positive">+{{ calculateBoxes(category, entry.item, entry.data.purchased) }}</td>
-                    <td class="negative">-{{ entry.data.consumed }}</td>
-                    <td class="box-cell negative">-{{ calculateBoxes(category, entry.item, entry.data.consumed) }}</td>
-                    <td class="result-cell">{{ entry.data.currentStock }}</td>
-                    <td class="result-cell box-cell">{{ calculateBoxes(category, entry.item, entry.data.currentStock) }}</td>
-                    <td>
-                      <input
-                        type="number"
-                        [(ngModel)]="entry.data.adjustment"
-                        class="adjustment-input"
-                        placeholder="調整值"
-                      />
+                    <td>{{ row.categoryName }}</td>
+                    <td>{{ row.item }}</td>
+                    <td>{{ row.opening != null ? row.opening : '—' }}</td>
+                    <td class="positive">+{{ row.arrived }}</td>
+                    <td class="negative">
+                      -{{ row.consumed }}
+                      <span class="unit-hint">（{{ row.daysLabel }}）</span>
+                    </td>
+                    <td class="result-cell">{{ row.closing != null ? row.closing : '—' }}</td>
+                    <td>{{ row.counted != null ? row.counted : '—' }}</td>
+                    <td [class.need-order]="row.diff != null && row.diff !== 0">
+                      {{ row.diff != null ? row.diff : '—' }}
                     </td>
                   </tr>
                 }
-              }
-            </tbody>
-          </table>
-        </div>
-      } @else {
-        <div class="placeholder-text">請選擇月份並點擊「計算庫存」。</div>
-      }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
     </div>
     }
 
@@ -847,8 +926,18 @@
     @if (activeTab() === 'weekly') {
     <div class="tab-panel">
       <div class="panel-header">
-        <h3>每週訂單計算</h3>
-        <p class="panel-description">訂購量 = 安全庫存(9天) - 週二盤點</p>
+        <div>
+          <h3>每週訂單計算</h3>
+          <p class="panel-description">
+            訂購量 = 安全庫存(日均 × 9 天) − 目前推估庫存 − 已叫貨待到貨
+          </p>
+          @if (weeklyConsumptionNote()) {
+            <p class="panel-description">{{ weeklyConsumptionNote() }}</p>
+          }
+          @if (weeklyStockNote()) {
+            <p class="panel-description">{{ weeklyStockNote() }}</p>
+          }
+        </div>
       </div>
 
       <div class="filter-bar">
@@ -861,7 +950,7 @@
           </div>
         </div>
         <div class="filter-field">
-          <label>選擇週次</label>
+          <label>訂單週</label>
           <div class="date-nav">
             <button type="button" class="date-nav-btn" title="上一週" (click)="stepDate(weeklyFilter, 'week', -1, 'week')">‹</button>
             <input type="week" [(ngModel)]="weeklyFilter.week" />
@@ -875,14 +964,17 @@
 
       @if (weeklyDataLoaded()) {
         <div class="weekly-content">
-          <!-- 週二盤點輸入區 -->
+          <!-- 盤點輸入區（與「盤點」頁籤同一份文件，key = 盤點日） -->
           <div class="weekly-section">
             <div class="section-header">
-              <h4>週二盤點輸入 ({{ weeklyFilter.countDate }})</h4>
+              <h4>盤點輸入 ({{ weeklyFilter.countDate }})</h4>
               <button class="btn-sm btn-primary" (click)="saveWeeklyCount()" [disabled]="weeklyLoading()">
                 儲存盤點
               </button>
             </div>
+            @if (weeklyCountSavedInfo()) {
+              <p class="panel-description">{{ weeklyCountSavedInfo() }}</p>
+            }
             <div class="inventory-grid">
               @for (category of categoryKeys; track category) {
                 <div class="category-section">
@@ -903,7 +995,7 @@
                           <span class="box-unit">箱</span>
                           @if (weeklyCountBoxes[category]?.[item]) {
                             <span class="unit-hint">
-                              = {{ calculateWeeklyUnits(category, item) }} 個
+                              = {{ weeklyCount[category][item] }} 個
                             </span>
                           }
                         </div>
@@ -930,33 +1022,38 @@
                     <th>類別</th>
                     <th>品項</th>
                     <th>每箱數量</th>
-                    <th>週二盤點(個)</th>
                     <th>上週消耗(個)</th>
                     <th>日均消耗</th>
                     <th>安全庫存(9天)</th>
+                    <th>盤點量</th>
+                    <th>盤點後到貨</th>
+                    <th>盤點後消耗</th>
+                    <th>目前推估</th>
+                    <th>待到貨</th>
                     <th>建議訂購(個)</th>
                     <th>建議訂購(箱)</th>
                   </tr>
                 </thead>
                 <tbody>
-                  @for (category of categoryKeys; track category) {
-                    @for (item of getItemsForCategory(category); track item) {
-                      <tr>
-                        <td>{{ CATEGORY_NAMES[category] }}</td>
-                        <td>{{ item }}</td>
-                        <td>{{ getUnitsPerBox(category, item) }}</td>
-                        <td>{{ weeklyCount[category]?.[item] || 0 }}</td>
-                        <td>{{ getWeeklyConsumption(category, item) }}</td>
-                        <td>{{ getDailyAvg(category, item) }}</td>
-                        <td>{{ getSafetyStock(category, item) }}</td>
-                        <td [class.need-order]="getOrderQuantity(category, item) > 0">
-                          {{ getOrderQuantity(category, item) }}
-                        </td>
-                        <td [class.need-order]="getOrderQuantity(category, item) > 0" class="box-cell">
-                          {{ calculateBoxesRounded(category, item, getOrderQuantity(category, item)) }}
-                        </td>
-                      </tr>
-                    }
+                  @for (row of weeklyRows(); track row.category + '|' + row.item) {
+                    <tr>
+                      <td>{{ row.categoryName }}</td>
+                      <td>{{ row.item }}</td>
+                      <td>{{ row.unitsPerBox }}</td>
+                      <td>
+                        {{ row.lastWeekConsumption }}
+                        <span class="unit-hint">({{ row.sourceLabel }})</span>
+                      </td>
+                      <td>{{ row.dailyAvg }}</td>
+                      <td>{{ row.safetyStock }}</td>
+                      <td>{{ row.countUnits }}</td>
+                      <td class="positive">+{{ row.arrivedSinceCount }}</td>
+                      <td class="negative">-{{ row.consumedSinceCount }}</td>
+                      <td class="result-cell">{{ row.estimatedStock }}</td>
+                      <td>{{ row.pending }}</td>
+                      <td [class.need-order]="row.orderQuantity > 0">{{ row.orderQuantity }}</td>
+                      <td [class.need-order]="row.orderQuantity > 0" class="box-cell">{{ row.orderBoxes }}</td>
+                    </tr>
                   }
                 </tbody>
               </table>
@@ -964,7 +1061,7 @@
           </div>
         </div>
       } @else {
-        <div class="placeholder-text">請選擇週次並點擊「載入資料」。</div>
+        <div class="placeholder-text">請選擇盤點日與訂單週，然後點擊「計算訂單」。</div>
       }
     </div>
     }

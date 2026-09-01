@@ -968,6 +968,31 @@ export function runMigrations() {
       }
     }
 
+    // ========================================
+    // inventory_count_docs：盤點文件（2026-09-01）
+    // 週二週盤點/月底盤點統一為「某盤點日各品項實際數量」一份文件（counts/count_boxes JSON）。
+    // 舊 inventory_counts 逐品項流水保留，由 PUT /system/inventory/counts/:date 同步重寫。
+    // ========================================
+    const countDocsExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='inventory_count_docs'")
+      .get()
+    if (!countDocsExists) {
+      console.log('📋 建立 inventory_count_docs 表格...')
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS inventory_count_docs (
+          count_date TEXT PRIMARY KEY,
+          counts TEXT NOT NULL DEFAULT '{}',
+          count_boxes TEXT NOT NULL DEFAULT '{}',
+          notes TEXT,
+          created_by TEXT DEFAULT '{}',
+          updated_by TEXT DEFAULT '{}',
+          created_at TEXT DEFAULT (datetime('now', 'localtime')),
+          updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+      `)
+      migrationsApplied++
+    }
+
     if (migrationsApplied > 0) {
       console.log(`✅ 已完成 ${migrationsApplied} 項遷移`)
     } else {
