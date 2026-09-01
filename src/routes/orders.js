@@ -107,6 +107,41 @@ function parseMonthFromFileName(fileName) {
 }
 
 /**
+ * 從耗材統計表的標題列解析「迄日」所屬月份，轉換為西元 YYYY-MM
+ * HIS 匯出的三種統計表（A1 人工腎臟 / A2 透析藥水Ca / A6 B液種類）標題列有兩種寫法：
+ *   - 西元：「&起日20260824&迄日20260828」→ 迄日 8 碼 YYYYMMDD
+ *   - 民國：「&民國年起日1150824&民國年迄日1150828」→ 迄日 7 碼 YYYMMDD（民國年 <100 時為 6 碼 YYMMDD）
+ * 「迄日」與數字之間允許夾冒號等非數字（akiService.js 曾遇到新版報表「&起日:YYYYMMDD20260615」）。
+ *
+ * @param {unknown} cell - 儲存格內容
+ * @returns {string|null} - 西元 YYYY-MM，或 null 表示無法解析
+ */
+function parseReportMonthFromHeader(cell) {
+  if (cell === null || cell === undefined) return null
+  const text = String(cell)
+  const match = text.match(/迄日\D*?(\d{6,8})/)
+  if (!match) return null
+
+  const digits = match[1]
+  let year
+  let month
+  if (digits.length === 8) {
+    // 西元 YYYYMMDD
+    year = parseInt(digits.substring(0, 4), 10)
+    month = parseInt(digits.substring(4, 6), 10)
+  } else {
+    // 民國 YYYMMDD / YYMMDD：去掉末 4 碼 (MMDD) 的前段即為民國年
+    const yearLen = digits.length - 4
+    year = parseInt(digits.substring(0, yearLen), 10) + 1911
+    month = parseInt(digits.substring(yearLen, yearLen + 2), 10)
+  }
+
+  if (!Number.isFinite(year) || year < 2000 || year > 2100) return null
+  if (!Number.isFinite(month) || month < 1 || month > 12) return null
+  return `${year}-${String(month).padStart(2, '0')}`
+}
+
+/**
  * 檢驗報告項目對應表
  */
 const LAB_ITEM_MAPPING = {
@@ -1547,19 +1582,29 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
       })
     }
 
-    // 從第二列抓取「迄日」來決定報表月份
-    const dateString = sheetAsArray[1][0] || ''
-    const monthMatch = dateString.match(/&迄日(\d{4})(\d{2})/)
+    // 從標題列（通常第二列）抓取「迄日」來決定報表月份
+    // HIS 匯出有西元（&迄日20260828）與民國（&民國年迄日1150828）兩種寫法，見 parseReportMonthFromHeader
+    let reportMonth = null
+    let dateString = ''
+    for (let i = 0; i < Math.min(sheetAsArray.length, 5) && !reportMonth; i++) {
+      for (const cell of sheetAsArray[i] || []) {
+        reportMonth = parseReportMonthFromHeader(cell)
+        if (reportMonth) {
+          dateString = String(cell)
+          break
+        }
+      }
+    }
 
-    if (!monthMatch) {
+    if (!reportMonth) {
       return res.status(400).json({
         error: true,
-        message: 'Excel 格式錯誤，在第二列找不到有效的迄日(需為 &迄日YYYYMM 格式)。',
+        message:
+          'Excel 格式錯誤，在前幾列找不到有效的迄日（需為 &迄日YYYYMMDD 或 &民國年迄日YYYMMDD 格式）。',
       })
     }
 
-    const reportMonth = `${monthMatch[1]}-${monthMatch[2]}`
-    console.log(`[Consumables] 解析到報表月份為 (迄日): ${reportMonth}`)
+    console.log(`[Consumables] 解析到報表月份為 (迄日): ${reportMonth}，來源標題「${dateString}」`)
 
     // 尋找標題行
     let headerRowIndex = -1
@@ -2472,6 +2517,8 @@ router.get('/consumables', ...isInventoryRole, (req, res) => {
         patientName: r.patient_name,
         medicalRecordNumber: r.medical_record_number,
         reportDate: r.report_date,
+        // 前端（inventory.component 月盤點/區間消耗）以 reportMonth 篩選
+        reportMonth: String(r.report_date || '').substring(0, 7),
         data: JSON.parse(r.report_data || '{}'),
         sourceFile: r.source_file,
         createdBy: JSON.parse(r.created_by || '{}'),
