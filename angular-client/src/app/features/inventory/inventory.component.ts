@@ -24,6 +24,7 @@ import {
   type ConsumableReport,
   type UploadedRangeSummary,
 } from '@/utils/consumablesReport';
+import { shiftDateLike, type DateStepKind } from '@/utils/dateStep';
 
 const CATEGORY_NAMES: Record<string, string> = {
   artificialKidney: '人工腎臟',
@@ -204,6 +205,19 @@ export class InventoryComponent implements OnInit {
   get flattenedHeaders(): string[] {
     const h = this.dynamicHeaders();
     return [...h.artificialKidney, ...h.dialysateCa, ...h.bicarbonateType];
+  }
+
+  /**
+   * 月份/日期/週次輸入欄旁的「‹ ›」導航：把 target[key] 位移 delta 個單位。
+   * 用法：(click)="stepDate(purchaseFilter, 'month', -1, 'month')"
+   */
+  stepDate(target: Record<string, any>, key: string, delta: number, kind: DateStepKind): void {
+    target[key] = shiftDateLike(String(target[key] || ''), delta, kind);
+  }
+
+  /** summaryMonth 是純字串屬性，另給一個方法 */
+  stepSummaryMonth(delta: number): void {
+    this.summaryMonth = shiftDateLike(this.summaryMonth, delta, 'month');
   }
 
   // ==================== Tab 3: 每月盤點 ====================

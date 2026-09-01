@@ -106,6 +106,32 @@ h1 {
   height: 38px;
   box-sizing: border-box;
 }
+/* 月份輸入欄的「‹ ›」導航 */
+.date-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.date-nav input {
+  min-width: 0;
+}
+.date-nav .date-nav-btn {
+  height: 38px;
+  width: 30px;
+  padding: 0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #f8f9fa;
+  color: #495057;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.date-nav .date-nav-btn:hover {
+  background: #e9ecef;
+  color: #212529;
+}
 .search-btn,
 .export-btn {
   padding: 0.5rem 1.5rem;

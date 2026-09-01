@@ -291,7 +291,11 @@
       <div class="filter-bar">
         <div class="filter-field">
           <label>月份</label>
-          <input type="month" [(ngModel)]="purchaseFilter.month" (ngModelChange)="fetchPurchases()" />
+          <div class="date-nav">
+            <button type="button" class="date-nav-btn" title="上個月" (click)="stepDate(purchaseFilter, 'month', -1, 'month'); fetchPurchases()">‹</button>
+            <input type="month" [(ngModel)]="purchaseFilter.month" (ngModelChange)="fetchPurchases()" />
+            <button type="button" class="date-nav-btn" title="下個月" (click)="stepDate(purchaseFilter, 'month', 1, 'month'); fetchPurchases()">›</button>
+          </div>
         </div>
         <div class="filter-field">
           <label>類別</label>
@@ -408,7 +412,11 @@
             </div>
             <div class="search-field">
               <label>盤點月份</label>
-              <input type="month" [(ngModel)]="groupSearchParams.month" />
+              <div class="date-nav">
+                <button type="button" class="date-nav-btn" title="上個月" (click)="stepDate(groupSearchParams, 'month', -1, 'month')">‹</button>
+                <input type="month" [(ngModel)]="groupSearchParams.month" />
+                <button type="button" class="date-nav-btn" title="下個月" (click)="stepDate(groupSearchParams, 'month', 1, 'month')">›</button>
+              </div>
             </div>
             <div class="search-field">
               <label>病歷號 / 姓名</label>
@@ -505,7 +513,11 @@
         <div class="search-controls">
           <div class="search-field">
             <label>選擇月份</label>
-            <input type="month" [(ngModel)]="summaryMonth" />
+            <div class="date-nav">
+              <button type="button" class="date-nav-btn" title="上個月" (click)="stepSummaryMonth(-1)">‹</button>
+              <input type="month" [(ngModel)]="summaryMonth" />
+              <button type="button" class="date-nav-btn" title="下個月" (click)="stepSummaryMonth(1)">›</button>
+            </div>
           </div>
           <button (click)="loadMonthlySummary()" [disabled]="summaryLoading()" class="btn-primary">
             {{ summaryLoading() ? '載入中...' : '查詢總量' }}
@@ -622,11 +634,19 @@
         <div class="search-controls">
           <div class="search-field">
             <label>起始日期</label>
-            <input type="date" [(ngModel)]="theoreticalFilter.startDate" />
+            <div class="date-nav">
+              <button type="button" class="date-nav-btn" title="前一天" (click)="stepDate(theoreticalFilter, 'startDate', -1, 'date')">‹</button>
+              <input type="date" [(ngModel)]="theoreticalFilter.startDate" />
+              <button type="button" class="date-nav-btn" title="後一天" (click)="stepDate(theoreticalFilter, 'startDate', 1, 'date')">›</button>
+            </div>
           </div>
           <div class="search-field">
             <label>結束日期</label>
-            <input type="date" [(ngModel)]="theoreticalFilter.endDate" />
+            <div class="date-nav">
+              <button type="button" class="date-nav-btn" title="前一天" (click)="stepDate(theoreticalFilter, 'endDate', -1, 'date')">‹</button>
+              <input type="date" [(ngModel)]="theoreticalFilter.endDate" />
+              <button type="button" class="date-nav-btn" title="後一天" (click)="stepDate(theoreticalFilter, 'endDate', 1, 'date')">›</button>
+            </div>
           </div>
           <button class="btn-primary" (click)="runTheoreticalConsumption()" [disabled]="theoreticalLoading()">
             {{ theoreticalLoading() ? '推算中...' : '開始推算' }}
@@ -683,15 +703,27 @@
       <div class="filter-bar">
         <div class="filter-field">
           <label>盤點日</label>
-          <input type="date" [(ngModel)]="monthlyFilter.countDate" />
+          <div class="date-nav">
+            <button type="button" class="date-nav-btn" title="前一天" (click)="stepDate(monthlyFilter, 'countDate', -1, 'date')">‹</button>
+            <input type="date" [(ngModel)]="monthlyFilter.countDate" />
+            <button type="button" class="date-nav-btn" title="後一天" (click)="stepDate(monthlyFilter, 'countDate', 1, 'date')">›</button>
+          </div>
         </div>
         <div class="filter-field">
           <label>盤點區間（起）</label>
-          <input type="date" [(ngModel)]="monthlyFilter.startDate" />
+          <div class="date-nav">
+            <button type="button" class="date-nav-btn" title="前一天" (click)="stepDate(monthlyFilter, 'startDate', -1, 'date')">‹</button>
+            <input type="date" [(ngModel)]="monthlyFilter.startDate" />
+            <button type="button" class="date-nav-btn" title="後一天" (click)="stepDate(monthlyFilter, 'startDate', 1, 'date')">›</button>
+          </div>
         </div>
         <div class="filter-field">
           <label>盤點區間（迄）</label>
-          <input type="date" [(ngModel)]="monthlyFilter.endDate" />
+          <div class="date-nav">
+            <button type="button" class="date-nav-btn" title="前一天" (click)="stepDate(monthlyFilter, 'endDate', -1, 'date')">‹</button>
+            <input type="date" [(ngModel)]="monthlyFilter.endDate" />
+            <button type="button" class="date-nav-btn" title="後一天" (click)="stepDate(monthlyFilter, 'endDate', 1, 'date')">›</button>
+          </div>
         </div>
         <button class="btn-primary" (click)="calculateMonthlyInventory()" [disabled]="monthlyLoading()">
           {{ monthlyLoading() ? '計算中...' : '計算庫存' }}
@@ -801,11 +833,19 @@
       <div class="filter-bar">
         <div class="filter-field">
           <label>盤點日（週二）</label>
-          <input type="date" [(ngModel)]="weeklyFilter.countDate" />
+          <div class="date-nav">
+            <button type="button" class="date-nav-btn" title="前一天" (click)="stepDate(weeklyFilter, 'countDate', -1, 'date')">‹</button>
+            <input type="date" [(ngModel)]="weeklyFilter.countDate" />
+            <button type="button" class="date-nav-btn" title="後一天" (click)="stepDate(weeklyFilter, 'countDate', 1, 'date')">›</button>
+          </div>
         </div>
         <div class="filter-field">
           <label>選擇週次</label>
-          <input type="week" [(ngModel)]="weeklyFilter.week" />
+          <div class="date-nav">
+            <button type="button" class="date-nav-btn" title="上一週" (click)="stepDate(weeklyFilter, 'week', -1, 'week')">‹</button>
+            <input type="week" [(ngModel)]="weeklyFilter.week" />
+            <button type="button" class="date-nav-btn" title="下一週" (click)="stepDate(weeklyFilter, 'week', 1, 'week')">›</button>
+          </div>
         </div>
         <button class="btn-primary" (click)="loadWeeklyData()" [disabled]="weeklyLoading()">
           {{ weeklyLoading() ? '計算中...' : '計算訂單' }}

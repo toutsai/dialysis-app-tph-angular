@@ -17,6 +17,7 @@ import {
   type ConsumableReport,
   type UploadedRangeSummary,
 } from '@/utils/consumablesReport';
+import { shiftMonthString } from '@/utils/dateStep';
 
 const SHIFT_INDEX_MAP: Record<number, string> = { 0: '早班', 1: '午班', 2: '晚班' };
 
@@ -83,6 +84,11 @@ export class ConsumablesComponent implements OnInit {
 
   ngOnInit(): void {
     this.patientStore.fetchPatientsIfNeeded();
+  }
+
+  /** 盤點月份「‹ ›」導航 */
+  stepMonth(delta: number): void {
+    this.groupSearchParams.month = shiftMonthString(this.groupSearchParams.month, delta);
   }
 
   formatShift(shiftIndex: number | undefined): string {

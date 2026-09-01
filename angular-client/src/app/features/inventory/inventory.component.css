@@ -176,6 +176,33 @@ h1 {
   height: 38px;
 }
 
+/* === 月份/日期/週次輸入欄的「‹ ›」導航 === */
+.date-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.date-nav input {
+  min-width: 0;
+}
+.date-nav .date-nav-btn {
+  height: 38px;
+  width: 30px;
+  padding: 0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #f8f9fa;
+  color: #495057;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.date-nav .date-nav-btn:hover {
+  background: #e9ecef;
+  color: #212529;
+}
+
 /* === 類別篩選按鈕列 === */
 .category-filter-bar {
   display: flex;
