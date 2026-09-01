@@ -377,7 +377,7 @@
     @if (activeTab() === 'consumption') {
     <div class="tab-panel">
       <div class="sub-tabs">
-        <button [class.active]="consumptionSubTab() === 'query'" (click)="consumptionSubTab.set('query')">耗材查詢</button>
+        <button [class.active]="consumptionSubTab() === 'query'" (click)="consumptionSubTab.set('query')">病人耗材查詢</button>
         <button [class.active]="consumptionSubTab() === 'theoretical'" (click)="consumptionSubTab.set('theoretical')">排程推算</button>
         <button [class.active]="consumptionSubTab() === 'summary'" (click)="consumptionSubTab.set('summary')">當月總量</button>
         <button [class.active]="consumptionSubTab() === 'upload'" (click)="consumptionSubTab.set('upload')">資料上傳</button>
@@ -391,6 +391,7 @@
             <div class="search-field">
               <label>頻率</label>
               <select [(ngModel)]="groupSearchParams.freq">
+                <option value="all">全部</option>
                 <option value="一三五">一三五</option>
                 <option value="二四六">二四六</option>
                 <option value="other">其他</option>
@@ -399,6 +400,7 @@
             <div class="search-field">
               <label>班別</label>
               <select [(ngModel)]="groupSearchParams.shift">
+                <option value="all">全部</option>
                 <option value="early">早班</option>
                 <option value="noon">午班</option>
                 <option value="late">晚班</option>
@@ -407,6 +409,10 @@
             <div class="search-field">
               <label>盤點月份</label>
               <input type="month" [(ngModel)]="groupSearchParams.month" />
+            </div>
+            <div class="search-field">
+              <label>病歷號 / 姓名</label>
+              <input type="text" [(ngModel)]="groupSearchParams.keyword" placeholder="選填" (keyup.enter)="handleConsumptionSearch()" />
             </div>
           </div>
           <button (click)="handleConsumptionSearch()" [disabled]="consumptionLoading()" class="btn-primary">
@@ -425,8 +431,22 @@
           } @else if (!consumptionSearchPerformed()) {
             <div class="placeholder-text">請選擇條件並點擊查詢。</div>
           } @else if (processedConsumptionData().length === 0) {
-            <div class="empty-state">查無符合條件的病人或耗材資料。</div>
+            <div class="empty-state">
+              查無符合條件的病人或耗材資料。
+              @if (rawConsumptionData().length === 0) {
+                （{{ groupSearchParams.month }} 尚未上傳任何耗材統計表）
+              }
+            </div>
           } @else {
+            <div style="margin: 0 0 8px; font-size: 0.9em; color: #555; line-height: 1.6;">
+              <strong>{{ groupSearchParams.month }} 已上傳區間：</strong>
+              @for (r of uploadedRanges(); track r.key) {
+                <span style="display: inline-block; margin-right: 12px;">{{ r.label }}（{{ r.categories.join('、') }}，{{ r.patientCount }} 人）</span>
+              } @empty {
+                <span>無</span>
+              }
+              <span style="color: #888;">　共 {{ processedConsumptionData().length }} 位病人；同區間重傳會覆蓋、不同區間累加；已刪除病人仍列出並計入總量。</span>
+            </div>
             <div class="table-container consumption-table">
               <table>
                 <thead>
@@ -436,6 +456,7 @@
                     <th rowspan="2" class="sticky-col col-bed">床號</th>
                     <th rowspan="2" class="sticky-col col-mrn">病歷號</th>
                     <th rowspan="2" class="sticky-col col-name">姓名</th>
+                    <th rowspan="2">狀態</th>
                     @if (dynamicHeaders().artificialKidney.length > 0) {
                       <th [attr.colspan]="dynamicHeaders().artificialKidney.length">人工腎臟</th>
                     }
@@ -454,12 +475,17 @@
                 </thead>
                 <tbody>
                   @for (row of processedConsumptionData(); track row.patientId) {
-                    <tr>
+                    <tr [style.color]="row.isDeleted ? '#999' : null">
                       <td class="sticky-col col-freq">{{ row.freq || '-' }}</td>
                       <td class="sticky-col col-shift">{{ formatShift(row.shiftIndex) }}</td>
                       <td class="sticky-col col-bed">{{ row.bedNum || '-' }}</td>
                       <td class="sticky-col col-mrn">{{ row.medicalRecordNumber || '-' }}</td>
                       <td class="sticky-col col-name">{{ row.patientName }}</td>
+                      <td style="white-space: nowrap;">
+                        @if (row.isDeleted) {
+                          <span style="color: #c0392b;" title="該時段有透析消耗，之後已自系統刪除；用量仍計入月總量">已刪除 {{ row.deletedAt || '(日期不明)' }}</span>
+                        }
+                      </td>
                       @for (header of flattenedHeaders; track header) {
                         <td>{{ row.consumableCounts[header] || '' }}</td>
                       }

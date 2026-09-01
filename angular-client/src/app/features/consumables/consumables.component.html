@@ -23,6 +23,7 @@
           <div class="search-field">
             <label for="group-freq">頻率</label>
             <select id="group-freq" [(ngModel)]="groupSearchParams.freq">
+              <option value="all">全部</option>
               <option value="一三五">一三五</option>
               <option value="二四六">二四六</option>
               <option value="other">其他</option>
@@ -31,6 +32,7 @@
           <div class="search-field">
             <label for="group-shift">班別</label>
             <select id="group-shift" [(ngModel)]="groupSearchParams.shift">
+              <option value="all">全部</option>
               <option value="early">早班</option>
               <option value="noon">午班</option>
               <option value="late">晚班</option>
@@ -39,6 +41,10 @@
           <div class="search-field">
             <label for="group-month">盤點月份</label>
             <input type="month" id="group-month" [(ngModel)]="groupSearchParams.month" />
+          </div>
+          <div class="search-field">
+            <label for="group-keyword">病歷號 / 姓名</label>
+            <input type="text" id="group-keyword" [(ngModel)]="groupSearchParams.keyword" placeholder="選填" (keyup.enter)="handleSearch()" />
           </div>
         </div>
         <button (click)="handleSearch()" [disabled]="isLoading()" class="search-btn">
@@ -59,6 +65,11 @@
         <div *ngIf="!isLoading() && searchPerformed() && processedData().length === 0" class="empty-state">
           查無符合條件的病人或耗材資料。
         </div>
+        <div *ngIf="!isLoading() && searchPerformed() && processedData().length > 0" style="margin: 0 0 8px; font-size: 0.9em; color: #555; line-height: 1.6;">
+          <strong>{{ groupSearchParams.month }} 已上傳區間：</strong>
+          <span *ngFor="let r of uploadedRanges()" style="display: inline-block; margin-right: 12px;">{{ r.label }}（{{ r.categories.join('、') }}，{{ r.patientCount }} 人）</span>
+          <span style="color: #888;">　共 {{ processedData().length }} 位病人；同區間重傳會覆蓋、不同區間累加；已刪除病人仍列出並計入總量。</span>
+        </div>
         <div *ngIf="!isLoading() && searchPerformed() && processedData().length > 0" class="table-container">
           <table>
             <thead>
@@ -68,6 +79,7 @@
                 <th rowspan="2" class="sticky-col col-bed">床號</th>
                 <th rowspan="2" class="sticky-col col-mrn">病歷號</th>
                 <th rowspan="2" class="sticky-col col-name">姓名</th>
+                <th rowspan="2">狀態</th>
                 <th
                   *ngIf="dynamicHeaders().artificialKidney.length > 0"
                   [attr.colspan]="dynamicHeaders().artificialKidney.length"
@@ -92,12 +104,15 @@
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let row of processedData()">
+              <tr *ngFor="let row of processedData()" [style.color]="row.isDeleted ? '#999' : null">
                 <td class="sticky-col col-freq">{{ row.freq || '-' }}</td>
                 <td class="sticky-col col-shift">{{ formatShift(row.shiftIndex) }}</td>
                 <td class="sticky-col col-bed">{{ row.bedNum || '-' }}</td>
                 <td class="sticky-col col-mrn">{{ row.medicalRecordNumber || '-' }}</td>
                 <td class="sticky-col col-name">{{ row.patientName }}</td>
+                <td style="white-space: nowrap;">
+                  <span *ngIf="row.isDeleted" style="color: #c0392b;" title="該時段有透析消耗，之後已自系統刪除；用量仍計入月總量">已刪除 {{ row.deletedAt || '(日期不明)' }}</span>
+                </td>
                 <td *ngFor="let header of flattenedHeaders()">
                   {{ row.consumableCounts[header] || '' }}
                 </td>

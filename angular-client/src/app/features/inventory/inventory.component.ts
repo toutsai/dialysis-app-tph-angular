@@ -17,6 +17,13 @@ import {
 } from '@services/api-manager.service';
 // Standalone 版：已移除 Firebase
 import { queryWithInChunks } from '@/utils/firestoreUtils';
+import {
+  buildDynamicHeaders,
+  buildPatientConsumptionRows,
+  summarizeUploadedRanges,
+  type ConsumableReport,
+  type UploadedRangeSummary,
+} from '@/utils/consumablesReport';
 
 const CATEGORY_NAMES: Record<string, string> = {
   artificialKidney: '人工腎臟',
@@ -165,11 +172,15 @@ export class InventoryComponent implements OnInit {
   consumptionSearchPerformed = signal(false);
   rawConsumptionData = signal<any[]>([]);
   processedConsumptionData = signal<any[]>([]);
+  // 病人耗材查詢：以「該月有上傳紀錄的病人」為主體（含已刪除病人），頻率/班別 'all' 不篩
   groupSearchParams = {
-    freq: 'other',
-    shift: 'early',
+    freq: 'all',
+    shift: 'all',
+    keyword: '',
     month: new Date().toISOString().slice(0, 7),
   };
+  /** 該月已上傳的區間 × 類別摘要 */
+  uploadedRanges = signal<UploadedRangeSummary[]>([]);
   dynamicHeaders = signal<Record<string, string[]>>({
     artificialKidney: [],
     dialysateCa: [],
@@ -804,104 +815,44 @@ export class InventoryComponent implements OnInit {
     this.rawConsumptionData.set([]);
     this.processedConsumptionData.set([]);
     this.dynamicHeaders.set({ artificialKidney: [], dialysateCa: [], bicarbonateType: [] });
+    this.uploadedRanges.set([]);
 
     try {
-      const shiftIndex = SHIFT_MAP[this.groupSearchParams.shift];
-      const regularFreqs = ['一三五', '二四六'];
-      const opdPatients = this.patientStore.opdPatients();
-
-      const patientsInGroup = opdPatients.filter((p: any) => {
-        const rule = p.scheduleRule;
-        if (!rule) return false;
-        const matchesShift = (rule as any).shiftIndex === shiftIndex;
-        if (!matchesShift) return false;
-        if (this.groupSearchParams.freq === 'other') {
-          return !regularFreqs.includes((rule as any).freq);
-        }
-        return (rule as any).freq === this.groupSearchParams.freq;
-      });
-
-      const allPatientIdsInGroup = patientsInGroup.map((p: any) => p.id);
-
-      if (allPatientIdsInGroup.length === 0) {
-        this.consumptionLoading.set(false);
+      const reportMonth = this.groupSearchParams.month;
+      if (!reportMonth) {
+        this.showAlert('提示', '請先選擇盤點月份。');
         return;
       }
+      await this.patientStore.fetchPatientsIfNeeded();
 
-      const reportMonth = this.groupSearchParams.month;
-      const reportIdsForMonth = allPatientIdsInGroup.map((id: string) => `${reportMonth}_${id}`);
-      // Fetch all reports and filter locally by ID
-      const allReports = await this.consumablesReportsApi.fetchAll();
-      const monthlyReports = (allReports as any[]).filter((r: any) => reportIdsForMonth.includes(r.id));
+      // 以該月報表為主體（後端 GET /orders/consumables 帶病人刪除狀態），不再從在籍病人清單出發
+      const monthlyReports = (await this.consumablesReportsApi.fetchWhere({
+        startDate: `${reportMonth}-01`,
+        endDate: `${reportMonth}-31`,
+      })) as unknown as ConsumableReport[];
       this.rawConsumptionData.set(monthlyReports);
+      this.uploadedRanges.set(summarizeUploadedRanges(monthlyReports));
 
-      const reportsMap = new Map(monthlyReports.map((r: any) => [r.patientId, r]));
-      const headers: Record<string, Set<string>> = {
-        artificialKidney: new Set(),
-        dialysateCa: new Set(),
-        bicarbonateType: new Set(),
-      };
-
-      for (const report of reportsMap.values()) {
-        const data = (report as any).data || {};
-        for (const category in headers) {
-          if (data[category] && Array.isArray(data[category])) {
-            data[category].forEach((item: any) => headers[category].add(item.item));
-          }
-        }
-      }
-
-      const newDynamicHeaders = {
-        artificialKidney: [...headers.artificialKidney].sort(),
-        dialysateCa: [...headers.dialysateCa].sort(),
-        bicarbonateType: [...headers.bicarbonateType].sort(),
-      };
+      const newDynamicHeaders = buildDynamicHeaders(monthlyReports);
       this.dynamicHeaders.set(newDynamicHeaders);
-
-      for (const category of Object.keys(headers)) {
-        headers[category].forEach((item) => {
+      for (const category of Object.keys(newDynamicHeaders) as (keyof typeof newDynamicHeaders)[]) {
+        for (const item of newDynamicHeaders[category]) {
           if (!this.knownItems[category].includes(item)) {
             this.knownItems[category].push(item);
           }
-        });
+        }
       }
 
-      const patientMap = this.patientStore.patientMap();
-      const currentFlattenedHeaders = this.flattenedHeaders;
-
-      const processed = allPatientIdsInGroup
-        .map((patientId: string) => {
-          const patient = patientMap.get(patientId);
-          const report = reportsMap.get(patientId) as any;
-          const consumables = report?.data || {};
-
-          const consumableCounts: Record<string, number> = {};
-          for (const header of currentFlattenedHeaders) {
-            const dh = this.dynamicHeaders();
-            for (const category in dh) {
-              if (consumables[category] && Array.isArray(consumables[category])) {
-                const foundItem = consumables[category].find((c: any) => c.item === header);
-                if (foundItem) {
-                  consumableCounts[header] = foundItem.count;
-                  break;
-                }
-              }
-            }
-          }
-
-          return {
-            patientId,
-            patientName: patient?.name || report?.patientName || '未知病人',
-            medicalRecordNumber: patient?.medicalRecordNumber || report?.medicalRecordNumber || 'N/A',
-            bedNum: (patient as any)?.scheduleRule?.bedNum || 'N/A',
-            freq: (patient as any)?.scheduleRule?.freq || 'N/A',
-            shiftIndex: (patient as any)?.scheduleRule?.shiftIndex,
-            consumableCounts,
-          };
-        })
-        .sort((a: any, b: any) =>
-          String(a.bedNum).localeCompare(String(b.bedNum), undefined, { numeric: true })
-        );
+      const processed = buildPatientConsumptionRows(
+        monthlyReports,
+        this.patientStore.patientMap(),
+        {
+          freq: this.groupSearchParams.freq,
+          shift: this.groupSearchParams.shift,
+          keyword: this.groupSearchParams.keyword,
+        },
+        this.flattenedHeaders,
+      );
 
       this.processedConsumptionData.set(processed);
     } catch (error) {
@@ -922,12 +873,17 @@ export class InventoryComponent implements OnInit {
 
     try {
       const { freq, shift, month } = this.groupSearchParams;
-      const shiftNameMap: Record<string, string> = { early: '早班', noon: '午班', late: '晚班' };
+      const shiftNameMap: Record<string, string> = { early: '早班', noon: '午班', late: '晚班', all: '全部班別' };
       const shiftName = shiftNameMap[shift] || shift;
-      const title = `每月耗材總表: ${freq} / ${shiftName} / ${month}`;
+      const freqName = freq === 'all' ? '全部頻率' : freq === 'other' ? '其他頻率' : freq;
+      const rangesText = this.uploadedRanges()
+        .map((r) => `${r.label}(${r.categories.join('、')})`)
+        .join('；');
+      const title = `病人耗材總表: ${freqName} / ${shiftName} / ${month}${rangesText ? `　已上傳區間：${rangesText}` : ''}`;
 
-      const headerRow1: string[] = ['頻率', '班別', '床號', '病歷號', '姓名'];
-      const headerRow2: string[] = ['', '', '', '', ''];
+      const FIXED_COLS = 6;
+      const headerRow1: string[] = ['頻率', '班別', '床號', '病歷號', '姓名', '狀態'];
+      const headerRow2: string[] = ['', '', '', '', '', ''];
 
       const dh = this.dynamicHeaders();
       for (const category in dh) {
@@ -950,6 +906,7 @@ export class InventoryComponent implements OnInit {
           row.bedNum || '',
           row.medicalRecordNumber || '',
           row.patientName || '',
+          row.statusLabel || '',
         ];
         headers.forEach((header: string) => {
           const count = row.consumableCounts[header];
@@ -962,14 +919,14 @@ export class InventoryComponent implements OnInit {
       const ws = XLSX.utils.aoa_to_sheet(sheetData, { skipHidden: true } as any);
 
       ws['!merges'] = [];
-      const totalColumnCount = headers.length + 5;
+      const totalColumnCount = headers.length + FIXED_COLS;
       ws['!merges'].push({ s: { r: 0, c: 0 }, e: { r: 0, c: totalColumnCount - 1 } });
 
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < FIXED_COLS; i++) {
         ws['!merges'].push({ s: { r: 2, c: i }, e: { r: 3, c: i } });
       }
 
-      let currentCol = 5;
+      let currentCol = FIXED_COLS;
       for (const category in dh) {
         const items = dh[category];
         if (items && Array.isArray(items) && items.length > 0) {
@@ -988,7 +945,7 @@ export class InventoryComponent implements OnInit {
       const blob = new Blob([wbout], { type: 'application/octet-stream' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `耗材總表_${freq}_${shiftName}_${month}.xlsx`;
+      link.download = `病人耗材總表_${freqName}_${shiftName}_${month}.xlsx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

@@ -914,6 +914,52 @@ export function runMigrations() {
       migrationsApplied++
     }
 
+    // ========================================
+    // consumables_reports：report_data 補上 ranges（各上傳區間明細，2026-09-01）
+    // 改制前同月同類別再上傳會整批覆蓋；改為以「起日-迄日」為 key 去重+累積，月聚合欄位由 ranges 加總重算。
+    // 既有列沒有 ranges → 由 source_file 檔名的 MMDD-MMDD 推出區間（A2...0824-0828.xls → 20260824-20260828），
+    // 推不出者歸 'legacy'（下次同類別上傳時視為被取代，見 orders.js 上傳處理）。
+    // ========================================
+    const consumablesTableExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='consumables_reports'")
+      .get()
+    if (consumablesTableExists && columnExists(db, 'consumables_reports', 'source_file')) {
+      const CATS = ['artificialKidney', 'dialysateCa', 'bicarbonateType']
+      const rows = db
+        .prepare(`SELECT id, report_date, report_data, source_file FROM consumables_reports WHERE report_data IS NOT NULL AND report_data != '{}'`)
+        .all()
+      const pending = []
+      for (const row of rows) {
+        let data
+        try {
+          data = JSON.parse(row.report_data)
+        } catch {
+          continue
+        }
+        if (!data || typeof data !== 'object' || Array.isArray(data)) continue
+        if (data.ranges && typeof data.ranges === 'object') continue
+        const cats = CATS.filter((c) => Array.isArray(data[c]) && data[c].length > 0)
+        if (cats.length === 0) continue
+        const year = String(row.report_date || '').substring(0, 4)
+        const m = String(row.source_file || '').match(/(\d{4})-(\d{4})/)
+        const key = m && /^\d{4}$/.test(year) ? `${year}${m[1]}-${year}${m[2]}` : 'legacy'
+        const entry = {}
+        for (const c of cats) entry[c] = data[c].map((x) => ({ item: String(x.item), count: Number(x.count) || 0 }))
+        if (row.source_file && cats.length === 1) entry.sourceFiles = { [cats[0]]: row.source_file }
+        data.ranges = { [key]: entry }
+        pending.push({ id: row.id, json: JSON.stringify(data), key })
+      }
+      if (pending.length > 0) {
+        const update = db.prepare('UPDATE consumables_reports SET report_data = ? WHERE id = ?')
+        db.transaction(() => {
+          for (const p of pending) update.run(p.json, p.id)
+        })()
+        const keys = [...new Set(pending.map((p) => p.key))].join(', ')
+        console.log(`  📦 consumables_reports 補上 ranges：${pending.length} 列（區間：${keys}）`)
+        migrationsApplied++
+      }
+    }
+
     if (migrationsApplied > 0) {
       console.log(`✅ 已完成 ${migrationsApplied} 項遷移`)
     } else {

@@ -107,38 +107,94 @@ function parseMonthFromFileName(fileName) {
 }
 
 /**
- * 從耗材統計表的標題列解析「迄日」所屬月份，轉換為西元 YYYY-MM
- * HIS 匯出的三種統計表（A1 人工腎臟 / A2 透析藥水Ca / A6 B液種類）標題列有兩種寫法：
- *   - 西元：「&起日20260824&迄日20260828」→ 迄日 8 碼 YYYYMMDD
- *   - 民國：「&民國年起日1150824&民國年迄日1150828」→ 迄日 7 碼 YYYMMDD（民國年 <100 時為 6 碼 YYMMDD）
- * 「迄日」與數字之間允許夾冒號等非數字（akiService.js 曾遇到新版報表「&起日:YYYYMMDD20260615」）。
- *
- * @param {unknown} cell - 儲存格內容
- * @returns {string|null} - 西元 YYYY-MM，或 null 表示無法解析
+ * 標題列日期字串 → 西元 YYYYMMDD
+ *   - 8 碼：西元 YYYYMMDD
+ *   - 7 碼 / 6 碼：民國 YYYMMDD / YYMMDD（去掉末 4 碼 MMDD 的前段即民國年，+1911）
+ * @returns {string|null}
  */
-function parseReportMonthFromHeader(cell) {
-  if (cell === null || cell === undefined) return null
-  const text = String(cell)
-  const match = text.match(/迄日\D*?(\d{6,8})/)
-  if (!match) return null
-
-  const digits = match[1]
+function normalizeHeaderDate(digits) {
+  if (!digits) return null
   let year
   let month
+  let day
   if (digits.length === 8) {
-    // 西元 YYYYMMDD
     year = parseInt(digits.substring(0, 4), 10)
     month = parseInt(digits.substring(4, 6), 10)
+    day = parseInt(digits.substring(6, 8), 10)
   } else {
-    // 民國 YYYMMDD / YYMMDD：去掉末 4 碼 (MMDD) 的前段即為民國年
     const yearLen = digits.length - 4
     year = parseInt(digits.substring(0, yearLen), 10) + 1911
     month = parseInt(digits.substring(yearLen, yearLen + 2), 10)
+    day = parseInt(digits.substring(yearLen + 2, yearLen + 4), 10)
   }
-
   if (!Number.isFinite(year) || year < 2000 || year > 2100) return null
   if (!Number.isFinite(month) || month < 1 || month > 12) return null
-  return `${year}-${String(month).padStart(2, '0')}`
+  if (!Number.isFinite(day) || day < 1 || day > 31) return null
+  return `${year}${String(month).padStart(2, '0')}${String(day).padStart(2, '0')}`
+}
+
+/**
+ * 從耗材統計表的標題列解析「起日／迄日」區間
+ * HIS 匯出的三種統計表（A1 人工腎臟 / A2 透析藥水Ca / A6 B液種類）標題列有兩種寫法：
+ *   - 西元：「&起日20260824&迄日20260828」→ 8 碼 YYYYMMDD
+ *   - 民國：「&民國年起日1150824&民國年迄日1150828」→ 7 碼 YYYMMDD（民國年 <100 時為 6 碼 YYMMDD）
+ * 「起日/迄日」與數字之間允許夾冒號等非數字（akiService.js 曾遇到新版報表「&起日:YYYYMMDD20260615」）。
+ * 報表歸屬月份 = 迄日所屬月；rangeKey（`起日-迄日`，皆 YYYYMMDD）作為同月內去重/累積的鍵。
+ *
+ * @param {unknown} cell - 儲存格內容
+ * @returns {{ startDate: string|null, endDate: string, reportMonth: string, rangeKey: string }|null}
+ */
+function parseReportRangeFromHeader(cell) {
+  if (cell === null || cell === undefined) return null
+  const text = String(cell)
+  const endMatch = text.match(/迄日\D*?(\d{6,8})/)
+  if (!endMatch) return null
+  const endDate = normalizeHeaderDate(endMatch[1])
+  if (!endDate) return null
+
+  const startMatch = text.match(/起日\D*?(\d{6,8})/)
+  const startDate = startMatch ? normalizeHeaderDate(startMatch[1]) : null
+
+  return {
+    startDate,
+    endDate,
+    reportMonth: `${endDate.substring(0, 4)}-${endDate.substring(4, 6)}`,
+    rangeKey: `${startDate || ''}-${endDate}`,
+  }
+}
+
+/** 相容舊名：只回傳 YYYY-MM */
+function parseReportMonthFromHeader(cell) {
+  const range = parseReportRangeFromHeader(cell)
+  return range ? range.reportMonth : null
+}
+
+const CONSUMABLE_CATEGORIES = ['artificialKidney', 'dialysateCa', 'bicarbonateType']
+
+/**
+ * 依 report_data.ranges（各上傳區間明細）重算三類耗材的月聚合陣列
+ * report_data 形狀：
+ *   { artificialKidney: [{item,count}], dialysateCa: [...], bicarbonateType: [...],   ← 月聚合（各區間加總）
+ *     ranges: { '20260824-20260828': { artificialKidney: [{item,count}], ..., sourceFiles: {cat: 檔名}, uploadedAt } } }
+ * 同一區間同一類別再上傳 = 整批取代（去重）；不同區間 = 累加。
+ */
+function recomputeConsumableAggregates(data) {
+  const ranges = data.ranges && typeof data.ranges === 'object' ? data.ranges : {}
+  for (const category of CONSUMABLE_CATEGORIES) {
+    const totals = new Map()
+    for (const entry of Object.values(ranges)) {
+      for (const it of (entry && Array.isArray(entry[category])) ? entry[category] : []) {
+        const key = String(it.item)
+        totals.set(key, (totals.get(key) || 0) + (Number(it.count) || 0))
+      }
+    }
+    if (totals.size > 0) {
+      data[category] = Array.from(totals, ([item, count]) => ({ item, count }))
+    } else {
+      delete data[category]
+    }
+  }
+  return data
 }
 
 /**
@@ -1584,19 +1640,19 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
 
     // 從標題列（通常第二列）抓取「迄日」來決定報表月份
     // HIS 匯出有西元（&迄日20260828）與民國（&民國年迄日1150828）兩種寫法，見 parseReportMonthFromHeader
-    let reportMonth = null
+    let range = null
     let dateString = ''
-    for (let i = 0; i < Math.min(sheetAsArray.length, 5) && !reportMonth; i++) {
+    for (let i = 0; i < Math.min(sheetAsArray.length, 5) && !range; i++) {
       for (const cell of sheetAsArray[i] || []) {
-        reportMonth = parseReportMonthFromHeader(cell)
-        if (reportMonth) {
+        range = parseReportRangeFromHeader(cell)
+        if (range) {
           dateString = String(cell)
           break
         }
       }
     }
 
-    if (!reportMonth) {
+    if (!range) {
       return res.status(400).json({
         error: true,
         message:
@@ -1604,7 +1660,12 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
       })
     }
 
-    console.log(`[Consumables] 解析到報表月份為 (迄日): ${reportMonth}，來源標題「${dateString}」`)
+    const { reportMonth, rangeKey, startDate, endDate } = range
+    const fmtMd = (d) => (d ? `${d.substring(4, 6)}/${d.substring(6, 8)}` : '?')
+    const rangeLabel = `${fmtMd(startDate)}～${fmtMd(endDate)}`
+    console.log(
+      `[Consumables] 解析到報表月份為 (迄日): ${reportMonth}，區間 ${rangeKey}，來源標題「${dateString}」`,
+    )
 
     // 尋找標題行
     let headerRowIndex = -1
@@ -1656,24 +1717,48 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
     const updatesMap = new Map()
     const errors = []
     let processedRowCount = 0
+    const deletedPatientIds = new Set()
 
-    // 預先載入所有病人
+    // 預先載入所有病人（含已刪除：該區間確實有透析消耗，需計入月總量；同病歷號多筆時優先在籍者）
     const allPatients = db
-      .prepare(`SELECT id, name, medical_record_number FROM patients WHERE is_deleted = 0`)
+      .prepare(`SELECT id, name, medical_record_number, is_deleted, deleted_at FROM patients`)
       .all()
     allPatients.forEach((p) => {
-      if (p.medical_record_number) {
-        const normalizedMrn = String(p.medical_record_number).replace(/^0+/, '')
+      if (!p.medical_record_number) return
+      const normalizedMrn = String(p.medical_record_number).replace(/^0+/, '')
+      const existing = patientCache.get(normalizedMrn)
+      if (!existing || (existing.is_deleted && !p.is_deleted)) {
         patientCache.set(normalizedMrn, p)
       }
     })
+
+    // 預先載入本月既有報表（同月不同區間要累積、同區間同類別要取代，所以在 JS 端合併後整包寫回）
+    const existingReports = new Map()
+    for (const row of db
+      .prepare(`SELECT id, report_data FROM consumables_reports WHERE report_date = ?`)
+      .all(`${reportMonth}-01`)) {
+      try {
+        const parsed = JSON.parse(row.report_data || '{}')
+        existingReports.set(row.id, parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {})
+      } catch {
+        existingReports.set(row.id, {})
+      }
+    }
+    // 本次上傳中「該病人該類別」是否已重設過該區間（同檔多列同病人要累加，不能每列都清空）
+    const resetDone = new Set()
 
     for (const rowArray of dataRows) {
       let medicalRecordNumber = String(rowArray[headerToIndex['病歷號']] || '').trim()
       const consumableValue = rowArray[headerToIndex[consumableHeader]]
       const count = rowArray[headerToIndex['COUNT(*)']]
 
-      if (!medicalRecordNumber || consumableValue === undefined || consumableValue === null) {
+      // 耗材欄空白（HIS 未填品項）不當成品項 ""，列入問題行
+      if (
+        !medicalRecordNumber ||
+        consumableValue === undefined ||
+        consumableValue === null ||
+        String(consumableValue).trim() === ''
+      ) {
         if (
           rowArray.every(
             (cell) => cell === null || cell === undefined || String(cell).trim() === '',
@@ -1692,8 +1777,12 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
         continue
       }
 
+      if (patientData.is_deleted) deletedPatientIds.add(patientData.id)
+
       const reportId = `${reportMonth}_${patientData.id}`
       if (!updatesMap.has(reportId)) {
+        const data = existingReports.get(reportId) || {}
+        if (!data.ranges || typeof data.ranges !== 'object' || Array.isArray(data.ranges)) data.ranges = {}
         updatesMap.set(reportId, {
           id: reportId,
           patientId: patientData.id,
@@ -1701,29 +1790,55 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
           medicalRecordNumber: patientData.medical_record_number,
           reportDate: `${reportMonth}-01`,
           sourceFile: fileName,
-          data: {},
+          data,
         })
       }
 
       const patientUpdate = updatesMap.get(reportId)
-      if (!patientUpdate.data[firestoreField]) {
-        patientUpdate.data[firestoreField] = []
+      const ranges = patientUpdate.data.ranges
+      if (!ranges[rangeKey] || typeof ranges[rangeKey] !== 'object') ranges[rangeKey] = {}
+      const rangeEntry = ranges[rangeKey]
+
+      const resetKey = `${reportId}|${firestoreField}`
+      if (!resetDone.has(resetKey)) {
+        resetDone.add(resetKey)
+        // 同區間同類別重傳 = 整批取代（去重）
+        rangeEntry[firestoreField] = []
+        rangeEntry.sourceFiles = { ...(rangeEntry.sourceFiles || {}), [firestoreField]: fileName }
+        rangeEntry.uploadedAt = new Date().toLocaleString('sv-SE')
+        // 舊制（區間不明）資料若含同類別，視為被本次上傳取代，避免重複計算
+        if (ranges.legacy && ranges.legacy[firestoreField]) {
+          delete ranges.legacy[firestoreField]
+          if (!CONSUMABLE_CATEGORIES.some((c) => Array.isArray(ranges.legacy[c]) && ranges.legacy[c].length)) {
+            delete ranges.legacy
+          }
+        }
       }
-      patientUpdate.data[firestoreField].push({
-        item: consumableValue,
-        count: count || 0,
-      })
+
+      const itemKey = String(consumableValue).trim()
+      const found = rangeEntry[firestoreField].find((it) => String(it.item) === itemKey)
+      if (found) {
+        found.count = (Number(found.count) || 0) + (Number(count) || 0)
+      } else {
+        rangeEntry[firestoreField].push({ item: itemKey, count: Number(count) || 0 })
+      }
 
       processedRowCount++
     }
 
-    // 批次寫入資料庫 (使用 UPSERT)
+    // 由各區間明細重算月聚合
+    for (const update of updatesMap.values()) {
+      recomputeConsumableAggregates(update.data)
+    }
+
+    // 批次寫入資料庫 (使用 UPSERT；report_data 已在 JS 端與既有資料合併，整包覆寫)
     if (updatesMap.size > 0) {
       const upsertStmt = db.prepare(`
         INSERT INTO consumables_reports (id, patient_id, patient_name, medical_record_number, report_date, report_data, source_file, created_by)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
-          report_data = json_patch(report_data, excluded.report_data),
+          report_data = excluded.report_data,
+          patient_name = excluded.patient_name,
           source_file = excluded.source_file,
           updated_at = datetime('now', 'localtime')
       `)
@@ -1756,19 +1871,27 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
       {
         processedCount: updatesMap.size,
         errorCount: errors.length,
+        reportMonth,
+        rangeKey,
+        category: firestoreField,
       },
     )
 
     console.log(
-      `[Consumables] 處理完成，處理 ${processedRowCount} 筆資料，聚合為 ${updatesMap.size} 份報表。`,
+      `[Consumables] 處理完成，處理 ${processedRowCount} 筆資料，聚合為 ${updatesMap.size} 份報表（含已刪除病人 ${deletedPatientIds.size} 位）。`,
     )
 
+    const deletedNote = deletedPatientIds.size > 0 ? `（其中 ${deletedPatientIds.size} 位為已刪除病人，仍計入月總量）` : ''
     res.json({
       success: true,
-      message: `處理完成！成功處理 ${processedRowCount} 筆耗材資料，聚合為 ${updatesMap.size} 份月報表，發現 ${errors.length} 個問題行。`,
+      message: `處理完成！${reportMonth} 區間 ${rangeLabel}（${consumableHeader}）：成功處理 ${processedRowCount} 筆耗材資料，寫入 ${updatesMap.size} 位病人的月報表${deletedNote}，發現 ${errors.length} 個問題行。同區間重傳會覆蓋、不同區間會累加。`,
       processedCount: updatesMap.size,
       errorCount: errors.length,
       errors: errors.slice(0, 50),
+      reportMonth,
+      rangeKey,
+      category: firestoreField,
+      deletedPatientCount: deletedPatientIds.size,
     })
   } catch (error) {
     console.error('[Consumables] 處理檔案時發生錯誤:', error)
@@ -2488,43 +2611,60 @@ router.get('/consumables', ...isInventoryRole, (req, res) => {
     const { patientId, startDate, endDate } = req.query
     const db = getDatabase()
 
-    let query = 'SELECT * FROM consumables_reports WHERE 1=1'
+    // LEFT JOIN patients：查詢頁要顯示「該時段已刪除」的病人（刪除日）但仍列出其用量
+    let query = `
+      SELECT c.*, p.is_deleted AS patient_is_deleted, p.deleted_at AS patient_deleted_at, p.name AS patient_current_name
+      FROM consumables_reports c
+      LEFT JOIN patients p ON p.id = c.patient_id
+      WHERE 1=1`
     const params = []
 
     if (patientId) {
-      query += ' AND patient_id = ?'
+      query += ' AND c.patient_id = ?'
       params.push(patientId)
     }
 
     if (startDate) {
-      query += ' AND report_date >= ?'
+      query += ' AND c.report_date >= ?'
       params.push(startDate)
     }
 
     if (endDate) {
-      query += ' AND report_date <= ?'
+      query += ' AND c.report_date <= ?'
       params.push(endDate)
     }
 
-    query += ' ORDER BY report_date DESC'
+    query += ' ORDER BY c.report_date DESC'
 
     const reports = db.prepare(query).all(...params)
 
     res.json(
-      reports.map((r) => ({
-        id: r.id,
-        patientId: r.patient_id,
-        patientName: r.patient_name,
-        medicalRecordNumber: r.medical_record_number,
-        reportDate: r.report_date,
-        // 前端（inventory.component 月盤點/區間消耗）以 reportMonth 篩選
-        reportMonth: String(r.report_date || '').substring(0, 7),
-        data: JSON.parse(r.report_data || '{}'),
-        sourceFile: r.source_file,
-        createdBy: JSON.parse(r.created_by || '{}'),
-        createdAt: r.created_at,
-        updatedAt: r.updated_at,
-      })),
+      reports.map((r) => {
+        let data = {}
+        try {
+          data = JSON.parse(r.report_data || '{}') || {}
+        } catch {
+          data = {}
+        }
+        return {
+          id: r.id,
+          patientId: r.patient_id,
+          patientName: r.patient_current_name || r.patient_name,
+          medicalRecordNumber: r.medical_record_number,
+          reportDate: r.report_date,
+          // 前端（inventory.component 月盤點/區間消耗）以 reportMonth 篩選
+          reportMonth: String(r.report_date || '').substring(0, 7),
+          data,
+          // 已上傳的區間 key 清單（`起日-迄日` YYYYMMDD；'legacy' = 改制前資料）
+          ranges: data.ranges && typeof data.ranges === 'object' ? Object.keys(data.ranges) : [],
+          patientDeleted: !!r.patient_is_deleted,
+          patientDeletedAt: r.patient_deleted_at || null,
+          sourceFile: r.source_file,
+          createdBy: JSON.parse(r.created_by || '{}'),
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
+        }
+      }),
     )
   } catch (error) {
     console.error('取得耗材報告錯誤:', error)
