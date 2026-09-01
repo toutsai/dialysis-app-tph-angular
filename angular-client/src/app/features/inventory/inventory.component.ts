@@ -1,7 +1,9 @@
 import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { firstValueFrom } from 'rxjs';
 import { ApiConfigService } from '@services/api-config.service';
+import { ApiService } from '@services/api.service';
 import { AuthService } from '@services/auth.service';
 import { PatientStoreService } from '@services/patient-store.service';
 import { ConsumptionEngineService, type ConsumptionResult } from '@services/consumption-engine.service';
@@ -64,6 +66,7 @@ export class InventoryComponent implements OnInit {
   private readonly patientStore = inject(PatientStoreService);
   private readonly consumptionEngine = inject(ConsumptionEngineService);
   private readonly apiManagerService = inject(ApiManagerService);
+  private readonly api = inject(ApiService);
 
   // API managers
   private readonly machineConfigApi: ApiManager<FirestoreRecord>;
@@ -265,6 +268,8 @@ export class InventoryComponent implements OnInit {
 
   // Order preview modal
   showOrderPreview = signal(false);
+  /** 確認匯出時同時把訂單建成行事曆叫貨（待到貨） */
+  createCalendarOrdersOnExport = true;
   orderDate = '';
   orderPreviewDates: string[] = []; // 6 dates: Mon-Sat
   orderPreviewDayLabels: string[] = [];
@@ -1877,7 +1882,62 @@ export class InventoryComponent implements OnInit {
     URL.revokeObjectURL(link.href);
 
     this.showOrderPreview.set(false);
-    this.showAlert('匯出成功', '訂單已下載');
+
+    // 同步建成行事曆叫貨（每格 >0 的數量 → 一筆待到貨，預計到貨日 = 該欄日期）
+    if (this.createCalendarOrdersOnExport) {
+      const result = await this.createCalendarOrdersFromPreview();
+      this.showAlert('匯出成功', `訂單已下載。${result}`);
+    } else {
+      this.showAlert('匯出成功', '訂單已下載');
+    }
+  }
+
+  /**
+   * 訂單預覽表 → 行事曆叫貨（inventory_purchases status=ordered，同一 batch）
+   * 訂單數量是「個」，行事曆以整箱計：箱數 = 無條件進位(個數 / 每箱個數)，個數 = 箱數 × 每箱個數。
+   * 同品項同預計到貨日已有待到貨時先確認，避免重複叫。
+   */
+  private async createCalendarOrdersFromPreview(): Promise<string> {
+    const entries: any[] = [];
+    for (const entry of this.orderPreviewItems) {
+      const grid = this.orderPreviewGrid[`${entry.category}|${entry.item}`] || [];
+      const unitsPerBox = this.getUnitsPerBox(entry.category, entry.item) || 1;
+      grid.forEach((units: number, idx: number) => {
+        const u = Number(units) || 0;
+        if (u <= 0 || !this.orderPreviewDates[idx]) return;
+        const boxQuantity = unitsPerBox > 1 ? Math.ceil(u / unitsPerBox) : u;
+        entries.push({
+          category: entry.category,
+          item: entry.item,
+          boxQuantity,
+          quantity: boxQuantity * unitsPerBox,
+          expectedDate: this.orderPreviewDates[idx],
+          orderDate: this.orderDate,
+          status: 'ordered',
+          notes: `每週訂單 ${this.weeklyFilter.week}（訂單量 ${u} 個）`,
+        });
+      });
+    }
+    if (entries.length === 0) return '（訂單無數量，未建立行事曆叫貨）';
+
+    try {
+      const existing = (await this.purchasesApi.fetchAll()) as any[];
+      const dup = entries.filter((e) =>
+        existing.some((p) => p.status === 'ordered' && p.category === e.category && p.item === e.item && p.expectedDate === e.expectedDate),
+      );
+      if (dup.length > 0) {
+        const sample = dup.slice(0, 3).map((d) => `${d.expectedDate} ${d.item}`).join('、');
+        if (!confirm(`行事曆已有 ${dup.length} 筆同品項同到貨日的待到貨（如 ${sample}），仍要再建立 ${entries.length} 筆叫貨嗎？\n（取消 = 只匯出 Excel，不建立）`)) {
+          return '（未建立行事曆叫貨）';
+        }
+      }
+      const res: any = await firstValueFrom(this.api.post('/system/inventory/purchases/batch', { entries }));
+      await this.fetchPurchases();
+      return `已建立 ${res?.count ?? entries.length} 筆行事曆叫貨（待到貨），可到「叫貨/到貨紀錄」查看。`;
+    } catch (error: any) {
+      console.error('建立行事曆叫貨失敗:', error);
+      return `但建立行事曆叫貨失敗：${error?.error?.message || error?.message || error}`;
+    }
   }
 
   getOrderRowTotal(category: string, item: string): number {

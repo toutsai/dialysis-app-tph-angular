@@ -1018,8 +1018,12 @@
           </table>
         </div>
         <p style="color: #6c757d; font-size: 0.85rem; margin-top: 0.5rem;">
-          💡 預設到貨日為週一、週三。可手動調整各日數量。
+          💡 預設到貨日為週一、週三。可手動調整各日數量（單位：個）。
         </p>
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 0.9rem; margin-top: 0.25rem;">
+          <input type="checkbox" [(ngModel)]="createCalendarOrdersOnExport" />
+          同時建立行事曆叫貨（每個有數量的日期一筆「待到貨」，以整箱計、無條件進位；到貨時在行事曆點選入庫）
+        </label>
         <div class="order-signature-row">
           <span><strong>製表人：</strong>{{ authService.currentUser()?.name || '' }}</span>
           <span><strong>洗腎室護理長：</strong>_______________</span>
@@ -1027,7 +1031,7 @@
       </div>
       <div class="modal-footer">
         <button class="btn-secondary" (click)="showOrderPreview.set(false)">取消</button>
-        <button class="btn-success" (click)="confirmExportOrder()">確認匯出 Excel</button>
+        <button class="btn-success" (click)="confirmExportOrder()">{{ createCalendarOrdersOnExport ? '確認匯出 Excel 並建立叫貨' : '確認匯出 Excel' }}</button>
       </div>
     </div>
   </div>
