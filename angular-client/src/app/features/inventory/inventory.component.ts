@@ -105,7 +105,7 @@ export class InventoryComponent implements OnInit {
   // ==================== Dashboard ====================
   dashboardLoading = signal(false);
   dashboardLoaded = signal(false);
-  dashboardItems = signal<{ category: string; itemName: string; estimatedStock: number; safeLevel: number; autoSafeLevel: number; dailyUsage: number; todayConsumption: number; remainingAfterToday: number; status: 'safe' | 'warning' | 'danger' | 'critical' }[]>([]);
+  dashboardItems = signal<{ category: string; itemName: string; estimatedStock: number; safeLevel: number; autoSafeLevel: number; dailyUsage: number; todayConsumption: number; remainingAfterToday: number; pending: number; status: 'safe' | 'warning' | 'danger' | 'critical'; statusLabel: string }[]>([]);
   dashboardLastCountDate = signal('');
   /** 是否找得到任何盤點紀錄（false → 畫面顯示「請先盤點」而不是全 0） */
   dashboardHasCount = signal(false);
@@ -1151,9 +1151,11 @@ export class InventoryComponent implements OnInit {
   // ==================== Dashboard ====================
 
   /**
-   * 庫存總覽：以「最近一次盤點」為基準推估今天的庫存。
-   * 推估庫存 = 盤點量 + 盤點後到貨 − 盤點後消耗（實際優先、缺的日子排程推估）。
+   * 庫存總覽：以「最近一次盤點」為基準推估「今日消耗前」的庫存。
+   * 推估庫存 = 盤點量 + 盤點後到貨（含今天已到貨）− 盤點後消耗（算到昨天；實際優先、缺的日子排程推估）。
+   * 今日消耗另以排程推估顯示，餘 = 推估庫存 − 今日預估消耗（今天只扣一次，不重複）。
    * 安全庫存 = ceil(上一個完整週消耗 / 7 × 9 天)，若品項有手動安全量則取兩者較大。
+   * 狀態：餘 < 0 今日不足 → 餘 < 日均×2 撐不到 2 天 → 餘 < 安全庫存 低於安全量 → 充足。
    */
   async loadDashboard(): Promise<void> {
     this.dashboardLoading.set(true);
@@ -1171,9 +1173,12 @@ export class InventoryComponent implements OnInit {
         countDate ? Math.max(0, this.stock.daysInclusive(countDate, todayStr) - 1) : 0,
       );
 
-      // 2. 推估庫存（盤點 + 到貨 − 消耗）
+      // 2. 推估庫存（盤點 + 到貨 − 消耗）：消耗算到昨天（今天的消耗在第 5 步另扣一次），到貨含今天
       const allPurchases = (await this.purchasesApi.fetchAll()) as any[];
-      const estimate = await this.stock.estimateStock(lastCountDoc, todayStr, allPurchases);
+      const yesterdayStr = this.stock.addDays(todayStr, -1);
+      const estimate = await this.stock.estimateStock(lastCountDoc, yesterdayStr, allPurchases);
+      const todayArrivals = countDate ? this.stock.arrivedBetween(allPurchases, todayStr, todayStr) : this.stock.emptyGrouped();
+      const pendingArrivals = this.stock.pendingArrivals(allPurchases);
 
       // 3. 手動安全量（品項設定）
       if (this.inventoryItems().length === 0) {
@@ -1218,6 +1223,7 @@ export class InventoryComponent implements OnInit {
         estimate.stock,
         estimate.arrivals,
         estimate.consumption,
+        todayArrivals,
         lastWeek.grouped,
       ]);
       const allKeys = new Set<string>();
@@ -1229,7 +1235,10 @@ export class InventoryComponent implements OnInit {
       const dashItems: ReturnType<typeof this.dashboardItems> = [];
       allKeys.forEach((key) => {
         const [category, itemName] = key.split(':');
-        const estimatedStock = this.stock.value(estimate.stock, category, itemName);
+        // 今日消耗前的庫存 = 推估（消耗到昨天）+ 今天已到貨
+        const estimatedStock =
+          this.stock.value(estimate.stock, category, itemName) +
+          this.stock.value(todayArrivals, category, itemName);
 
         // 上週消耗 → 日均用量 → 自動安全庫存（9 天）
         const weeklyUsage = this.stock.value(lastWeek.grouped, category, itemName);
@@ -1238,28 +1247,33 @@ export class InventoryComponent implements OnInit {
         const autoSafeLevel = this.stock.safetyStock(weeklyUsage);
         const safeLevel = Math.max(autoSafeLevel, manualSafeLevel);
 
-        // 今日預估消耗
+        // 今日預估消耗（只在這裡扣一次）
         const todayConsumption = todayForecastData[category]?.[itemName] || 0;
         const remainingAfterToday = estimatedStock - todayConsumption;
+        const pending = this.stock.value(pendingArrivals, category, itemName);
 
-        // 4 階狀態判定
+        // 4 階狀態：與每週訂單的「安全庫存 = 日均 × 9 天」同一把尺
         let status: 'safe' | 'warning' | 'danger' | 'critical' = 'safe';
-        if (dailyUsage > 0) {
-          if (remainingAfterToday < 0) status = 'critical';
-          else if (remainingAfterToday < dailyUsage) status = 'danger';
-          else if (remainingAfterToday < dailyUsage * 2) status = 'warning';
-        } else if (manualSafeLevel > 0) {
-          // 沒有上週數據時，回退到手動安全庫存
-          if (estimatedStock < 0) status = 'critical';
-          else if (estimatedStock <= 0) status = 'danger';
-          else if (estimatedStock <= manualSafeLevel) status = 'warning';
+        let statusLabel = '充足';
+        if (remainingAfterToday < 0) {
+          status = 'critical';
+          statusLabel = '今日不足';
+        } else if (dailyUsage > 0 && remainingAfterToday < dailyUsage * 2) {
+          status = 'danger';
+          statusLabel = '撐不到 2 天';
+        } else if (safeLevel > 0 && remainingAfterToday < safeLevel) {
+          status = 'warning';
+          statusLabel = '低於安全量';
         }
+        if (status !== 'safe' && pending > 0) statusLabel += '（已叫貨）';
 
-        dashItems.push({ category, itemName, estimatedStock, safeLevel, autoSafeLevel, dailyUsage, todayConsumption, remainingAfterToday, status });
+        dashItems.push({ category, itemName, estimatedStock, safeLevel, autoSafeLevel, dailyUsage, todayConsumption, remainingAfterToday, pending, status, statusLabel });
       });
 
       const statusOrder: Record<string, number> = { critical: 0, danger: 1, warning: 2, safe: 3 };
-      dashItems.sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
+      dashItems.sort(
+        (a, b) => statusOrder[a.status] - statusOrder[b.status] || a.itemName.localeCompare(b.itemName, 'zh-Hant'),
+      );
 
       this.dashboardItems.set(dashItems);
       this.dashboardLoaded.set(true);

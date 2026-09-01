@@ -7,7 +7,7 @@ import { syncMasterScheduleToFuture, initializeFutureSchedules, mergeExceptionsI
 import { processScheduleException } from '../services/exceptionHandler.js'
 import { isSingleDayMove, reconcileSingleDayMove, resolveSourceConflict, retargetConflict } from '../services/exceptionReconcile.js'
 import { syncEventsToKiditLogbook } from '../services/kiditSync.js'
-import { getTaipeiTodayString, formatDateToYYYYMMDD, formatDateToTaipeiString, getTaipeiDayIndex } from '../utils/dateUtils.js'
+import { getTaipeiTodayString, getTaipeiYesterdayString, formatDateToYYYYMMDD, formatDateToTaipeiString, getTaipeiDayIndex } from '../utils/dateUtils.js'
 import { SHIFTS, FREQ_MAP_TO_DAY_INDEX, getScheduleKey } from '../utils/scheduleUtils.js'
 import { emitExceptionChange, emitScheduleSaved } from '../services/eventBus.js'
 import { removeAutoMovementFromDailyLog } from '../services/dailyLogMovementSync.js'
@@ -467,7 +467,7 @@ router.get('/range', authenticate, (req, res) => {
     }
     query += ' ORDER BY date'
     const schedules = db.prepare(query).all(...params)
-    res.json(schedules.map(s => ({
+    const rows = schedules.map(s => ({
       id: s.id,
       date: s.date,
       schedule: JSON.parse(s.schedule || '{}'),
@@ -476,7 +476,37 @@ router.get('/range', authenticate, (req, res) => {
       version: s.version,
       createdAt: s.created_at,
       updatedAt: s.updated_at
-    })))
+    }))
+
+    // 過去日期補上歸檔表（每日 00:05 歸檔 cron 會把昨天以前的排程搬到 archived_schedules 並從 schedules 刪除；
+    // 與 GET /:date 同一規則：過去日期優先信歸檔，schedules 只剩空殼時視同查無）。
+    // 消耗引擎（庫存推估）用這支端點回算過去區間，沒有這段會把所有過去日子當成 0 消耗。
+    const todayStr = getTaipeiTodayString()
+    const rangeEnd = end && end < todayStr ? end : getTaipeiYesterdayString()
+    if (start && start <= rangeEnd) {
+      const archived = db
+        .prepare('SELECT * FROM archived_schedules WHERE date >= ? AND date <= ? ORDER BY date')
+        .all(start, rangeEnd)
+      const nonEmptyLive = new Set(rows.filter(r => Object.keys(r.schedule).length > 0).map(r => r.date))
+      const merged = rows.filter(r => r.date >= todayStr || nonEmptyLive.has(r.date))
+      for (const a of archived) {
+        if (nonEmptyLive.has(a.date)) continue
+        merged.push({
+          id: a.id,
+          date: a.date,
+          schedule: JSON.parse(a.schedule || '{}'),
+          syncMethod: 'archived',
+          lastModifiedBy: JSON.parse(a.last_modified_by || '{}'),
+          version: null,
+          createdAt: a.created_at,
+          updatedAt: a.updated_at
+        })
+      }
+      merged.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0))
+      return res.json(merged)
+    }
+
+    res.json(rows)
   } catch (error) {
     console.error('取得排程範圍錯誤:', error)
     res.status(500).json({ error: true, message: '取得排程範圍失敗' })

@@ -60,11 +60,12 @@
           @if (dashboardHasCount()) {
             <p class="panel-description">
               盤點基礎：{{ dashboardLastCountDate() }}（{{ dashboardCountAgeDays() }} 天前）
-              ｜推估庫存 = 盤點量 + 盤點後到貨 − 盤點後消耗
+              ｜卡片數字 = 今日消耗前的推估庫存（盤點量 + 盤點後到貨 − 盤點後至昨日消耗）；餘 = 再扣今日預估消耗
             </p>
             @if (dashboardConsumptionNote()) {
               <p class="panel-description">安全庫存 = 日均 × 9 天；{{ dashboardConsumptionNote() }}</p>
             }
+            <p class="panel-description">狀態：今日不足（餘 &lt; 0）→ 撐不到 2 天（餘 &lt; 日均×2）→ 低於安全量（餘 &lt; 安全庫存）→ 充足</p>
           }
         </div>
         <button class="btn-primary" (click)="loadDashboard()" [disabled]="dashboardLoading()">
@@ -102,9 +103,9 @@
                       <span class="status-dot" [class.dot-safe]="item.status === 'safe'" [class.dot-warning]="item.status === 'warning'" [class.dot-danger]="item.status === 'danger'" [class.dot-critical]="item.status === 'critical'"></span>
                     </div>
                     <div class="dash-card-stock">{{ item.estimatedStock }}</div>
-                    <div class="dash-card-safe-level">安全庫存：{{ item.safeLevel > 0 ? item.safeLevel : '-' }}</div>
-                    @if (item.dailyUsage > 0) {
-                      <div class="dash-card-detail">日均：{{ item.dailyUsage }} ｜ 今消耗：{{ item.todayConsumption }} ｜ 餘：{{ item.remainingAfterToday }}</div>
+                    <div class="dash-card-safe-level">{{ item.statusLabel }} ｜ 安全庫存：{{ item.safeLevel > 0 ? item.safeLevel : '-' }}</div>
+                    @if (item.dailyUsage > 0 || item.todayConsumption > 0 || item.pending > 0) {
+                      <div class="dash-card-detail">日均：{{ item.dailyUsage }} ｜ 今消耗：{{ item.todayConsumption }} ｜ 餘：{{ item.remainingAfterToday }}@if (item.pending > 0) {<span> ｜ 待到貨：{{ item.pending }}</span>}</div>
                     }
                   </div>
                 }
