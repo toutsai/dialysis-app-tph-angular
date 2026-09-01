@@ -46,8 +46,8 @@
     <button [class.active]="activeTab() === 'beds'" (click)="activeTab.set('beds')">床位預設用物</button>
     <button [class.active]="activeTab() === 'purchase'" (click)="activeTab.set('purchase')">叫貨/到貨紀錄</button>
     <button [class.active]="activeTab() === 'consumption'" (click)="activeTab.set('consumption')">消耗紀錄</button>
-    <button [class.active]="activeTab() === 'monthly'" (click)="activeTab.set('monthly')">每月盤點</button>
     <button [class.active]="activeTab() === 'weekly'" (click)="activeTab.set('weekly'); loadWeeklyData()">每週訂單</button>
+    <button [class.active]="activeTab() === 'monthly'" (click)="activeTab.set('monthly')">每月盤點</button>
   </div>
 
   <main class="page-main-content">
