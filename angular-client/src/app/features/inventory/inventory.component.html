@@ -44,7 +44,7 @@
     <button [class.active]="activeTab() === 'dashboard'" (click)="activeTab.set('dashboard'); loadDashboard()">庫存總覽</button>
     <button [class.active]="activeTab() === 'items'" (click)="activeTab.set('items')">品項設定</button>
     <button [class.active]="activeTab() === 'beds'" (click)="activeTab.set('beds')">床位預設用物</button>
-    <button [class.active]="activeTab() === 'purchase'" (click)="activeTab.set('purchase')">進貨紀錄</button>
+    <button [class.active]="activeTab() === 'purchase'" (click)="activeTab.set('purchase')">叫貨/到貨紀錄</button>
     <button [class.active]="activeTab() === 'consumption'" (click)="activeTab.set('consumption')">消耗紀錄</button>
     <button [class.active]="activeTab() === 'monthly'" (click)="activeTab.set('monthly')">每月盤點</button>
     <button [class.active]="activeTab() === 'weekly'" (click)="activeTab.set('weekly'); loadWeeklyData()">每週訂單</button>
@@ -278,16 +278,27 @@
     </div>
     }
 
-    <!-- ========== Tab 1: 進貨紀錄 ========== -->
+    <!-- ========== Tab 1: 叫貨/到貨紀錄 ========== -->
     @if (activeTab() === 'purchase') {
     <div class="tab-panel">
       <div class="panel-header">
-        <h3>進貨紀錄管理</h3>
-        <button class="btn-primary" (click)="toggleInlineAdd()">
-          {{ showPurchaseInlineAdd() ? '取消新增' : '+ 新增進貨' }}
-        </button>
+        <h3>叫貨/到貨紀錄</h3>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <div class="sub-tabs" style="margin: 0;">
+            <button [class.active]="purchaseView() === 'calendar'" (click)="purchaseView.set('calendar')">行事曆</button>
+            <button [class.active]="purchaseView() === 'list'" (click)="purchaseView.set('list'); fetchPurchases()">列表</button>
+          </div>
+          @if (purchaseView() === 'list') {
+            <button class="btn-primary" (click)="toggleInlineAdd()">
+              {{ showPurchaseInlineAdd() ? '取消新增' : '+ 新增到貨(直接入庫)' }}
+            </button>
+          }
+        </div>
       </div>
 
+      @if (purchaseView() === 'calendar') {
+        <app-purchase-calendar [knownItems]="knownItems" [unitsPerBoxFn]="unitsPerBoxFn" (changed)="fetchPurchases()"></app-purchase-calendar>
+      } @else {
       <div class="filter-bar">
         <div class="filter-field">
           <label>月份</label>
@@ -316,6 +327,7 @@
             <thead>
               <tr>
                 <th>日期</th>
+                <th>狀態</th>
                 <th>類別</th>
                 <th>品項</th>
                 <th>箱數</th>
@@ -328,6 +340,7 @@
               @if (showPurchaseInlineAdd()) {
                 <tr class="inline-add-row">
                   <td><input type="datetime-local" [(ngModel)]="purchaseForm.date" style="width: 175px;" /></td>
+                  <td>已到貨</td>
                   <td>
                     <select [(ngModel)]="purchaseForm.category" style="width: 110px;">
                       <option value="">請選擇</option>
@@ -354,8 +367,15 @@
                 </tr>
               }
               @for (item of purchases(); track item.id) {
-                <tr>
-                  <td>{{ formatDateTime(item.date) }}</td>
+                <tr [style.color]="item.status === 'ordered' ? '#b9770e' : null">
+                  <td>
+                    @if (item.status === 'ordered') {
+                      預計 {{ item.expectedDate }}
+                    } @else {
+                      {{ formatDateTime(item.date) }}
+                    }
+                  </td>
+                  <td>{{ purchaseStatusText(item) }}</td>
                   <td>{{ CATEGORY_NAMES[item.category] }}</td>
                   <td>{{ item.item }}</td>
                   <td>{{ item.boxQuantity || '-' }}</td>
@@ -368,12 +388,13 @@
                 </tr>
               }
               @if (purchases().length === 0 && !showPurchaseInlineAdd()) {
-                <tr><td colspan="7" class="empty-state">尚無進貨紀錄</td></tr>
+                <tr><td colspan="8" class="empty-state">本月尚無叫貨/到貨紀錄</td></tr>
               }
             </tbody>
           </table>
         }
       </div>
+      }
     </div>
     }
 

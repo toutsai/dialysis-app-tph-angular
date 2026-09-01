@@ -10,6 +10,7 @@ import { ClerkPhysicianPrintComponent } from './clerk-physician-print.component'
 import { ClerkRegistrationComponent } from './clerk-registration.component';
 import { ClerkInjectionPrintComponent } from './clerk-injection-print.component';
 import { ClerkGentamycinListComponent } from './clerk-gentamycin-list.component';
+import { PurchaseCalendarComponent } from './purchase-calendar.component';
 import {
   ApiManagerService,
   type ApiManager,
@@ -52,6 +53,7 @@ const DEFAULT_ITEMS: Record<string, string[]> = {
     ClerkRegistrationComponent,
     ClerkInjectionPrintComponent,
     ClerkGentamycinListComponent,
+    PurchaseCalendarComponent,
   ],
   templateUrl: './inventory.component.html',
   styleUrl: './inventory.component.css',
@@ -136,6 +138,16 @@ export class InventoryComponent implements OnInit {
   // ==================== Tab 1: 進貨紀錄 ====================
   purchases = signal<any[]>([]);
   purchaseLoading = signal(false);
+  /** 叫貨/到貨紀錄：行事曆（預設）或列表 */
+  purchaseView = signal<'calendar' | 'list'>('calendar');
+  /** 給行事曆子元件用：每箱個數 */
+  readonly unitsPerBoxFn = (category: string, item: string) => this.getUnitsPerBox(category, item);
+  purchaseStatusText(p: any): string {
+    if (p.status !== 'ordered') return '已到貨';
+    const today = new Date();
+    const t = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    return (p.expectedDate || '') < t ? '逾期未到' : '待到貨';
+  }
   purchaseFilter = {
     month: new Date().toISOString().slice(0, 7),
     category: '',
@@ -673,14 +685,13 @@ export class InventoryComponent implements OnInit {
       const endDateStr = endDate.toISOString();
 
       const allPurchases = await this.purchasesApi.fetchAll();
+      // 列表：已到貨看到貨日、待到貨看預計到貨日
+      const keyDate = (p: any): string =>
+        p.status === 'ordered' ? String(p.expectedDate || '') : typeof p.date === 'string' ? p.date : '';
       let results = (allPurchases as any[]).filter((p: any) => {
-        const pDate = typeof p.date === 'string' ? p.date : (p.date?.toDate ? p.date.toDate().toISOString() : '');
-        return pDate >= startDateStr && pDate <= endDateStr;
-      }).sort((a: any, b: any) => {
-        const aDate = typeof a.date === 'string' ? a.date : '';
-        const bDate = typeof b.date === 'string' ? b.date : '';
-        return bDate.localeCompare(aDate);
-      });
+        const pDate = keyDate(p);
+        return pDate >= startDateStr.substring(0, 10) && pDate <= endDateStr;
+      }).sort((a: any, b: any) => keyDate(b).localeCompare(keyDate(a)));
 
       if (this.purchaseFilter.category) {
         results = results.filter((item: any) => item.category === this.purchaseFilter.category);
@@ -1085,7 +1096,9 @@ export class InventoryComponent implements OnInit {
       const purchases: Record<string, Record<string, number>> = {};
       if (countDate) {
         const allPurchases = await this.purchasesApi.fetchAll();
+        // 只算已到貨（入庫）；已叫貨待到貨不計入庫存
         const filteredPurchases = (allPurchases as any[]).filter((p: any) => {
+          if (p.status === 'ordered') return false;
           const pDate = typeof p.date === 'string' ? p.date : '';
           return pDate >= new Date(countDate + 'T00:00:00').toISOString();
         });
@@ -1349,7 +1362,9 @@ export class InventoryComponent implements OnInit {
       const allPurchases = await this.purchasesApi.fetchAll();
       const startDateStr = startDate.toISOString();
       const endDateStr = endDate.toISOString();
+      // 只算已到貨（入庫）；已叫貨待到貨不計入庫存
       const filteredPurchases = (allPurchases as any[]).filter((p: any) => {
+        if (p.status === 'ordered') return false;
         const pDate = typeof p.date === 'string' ? p.date : '';
         return pDate >= startDateStr && pDate <= endDateStr;
       });

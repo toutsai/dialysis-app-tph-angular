@@ -656,22 +656,7 @@ router.get('/inventory/purchases', ...isInventoryRole, (req, res) => {
 
     const purchases = db.prepare(query).all(...params)
 
-    res.json(
-      purchases.map((p) => ({
-        id: p.id,
-        itemId: p.item_id,
-        item: p.item_name, // Mapping for frontend
-        category: p.item_category, // Mapping for frontend
-        quantity: p.quantity,
-        boxQuantity: p.box_quantity || (p.units_per_box ? p.quantity / p.units_per_box : 0), // Fallback calculation if column missing
-        unitPrice: p.unit_price,
-        supplier: p.supplier,
-        date: p.purchase_date,
-        notes: p.notes,
-        createdBy: JSON.parse(p.created_by || '{}').name || '未知',
-        createdAt: p.created_at,
-      })),
-    )
+    res.json(purchases.map(mapPurchaseRow))
   } catch (error) {
     console.error('取得進貨紀錄錯誤:', error)
     res.status(500).json({
@@ -680,6 +665,43 @@ router.get('/inventory/purchases', ...isInventoryRole, (req, res) => {
     })
   }
 })
+
+/**
+ * inventory_purchases 列 → API 形狀
+ * status：'ordered' 已叫貨待到貨 / 'arrived' 已到貨（入庫，庫存計算只算這種）；舊資料 NULL 視為 arrived
+ * date = purchase_date = 實際到貨(入庫)日；orderDate 叫貨日；expectedDate 預計到貨日；batchId 批次群組
+ */
+function mapPurchaseRow(p) {
+  return {
+    id: p.id,
+    itemId: p.item_id,
+    item: p.item_name, // Mapping for frontend
+    category: p.item_category, // Mapping for frontend
+    quantity: p.quantity,
+    boxQuantity: p.box_quantity || (p.units_per_box ? p.quantity / p.units_per_box : 0), // Fallback calculation if column missing
+    unitPrice: p.unit_price,
+    supplier: p.supplier,
+    date: p.purchase_date,
+    status: p.status || 'arrived',
+    orderDate: p.order_date || null,
+    expectedDate: p.expected_date || null,
+    batchId: p.batch_id || null,
+    arrivedBy: (() => {
+      if (!p.arrived_by) return null
+      try {
+        return JSON.parse(p.arrived_by)
+      } catch {
+        return { name: String(p.arrived_by) }
+      }
+    })(),
+    notes: p.notes,
+    createdBy: JSON.parse(p.created_by || '{}').name || '未知',
+    createdAt: p.created_at,
+    updatedAt: p.updated_at || null,
+  }
+}
+
+const PURCHASE_STATUSES = new Set(['ordered', 'arrived'])
 
 /**
  * 由 itemId 或（品名 + 分類）解析庫存品項 id。
@@ -707,29 +729,16 @@ function resolveInventoryItemId(db, { itemId, item, category }) {
  */
 router.post('/inventory/purchases', ...isInventoryRole, async (req, res) => {
   try {
-    const { itemId, item, category, quantity, boxQuantity, unitPrice, supplier, date, notes } = req.body
-
-    const id = uuidv4()
     const db = getDatabase()
     const createdBy = JSON.stringify({ uid: req.user.id, name: req.user.name })
-
-    const resolvedItemId = resolveInventoryItemId(db, { itemId, item, category })
-    if (!resolvedItemId) {
-      return res.status(400).json({ error: true, message: '缺少品項（itemId 或 item 品名）' })
+    const result = insertPurchaseRow(db, req.body, createdBy)
+    if (result.error) {
+      return res.status(400).json({ error: true, message: result.error })
     }
-
-    db.prepare(
-      `
-      INSERT INTO inventory_purchases (
-        id, item_id, quantity, box_quantity, unit_price, supplier, purchase_date, notes, created_by
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    ).run(id, resolvedItemId, quantity ?? null, boxQuantity ?? null, unitPrice || 0, supplier ?? null, date ?? null, notes ?? null, createdBy)
 
     res.status(201).json({
       success: true,
-      id,
+      id: result.id,
     })
   } catch (error) {
     console.error('新增進貨紀錄錯誤:', error)
@@ -741,17 +750,133 @@ router.post('/inventory/purchases', ...isInventoryRole, async (req, res) => {
 })
 
 /**
+ * 寫入一列 inventory_purchases（POST 單筆與 /batch 共用）
+ * status 預設 'arrived'（相容舊的「新增進貨」= 直接入庫）；'ordered' 時 purchase_date 可為空（到貨時才填）
+ */
+function insertPurchaseRow(db, body, createdBy, batchId = null) {
+  const { itemId, item, category, quantity, boxQuantity, unitPrice, supplier, date, notes, status, orderDate, expectedDate } = body || {}
+  const resolvedItemId = resolveInventoryItemId(db, { itemId, item, category })
+  if (!resolvedItemId) return { error: '缺少品項（itemId 或 item 品名）' }
+  const finalStatus = PURCHASE_STATUSES.has(status) ? status : 'arrived'
+  if (finalStatus === 'ordered' && !expectedDate) return { error: '叫貨需填預計到貨日' }
+
+  const id = uuidv4()
+  db.prepare(
+    `
+    INSERT INTO inventory_purchases (
+      id, item_id, quantity, box_quantity, unit_price, supplier, purchase_date, notes, created_by,
+      status, order_date, expected_date, batch_id
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `,
+  ).run(
+    id,
+    resolvedItemId,
+    quantity ?? null,
+    boxQuantity ?? null,
+    unitPrice || 0,
+    supplier ?? null,
+    date ?? null,
+    notes ?? null,
+    createdBy,
+    finalStatus,
+    orderDate ?? null,
+    expectedDate ?? null,
+    batchId ?? body?.batchId ?? null,
+  )
+  return { id }
+}
+
+/**
+ * POST /api/system/inventory/purchases/batch
+ * 批次新增叫貨（行事曆「起訖日 + 每週/隔週 星期幾」展開後的多筆），同一 batch_id，交易寫入
+ * body: { entries: [{ item, category, boxQuantity, quantity, expectedDate, orderDate, status? , notes? }] }
+ */
+router.post('/inventory/purchases/batch', ...isInventoryRole, async (req, res) => {
+  try {
+    const entries = Array.isArray(req.body?.entries) ? req.body.entries : []
+    if (entries.length === 0) {
+      return res.status(400).json({ error: true, message: '沒有要新增的資料' })
+    }
+    if (entries.length > 200) {
+      return res.status(400).json({ error: true, message: '一次最多 200 筆' })
+    }
+    const db = getDatabase()
+    const createdBy = JSON.stringify({ uid: req.user.id, name: req.user.name })
+    const batchId = uuidv4()
+    const ids = []
+    let failed = null
+    db.transaction(() => {
+      for (const entry of entries) {
+        const r = insertPurchaseRow(db, { status: 'ordered', ...entry }, createdBy, batchId)
+        if (r.error) {
+          failed = r.error
+          throw new Error(r.error)
+        }
+        ids.push(r.id)
+      }
+    })()
+    res.status(201).json({ success: true, batchId, ids, count: ids.length })
+  } catch (error) {
+    if (error && /缺少品項|預計到貨日/.test(error.message)) {
+      return res.status(400).json({ error: true, message: error.message })
+    }
+    console.error('批次新增叫貨錯誤:', error)
+    res.status(500).json({ error: true, message: '批次新增叫貨失敗' })
+  }
+})
+
+/**
+ * DELETE /api/system/inventory/purchases/batch/:batchId
+ * 刪除同一批次中「尚未到貨」的叫貨（已到貨的保留，避免動到庫存）
+ */
+router.delete('/inventory/purchases/batch/:batchId', ...isInventoryRole, async (req, res) => {
+  try {
+    const { batchId } = req.params
+    const db = getDatabase()
+    const result = db
+      .prepare(`DELETE FROM inventory_purchases WHERE batch_id = ? AND status = 'ordered'`)
+      .run(batchId)
+    res.json({ success: true, deleted: result.changes })
+  } catch (error) {
+    console.error('刪除批次叫貨錯誤:', error)
+    res.status(500).json({ error: true, message: '刪除批次叫貨失敗' })
+  }
+})
+
+/**
  * PUT /api/system/inventory/purchases/:id
  * 更新進貨紀錄
  */
 router.put('/inventory/purchases/:id', ...isInventoryRole, async (req, res) => {
   try {
     const { id } = req.params
-    const { itemId, item, category, quantity, boxQuantity, unitPrice, supplier, date, notes } = req.body
+    const { itemId, item, category, quantity, boxQuantity, unitPrice, supplier, date, notes, status, orderDate, expectedDate } = req.body
     const db = getDatabase()
 
     const updates = [`updated_at = datetime('now', 'localtime')`]
     const params = []
+
+    if (status !== undefined) {
+      if (!PURCHASE_STATUSES.has(status)) {
+        return res.status(400).json({ error: true, message: 'status 只能是 ordered 或 arrived' })
+      }
+      updates.push('status = ?')
+      params.push(status)
+      if (status === 'arrived') {
+        // 標記到貨：記錄由誰確認；到貨日由 date 帶入（前端預設今天）
+        updates.push('arrived_by = ?')
+        params.push(JSON.stringify({ uid: req.user.id, name: req.user.name }))
+      }
+    }
+    if (orderDate !== undefined) {
+      updates.push('order_date = ?')
+      params.push(orderDate)
+    }
+    if (expectedDate !== undefined) {
+      updates.push('expected_date = ?')
+      params.push(expectedDate)
+    }
 
     if (itemId !== undefined || item !== undefined) {
       const resolvedItemId = resolveInventoryItemId(db, { itemId, item, category })
@@ -848,9 +973,10 @@ router.get('/inventory/monthly/calculation', ...isInventoryRole, (req, res) => {
 
     // 預先取得所有相關資料，避免 N+1
     // 1. 進貨
+    // 只算已到貨（入庫）的；已叫貨待到貨(status='ordered')不計入庫存
     const purchases = db.prepare(`
       SELECT item_id, quantity, purchase_date FROM inventory_purchases
-      WHERE purchase_date <= ?
+      WHERE purchase_date <= ? AND (status IS NULL OR status = 'arrived')
     `).all(endDate)
 
     // 2. 消耗 (報表)

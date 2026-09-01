@@ -465,6 +465,14 @@ export function runMigrations() {
       // Angular 進貨表單以「箱數」為單位；updated_at 供編輯紀錄使用
       if (addColumnIfNotExists(db, 'inventory_purchases', 'box_quantity', 'INTEGER')) migrationsApplied++
       if (addColumnIfNotExists(db, 'inventory_purchases', 'updated_at', 'TEXT')) migrationsApplied++
+      // 2026-09-01 叫貨/到貨行事曆：status 'ordered'（已叫貨待到貨）/ 'arrived'（已到貨=入庫）；
+      // order_date 叫貨日、expected_date 預計到貨日（YYYY-MM-DD）、batch_id 批次新增的群組；
+      // purchase_date 維持「實際到貨(入庫)日」語意，庫存計算只算 arrived。舊資料一律視為 arrived。
+      if (addColumnIfNotExists(db, 'inventory_purchases', 'status', "TEXT DEFAULT 'arrived'")) migrationsApplied++
+      if (addColumnIfNotExists(db, 'inventory_purchases', 'order_date', 'TEXT')) migrationsApplied++
+      if (addColumnIfNotExists(db, 'inventory_purchases', 'expected_date', 'TEXT')) migrationsApplied++
+      if (addColumnIfNotExists(db, 'inventory_purchases', 'batch_id', 'TEXT')) migrationsApplied++
+      if (addColumnIfNotExists(db, 'inventory_purchases', 'arrived_by', 'TEXT')) migrationsApplied++
     }
 
     const bedDashboardDevicesExists = db

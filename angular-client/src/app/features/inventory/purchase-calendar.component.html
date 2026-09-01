@@ -1,0 +1,281 @@
+<div class="pc-root">
+  <!-- 工具列 -->
+  <div class="pc-toolbar">
+    <div class="pc-month-nav">
+      <button type="button" class="pc-nav-btn" (click)="stepMonth(-1)" title="上個月">‹</button>
+      <span class="pc-month-label">{{ month() }}</span>
+      <button type="button" class="pc-nav-btn" (click)="stepMonth(1)" title="下個月">›</button>
+      <button type="button" class="pc-today-btn" (click)="goToday()">今天</button>
+    </div>
+    <div class="pc-filters">
+      <select [ngModel]="filterCategory()" (ngModelChange)="filterCategory.set($event)">
+        <option value="">全部類別</option>
+        @for (cat of categoryKeys; track cat) {
+          <option [value]="cat">{{ CATEGORY_NAMES[cat] }}</option>
+        }
+      </select>
+      <span class="pc-legend"><i class="dot ordered"></i>待到貨</span>
+      <span class="pc-legend"><i class="dot overdue"></i>逾期未到</span>
+      <span class="pc-legend"><i class="dot arrived"></i>已到貨</span>
+    </div>
+    <button type="button" class="btn-primary" (click)="openNew()">+ 新增叫貨</button>
+  </div>
+
+  <!-- 待到貨摘要 -->
+  <div class="pc-summary" [class.has-overdue]="overdue().length > 0">
+    @if (pending().length === 0) {
+      <span>目前沒有叫貨待到貨。</span>
+    } @else {
+      <strong>待到貨 {{ pending().length }} 筆</strong>
+      @if (overdue().length > 0) {
+        <span class="pc-overdue-text">，其中 <strong>{{ overdue().length }} 筆逾期</strong></span>
+      }
+      ：
+      @for (e of pending().slice(0, 12); track e.id) {
+        <button type="button" class="pc-chip {{ entryClass(e) }}" (click)="openDetail(e)" [title]="statusText(e)">
+          {{ formatMd(e.expectedDate) }} {{ entryLabel(e) }}
+        </button>
+      }
+      @if (pending().length > 12) {
+        <span class="pc-more">…另 {{ pending().length - 12 }} 筆</span>
+      }
+    }
+    <span class="pc-month-stats">本月：待到貨 {{ monthStats().ordered }}、已到貨 {{ monthStats().arrived }}</span>
+  </div>
+
+  <!-- 行事曆 -->
+  @if (loading()) {
+    <div class="pc-loading">載入中...</div>
+  }
+  <div class="pc-grid">
+    @for (label of weekdayLabels; track label) {
+      <div class="pc-head">週{{ label }}</div>
+    }
+    @for (week of weeks(); track $index) {
+      @for (cell of week; track cell.ymd) {
+        <div
+          class="pc-cell"
+          [class.out]="!cell.inMonth"
+          [class.today]="cell.isToday"
+          (click)="openNew(cell.ymd)"
+          [title]="'點一下新增 ' + cell.ymd + ' 的叫貨'"
+        >
+          <div class="pc-cell-head">
+            <span class="pc-day">{{ cell.day }}</span>
+            <span class="pc-add">＋</span>
+          </div>
+          <div class="pc-entries">
+            @for (e of cell.entries; track e.id) {
+              <button type="button" class="pc-chip {{ entryClass(e) }}" (click)="openDetail(e, $event)" [title]="statusText(e) + '：' + entryLabel(e)">
+                {{ entryLabel(e) }}
+              </button>
+            }
+          </div>
+        </div>
+      }
+    }
+  </div>
+</div>
+
+<!-- 新增叫貨 -->
+@if (showNewModal()) {
+  <div class="pc-overlay" (click)="onOverlayClick($event, 'new')">
+    <div class="pc-modal">
+      <div class="pc-modal-head">
+        <h3>新增叫貨</h3>
+        <button type="button" class="pc-close" (click)="closeNew()">&times;</button>
+      </div>
+      <div class="pc-modal-body">
+        <div class="pc-row">
+          <div class="pc-field">
+            <label>類別 *</label>
+            <select [(ngModel)]="newForm.category" (ngModelChange)="onCategoryChange()">
+              @for (cat of categoryKeys; track cat) {
+                <option [value]="cat">{{ CATEGORY_NAMES[cat] }}</option>
+              }
+            </select>
+          </div>
+          <div class="pc-field">
+            <label>品項 *</label>
+            <select [(ngModel)]="newForm.item" (ngModelChange)="touch()">
+              <option value="">請選擇品項</option>
+              @for (it of itemsFor(newForm.category); track it) {
+                <option [value]="it">{{ it }}</option>
+              }
+            </select>
+          </div>
+          <div class="pc-field pc-field-sm">
+            <label>箱數 *</label>
+            <input type="number" min="1" [(ngModel)]="newForm.boxQuantity" (ngModelChange)="touch()" />
+            @if (newForm.item) {
+              <small>= {{ newForm.boxQuantity * unitsPerBox(newForm.category, newForm.item) }} 個（每箱 {{ unitsPerBox(newForm.category, newForm.item) }}）</small>
+            }
+          </div>
+        </div>
+
+        <div class="pc-row">
+          <div class="pc-field">
+            <label>叫貨日</label>
+            <input type="date" [(ngModel)]="newForm.orderDate" />
+          </div>
+          @if (!newForm.batch) {
+            <div class="pc-field">
+              <label>預計到貨日 *</label>
+              <input type="date" [(ngModel)]="newForm.expectedDate" (ngModelChange)="touch()" />
+            </div>
+            <div class="pc-field pc-field-check">
+              <label><input type="checkbox" [(ngModel)]="newForm.arrivedNow" /> 已到貨（直接入庫）</label>
+            </div>
+          }
+        </div>
+
+        <div class="pc-batch-toggle">
+          <label><input type="checkbox" [(ngModel)]="newForm.batch" (ngModelChange)="touch()" /> 批次新增（起訖日 × 每週/隔週 × 星期幾）</label>
+        </div>
+
+        @if (newForm.batch) {
+          <div class="pc-batch">
+            <div class="pc-row">
+              <div class="pc-field">
+                <label>起日</label>
+                <input type="date" [(ngModel)]="newForm.rangeStart" (ngModelChange)="touch()" />
+              </div>
+              <div class="pc-field">
+                <label>迄日</label>
+                <input type="date" [(ngModel)]="newForm.rangeEnd" (ngModelChange)="touch()" />
+              </div>
+              <div class="pc-field">
+                <label>重複</label>
+                <select [(ngModel)]="newForm.repeat" (ngModelChange)="touch()">
+                  <option value="weekly">每週</option>
+                  <option value="biweekly">隔週（以起日那週為第一週）</option>
+                </select>
+              </div>
+            </div>
+            <div class="pc-weekdays">
+              <span>到貨星期：</span>
+              @for (label of weekdayLabels; track label; let i = $index) {
+                <button type="button" class="pc-wd" [class.on]="newForm.weekdays[i]" (click)="toggleWeekday(i)">{{ label }}</button>
+              }
+            </div>
+            <div class="pc-preview">
+              @if (batchPreview().length === 0) {
+                <span class="pc-muted">請選起訖日與星期，這裡會列出將建立的日期。</span>
+              } @else {
+                <strong>將建立 {{ batchPreview().length }} 筆叫貨：</strong>
+                @for (d of batchPreview(); track d) {
+                  <span class="pc-date-tag">{{ formatMd(d) }}</span>
+                }
+              }
+            </div>
+          </div>
+        }
+
+        <div class="pc-field">
+          <label>備註</label>
+          <input type="text" [(ngModel)]="newForm.notes" placeholder="選填" />
+        </div>
+      </div>
+      <div class="pc-modal-foot">
+        <button type="button" class="btn-secondary" (click)="closeNew()">取消</button>
+        <button type="button" class="btn-primary" (click)="saveNew()" [disabled]="!isNewFormValid || saving()">
+          {{ saving() ? '儲存中...' : newForm.batch ? '批次建立 ' + batchPreview().length + ' 筆' : newForm.arrivedNow ? '新增並入庫' : '新增叫貨' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- 明細 / 到貨 -->
+@if (showDetail() && detail(); as e) {
+  <div class="pc-overlay" (click)="onOverlayClick($event, 'detail')">
+    <div class="pc-modal pc-modal-sm">
+      <div class="pc-modal-head">
+        <h3>
+          <span class="pc-status-badge {{ entryClass(e) }}">{{ statusText(e) }}</span>
+          {{ CATEGORY_NAMES[e.category] || e.category }}
+        </h3>
+        <button type="button" class="pc-close" (click)="closeDetail()">&times;</button>
+      </div>
+      <div class="pc-modal-body">
+        <div class="pc-row">
+          <div class="pc-field">
+            <label>品項</label>
+            <select [(ngModel)]="detailEdit.item">
+              @for (it of itemsFor(detailEdit.category); track it) {
+                <option [value]="it">{{ it }}</option>
+              }
+              @if (!itemsFor(detailEdit.category).includes(detailEdit.item)) {
+                <option [value]="detailEdit.item">{{ detailEdit.item }}</option>
+              }
+            </select>
+          </div>
+          <div class="pc-field pc-field-sm">
+            <label>箱數</label>
+            <input type="number" min="1" [(ngModel)]="detailEdit.boxQuantity" />
+            <small>= {{ detailEdit.boxQuantity * unitsPerBox(detailEdit.category, detailEdit.item) }} 個</small>
+          </div>
+        </div>
+        <div class="pc-row">
+          <div class="pc-field">
+            <label>叫貨日</label>
+            <input type="date" [(ngModel)]="detailEdit.orderDate" />
+          </div>
+          @if (e.status === 'ordered') {
+            <div class="pc-field">
+              <label>預計到貨日</label>
+              <input type="date" [(ngModel)]="detailEdit.expectedDate" />
+              @if (daysLate(e) > 0) {
+                <small class="pc-overdue-text">已逾期 {{ daysLate(e) }} 天</small>
+              }
+            </div>
+          } @else {
+            <div class="pc-field">
+              <label>到貨日</label>
+              <input type="date" [(ngModel)]="arriveDate" />
+              @if (e.expectedDate) {
+                <small>預計 {{ formatMd(e.expectedDate) }}</small>
+              }
+            </div>
+          }
+        </div>
+        <div class="pc-field">
+          <label>備註</label>
+          <input type="text" [(ngModel)]="detailEdit.notes" />
+        </div>
+        <div class="pc-meta">
+          建立：{{ e.createdBy || '-' }}
+          @if (e.status === 'arrived' && e.arrivedBy?.name) {
+            ；到貨確認：{{ e.arrivedBy?.name }}
+          }
+          @if (e.batchId) {
+            ；批次新增（同批次尚未到貨另有 {{ batchSiblings(e) }} 筆）
+          }
+        </div>
+
+        @if (e.status === 'ordered') {
+          <div class="pc-arrive-box">
+            <label>到貨日</label>
+            <input type="date" [(ngModel)]="arriveDate" />
+            <button type="button" class="btn-success" (click)="markArrived()" [disabled]="saving()">✓ 標記到貨（入庫）</button>
+          </div>
+        }
+      </div>
+      <div class="pc-modal-foot pc-modal-foot-split">
+        <div>
+          <button type="button" class="pc-danger" (click)="deleteOne()" [disabled]="saving()">刪除</button>
+          @if (e.batchId && (batchSiblings(e) > 0 || e.status === 'ordered')) {
+            <button type="button" class="pc-danger" (click)="deleteBatchPending()" [disabled]="saving()">刪除整批未到貨</button>
+          }
+          @if (e.status === 'arrived') {
+            <button type="button" class="pc-link" (click)="revertToOrdered()" [disabled]="saving()">改回待到貨</button>
+          }
+        </div>
+        <div>
+          <button type="button" class="btn-secondary" (click)="closeDetail()">關閉</button>
+          <button type="button" class="btn-primary" (click)="saveDetailEdit()" [disabled]="saving()">儲存修改</button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
