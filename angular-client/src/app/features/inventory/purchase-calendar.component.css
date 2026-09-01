@@ -389,3 +389,121 @@
   cursor: pointer;
   text-decoration: underline;
 }
+
+/* 批次：每個日期各自的箱數 */
+.pc-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.pc-mini {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  color: #495057;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+.pc-mini:hover {
+  background: #e9ecef;
+}
+.pc-batch-rows {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+}
+.pc-batch-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 4px 6px;
+}
+.pc-batch-date {
+  flex: 1;
+  font-size: 0.85rem;
+}
+.pc-batch-row input {
+  width: 58px;
+  height: 30px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 0 6px;
+  text-align: right;
+}
+.pc-batch-row input.invalid {
+  border-color: #e74c3c;
+  background: #fdecea;
+}
+.pc-x {
+  border: none;
+  background: none;
+  color: #999;
+  font-size: 1.1rem;
+  cursor: pointer;
+  line-height: 1;
+}
+.pc-x:hover {
+  color: #e74c3c;
+}
+
+/* 按鈕樣式對齊庫存管理頁（inventory.component.css 為元件封裝，子元件吃不到，這裡複製一份） */
+.btn-primary,
+.btn-success,
+.btn-secondary {
+  padding: 0.5rem 1.5rem;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  height: 38px;
+  font-weight: 500;
+  font-size: 1rem;
+  transition: background-color 0.2s;
+}
+.btn-primary {
+  background-color: #007bff;
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) {
+  background-color: #0056b3;
+}
+.btn-success {
+  background-color: #198754;
+  color: #fff;
+}
+.btn-success:hover:not(:disabled) {
+  background-color: #157347;
+}
+.btn-secondary {
+  border: 1px solid #6c757d;
+  background-color: #fff;
+  color: #6c757d;
+  font-weight: 400;
+}
+.btn-secondary:hover:not(:disabled) {
+  background-color: #f1f3f5;
+}
+.btn-primary:disabled,
+.btn-success:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}
+.pc-danger {
+  height: 38px;
+  padding: 0.5rem 1rem;
+}
+.pc-nav-btn,
+.pc-today-btn {
+  height: 38px;
+}
+.pc-filters select {
+  height: 38px;
+}

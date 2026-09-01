@@ -178,12 +178,10 @@ export class PurchaseCalendarComponent implements OnInit {
     repeat: 'weekly' as 'weekly' | 'biweekly',
     weekdays: [false, false, false, false, false, false, false] as boolean[], // 一..日
   };
-  /** 讓 template 在表單變動後重算預覽 */
-  formVersion = signal(0);
-  readonly batchPreview = computed(() => {
-    this.formVersion();
-    return this.expandBatchDates();
-  });
+  /** 批次新增：展開後的日期列，每列可各自填箱數（不同日期數量可不同） */
+  batchRows = signal<{ date: string; boxQuantity: number }[]>([]);
+  /** 使用者按 × 拿掉的日期（重算時不再加回） */
+  private excludedDates = new Set<string>();
 
   // ---------------- 明細 modal ----------------
   showDetail = signal(false);
@@ -221,8 +219,33 @@ export class PurchaseCalendarComponent implements OnInit {
   goToday(): void {
     this.month.set(this.today.substring(0, 7));
   }
+  /** 表單變動 → 重算批次日期列（保留已填過的箱數） */
   touch(): void {
-    this.formVersion.update((v) => v + 1);
+    if (!this.newForm.batch) {
+      this.batchRows.set([]);
+      return;
+    }
+    const prev = new Map(this.batchRows().map((r) => [r.date, r.boxQuantity]));
+    const rows = this.expandBatchDates()
+      .filter((d) => !this.excludedDates.has(d))
+      .map((date) => ({ date, boxQuantity: prev.get(date) ?? this.newForm.boxQuantity ?? 1 }));
+    this.batchRows.set(rows);
+  }
+  removeBatchDate(date: string): void {
+    this.excludedDates.add(date);
+    this.batchRows.set(this.batchRows().filter((r) => r.date !== date));
+  }
+  /** 把「預設箱數」套到全部日期 */
+  applyDefaultBoxesToAll(): void {
+    const q = this.newForm.boxQuantity > 0 ? this.newForm.boxQuantity : 1;
+    this.batchRows.set(this.batchRows().map((r) => ({ ...r, boxQuantity: q })));
+  }
+  batchTotalBoxes(): number {
+    return this.batchRows().reduce((s, r) => s + (Number(r.boxQuantity) || 0), 0);
+  }
+  batchRowsValid(): boolean {
+    const rows = this.batchRows();
+    return rows.length > 0 && rows.every((r) => Number(r.boxQuantity) > 0);
   }
 
   entryClass(e: PurchaseEntry): string {
@@ -235,6 +258,10 @@ export class PurchaseCalendarComponent implements OnInit {
   statusText(e: PurchaseEntry): string {
     if (e.status === 'arrived') return '已到貨';
     return (e.expectedDate || '') < this.today ? '逾期未到' : '待到貨';
+  }
+  weekdayOf(ymd: string): string {
+    const d = new Date(ymd + 'T00:00:00');
+    return isNaN(d.getTime()) ? '' : this.weekdayLabels[(d.getDay() + 6) % 7];
   }
   formatMd(ymd: string | null | undefined): string {
     const s = toLocalYmd(ymd);
@@ -269,6 +296,8 @@ export class PurchaseCalendarComponent implements OnInit {
     this.newForm.repeat = 'weekly';
     const dow = (new Date(date + 'T00:00:00').getDay() + 6) % 7;
     this.newForm.weekdays = this.weekdayLabels.map((_, i) => i === dow);
+    this.excludedDates.clear();
+    this.batchRows.set([]);
     this.touch();
     this.showNewModal.set(true);
   }
@@ -309,9 +338,9 @@ export class PurchaseCalendarComponent implements OnInit {
 
   get isNewFormValid(): boolean {
     const f = this.newForm;
-    if (!f.category || !f.item || !(f.boxQuantity > 0)) return false;
-    if (f.batch) return this.batchPreview().length > 0;
-    return !!f.expectedDate;
+    if (!f.category || !f.item) return false;
+    if (f.batch) return this.batchRowsValid();
+    return f.boxQuantity > 0 && !!f.expectedDate;
   }
 
   async saveNew(): Promise<void> {
@@ -329,7 +358,14 @@ export class PurchaseCalendarComponent implements OnInit {
     this.saving.set(true);
     try {
       if (f.batch) {
-        const entries = this.batchPreview().map((expectedDate) => ({ ...base, expectedDate, status: 'ordered' }));
+        // 每個日期各自的箱數
+        const entries = this.batchRows().map((row) => ({
+          ...base,
+          boxQuantity: Number(row.boxQuantity),
+          quantity: Number(row.boxQuantity) * unitsPerBox,
+          expectedDate: row.date,
+          status: 'ordered',
+        }));
         await firstValueFrom(this.api.post('/system/inventory/purchases/batch', { entries }));
       } else if (f.arrivedNow) {
         await this.purchasesApi.create({ ...base, status: 'arrived', expectedDate: f.expectedDate, date: f.expectedDate } as any);

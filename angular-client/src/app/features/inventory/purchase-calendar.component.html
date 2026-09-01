@@ -105,8 +105,8 @@
             </select>
           </div>
           <div class="pc-field pc-field-sm">
-            <label>箱數 *</label>
-            <input type="number" min="1" [(ngModel)]="newForm.boxQuantity" (ngModelChange)="touch()" />
+            <label>{{ newForm.batch ? '預設箱數' : '箱數 *' }}</label>
+            <input type="number" min="1" [(ngModel)]="newForm.boxQuantity" />
             @if (newForm.item) {
               <small>= {{ newForm.boxQuantity * unitsPerBox(newForm.category, newForm.item) }} 個（每箱 {{ unitsPerBox(newForm.category, newForm.item) }}）</small>
             }
@@ -159,13 +159,23 @@
               }
             </div>
             <div class="pc-preview">
-              @if (batchPreview().length === 0) {
-                <span class="pc-muted">請選起訖日與星期，這裡會列出將建立的日期。</span>
+              @if (batchRows().length === 0) {
+                <span class="pc-muted">請選起訖日與星期，這裡會列出將建立的日期，每個日期可各自填箱數。</span>
               } @else {
-                <strong>將建立 {{ batchPreview().length }} 筆叫貨：</strong>
-                @for (d of batchPreview(); track d) {
-                  <span class="pc-date-tag">{{ formatMd(d) }}</span>
-                }
+                <div class="pc-preview-head">
+                  <strong>將建立 {{ batchRows().length }} 筆叫貨，共 {{ batchTotalBoxes() }} 箱</strong>
+                  <button type="button" class="pc-mini" (click)="applyDefaultBoxesToAll()">預設箱數套用到全部</button>
+                </div>
+                <div class="pc-batch-rows">
+                  @for (row of batchRows(); track row.date) {
+                    <div class="pc-batch-row">
+                      <span class="pc-batch-date">{{ formatMd(row.date) }}（週{{ weekdayOf(row.date) }}）</span>
+                      <input type="number" min="1" [(ngModel)]="row.boxQuantity" [class.invalid]="!(row.boxQuantity > 0)" />
+                      <span class="pc-muted">箱</span>
+                      <button type="button" class="pc-x" title="這天不叫" (click)="removeBatchDate(row.date)">×</button>
+                    </div>
+                  }
+                </div>
               }
             </div>
           </div>
@@ -179,7 +189,7 @@
       <div class="pc-modal-foot">
         <button type="button" class="btn-secondary" (click)="closeNew()">取消</button>
         <button type="button" class="btn-primary" (click)="saveNew()" [disabled]="!isNewFormValid || saving()">
-          {{ saving() ? '儲存中...' : newForm.batch ? '批次建立 ' + batchPreview().length + ' 筆' : newForm.arrivedNow ? '新增並入庫' : '新增叫貨' }}
+          {{ saving() ? '儲存中...' : newForm.batch ? '批次建立 ' + batchRows().length + ' 筆' : newForm.arrivedNow ? '新增並入庫' : '新增叫貨' }}
         </button>
       </div>
     </div>
