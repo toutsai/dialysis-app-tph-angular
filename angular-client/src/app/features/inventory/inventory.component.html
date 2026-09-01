@@ -381,10 +381,10 @@
     @if (activeTab() === 'consumption') {
     <div class="tab-panel">
       <div class="sub-tabs">
-        <button [class.active]="consumptionSubTab() === 'query'" (click)="consumptionSubTab.set('query')">病人耗材查詢</button>
-        <button [class.active]="consumptionSubTab() === 'theoretical'" (click)="consumptionSubTab.set('theoretical')">排程推算</button>
-        <button [class.active]="consumptionSubTab() === 'summary'" (click)="consumptionSubTab.set('summary')">當月總量</button>
         <button [class.active]="consumptionSubTab() === 'upload'" (click)="consumptionSubTab.set('upload')">資料上傳</button>
+        <button [class.active]="consumptionSubTab() === 'query'" (click)="consumptionSubTab.set('query')">病人耗材查詢</button>
+        <button [class.active]="consumptionSubTab() === 'summary'" (click)="consumptionSubTab.set('summary')">每月消耗量</button>
+        <button [class.active]="consumptionSubTab() === 'theoretical'" (click)="consumptionSubTab.set('theoretical')">排程推算消耗</button>
       </div>
 
       <!-- 耗材查詢 -->

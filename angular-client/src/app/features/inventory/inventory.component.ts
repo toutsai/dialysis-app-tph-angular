@@ -160,7 +160,8 @@ export class InventoryComponent implements OnInit {
   }
 
   // ==================== Tab 2: 消耗紀錄 ====================
-  consumptionSubTab = signal('query');
+  // 頁籤順序：資料上傳 → 病人耗材查詢 → 每月消耗量 → 排程推算消耗（2026-09-01 使用者指定），預設第一個
+  consumptionSubTab = signal('upload');
 
   // -- Theoretical consumption (排程推算) --
   theoreticalLoading = signal(false);
