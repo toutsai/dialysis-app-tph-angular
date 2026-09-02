@@ -101,6 +101,8 @@ export function mapKiditProfileToBasic(profile) {
     occupation: pick('occupation'),
     isIndigenous: pick('isIndigenous'),
     isWelfare: pick('isWelfare'),
+    // KiDit 建檔表「是否為外籍人士」（2026-09-03 補欄）→ patients.is_foreign；空白不清除（upsert skipEmpty）
+    isForeign: pick('isForeign'),
     phone: pick('phone'),
     address: pick('address'),
     emergencyContact: pick('contactPerson'),

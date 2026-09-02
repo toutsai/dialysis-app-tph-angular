@@ -9,6 +9,16 @@ import {
   siteOptionsForType,
 } from '@app/core/constants/vascular-access-codes';
 
+/** 站內欄「首次透析模式」推導：05 首次血液透析／08 首次腹膜透析日期孰早；只有一邊有值取該邊；皆無回空（由同仁點選） */
+function deriveFirstDialysisMode(startHDDate?: string, startPDDate?: string): 'HD' | 'PD' | '' {
+  const hd = (startHDDate || '').trim();
+  const pd = (startPDDate || '').trim();
+  if (hd && pd) return hd <= pd ? 'HD' : 'PD';
+  if (hd) return 'HD';
+  if (pd) return 'PD';
+  return '';
+}
+
 @Component({
   selector: 'app-kidit-history-form',
   standalone: true,
@@ -58,21 +68,22 @@ export class KiditHistoryFormComponent implements OnChanges {
         isTransferFromOther: h.isTransferFromOther || '',
         transferFromName: h.transferFromName || '',
         transferFromCode: h.transferFromCode || '',
+        // 是/否欄（06/09/12/14/15/19/50）不預設「否」（2026-09-03 護理師要求：留空由同仁自己點，避免漏看）
         startHDDate: h.startHDDate || '',
-        isStartHDHere: h.isStartHDHere || 'N',
+        isStartHDHere: h.isStartHDHere || '',
         startHDHospital: h.startHDHospital || '',
         startPDDate: h.startPDDate || '',
-        isStartPDHere: h.isStartPDHere || 'N',
+        isStartPDHere: h.isStartPDHere || '',
         startPDHospital: h.startPDHospital || '',
         transplantDate: h.transplantDate || '',
-        isTransplantHere: h.isTransplantHere || 'N',
+        isTransplantHere: h.isTransplantHere || '',
         transplantHospital: h.transplantHospital || '',
-        isKnownCKD: h.isKnownCKD || 'N',
-        isBUNCreatAbnormal: h.isBUNCreatAbnormal || 'N',
+        isKnownCKD: h.isKnownCKD || '',
+        isBUNCreatAbnormal: h.isBUNCreatAbnormal || '',
         abnormalLabDate: h.abnormalLabDate || '',
         initialBUN: h.initialBUN || '',
         initialCr: h.initialCr || '',
-        renalUltrasoundAbnormal: h.renalUltrasoundAbnormal || 'N',
+        renalUltrasoundAbnormal: h.renalUltrasoundAbnormal || '',
         renalUltrasoundDesc: h.renalUltrasoundDesc || '',
         renalUltrasoundOtherDesc: h.renalUltrasoundOtherDesc || '',
         renalUltrasoundDate: h.renalUltrasoundDate || '',
@@ -80,6 +91,8 @@ export class KiditHistoryFormComponent implements OnChanges {
         otherSystemicDescription: h.otherSystemicDescription || '',
         dmType: h.dmType || '3',
         initialLabDate: h.initialLabDate || '',
+        // 站內欄：首次透析模式 HD/PD（官網有、匯入格式無，不匯出）；依 05/08 日期推導，推不出留空
+        firstDialysisMode: h.firstDialysisMode || deriveFirstDialysisMode(h.startHDDate, h.startPDDate),
         initialHct: h.initialHct || '',
         initialHb: h.initialHb || '',
         initialLabBUN: h.initialLabBUN || '',
@@ -111,7 +124,7 @@ export class KiditHistoryFormComponent implements OnChanges {
         emergencyK: h.emergencyK || '',
         emergencyHCO3: h.emergencyHCO3 || '',
         emergencyAlb: h.emergencyAlb || '',
-        isFirstCatastrophic: h.isFirstCatastrophic || 'N',
+        isFirstCatastrophic: h.isFirstCatastrophic || '',
         firstFistulaDate: h.firstFistulaDate || '',
         firstFistulaType: h.firstFistulaType || '',
         firstFistulaSide: h.firstFistulaSide || '',
@@ -120,10 +133,10 @@ export class KiditHistoryFormComponent implements OnChanges {
     } else {
       this.formData = {};
     }
-    // 站內欄位：舊資料沒有他院轉入旗標時，依既有轉入院所欄位推導
+    // 站內欄位：舊資料沒有他院轉入旗標時，依既有轉入院所欄位推導；推不出留空由同仁點選（不預設「否」）
     if (Object.keys(this.formData).length && !this.formData.isTransferFromOther) {
       this.formData.isTransferFromOther =
-        this.formData.transferFromName || this.formData.transferFromCode ? 'Y' : 'N';
+        this.formData.transferFromName || this.formData.transferFromCode ? 'Y' : '';
     }
   }
 

@@ -193,6 +193,11 @@ export const KIDIT_HISTORY_OPTIONS: Record<string, KiditOption[] | KiditIndexedO
     { value: 'Y', label: '是' },
     { value: 'N', label: '否' },
   ] as KiditOption[],
+  // 站內欄：首次透析模式（官網「開始透析適應症」列有此欄；匯入格式無，不匯出）
+  firstDialysisMode: [
+    { value: 'HD', label: 'HD' },
+    { value: 'PD', label: 'PD' },
+  ] as KiditOption[],
   // 33, 34 肝炎標記（Y/N/O 為官方碼；F＝站內「已作待追蹤」＋追蹤日期，匯出 CSV 時轉 O，見 kiditInitialCsvService）
   hepatitis: [
     { value: 'Y', label: '陽性(+)' },

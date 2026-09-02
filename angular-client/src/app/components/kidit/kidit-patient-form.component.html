@@ -18,6 +18,17 @@
           <label><span class="fnum">04</span>身分證號</label>
           <input type="text" class="w-md" [(ngModel)]="formData.idNumber" placeholder="10碼" />
         </div>
+        <!-- 站內欄：官網身分證號旁有「外籍」勾選（匯入格式無此欄，不匯出 CSV）；帶病人層級 is_foreign，存檔回寫（2026-09-03 護理師檢視補欄） -->
+        <div class="kd-field">
+          <label>是否為外籍人士</label>
+          <div class="kd-choice-group">
+            @for (opt of opts.yesNo; track opt.value) {
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.isForeign === opt.value"
+                      (click)="formData.isForeign = opt.value">{{ opt.label }}</button>
+            }
+          </div>
+        </div>
         <!-- 站內欄：KiDit 網站基本資料頁需輸入主治醫師，此欄唯讀帶病人清單主治醫師供抄錄，不匯出 CSV（匯入格式無此欄） -->
         <div class="kd-field">
           <label>主治醫師</label>

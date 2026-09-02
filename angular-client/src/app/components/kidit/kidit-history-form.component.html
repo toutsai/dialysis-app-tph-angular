@@ -7,7 +7,7 @@
       <h4 class="section-title">初診資料</h4>
       <div class="kd-row">
         <div class="kd-field">
-          <label>他院轉入</label>
+          <label>是否他院轉入</label>
           <div class="kd-choice-group">
             @for (opt of opts.yesNo; track opt.value) {
               <button type="button" class="kd-choice"
@@ -144,18 +144,9 @@
             }
           </div>
         </div>
-        <div class="kd-field">
-          <label><span class="fnum">20</span>異常說明</label>
-          <input type="text" class="w-md" [(ngModel)]="formData.renalUltrasoundDesc" maxlength="20" />
-        </div>
-        <div class="kd-field">
-          <label>其他說明</label>
-          <input type="text" class="w-md" [(ngModel)]="formData.renalUltrasoundOtherDesc" maxlength="20" />
-        </div>
-        <div class="kd-field">
-          <label><span class="fnum">21</span>檢驗日期</label>
-          <input type="date" [(ngModel)]="formData.renalUltrasoundDate" />
-        </div>
+        <!-- 官方欄 20 異常說明／其他說明、21 檢驗日期：KiDit 官網病史頁沒有這三欄（2026-09-03 護理師檢視），
+             比照緊急透析區 38-49 只拆 UI：formData 的 renalUltrasoundDesc/renalUltrasoundOtherDesc/renalUltrasoundDate
+             與 CSV 欄序保留（未填輸出空白），勿當缺欄補回 -->
       </div>
     </div>
 
@@ -194,6 +185,17 @@
         <div class="kd-field">
           <label><span class="fnum">25</span>開始透析前檢驗日期</label>
           <input type="date" [(ngModel)]="formData.initialLabDate" />
+        </div>
+        <!-- 站內欄：官網此列右側有「首次透析模式」（匯入格式無此欄，不匯出 CSV）；新表單依 05/08 日期推導，推不出留空由同仁點選 -->
+        <div class="kd-field">
+          <label>首次透析模式</label>
+          <div class="kd-choice-group">
+            @for (opt of opts.firstDialysisMode; track opt.value) {
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.firstDialysisMode === opt.value"
+                      (click)="formData.firstDialysisMode = opt.value">{{ opt.label }}</button>
+            }
+          </div>
         </div>
       </div>
 

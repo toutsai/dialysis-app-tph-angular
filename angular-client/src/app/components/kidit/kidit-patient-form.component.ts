@@ -71,8 +71,11 @@ export class KiditPatientFormComponent implements OnChanges {
         birthDate: p.birthDate || '',
         gender: p.gender ? (p.gender === '男' ? '1' : '2') : '',
         bloodType: p.bloodType || '',
-        isIndigenous: p.isIndigenous || 'N',
-        isWelfare: p.isWelfare || 'N',
+        // 是/否欄不預設「否」（2026-09-03 護理師要求：留空由同仁自己點，避免漏看）
+        isIndigenous: p.isIndigenous || '',
+        isWelfare: p.isWelfare || '',
+        // 站內欄：外籍（官網有、匯入格式無）；帶病人層級 is_foreign，存檔經 mapKiditProfileToBasic 回寫
+        isForeign: p.isForeign || '',
         catastrophicCardNo: k.catastrophicCardNo || '',
         address: p.address || '',
         phone: p.phone || '',
