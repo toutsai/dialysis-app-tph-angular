@@ -3,6 +3,7 @@ import {
   ViewChild, ElementRef, AfterViewInit, OnDestroy, NgZone
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { infectionAbbrFromTags, isolationAbbrFromTags, CURED_TAG } from '@/utils/hepatitis';
 
 interface PatientDetails {
   name: string;
@@ -102,9 +103,20 @@ export class ScheduleTableComponent implements AfterViewInit, OnDestroy {
     return {
       name: patient.name,
       medicalRecordNumber: patient.medicalRecordNumber,
-      diseases: patient.diseases || [],
+      diseases: this.diseaseAbbrs(patient.diseases),
       patient: patient,
     };
+  }
+
+  /** 疾病標籤→縮寫 chip：B/C/H/R、待追蹤 B?/C?/H?/R?、C癒、冠/疥/MDR/隔。
+   *  與每日排程/護理分組的 generateAutoNote 同源規則（utils/hepatitis），
+   *  取代原本顯示完整標籤（如「HBV待追蹤」）造成姓名後過長（2026-09-02 使用者要求）。 */
+  private diseaseAbbrs(diseases: unknown): string[] {
+    const tags = Array.isArray(diseases) ? diseases.map(String) : [];
+    const out = infectionAbbrFromTags(tags);
+    if (tags.includes(CURED_TAG)) out.push('C癒');
+    out.push(...isolationAbbrFromTags(tags));
+    return out;
   }
 
   getBedDisplayName(bedNum: any): string {
