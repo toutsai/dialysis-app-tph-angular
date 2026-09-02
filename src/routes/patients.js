@@ -1797,6 +1797,14 @@ async function updatePatientHandler(req, res) {
         reason: '',
         remarks: `透析模式由「${previousMode || '未設定'}」改為「${currentMode || '未設定'}」`,
       })
+
+      // CVVHDF 每日洗、不排常規床（2026-09-03 使用者裁定）：改為 CVVHDF 時前端已自總表移除固定排班，
+      // 這裡同步取消該病人的未來調班（比照住院轉回門診）。改回其他模式不自動處理（前端詢問恢復床位）。
+      if (normalizeDialysisMode(currentMode) === 'CVVHDF') {
+        deletedFutureExceptions = deletedFutureExceptions.concat(
+          deleteFutureScheduleExceptionsForPatient(db, id, 'mode_changed_to_cvvhdf', modifiedBy),
+        )
+      }
     }
 
     // 「勿動」標記不寫工作日誌（2026-08-06 使用者裁定移除同步）；

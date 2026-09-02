@@ -214,6 +214,9 @@
                   <span *ngIf="p.status === 'opd' && p.patientStatus?.preInpatientRule" class="status-bed-restore"
                         (click)="promptRestoreLongTermBed(p.id, p.name); $event.stopPropagation()"
                         title="住院前長期床位尚未恢復，點擊處理"><i class="fas fa-bed"></i> 待恢復長期床位</span>
+                  <span *ngIf="showCvvhdfRestoreMarker(p)" class="status-bed-restore"
+                        (click)="promptRestoreLongTermBed(p.id, p.name, '', 'preCvvhdfRule'); $event.stopPropagation()"
+                        title="改為 CVVHDF 前的長期床位尚未恢復，點擊處理"><i class="fas fa-bed"></i> 待恢復長期床位</span>
                 </div>
               </div>
               <div class="flex-cell col-actions">

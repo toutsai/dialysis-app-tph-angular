@@ -38,6 +38,9 @@ import { createDialysisOrderAndUpdatePatient } from '@/services/optimizedApiServ
 import { syncDialysisOrigin } from '@app/core/models/patient.model';
 import { kiditService } from '@/services/kiditService';
 
+/** 長期床位快照存放鍵（patientStatus 下）：住院/急診前、改為 CVVHDF 前 */
+type BedSnapshotKey = 'preInpatientRule' | 'preCvvhdfRule';
+
 // Child component imports
 import { PatientFormModalComponent } from '@app/components/dialogs/patient-form-modal/patient-form-modal.component';
 import { SelectionDialogComponent } from '@app/components/dialogs/selection-dialog/selection-dialog.component';
@@ -224,8 +227,8 @@ export class PatientsComponent implements OnInit, OnDestroy {
     | { type: 'none' }
     | null = null;
   private bedDialogMode: 'edit-save' | 'new-patient' | 'relocate-occupant' | null = null;
-  /** 恢復長期床位進行中：佔用者改床後要自動復位的病人與其快照 */
-  private bedRestorePending: { patientId: string; snap: any } | null = null;
+  /** 恢復長期床位進行中：佔用者改床後要自動復位的病人與其快照（key＝快照存放鍵） */
+  private bedRestorePending: { patientId: string; snap: any; key: BedSnapshotKey } | null = null;
   private bedDialogSavePayload: any = null;
   private cachedPatientHistory: any[] | null = null;
   private pendingNewStatus: string | null = null;
@@ -978,6 +981,43 @@ export class PatientsComponent implements OnInit, OnDestroy {
         return;
       }
 
+      // CVVHDF 連動（2026-09-03 使用者裁定）：CVVHDF 每日洗、不排常規床。
+      // 改為 CVVHDF → 頻率改「每日」、自總表移除固定排班（明日起）、後端同步取消未來調班；
+      // 改回 HD/SLED → 存檔後比照住院轉回門診，詢問是否恢復改前的長期床位。
+      // 只掛病人清單存檔（組長作業）；醫囑視窗改模式（醫師作業）刻意不連動。
+      const pickMode = (obj: any): string =>
+        String(obj?.mode ?? obj?.dialysisOrders?.mode ?? '').trim().toUpperCase();
+      const formMode = pickMode(patientData);
+      const origMode = pickMode(originalPatient);
+      const toCvvhdf = formMode === 'CVVHDF' && origMode !== 'CVVHDF';
+      const fromCvvhdf = origMode === 'CVVHDF' && (formMode === 'HD' || formMode.startsWith('SLED'));
+      if (toCvvhdf && !this.pendingRuleDecision) {
+        const currentRule: any = (this.patientStore.masterScheduleRules() as any)[patientData.id] || null;
+        const hasRule = !!currentRule;
+        const restoreHint = hasRule
+          ? `\n・之後改回 HD/SLED 時，會詢問是否恢復目前的長期床位（${this.formatRuleLabel(currentRule)}）`
+          : '';
+        this.showConfirm(
+          '改為 CVVHDF — 每日洗、移除固定排班',
+          `「${patientData.name}」的透析模式將改為 CVVHDF，系統將自動：\n\n・透析頻率改為「每日」\n・自總床位表移除固定排班（今日排程不受影響，明日起不再自動產生）\n・取消該病人所有未來的調班申請${restoreHint}\n\n確定嗎？`,
+          () => {
+            patientData.freq = '每日';
+            if (patientData.dialysisOrders && typeof patientData.dialysisOrders === 'object') {
+              patientData.dialysisOrders = { ...patientData.dialysisOrders, freq: '每日' };
+            }
+            if (hasRule) {
+              const snap = this.buildBedSnapshot(originalPatient, false);
+              if (snap) {
+                patientData.patientStatus = { ...(patientData.patientStatus || {}), preCvvhdfRule: snap };
+              }
+            }
+            this.pendingRuleDecision = hasRule ? { type: 'remove' } : { type: 'none' };
+            void this.handleSavePatient(patientData);
+          }
+        );
+        return;
+      }
+
       // 頻率變更攔截：頻率通常連動床位，存檔前先開總表的「變更頻率/床位」元件
       // 讓組長選定常規床位（pendingRuleDecision 決定後重入本函式續存）
       const pickFreq = (obj: any): string | null =>
@@ -1093,6 +1133,10 @@ export class PatientsComponent implements OnInit, OnDestroy {
           window.dispatchEvent(new CustomEvent('patient-data-updated'));
           this.notificationService.createNotification(`編輯病人：${patientData.name}`, 'patient');
           this.closeModal();
+          // CVVHDF 改回 HD/SLED：有改前長期床位快照者詢問是否恢復（同床同班則靜默清快照）
+          if (fromCvvhdf) {
+            this.promptRestoreLongTermBed(patientData.id, patientData.name, '', 'preCvvhdfRule');
+          }
         } catch (err) {
           this.showAlert('操作失敗', '更新病人資料失敗！');
         }
@@ -1535,7 +1579,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
         this.showAlert('操作失敗', `為 ${patient?.name || ''} 改床失敗：${err.message || ''}。長期床位未恢復。`);
         return;
       }
-      if (pending) await this.restoreLongTermBed(pending.patientId, pending.snap);
+      if (pending) await this.restoreLongTermBed(pending.patientId, pending.snap, pending.key);
       return;
     }
 
@@ -1627,7 +1671,12 @@ export class PatientsComponent implements OnInit, OnDestroy {
 
   /** 轉入住院/急診當下的長期床位快照；非常規或無總表規則者不記 */
   private buildPreInpatientSnapshot(patient: any): any | null {
-    if (!this.isRegularCategory(patient)) return null;
+    return this.buildBedSnapshot(patient, true);
+  }
+
+  /** 目前總表規則的快照；requireRegular=true 時非常規分類不記（改 CVVHDF 前快照不看分類） */
+  private buildBedSnapshot(patient: any, requireRegular: boolean): any | null {
+    if (requireRegular && !this.isRegularCategory(patient)) return null;
     const rule: any = (this.patientStore.masterScheduleRules() as Record<string, any>)[patient.id];
     if (!rule || rule.bedNum === undefined || rule.bedNum === null || rule.shiftIndex === undefined) return null;
     return {
@@ -1647,13 +1696,20 @@ export class PatientsComponent implements OnInit, OnDestroy {
     );
   }
 
-  private async clearPreInpatientRule(patientId: string): Promise<void> {
+  private async clearPreInpatientRule(patientId: string, key: BedSnapshotKey = 'preInpatientRule'): Promise<void> {
     const p: any = this.patientStore.patientMap().get(patientId);
-    if (!p?.patientStatus?.preInpatientRule) return;
+    if (!p?.patientStatus?.[key]) return;
     const ps = { ...p.patientStatus };
-    delete ps.preInpatientRule;
+    delete ps[key];
     await this.patientsApi.save(patientId, { patientStatus: ps });
     this.patientStore.updatePatientInStore(patientId, { patientStatus: ps } as any);
+  }
+
+  /** 清單標記：已不是 CVVHDF 但仍留有改前長期床位快照（恢復流程被取消/中斷） */
+  showCvvhdfRestoreMarker(p: any): boolean {
+    if (!p?.patientStatus?.preCvvhdfRule) return false;
+    const mode = String(p.mode ?? p.dialysisOrders?.mode ?? '').trim().toUpperCase();
+    return mode !== 'CVVHDF';
   }
 
   /** 佔用原床位（同床同班且頻率衝突）的其他總表規則 */
@@ -1670,35 +1726,36 @@ export class PatientsComponent implements OnInit, OnDestroy {
   }
 
   /** 轉回門診（或清單標記點擊）：與目前規則相同→靜默清快照；不同→問是否恢復 */
-  promptRestoreLongTermBed(patientId: string, name: string, leadMsg = ''): void {
+  promptRestoreLongTermBed(patientId: string, name: string, leadMsg = '', key: BedSnapshotKey = 'preInpatientRule'): void {
     const p: any = this.patientStore.patientMap().get(patientId);
-    const snap = p?.patientStatus?.preInpatientRule;
+    const snap = p?.patientStatus?.[key];
     if (!snap) {
       if (leadMsg) this.showAlert('轉移成功', leadMsg);
       return;
     }
     const current: any = (this.patientStore.masterScheduleRules() as Record<string, any>)[patientId] || null;
     if (current && this.sameRule(current, snap)) {
-      void this.clearPreInpatientRule(patientId);
+      void this.clearPreInpatientRule(patientId, key);
       if (leadMsg) this.showAlert('轉移成功', leadMsg);
       return;
     }
     const head = leadMsg ? `${leadMsg}\n\n` : '';
+    const beforeText = key === 'preCvvhdfRule' ? '改為 CVVHDF 前' : '住院前';
     this.showConfirm(
       '恢復長期床位',
-      `${head}${name} 住院前的長期床位：${this.formatRuleLabel(snap)}\n目前總表：${current ? this.formatRuleLabel(current) : '無常規床位'}\n\n是否恢復長期床位？（若原床位已被其他病人使用，將先為該病人改床）\n\n按「取消」＝接受目前床位為新的長期床位。`,
-      () => { void this.restoreLongTermBed(patientId, snap); },
-      () => { void this.clearPreInpatientRule(patientId); },
+      `${head}${name} ${beforeText}的長期床位：${this.formatRuleLabel(snap)}\n目前總表：${current ? this.formatRuleLabel(current) : '無常規床位'}\n\n是否恢復長期床位？（若原床位已被其他病人使用，將先為該病人改床）\n\n按「取消」＝接受目前床位為新的長期床位。`,
+      () => { void this.restoreLongTermBed(patientId, snap, key); },
+      () => { void this.clearPreInpatientRule(patientId, key); },
     );
   }
 
   /** 寫回長期床位；原床被其他總表規則佔用 → 先為佔用者開床位指派，完成後自動復位 */
-  private async restoreLongTermBed(patientId: string, snap: any): Promise<void> {
+  private async restoreLongTermBed(patientId: string, snap: any, key: BedSnapshotKey = 'preInpatientRule'): Promise<void> {
     const patient: any = this.patientStore.patientMap().get(patientId);
     const occupant = this.findOccupantRule(patientId, snap);
     if (occupant) {
       const occPatient: any = this.patientStore.patientMap().get(occupant.pid) || { id: occupant.pid, name: '其他病人' };
-      this.bedRestorePending = { patientId, snap };
+      this.bedRestorePending = { patientId, snap, key };
       this.bedDialogMode = 'relocate-occupant';
       this.bedAssignContext.set({
         mode: 'change_freq_and_bed',
@@ -1728,9 +1785,9 @@ export class PatientsComponent implements OnInit, OnDestroy {
         this.patientStore.updatePatientInStore(patientId, { freq: snap.freq } as any);
       }
       await this.patientStore.upsertRuleInMasterSchedule(patientId, ruleData);
-      await this.clearPreInpatientRule(patientId);
+      await this.clearPreInpatientRule(patientId, key);
       await this.recalculateStatsLocally();
-      this.showAlert('已恢復長期床位', `${patient?.name || ''} 已恢復 ${this.formatRuleLabel(snap)}，明日起自動產生排程。\n住院期間排到該床的調班若有衝突，會在排程/護理分組標示。`);
+      this.showAlert('已恢復長期床位', `${patient?.name || ''} 已恢復 ${this.formatRuleLabel(snap)}，明日起自動產生排程。\n${key === 'preCvvhdfRule' ? 'CVVHDF' : '住院'}期間排到該床的調班若有衝突，會在排程/護理分組標示。`);
     } catch (err: any) {
       this.showAlert('操作失敗', `恢復長期床位失敗：${err.message || ''}。請至總床位表處理。`);
     }
