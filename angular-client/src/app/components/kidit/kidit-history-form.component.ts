@@ -89,7 +89,8 @@ export class KiditHistoryFormComponent implements OnChanges {
         renalUltrasoundDate: h.renalUltrasoundDate || '',
         selectedSystemicDiseases: h.selectedSystemicDiseases || [],
         otherSystemicDescription: h.otherSystemicDescription || '',
-        dmType: h.dmType || '3',
+        // 24/33/34/35 亦不預設（2026-09-03 使用者裁定全部留空由同仁點選）；33/34 病人清單四態仍為權威帶入
+        dmType: h.dmType || '',
         initialLabDate: h.initialLabDate || '',
         // 站內欄：首次透析模式 HD/PD（官網有、匯入格式無，不匯出）；依 05/08 日期推導，推不出留空
         firstDialysisMode: h.firstDialysisMode || deriveFirstDialysisMode(h.startHDDate, h.startPDDate),
@@ -104,12 +105,12 @@ export class KiditHistoryFormComponent implements OnChanges {
         initialHeight: h.initialHeight || '',
         initialEGFR: h.initialEGFR || '',
         // 33/34：病人清單 B/C 肝四態（組長建檔確認、同碼）為權威帶入；舊 kiditProfile 病史值次之
-        hbsag: this.listHepatitis?.hbsag || h.hbsag || 'O',
-        antihcv: this.listHepatitis?.antihcv || h.antihcv || 'O',
+        hbsag: this.listHepatitis?.hbsag || h.hbsag || '',
+        antihcv: this.listHepatitis?.antihcv || h.antihcv || '',
         // 站內欄：33/34 選「已作待追蹤(F)」時的追蹤日期（不匯出）；病人清單自 2026-08-30 改存 *Date（檢驗日期）
         hbsagFollowDate: this.listHepatitis?.hbsagDate || h.hbsagFollowDate || '',
         antihcvFollowDate: this.listHepatitis?.antihcvDate || h.antihcvFollowDate || '',
-        indicationType: h.indicationType || '1',
+        indicationType: h.indicationType || '',
         selectedSymptoms: h.selectedSymptoms || [],
         symptomsOtherDescription: h.symptomsOtherDescription || '',
         selectedEmergencyReasons: h.selectedEmergencyReasons || [],
