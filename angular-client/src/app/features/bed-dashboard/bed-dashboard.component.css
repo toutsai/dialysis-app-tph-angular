@@ -52,6 +52,44 @@
   width: 100%;
 }
 
+.fullscreen-hint {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  margin-bottom: 12px;
+  background: #0f766e;
+  color: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.fullscreen-hint button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.fullscreen-hint-main {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 16px;
+}
+
+.fullscreen-hint-close {
+  padding: 0 18px;
+  border-left: 1px solid rgba(255, 255, 255, 0.35) !important;
+}
+
+.fullscreen-hint button:active {
+  background: rgba(255, 255, 255, 0.15);
+}
+
 .pin-form input,
 .dashboard-header input {
   border: 1px solid #a9b6c2;

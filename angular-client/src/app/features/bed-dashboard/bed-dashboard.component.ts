@@ -5,6 +5,16 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { DashboardData, DashboardHandoverItem, DashboardService, DashboardShift } from '@services/dashboard.service';
 import { formatDateToYYYYMMDD } from '@/utils/dateUtils';
 
+/** Screen Wake Lock 的最小型別（避免依賴各版 TS lib.dom 是否內建）。 */
+interface WakeLockSentinelLike {
+  released: boolean;
+  release(): Promise<void>;
+  addEventListener(type: 'release', listener: () => void): void;
+}
+type NavigatorWithWakeLock = Navigator & {
+  wakeLock?: { request(type: 'screen'): Promise<WakeLockSentinelLike> };
+};
+
 @Component({
   selector: 'app-bed-dashboard',
   standalone: true,
@@ -35,6 +45,23 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
   readonly supportsFullscreen =
     typeof document !== 'undefined' && typeof document.documentElement?.requestFullscreen === 'function';
   private readonly onFullscreenChange = () => this.isFullscreen.set(!!document.fullscreenElement);
+
+  // 進頁面時的全螢幕提示條：固定床邊平板裝機時點一下即可；按 × 後本次瀏覽不再出現。
+  private static readonly FULLSCREEN_HINT_DISMISSED_KEY = 'bed_dashboard_fullscreen_hint_dismissed';
+  readonly fullscreenHintDismissed = signal(
+    typeof sessionStorage !== 'undefined' &&
+      sessionStorage.getItem(BedDashboardComponent.FULLSCREEN_HINT_DISMISSED_KEY) === '1',
+  );
+  readonly showFullscreenHint = computed(
+    () => this.supportsFullscreen && !this.isFullscreen() && !this.fullscreenHintDismissed(),
+  );
+
+  // 螢幕常亮（Screen Wake Lock API）：頁面在前景時要求系統不要因閒置關螢幕/鎖屏。
+  // 只在支援的瀏覽器生效（Android Chrome 84+）；切到背景會被系統釋放，回前景時重新申請。
+  private wakeLock: WakeLockSentinelLike | null = null;
+  private readonly onVisibilityChange = () => {
+    if (document.visibilityState === 'visible') void this.requestWakeLock();
+  };
 
   // 只有員工帳號登入時才顯示交班留言的「已讀」按鈕（床邊 PIN 裝置維持唯讀）。
   readonly canManage = computed(() => this.dashboardService.hasStaffToken());
@@ -72,6 +99,9 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
 
     document.addEventListener('fullscreenchange', this.onFullscreenChange);
     this.onFullscreenChange();
+
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+    void this.requestWakeLock();
   }
 
   ngOnDestroy(): void {
@@ -79,6 +109,44 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
       clearInterval(this.refreshTimer);
     }
     document.removeEventListener('fullscreenchange', this.onFullscreenChange);
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
+    void this.releaseWakeLock();
+  }
+
+  /** 申請螢幕常亮；不支援或被系統拒絕時靜默略過（改由平板系統設定處理）。 */
+  private async requestWakeLock(): Promise<void> {
+    const wakeLockApi = (navigator as NavigatorWithWakeLock).wakeLock;
+    if (!wakeLockApi || document.visibilityState !== 'visible') return;
+    if (this.wakeLock && !this.wakeLock.released) return;
+    try {
+      const sentinel = await wakeLockApi.request('screen');
+      sentinel.addEventListener('release', () => {
+        if (this.wakeLock === sentinel) this.wakeLock = null;
+      });
+      this.wakeLock = sentinel;
+    } catch {
+      this.wakeLock = null;
+    }
+  }
+
+  private async releaseWakeLock(): Promise<void> {
+    const sentinel = this.wakeLock;
+    this.wakeLock = null;
+    if (!sentinel || sentinel.released) return;
+    try {
+      await sentinel.release();
+    } catch {
+      /* 已被系統釋放，忽略 */
+    }
+  }
+
+  dismissFullscreenHint(): void {
+    this.fullscreenHintDismissed.set(true);
+    try {
+      sessionStorage.setItem(BedDashboardComponent.FULLSCREEN_HINT_DISMISSED_KEY, '1');
+    } catch {
+      /* 無法寫入 sessionStorage 時僅本次生效 */
+    }
   }
 
   /** 切換瀏覽器全螢幕（需由使用者點擊觸發；平板瀏覽器會隱藏網址列）。 */
@@ -175,7 +243,10 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
     void this.loadDashboard();
   }
 
+  /** 鎖定會清掉床位 token，固定床邊裝置之後要重輸 PIN 才能用，故先確認避免誤觸。 */
   lockDevice(): void {
+    const confirmed = window.confirm('確定要鎖定此床邊裝置？\n鎖定後必須重新輸入床位 PIN 才能再看儀表板。');
+    if (!confirmed) return;
     this.dashboardService.clearStoredToken(this.bedKey());
     this.needsPin.set(!this.dashboardService.hasStaffToken());
     this.data.set(null);

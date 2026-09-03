@@ -1,4 +1,14 @@
 <div class="dashboard-shell">
+  <div *ngIf="showFullscreenHint()" class="fullscreen-hint" role="status">
+    <button type="button" class="fullscreen-hint-main" (click)="toggleFullscreen()">
+      <i class="fas fa-expand"></i>
+      點一下進入全螢幕（隱藏網址列）
+    </button>
+    <button type="button" class="fullscreen-hint-close" aria-label="關閉提示" (click)="dismissFullscreenHint()">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+
   <div *ngIf="needsPin()" class="pin-screen">
     <section class="pin-panel">
       <div class="pin-title">
