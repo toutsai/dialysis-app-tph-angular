@@ -80,11 +80,12 @@
           <i class="fas fa-sync-alt"></i>
           重新整理
         </button>
-        <button class="ghost-button" (click)="lockDevice()">
+        <!-- 固定床邊 PIN 裝置不顯示鎖定/返回（避免誤觸）；只有員工帳號登入時才出現 -->
+        <button *ngIf="canManage()" class="ghost-button" (click)="lockDevice()">
           <i class="fas fa-lock"></i>
           鎖定
         </button>
-        <button class="ghost-button" (click)="goBack()">
+        <button *ngIf="canManage()" class="ghost-button" (click)="goBack()">
           <i class="fas fa-arrow-left"></i>
           返回
         </button>

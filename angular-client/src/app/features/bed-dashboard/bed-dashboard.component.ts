@@ -39,6 +39,11 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
   readonly lastRefreshLabel = signal('');
   readonly completingId = signal<string | null>(null);
 
+  // 固定床邊平板會一直開著：日期預設跟著「今天」走，跨日自動切到當天排程、班別回到自動。
+  // 若網址帶了非今天的 date、或有人手動改日期，當天內尊重該選擇；到隔天再自動回到今天。
+  private followToday = true;
+  private manualDateSetOn = formatDateToYYYYMMDD();
+
   // 全螢幕：平板瀏覽器開啟時可隱藏網址列/工具列。瀏覽器規定必須由使用者在本頁點擊觸發，
   // 無法在「我的病人」開新分頁時自動全螢幕，所以在儀表板本頁提供切換鈕。
   readonly isFullscreen = signal(false);
@@ -88,13 +93,19 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
     this.route.queryParamMap.subscribe((params) => {
       const date = params.get('date');
       const shift = params.get('shift') as DashboardShift | null;
-      if (date) this.selectedDate.set(date);
+      if (date) {
+        this.selectedDate.set(date);
+        this.markDateChosen(date);
+      }
       if (shift && ['auto', 'early', 'noon', 'late'].includes(shift)) this.selectedShift.set(shift);
       void this.loadDashboard();
     });
 
+    // 每 30 秒重抓資料（頁面在前景且已登入時）；跨日時先把日期切到今天再抓。
     this.refreshTimer = setInterval(() => {
-      if (!document.hidden && !this.needsPin()) void this.loadDashboard(false);
+      if (document.hidden || this.needsPin()) return;
+      if (this.rollOverToTodayIfNeeded()) return;
+      void this.loadDashboard(false);
     }, 30_000);
 
     document.addEventListener('fullscreenchange', this.onFullscreenChange);
@@ -235,12 +246,42 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
 
   changeDate(date: string): void {
     this.selectedDate.set(date);
+    this.markDateChosen(date);
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: { date, shift: this.selectedShift() },
       queryParamsHandling: 'merge',
     });
     void this.loadDashboard();
+  }
+
+  /** 記錄使用者/網址選了哪一天：選今天就繼續跟著今天走，選別天則當天內固定。 */
+  private markDateChosen(date: string): void {
+    const today = formatDateToYYYYMMDD();
+    this.followToday = date === today;
+    this.manualDateSetOn = today;
+  }
+
+  /**
+   * 跨日處理：若跟著今天走、或手動選的日期已經是「前一天選的」，就切回今天並把班別設回自動。
+   * 回傳 true 表示已觸發重新載入，呼叫端不必再抓一次。
+   */
+  private rollOverToTodayIfNeeded(): boolean {
+    const today = formatDateToYYYYMMDD();
+    if (!this.followToday && this.manualDateSetOn === today) return false;
+    if (this.followToday && this.selectedDate() === today) return false;
+
+    this.followToday = true;
+    this.manualDateSetOn = today;
+    this.selectedDate.set(today);
+    this.selectedShift.set('auto');
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { date: today, shift: 'auto' },
+      queryParamsHandling: 'merge',
+    });
+    void this.loadDashboard(false);
+    return true;
   }
 
   /** 鎖定會清掉床位 token，固定床邊裝置之後要重輸 PIN 才能用，故先確認避免誤觸。 */
