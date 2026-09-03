@@ -47,6 +47,11 @@
   font-weight: 700;
 }
 
+.pin-fullscreen-btn {
+  margin-top: 18px;
+  width: 100%;
+}
+
 .pin-form input,
 .dashboard-header input {
   border: 1px solid #a9b6c2;

@@ -25,6 +25,16 @@
       </form>
 
       <p *ngIf="errorMessage()" class="error-text">{{ errorMessage() }}</p>
+
+      <button
+        *ngIf="supportsFullscreen"
+        type="button"
+        class="ghost-button pin-fullscreen-btn"
+        (click)="toggleFullscreen()"
+      >
+        <i class="fas" [class.fa-expand]="!isFullscreen()" [class.fa-compress]="isFullscreen()"></i>
+        {{ isFullscreen() ? '離開全螢幕' : '全螢幕' }}
+      </button>
     </section>
   </div>
 
@@ -46,6 +56,16 @@
           (ngModelChange)="changeDate($event)"
           aria-label="日期"
         />
+        <button
+          *ngIf="supportsFullscreen"
+          type="button"
+          class="ghost-button"
+          (click)="toggleFullscreen()"
+          [attr.aria-pressed]="isFullscreen()"
+        >
+          <i class="fas" [class.fa-expand]="!isFullscreen()" [class.fa-compress]="isFullscreen()"></i>
+          {{ isFullscreen() ? '離開全螢幕' : '全螢幕' }}
+        </button>
         <button class="ghost-button" (click)="loadDashboard()" [disabled]="isLoading()">
           <i class="fas fa-sync-alt"></i>
           重新整理

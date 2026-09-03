@@ -29,6 +29,13 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
   readonly lastRefreshLabel = signal('');
   readonly completingId = signal<string | null>(null);
 
+  // 全螢幕：平板瀏覽器開啟時可隱藏網址列/工具列。瀏覽器規定必須由使用者在本頁點擊觸發，
+  // 無法在「我的病人」開新分頁時自動全螢幕，所以在儀表板本頁提供切換鈕。
+  readonly isFullscreen = signal(false);
+  readonly supportsFullscreen =
+    typeof document !== 'undefined' && typeof document.documentElement?.requestFullscreen === 'function';
+  private readonly onFullscreenChange = () => this.isFullscreen.set(!!document.fullscreenElement);
+
   // 只有員工帳號登入時才顯示交班留言的「已讀」按鈕（床邊 PIN 裝置維持唯讀）。
   readonly canManage = computed(() => this.dashboardService.hasStaffToken());
 
@@ -62,11 +69,29 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
     this.refreshTimer = setInterval(() => {
       if (!document.hidden && !this.needsPin()) void this.loadDashboard(false);
     }, 30_000);
+
+    document.addEventListener('fullscreenchange', this.onFullscreenChange);
+    this.onFullscreenChange();
   }
 
   ngOnDestroy(): void {
     if (this.refreshTimer) {
       clearInterval(this.refreshTimer);
+    }
+    document.removeEventListener('fullscreenchange', this.onFullscreenChange);
+  }
+
+  /** 切換瀏覽器全螢幕（需由使用者點擊觸發；平板瀏覽器會隱藏網址列）。 */
+  async toggleFullscreen(): Promise<void> {
+    if (!this.supportsFullscreen) return;
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+      }
+    } catch {
+      this.errorMessage.set('此瀏覽器不允許全螢幕，請改用瀏覽器選單的「加到主畫面」開啟');
     }
   }
 
