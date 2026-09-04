@@ -1,7 +1,23 @@
+/*
+ * 床邊智慧儀表板配色（2026-09-04 平板版面優化）：
+ * 四個面板各自一個主色，標題列/數值/清單標籤沿用同色，遠看就能分辨區塊。
+ *   透析醫囑 teal  #0f766e / 體重評估 amber #b45309 / 交班事項 blue #1d4ed8 / 今日藥物 rose #be123c
+ */
 .dashboard-shell {
+  --c-order: #0f766e;
+  --c-order-2: #0d9488;
+  --c-weight: #b45309;
+  --c-weight-2: #d97706;
+  --c-handover: #1d4ed8;
+  --c-handover-2: #3b82f6;
+  --c-med: #be123c;
+  --c-med-2: #e11d48;
+  --ink: #0f172a;
+  --ink-soft: #475569;
+  --line: #cbd5e1;
   min-height: 100vh;
-  background: #eef3f6;
-  color: #111827;
+  background: #e2e9ef;
+  color: var(--ink);
   padding: 18px;
   box-sizing: border-box;
 }
@@ -31,7 +47,7 @@
 .bed-chip {
   display: inline-flex;
   align-items: center;
-  background: #0f766e;
+  background: var(--c-order);
   color: #fff;
   border-radius: 4px;
   padding: 6px 12px;
@@ -57,7 +73,7 @@
   align-items: stretch;
   gap: 6px;
   margin-bottom: 12px;
-  background: #0f766e;
+  background: var(--c-order);
   color: #fff;
   border-radius: 8px;
   overflow: hidden;
@@ -104,7 +120,7 @@
 .shift-tabs button {
   border: 1px solid #a9b6c2;
   background: #fff;
-  color: #111827;
+  color: var(--ink);
   border-radius: 6px;
   cursor: pointer;
   display: inline-flex;
@@ -135,7 +151,8 @@
   justify-content: space-between;
   gap: 18px;
   background: #fff;
-  border: 1px solid #d6dee5;
+  border: 1px solid var(--line);
+  border-left: 6px solid var(--c-order);
   border-radius: 8px;
   padding: 18px 22px;
 }
@@ -145,6 +162,7 @@
   font-size: clamp(1.8rem, 3vw, 3rem);
   line-height: 1.1;
   letter-spacing: 0;
+  color: var(--ink);
 }
 
 .header-meta,
@@ -152,7 +170,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  color: #52606d;
+  color: var(--ink-soft);
   font-weight: 700;
 }
 
@@ -160,6 +178,17 @@
   background: #e7eef5;
   border-radius: 4px;
   padding: 4px 10px;
+}
+
+/* 床位 / 日期 / 班別 三個 chip：床位與班別上色，遠看就知道是哪一床哪一班 */
+.header-meta span:nth-child(1) {
+  background: var(--c-order);
+  color: #fff;
+}
+
+.header-meta span:nth-child(3) {
+  background: #dbeafe;
+  color: #1e3a8a;
 }
 
 .header-actions {
@@ -191,7 +220,7 @@
 
 .shift-tabs button span {
   max-width: 100%;
-  color: #52606d;
+  color: var(--ink-soft);
   font-size: 0.92rem;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -199,14 +228,24 @@
 }
 
 .shift-tabs button.active {
-  border-color: #0f766e;
-  background: #ccfbf1;
-  color: #134e4a;
+  border-color: var(--c-order);
+  background: var(--c-order);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.35);
+}
+
+.shift-tabs button.active span {
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .shift-tabs button.has-patient:not(.active) {
   border-color: #f59e0b;
-  background: #fffbeb;
+  background: #fff4d6;
+  color: #7c2d12;
+}
+
+.shift-tabs button.has-patient:not(.active) span {
+  color: #9a3412;
 }
 
 .banner {
@@ -242,7 +281,7 @@
   width: 38px;
   height: 38px;
   border: 4px solid #d6dee5;
-  border-top-color: #0f766e;
+  border-top-color: var(--c-order);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -278,9 +317,10 @@
 .med-panel,
 .empty-bed-panel {
   background: #fff;
-  border: 1px solid #d6dee5;
+  border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
 }
 
 .panel-title {
@@ -292,11 +332,27 @@
   letter-spacing: 0;
 }
 
+.order-panel .panel-title {
+  background: linear-gradient(135deg, var(--c-order), var(--c-order-2));
+}
+
+.weight-panel .panel-title {
+  background: linear-gradient(135deg, var(--c-weight), var(--c-weight-2));
+}
+
+.handover-panel .panel-title {
+  background: linear-gradient(135deg, var(--c-handover), var(--c-handover-2));
+}
+
+.med-panel .panel-title {
+  background: linear-gradient(135deg, var(--c-med), var(--c-med-2));
+}
+
 .clinical-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(160px, 1fr));
   gap: 1px;
-  background: #d6dee5;
+  background: var(--line);
 }
 
 .clinical-grid div,
@@ -312,7 +368,7 @@
 
 .clinical-grid span,
 .weight-list span {
-  color: #4b5563;
+  color: var(--ink-soft);
   font-size: clamp(1rem, 1.4vw, 1.35rem);
   font-weight: 700;
 }
@@ -322,6 +378,13 @@
   font-size: clamp(1.35rem, 2.2vw, 2.25rem);
   line-height: 1.1;
   overflow-wrap: anywhere;
+  color: var(--ink);
+}
+
+/* 模式與血管通路是上針前最先看的兩格，用醫囑主色標出 */
+.clinical-grid .order-cell:nth-child(1) strong,
+.clinical-grid .order-cell:nth-child(4) strong {
+  color: var(--c-order);
 }
 
 .clinical-grid .compact-value strong {
@@ -332,15 +395,19 @@
 .weight-list {
   display: grid;
   gap: 1px;
-  background: #d6dee5;
+  background: var(--line);
 }
 
 .weight-list .target-uf {
-  background: #fff7ed;
+  background: #ffedd5;
+}
+
+.weight-list .target-uf span {
+  color: #9a3412;
 }
 
 .weight-list .target-uf strong {
-  color: #9a3412;
+  color: #c2410c;
 }
 
 .panel-note {
@@ -376,7 +443,7 @@
 
 .handover-item span {
   display: inline-flex;
-  color: #0f766e;
+  color: var(--c-handover);
   font-weight: 800;
   margin-bottom: 6px;
 }
@@ -407,9 +474,9 @@
   align-items: center;
   gap: 6px;
   padding: 6px 14px;
-  border: 1px solid #0f766e;
+  border: 1px solid var(--c-handover);
   border-radius: 999px;
-  background: #0f766e;
+  background: var(--c-handover);
   color: #fff;
   font-size: 1.05rem;
   font-weight: 800;
@@ -418,7 +485,7 @@
 }
 
 .handover-done-btn:hover:not(:disabled) {
-  background: #0b5b54;
+  background: #1e40af;
 }
 
 .handover-done-btn:disabled {
@@ -431,6 +498,7 @@
   font-size: clamp(1.1rem, 1.6vw, 1.55rem);
   line-height: 1.45;
   overflow-wrap: anywhere;
+  color: var(--ink);
 }
 
 .empty-list {
@@ -455,6 +523,7 @@
   font-size: clamp(1.08rem, 1.6vw, 1.5rem);
   font-weight: 800;
   line-height: 1.35;
+  color: var(--ink);
 }
 
 .med-list li:last-child {
@@ -462,7 +531,7 @@
 }
 
 .med-list i {
-  color: #be123c;
+  color: var(--c-med);
   margin-top: 4px;
 }
 
@@ -489,7 +558,7 @@
 
 .empty-bed-panel p {
   margin: 0;
-  color: #52606d;
+  color: var(--ink-soft);
   font-weight: 700;
 }
 
@@ -500,9 +569,10 @@
 }
 
 /*
- * 橫向、偏矮的螢幕（床邊平板橫放，例如 1280×800 / 1024×600）：
+ * 橫向、偏矮的螢幕（床邊平板橫放，例如三星 Tab A11 1340×800 / 1024×600）：
  * 整頁塞進一個畫面高度，四個區塊不捲動就看得到；清單超出時各面板內部捲動。
  * 醫囑格改 4 欄（8 格→2 列）、體重改 3 欄橫排，把上半部壓扁讓下半部有空間。
+ * 字級以 vh 為主（2026-09-04 放大：數值 4.6vh、清單 3vh），把畫面下半部原本的空白吃掉。
  */
 @media (orientation: landscape) and (min-width: 981px) and (max-height: 900px) {
   .dashboard-shell {
@@ -536,17 +606,17 @@
   }
 
   .dashboard-header h1 {
-    margin-top: 2px;
-    font-size: clamp(1.2rem, 3.4vh, 1.9rem);
+    margin-top: 3px;
+    font-size: clamp(1.5rem, 4.4vh, 2.4rem);
   }
 
   .header-meta {
-    gap: 6px;
+    gap: 8px;
   }
 
   .header-meta span {
-    padding: 2px 8px;
-    font-size: 0.9rem;
+    padding: 3px 10px;
+    font-size: clamp(0.9rem, 2.2vh, 1.15rem);
   }
 
   .dashboard-header input {
@@ -555,8 +625,9 @@
   }
 
   .ghost-button {
-    min-height: 36px;
+    min-height: 38px;
     padding: 6px 12px;
+    font-size: 1rem;
   }
 
   .shift-tabs {
@@ -566,13 +637,13 @@
   }
 
   .shift-tabs button {
-    min-height: 44px;
+    min-height: 52px;
     gap: 0;
-    font-size: 0.95rem;
+    font-size: clamp(1rem, 2.6vh, 1.25rem);
   }
 
   .shift-tabs button span {
-    font-size: 0.85rem;
+    font-size: clamp(0.9rem, 2.2vh, 1.1rem);
   }
 
   .banner {
@@ -610,7 +681,7 @@
   .panel-title {
     flex-shrink: 0;
     padding: 6px 14px;
-    font-size: clamp(1rem, 2.6vh, 1.4rem);
+    font-size: clamp(1.1rem, 3.2vh, 1.6rem);
   }
 
   .clinical-grid {
@@ -632,21 +703,21 @@
 
   .clinical-grid span,
   .weight-list span {
-    font-size: clamp(0.85rem, 1.9vh, 1.05rem);
+    font-size: clamp(0.95rem, 2.3vh, 1.2rem);
   }
 
   .clinical-grid strong,
   .weight-list strong {
-    font-size: clamp(1.1rem, 3.6vh, 1.9rem);
+    font-size: clamp(1.3rem, 4.6vh, 2.4rem);
   }
 
   .clinical-grid .compact-value strong {
-    font-size: clamp(0.9rem, 2.3vh, 1.2rem);
+    font-size: clamp(1rem, 2.8vh, 1.4rem);
   }
 
   .panel-note {
     padding: 6px 12px;
-    font-size: 0.9rem;
+    font-size: clamp(0.85rem, 2vh, 1rem);
   }
 
   .handover-panel,
@@ -668,28 +739,40 @@
   }
 
   .med-list li {
-    padding: 8px 0;
-    font-size: clamp(1rem, 2.5vh, 1.3rem);
+    padding: 10px 0;
+    font-size: clamp(1.1rem, 3.2vh, 1.6rem);
   }
 
   .handover-item {
     padding: 8px 14px;
   }
 
+  .handover-item-head {
+    margin-bottom: 4px;
+  }
+
+  .handover-item span {
+    font-size: clamp(1rem, 2.5vh, 1.2rem);
+  }
+
+  .handover-date {
+    font-size: clamp(0.85rem, 2.1vh, 1rem);
+  }
+
   .handover-item p {
-    font-size: clamp(0.95rem, 2.4vh, 1.25rem);
+    font-size: clamp(1.05rem, 3vh, 1.5rem);
     line-height: 1.35;
   }
 
   .empty-list {
     padding: 10px 14px;
-    font-size: 1rem;
+    font-size: clamp(1rem, 2.5vh, 1.2rem);
   }
 
   .dashboard-footer {
     flex-shrink: 0;
     margin-top: 6px;
-    font-size: 0.85rem;
+    font-size: 0.9rem;
   }
 }
 
