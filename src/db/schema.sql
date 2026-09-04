@@ -517,6 +517,17 @@ CREATE TABLE IF NOT EXISTS inventory_items (
     updated_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
+-- 消耗紀錄品名別名：HIS 報表品名 → inventory_items（上傳對不上、使用者在確認視窗對應後記住）
+CREATE TABLE IF NOT EXISTS inventory_item_aliases (
+    id TEXT PRIMARY KEY,
+    category TEXT NOT NULL,
+    alias TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    created_by TEXT,
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    UNIQUE(category, alias)
+);
+
 CREATE TABLE IF NOT EXISTS inventory_purchases (
     id TEXT PRIMARY KEY,
     item_id TEXT,

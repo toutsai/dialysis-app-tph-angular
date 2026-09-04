@@ -200,6 +200,7 @@
               <tr>
                 <th>品項類別</th>
                 <th>品項名稱</th>
+                <th title="消耗紀錄上傳時對照確認過的 HIS 品名，之後上傳自動對應到此品項">消耗紀錄別名</th>
                 <th>院內代碼</th>
                 <th>每箱個數</th>
                 <th>安全庫存量</th>
@@ -213,6 +214,18 @@
                 <tr>
                   <td>{{ CATEGORY_NAMES[item.category] }}</td>
                   <td>{{ item.name }}</td>
+                  <td class="alias-cell">
+                    @if (item.aliases?.length) {
+                      @for (alias of item.aliases; track alias.id) {
+                        <span class="alias-chip">
+                          {{ alias.alias }}
+                          <button type="button" class="alias-remove" title="移除別名" (click)="deleteItemAlias(item, alias)">&times;</button>
+                        </span>
+                      }
+                    } @else {
+                      -
+                    }
+                  </td>
                   <td>{{ item.hospitalCode || '-' }}</td>
                   <td>{{ item.unitsPerBox || '-' }}</td>
                   <td>{{ item.safeInventoryLevel || 0 }}</td>
@@ -651,12 +664,16 @@
           @if (uploadResult()) {
             <div
               class="upload-result-toast"
-              [class.has-error]="uploadResult()!.errorCount > 0"
-              [class.is-success]="uploadResult()!.errorCount === 0"
+              [class.has-error]="!uploadResult()!.cancelled && uploadResult()!.errorCount > 0"
+              [class.is-success]="!uploadResult()!.cancelled && uploadResult()!.errorCount === 0"
+              [class.is-cancelled]="uploadResult()!.cancelled"
             >
               {{ uploadResult()!.message }}
             </div>
           }
+          <p class="upload-hint" style="margin-top: 0.75rem;">
+            上傳品名會對照「品項設定」的品項（品項設定為準）；找不到的品項會先跳出確認視窗，未確認前不會寫入。
+          </p>
         </div>
       </div>
       }
@@ -1323,4 +1340,11 @@
     [message]="alertDialogMessage()"
     (confirm)="isAlertDialogVisible.set(false)"
   ></app-alert-dialog>
+
+  <!-- 消耗紀錄上傳：品名對不上品項設定時的對照確認視窗 -->
+  <app-consumable-item-mapping-dialog
+    [request]="itemMappingRequest()"
+    (confirm)="onItemMappingConfirm($event)"
+    (cancel)="onItemMappingCancel()"
+  ></app-consumable-item-mapping-dialog>
 </div>

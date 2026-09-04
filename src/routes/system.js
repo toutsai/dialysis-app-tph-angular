@@ -486,11 +486,21 @@ router.get('/inventory', ...isInventoryRole, (req, res) => {
 
     const items = db.prepare(`SELECT * FROM inventory_items ORDER BY name`).all()
 
+    // 消耗紀錄品名別名（上傳對照確認時記住的），依品項分組
+    const aliasesByItem = new Map()
+    for (const a of db
+      .prepare(`SELECT id, alias, item_id FROM inventory_item_aliases ORDER BY alias`)
+      .all()) {
+      if (!aliasesByItem.has(a.item_id)) aliasesByItem.set(a.item_id, [])
+      aliasesByItem.get(a.item_id).push({ id: a.id, alias: a.alias })
+    }
+
     res.json(
       items.map((i) => ({
         id: i.id,
         name: i.name,
         category: i.category,
+        aliases: aliasesByItem.get(i.id) || [],
         unit: i.unit,
         unitsPerBox: i.units_per_box,
         currentQuantity: i.current_quantity,
@@ -607,7 +617,10 @@ router.delete('/inventory/:id', ...isInventoryRole, async (req, res) => {
     const { id } = req.params
     const db = getDatabase()
 
-    db.prepare('DELETE FROM inventory_items WHERE id = ?').run(id)
+    db.transaction(() => {
+      db.prepare('DELETE FROM inventory_item_aliases WHERE item_id = ?').run(id)
+      db.prepare('DELETE FROM inventory_items WHERE id = ?').run(id)
+    })()
 
     res.json({
       success: true,
@@ -619,6 +632,61 @@ router.delete('/inventory/:id', ...isInventoryRole, async (req, res) => {
       error: true,
       message: '刪除庫存失敗',
     })
+  }
+})
+
+// ========================================
+// 消耗紀錄品名別名 API（inventory_item_aliases）
+// 別名由「消耗紀錄上傳 → 品項對照確認」視窗建立（POST /orders/consumables/upload 的 itemMappings），這裡只提供查詢與刪除
+// ========================================
+
+/**
+ * GET /api/system/inventory/aliases
+ * 取得所有品名別名（含對應品項名稱）
+ */
+router.get('/inventory/aliases', ...isInventoryRole, (req, res) => {
+  try {
+    const db = getDatabase()
+    const rows = db
+      .prepare(
+        `SELECT a.id, a.category, a.alias, a.item_id, a.created_by, a.created_at, i.name AS item_name
+         FROM inventory_item_aliases a
+         LEFT JOIN inventory_items i ON i.id = a.item_id
+         ORDER BY a.category, a.alias`,
+      )
+      .all()
+    res.json(
+      rows.map((r) => ({
+        id: r.id,
+        category: r.category,
+        alias: r.alias,
+        itemId: r.item_id,
+        itemName: r.item_name,
+        createdBy: r.created_by,
+        createdAt: r.created_at,
+      })),
+    )
+  } catch (error) {
+    console.error('取得品名別名錯誤:', error)
+    res.status(500).json({ error: true, message: '取得品名別名失敗' })
+  }
+})
+
+/**
+ * DELETE /api/system/inventory/aliases/:id
+ * 刪除一筆品名別名（之後上傳同名品項會再次要求確認）
+ */
+router.delete('/inventory/aliases/:id', ...isInventoryRole, (req, res) => {
+  try {
+    const db = getDatabase()
+    const result = db.prepare('DELETE FROM inventory_item_aliases WHERE id = ?').run(req.params.id)
+    if (result.changes === 0) {
+      return res.status(404).json({ error: true, message: '別名不存在' })
+    }
+    res.json({ success: true, message: '別名已刪除' })
+  } catch (error) {
+    console.error('刪除品名別名錯誤:', error)
+    res.status(500).json({ error: true, message: '刪除品名別名失敗' })
   }
 })
 

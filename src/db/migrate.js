@@ -993,6 +993,29 @@ export function runMigrations() {
       migrationsApplied++
     }
 
+    // ========================================
+    // inventory_item_aliases：消耗紀錄品名別名（2026-09-04）
+    // 消耗上傳時 HIS 品名對不上 inventory_items，使用者在確認視窗對應既有品項後記住，下次自動對應。
+    // ========================================
+    const itemAliasesExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='inventory_item_aliases'")
+      .get()
+    if (!itemAliasesExists) {
+      console.log('📋 建立 inventory_item_aliases 表格...')
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS inventory_item_aliases (
+          id TEXT PRIMARY KEY,
+          category TEXT NOT NULL,
+          alias TEXT NOT NULL,
+          item_id TEXT NOT NULL,
+          created_by TEXT,
+          created_at TEXT DEFAULT (datetime('now', 'localtime')),
+          UNIQUE(category, alias)
+        )
+      `)
+      migrationsApplied++
+    }
+
     if (migrationsApplied > 0) {
       console.log(`✅ 已完成 ${migrationsApplied} 項遷移`)
     } else {

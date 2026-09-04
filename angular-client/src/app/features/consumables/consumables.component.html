@@ -167,11 +167,21 @@
         <div
           *ngIf="uploadResult()"
           class="upload-result-toast"
-          [ngClass]="uploadResult()!.errorCount > 0 ? 'has-error' : 'is-success'"
+          [ngClass]="uploadResult()!.cancelled ? 'is-cancelled' : (uploadResult()!.errorCount > 0 ? 'has-error' : 'is-success')"
         >
           {{ uploadResult()!.message }}
         </div>
+        <p class="upload-hint" style="margin-top: 0.75rem;">
+          上傳品名會對照「品項設定」的品項（品項設定為準）；找不到的品項會先跳出確認視窗，未確認前不會寫入。
+        </p>
       </div>
     </div>
   </main>
+
+  <!-- 消耗紀錄上傳：品名對不上品項設定時的對照確認視窗 -->
+  <app-consumable-item-mapping-dialog
+    [request]="itemMappingRequest()"
+    (confirm)="onItemMappingConfirm($event)"
+    (cancel)="onItemMappingCancel()"
+  ></app-consumable-item-mapping-dialog>
 </div>

@@ -8,6 +8,11 @@ import { AuthService } from '@services/auth.service';
 import { PatientStoreService } from '@services/patient-store.service';
 import { ConsumptionEngineService, type ConsumptionResult } from '@services/consumption-engine.service';
 import { AlertDialogComponent } from '@app/components/dialogs/alert-dialog/alert-dialog.component';
+import {
+  ConsumableItemMappingDialogComponent,
+  type ConsumableItemMappingRequest,
+  type ConsumableItemMappings,
+} from '@app/components/dialogs/consumable-item-mapping-dialog/consumable-item-mapping-dialog.component';
 import { ClerkPhysicianPrintComponent } from './clerk-physician-print.component';
 import { ClerkRegistrationComponent } from './clerk-registration.component';
 import { ClerkInjectionPrintComponent } from './clerk-injection-print.component';
@@ -67,6 +72,7 @@ const DEFAULT_ITEMS: Record<string, string[]> = {
     CommonModule,
     FormsModule,
     AlertDialogComponent,
+    ConsumableItemMappingDialogComponent,
     ClerkPhysicianPrintComponent,
     ClerkRegistrationComponent,
     ClerkInjectionPrintComponent,
@@ -232,6 +238,8 @@ export class InventoryComponent implements OnInit {
   isUploading = signal(false);
   uploadResult = signal<any>(null);
   isDragOver = signal(false);
+  /** 後端回 needsItemMapping（上傳品名對不上品項設定）→ 開對照確認視窗 */
+  itemMappingRequest = signal<ConsumableItemMappingRequest | null>(null);
 
   summaryMonth = localMonth();
   summaryLoading = signal(false);
@@ -1109,8 +1117,17 @@ export class InventoryComponent implements OnInit {
       this.showAlert('提示', '請先選擇一個檔案！');
       return;
     }
+    await this.postConsumablesUpload(file);
+  }
+
+  /**
+   * 送後端解析；品名對不上「品項設定」時後端回 needsItemMapping 且不寫入，
+   * 這裡開對照確認視窗，使用者確認後帶 itemMappings 重送同一檔
+   */
+  private async postConsumablesUpload(file: File, itemMappings?: ConsumableItemMappings): Promise<void> {
     this.isUploading.set(true);
     this.uploadResult.set(null);
+    this.itemMappingRequest.set(null);
     try {
       const fileContentBase64 = await this.toBase64(file);
       const res = await fetch(`${this.firebaseService.apiBaseUrl}/consumables/process`, {
@@ -1119,15 +1136,63 @@ export class InventoryComponent implements OnInit {
         body: JSON.stringify({
           fileName: file.name,
           fileContent: fileContentBase64,
+          ...(itemMappings ? { itemMappings } : {}),
         }),
       });
       const resultData = await res.json();
+      if (resultData?.needsItemMapping) {
+        this.itemMappingRequest.set(resultData as ConsumableItemMappingRequest);
+        return;
+      }
       this.uploadResult.set(resultData);
+      if (resultData?.success) {
+        // 實際消耗區間變了，總覽/每週訂單的推估要重抓；確認視窗新增了品項則品項清單也要更新
+        this.stock.invalidateActualRanges();
+        if (resultData.itemMapping?.created?.length || resultData.itemMapping?.mapped?.length) {
+          await this.fetchInventoryItems();
+        }
+      }
     } catch (error: any) {
       console.error('上傳處理失敗:', error);
       this.uploadResult.set({ message: `上傳失敗: ${error.message}`, errorCount: 1 });
     } finally {
       this.isUploading.set(false);
+    }
+  }
+
+  async onItemMappingConfirm(mappings: ConsumableItemMappings): Promise<void> {
+    const file = this.selectedFile();
+    this.itemMappingRequest.set(null);
+    if (!file) {
+      this.showAlert('提示', '找不到原始檔案，請重新選擇檔案再上傳。');
+      return;
+    }
+    await this.postConsumablesUpload(file, mappings);
+  }
+
+  onItemMappingCancel(): void {
+    this.itemMappingRequest.set(null);
+    this.uploadResult.set({
+      message: '已取消上傳：品項對照未確認，未寫入任何資料。',
+      errorCount: 0,
+      cancelled: true,
+    });
+  }
+
+  /** 品項設定：移除一筆消耗紀錄別名（之後上傳同名品項會再次詢問） */
+  async deleteItemAlias(item: any, alias: { id: string; alias: string }): Promise<void> {
+    if (!confirm(`確定移除別名「${alias.alias}」→「${item.name}」？之後上傳此品名會再次要求確認。`)) return;
+    try {
+      const res = await fetch(`${this.firebaseService.apiBaseUrl}/system/inventory/aliases/${encodeURIComponent(alias.id)}`, {
+        method: 'DELETE',
+        headers: this.firebaseService.getHeaders(),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.message || `HTTP ${res.status}`);
+      await this.fetchInventoryItems();
+    } catch (error: any) {
+      console.error('刪除別名失敗:', error);
+      this.showAlert('刪除失敗', error.message);
     }
   }
 

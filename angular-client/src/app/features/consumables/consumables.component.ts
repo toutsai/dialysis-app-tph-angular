@@ -18,13 +18,18 @@ import {
   type UploadedRangeSummary,
 } from '@/utils/consumablesReport';
 import { shiftMonthString } from '@/utils/dateStep';
+import {
+  ConsumableItemMappingDialogComponent,
+  type ConsumableItemMappingRequest,
+  type ConsumableItemMappings,
+} from '@app/components/dialogs/consumable-item-mapping-dialog/consumable-item-mapping-dialog.component';
 
 const SHIFT_INDEX_MAP: Record<number, string> = { 0: '早班', 1: '午班', 2: '晚班' };
 
 @Component({
   selector: 'app-consumables',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ConsumableItemMappingDialogComponent],
   templateUrl: './consumables.component.html',
   styleUrl: './consumables.component.css',
 })
@@ -75,8 +80,10 @@ export class ConsumablesComponent implements OnInit {
   // --- Upload tab state ---
   selectedFile = signal<File | null>(null);
   isUploading = signal(false);
-  uploadResult = signal<{ message: string; errorCount: number } | null>(null);
+  uploadResult = signal<{ message: string; errorCount: number; cancelled?: boolean } | null>(null);
   isDragOver = signal(false);
+  /** 後端回 needsItemMapping（上傳品名對不上品項設定）→ 開對照確認視窗 */
+  itemMappingRequest = signal<ConsumableItemMappingRequest | null>(null);
 
   constructor() {
     this.consumablesReportsApi = this.apiManagerService.create<FirestoreRecord>('consumables_reports');
@@ -291,8 +298,17 @@ export class ConsumablesComponent implements OnInit {
       alert('請先選擇一個檔案！');
       return;
     }
+    await this.postConsumablesUpload(file);
+  }
+
+  /**
+   * 送後端解析；品名對不上「品項設定」時後端回 needsItemMapping 且不寫入，
+   * 開對照確認視窗，使用者確認後帶 itemMappings 重送同一檔（與 inventory.component 同一套流程）
+   */
+  private async postConsumablesUpload(file: File, itemMappings?: ConsumableItemMappings): Promise<void> {
     this.isUploading.set(true);
     this.uploadResult.set(null);
+    this.itemMappingRequest.set(null);
     try {
       const fileContentBase64 = await this.toBase64(file);
       const res = await fetch(`${this.firebaseService.apiBaseUrl}/consumables/process`, {
@@ -301,9 +317,14 @@ export class ConsumablesComponent implements OnInit {
         body: JSON.stringify({
           fileName: file.name,
           fileContent: fileContentBase64,
+          ...(itemMappings ? { itemMappings } : {}),
         }),
       });
       const resultData = await res.json();
+      if (resultData?.needsItemMapping) {
+        this.itemMappingRequest.set(resultData as ConsumableItemMappingRequest);
+        return;
+      }
       this.uploadResult.set(resultData as { message: string; errorCount: number });
     } catch (error: any) {
       console.error('上傳處理失敗:', error);
@@ -311,5 +332,24 @@ export class ConsumablesComponent implements OnInit {
     } finally {
       this.isUploading.set(false);
     }
+  }
+
+  async onItemMappingConfirm(mappings: ConsumableItemMappings): Promise<void> {
+    const file = this.selectedFile();
+    this.itemMappingRequest.set(null);
+    if (!file) {
+      alert('找不到原始檔案，請重新選擇檔案再上傳。');
+      return;
+    }
+    await this.postConsumablesUpload(file, mappings);
+  }
+
+  onItemMappingCancel(): void {
+    this.itemMappingRequest.set(null);
+    this.uploadResult.set({
+      message: '已取消上傳：品項對照未確認，未寫入任何資料。',
+      errorCount: 0,
+      cancelled: true,
+    });
   }
 }

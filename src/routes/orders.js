@@ -170,6 +170,98 @@ function parseReportMonthFromHeader(cell) {
 }
 
 const CONSUMABLE_CATEGORIES = ['artificialKidney', 'dialysateCa', 'bicarbonateType']
+const CONSUMABLE_CATEGORY_LABELS = {
+  artificialKidney: '人工腎臟',
+  dialysateCa: '透析藥水CA',
+  bicarbonateType: 'B液種類',
+}
+
+/**
+ * 品名寬鬆比對 key：全形轉半形、去所有空白、轉大寫
+ * （HIS 報表與品項設定只差大小寫/空白時視為同一品項，不用再問使用者）
+ */
+function looseConsumableItemKey(name) {
+  return String(name ?? '')
+    .replace(/[！-～]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
+    .replace(/\s+/g, '')
+    .toUpperCase()
+}
+
+/**
+ * 建立「消耗紀錄品名 → 品項設定品項」解析器（inventory_items 為唯一權威）
+ * 解析順序：品名完全相同 → 別名表 inventory_item_aliases → 寬鬆比對（大小寫/空白）
+ *          → 本次請求的 itemMappings（使用者在確認視窗的決定：map/create/skip）→ unmatched
+ * 回傳 resolve(rawTrimmed) => { canonical: string|null, via: 'exact'|'auto'|'map'|'create'|'skip'|'unmatched' }
+ * map/create 的副作用（新建品項、記住別名）先收在 pendingCreates/pendingAliases，由呼叫端在交易內寫入。
+ */
+function buildConsumableItemResolver(db, category, itemMappings) {
+  const inventoryItems = db
+    .prepare(`SELECT id, name FROM inventory_items WHERE category = ? ORDER BY name`)
+    .all(category)
+  const itemById = new Map(inventoryItems.map((i) => [i.id, i]))
+  const itemByExact = new Map()
+  const itemByLoose = new Map()
+  for (const it of inventoryItems) {
+    if (!itemByExact.has(it.name)) itemByExact.set(it.name, it)
+    const loose = looseConsumableItemKey(it.name)
+    if (!itemByLoose.has(loose)) itemByLoose.set(loose, it)
+  }
+  const itemByAlias = new Map()
+  for (const a of db
+    .prepare(`SELECT alias, item_id FROM inventory_item_aliases WHERE category = ?`)
+    .all(category)) {
+    const target = itemById.get(a.item_id)
+    if (!target) continue // 品項已刪除的殘留別名，忽略
+    itemByAlias.set(a.alias, target)
+    const loose = looseConsumableItemKey(a.alias)
+    if (!itemByAlias.has(loose)) itemByAlias.set(loose, target)
+  }
+
+  const mappings =
+    itemMappings && typeof itemMappings === 'object' && !Array.isArray(itemMappings) ? itemMappings : {}
+  const cache = new Map()
+  const pendingCreates = [] // [{ id, name }]
+  const pendingAliases = [] // [{ alias, itemId, itemName }]
+  const mapped = [] // [{ from, to, remembered }]
+  const skipped = [] // [name]
+
+  const resolve = (rawTrimmed) => {
+    if (cache.has(rawTrimmed)) return cache.get(rawTrimmed)
+    const loose = looseConsumableItemKey(rawTrimmed)
+    let result
+    const exact = itemByExact.get(rawTrimmed)
+    const auto = exact || itemByAlias.get(rawTrimmed) || itemByAlias.get(loose) || itemByLoose.get(loose)
+    if (auto) {
+      result = { canonical: auto.name, via: exact ? 'exact' : 'auto' }
+    } else {
+      const m = mappings[rawTrimmed]
+      const action = m && typeof m === 'object' ? m.action : null
+      if (action === 'skip') {
+        skipped.push(rawTrimmed)
+        result = { canonical: null, via: 'skip' }
+      } else if (action === 'create') {
+        const created = { id: uuidv4(), name: rawTrimmed }
+        pendingCreates.push(created)
+        itemById.set(created.id, created)
+        itemByExact.set(created.name, created)
+        itemByLoose.set(loose, created)
+        result = { canonical: created.name, via: 'create' }
+      } else if (action === 'map' && m.itemId && itemById.has(String(m.itemId))) {
+        const target = itemById.get(String(m.itemId))
+        const remembered = m.remember !== false && target.name !== rawTrimmed
+        if (remembered) pendingAliases.push({ alias: rawTrimmed, itemId: target.id, itemName: target.name })
+        mapped.push({ from: rawTrimmed, to: target.name, remembered })
+        result = { canonical: target.name, via: 'map' }
+      } else {
+        result = { canonical: null, via: 'unmatched' }
+      }
+    }
+    cache.set(rawTrimmed, result)
+    return result
+  }
+
+  return { inventoryItems, resolve, pendingCreates, pendingAliases, mapped, skipped }
+}
 
 /**
  * 依 report_data.ranges（各上傳區間明細）重算三類耗材的月聚合陣列
@@ -1614,7 +1706,9 @@ router.post('/lab-reports/upload', ...isDoctorRole, async (req, res) => {
  */
 router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
   try {
-    const { fileName, fileContent } = req.body
+    // itemMappings：使用者在「品項對照確認」視窗的決定
+    //   { [上傳品名]: { action:'map', itemId, remember } | { action:'create' } | { action:'skip' } }
+    const { fileName, fileContent, itemMappings } = req.body
 
     if (!fileName || !fileContent) {
       return res.status(400).json({
@@ -1713,10 +1807,47 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
     const db = getDatabase()
     ensureTablesExist(db)
 
+    // ---- 品項對照：以「品項設定」(inventory_items) 為唯一權威 ----
+    // 先掃一遍所有品名；有任何對不上且本次 itemMappings 沒交代的，回 needsItemMapping 讓前端跳確認視窗，不寫入任何資料。
+    const itemResolver = buildConsumableItemResolver(db, firestoreField, itemMappings)
+    const consumableIndex = headerToIndex[consumableHeader]
+    const countIndex = headerToIndex['COUNT(*)']
+    const unmatchedItems = new Map()
+    for (const rowArray of dataRows) {
+      const raw = rowArray[consumableIndex]
+      if (raw === undefined || raw === null || String(raw).trim() === '') continue
+      const rawTrimmed = String(raw).trim()
+      if (itemResolver.resolve(rawTrimmed).via !== 'unmatched') continue
+      const entry = unmatchedItems.get(rawTrimmed) || { item: rawTrimmed, rowCount: 0, totalCount: 0 }
+      entry.rowCount++
+      entry.totalCount += Number(rowArray[countIndex]) || 0
+      unmatchedItems.set(rawTrimmed, entry)
+    }
+    if (unmatchedItems.size > 0) {
+      const categoryLabel = CONSUMABLE_CATEGORY_LABELS[firestoreField] || consumableHeader
+      console.log(
+        `[Consumables] ${fileName} 有 ${unmatchedItems.size} 個品項未對應品項設定（${categoryLabel}）：${Array.from(unmatchedItems.keys()).join('、')}，等待使用者確認`,
+      )
+      return res.json({
+        success: false,
+        needsItemMapping: true,
+        message: `有 ${unmatchedItems.size} 個品項在「品項設定」（${categoryLabel}）中找不到，請確認對應方式後再匯入。尚未寫入任何資料。`,
+        fileName,
+        category: firestoreField,
+        categoryLabel,
+        reportMonth,
+        rangeKey,
+        rangeLabel,
+        unmatchedItems: Array.from(unmatchedItems.values()),
+        inventoryItems: itemResolver.inventoryItems.map((i) => ({ id: i.id, name: i.name })),
+      })
+    }
+
     const patientCache = new Map()
     const updatesMap = new Map()
     const errors = []
     let processedRowCount = 0
+    let skippedRowCount = 0
     const deletedPatientIds = new Set()
 
     // 預先載入所有病人（含已刪除：該區間確實有透析消耗，需計入月總量；同病歷號多筆時優先在籍者）
@@ -1815,7 +1946,14 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
         }
       }
 
-      const itemKey = String(consumableValue).trim()
+      // 品名一律存「品項設定」的正式名稱（別名/寬鬆比對/使用者對應都轉成正式名稱）；略過的品項不寫入
+      // 注意：略過要放在上面的「同區間取代」重設之後，同區間重傳時舊的該品項才會被清掉
+      const resolved = itemResolver.resolve(String(consumableValue).trim())
+      if (resolved.via === 'skip') {
+        skippedRowCount++
+        continue
+      }
+      const itemKey = resolved.canonical
       const found = rangeEntry[firestoreField].find((it) => String(it.item) === itemKey)
       if (found) {
         found.count = (Number(found.count) || 0) + (Number(count) || 0)
@@ -1832,7 +1970,19 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
     }
 
     // 批次寫入資料庫 (使用 UPSERT；report_data 已在 JS 端與既有資料合併，整包覆寫)
-    if (updatesMap.size > 0) {
+    // 同一交易內：使用者確認「新增為品項」→ inventory_items；「對應既有品項＋記住」→ inventory_item_aliases
+    const { pendingCreates, pendingAliases } = itemResolver
+    if (updatesMap.size > 0 || pendingCreates.length > 0 || pendingAliases.length > 0) {
+      const createdByJson = JSON.stringify({ uid: req.user.id, name: req.user.name })
+      const insertItemStmt = db.prepare(`INSERT INTO inventory_items (id, name, category) VALUES (?, ?, ?)`)
+      const upsertAliasStmt = db.prepare(`
+        INSERT INTO inventory_item_aliases (id, category, alias, item_id, created_by)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(category, alias) DO UPDATE SET
+          item_id = excluded.item_id,
+          created_by = excluded.created_by,
+          created_at = datetime('now', 'localtime')
+      `)
       const upsertStmt = db.prepare(`
         INSERT INTO consumables_reports (id, patient_id, patient_name, medical_record_number, report_date, report_data, source_file, created_by)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -1844,6 +1994,8 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
       `)
 
       const upsertMany = db.transaction((reportList) => {
+        for (const c of pendingCreates) insertItemStmt.run(c.id, c.name, firestoreField)
+        for (const a of pendingAliases) upsertAliasStmt.run(uuidv4(), firestoreField, a.alias, a.itemId, createdByJson)
         for (const report of reportList) {
           upsertStmt.run(
             report.id,
@@ -1853,7 +2005,7 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
             report.reportDate,
             JSON.stringify(report.data),
             report.sourceFile,
-            JSON.stringify({ uid: req.user.id, name: req.user.name }),
+            createdByJson,
           )
         }
       })
@@ -1861,6 +2013,12 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
       upsertMany(Array.from(updatesMap.values()))
     }
 
+    const itemMappingSummary = {
+      created: pendingCreates.map((c) => c.name),
+      mapped: itemResolver.mapped,
+      skipped: itemResolver.skipped,
+      skippedRowCount,
+    }
 
     await logAudit(
       'CONSUMABLES_UPLOAD',
@@ -1874,17 +2032,27 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
         reportMonth,
         rangeKey,
         category: firestoreField,
+        itemMapping: itemMappingSummary,
       },
     )
 
     console.log(
-      `[Consumables] 處理完成，處理 ${processedRowCount} 筆資料，聚合為 ${updatesMap.size} 份報表（含已刪除病人 ${deletedPatientIds.size} 位）。`,
+      `[Consumables] 處理完成，處理 ${processedRowCount} 筆資料，聚合為 ${updatesMap.size} 份報表（含已刪除病人 ${deletedPatientIds.size} 位；略過 ${skippedRowCount} 筆；新增品項 ${pendingCreates.length}、記住別名 ${pendingAliases.length}）。`,
     )
 
     const deletedNote = deletedPatientIds.size > 0 ? `（其中 ${deletedPatientIds.size} 位為已刪除病人，仍計入月總量）` : ''
+    const mappingNotes = []
+    if (itemMappingSummary.created.length) mappingNotes.push(`新增品項：${itemMappingSummary.created.join('、')}`)
+    if (itemMappingSummary.mapped.length)
+      mappingNotes.push(
+        `對應品項：${itemMappingSummary.mapped.map((m) => `${m.from}→${m.to}${m.remembered ? '' : '（未記住）'}`).join('、')}`,
+      )
+    if (itemMappingSummary.skipped.length)
+      mappingNotes.push(`略過品項：${itemMappingSummary.skipped.join('、')}（${skippedRowCount} 筆未匯入）`)
+    const mappingNote = mappingNotes.length ? ` 品項對照 — ${mappingNotes.join('；')}。` : ''
     res.json({
       success: true,
-      message: `處理完成！${reportMonth} 區間 ${rangeLabel}（${consumableHeader}）：成功處理 ${processedRowCount} 筆耗材資料，寫入 ${updatesMap.size} 位病人的月報表${deletedNote}，發現 ${errors.length} 個問題行。同區間重傳會覆蓋、不同區間會累加。`,
+      message: `處理完成！${reportMonth} 區間 ${rangeLabel}（${consumableHeader}）：成功處理 ${processedRowCount} 筆耗材資料，寫入 ${updatesMap.size} 位病人的月報表${deletedNote}，發現 ${errors.length} 個問題行。同區間重傳會覆蓋、不同區間會累加。${mappingNote}`,
       processedCount: updatesMap.size,
       errorCount: errors.length,
       errors: errors.slice(0, 50),
@@ -1892,6 +2060,7 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
       rangeKey,
       category: firestoreField,
       deletedPatientCount: deletedPatientIds.size,
+      itemMapping: itemMappingSummary,
     })
   } catch (error) {
     console.error('[Consumables] 處理檔案時發生錯誤:', error)
