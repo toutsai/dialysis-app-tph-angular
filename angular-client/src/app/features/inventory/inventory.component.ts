@@ -1291,15 +1291,17 @@ export class InventoryComponent implements OnInit {
         todayArrivals,
         lastWeek.grouped,
       ]);
-      const allKeys = new Set<string>();
+      // 品名本身可能含冒號（如 HI:23），不能把 `${cat}:${item}` 組成字串再 split 回來（曾把 HI:23 截成 HI）
+      const allEntries: { category: string; itemName: string; key: string }[] = [];
       for (const cat of Object.keys(CATEGORY_NAMES)) {
-        for (const item of itemsByCategory[cat] || []) allKeys.add(`${cat}:${item}`);
+        for (const item of itemsByCategory[cat] || []) {
+          allEntries.push({ category: cat, itemName: item, key: `${cat}:${item}` });
+        }
       }
 
       // 7. 每品項推估庫存 + 4 階狀態
       const dashItems: ReturnType<typeof this.dashboardItems> = [];
-      allKeys.forEach((key) => {
-        const [category, itemName] = key.split(':');
+      allEntries.forEach(({ category, itemName, key }) => {
         // 今日消耗前的庫存 = 推估（消耗到昨天）+ 今天已到貨
         const estimatedStock =
           this.stock.value(estimate.stock, category, itemName) +
