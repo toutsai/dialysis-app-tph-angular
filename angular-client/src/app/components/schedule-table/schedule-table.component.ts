@@ -36,6 +36,8 @@ export class ScheduleTableComponent implements AfterViewInit, OnDestroy {
   @Input() isDateInPast: (dayIndex: number) => boolean = () => false;
   @Input() typesMap: Map<string, any> = new Map();
   @Input() isPageLocked = false;
+  /** 是否採用排程格上的 modeOverride（調班加洗的臨時模式）。週班表 true；床位總表傳 false，只看病人清單的常規模式。 */
+  @Input() useSlotModeOverride = true;
 
   // --- Outputs (matching Vue emits) ---
   @Output() gridClick = new EventEmitter<string>();
@@ -107,7 +109,7 @@ export class ScheduleTableComponent implements AfterViewInit, OnDestroy {
       medicalRecordNumber: patient.medicalRecordNumber,
       diseases: this.diseaseAbbrs(patient.diseases),
       patient: patient,
-      mode: String(slotData.modeOverride || patient.mode || ''),
+      mode: String((this.useSlotModeOverride ? slotData.modeOverride : '') || patient.mode || ''),
     };
   }
 
