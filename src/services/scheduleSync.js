@@ -490,12 +490,19 @@ function applySingleException(schedule, ex, dateStr) {
         // 正常執行操作
         if (sourceMatchesDay) delete schedule[sourceKey]
 
-        schedule[targetKey] = {
+        // 與 exceptionHandler 建立的格保持同樣欄位：shiftId 與 modeOverride 都要帶，
+        // 否則總表同步/整日重建後「臨時加洗」的特殊透析模式（PP/DFPP/SLED/Lipid…）會消失，
+        // 護理分組就不再顯示特殊模式標籤（2026-09-04 修）。
+        const rebuiltSlot = {
           patientId: ex.patientId,
           patientName: ex.patientName,
+          shiftId: ex.to.shiftCode,
           exceptionId: ex.id,
           manualNote: isMove ? '(換班)' : '(臨時加洗)',
         }
+        const overrideMode = ex.to?.mode || ex.mode
+        if (overrideMode) rebuiltSlot.modeOverride = overrideMode
+        schedule[targetKey] = rebuiltSlot
         return 'ok'
       }
 
