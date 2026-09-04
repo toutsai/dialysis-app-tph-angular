@@ -71,6 +71,10 @@ export interface DashboardData {
   dialysisOrder: {
     mode?: string;
     ak?: string;
+    /** 依日期星期與頻率解析出的當次 AK（AK 含 / 輪替時才與 ak 不同） */
+    akToday?: string;
+    akIsRotation?: boolean;
+    freq?: string;
     dialysateCa?: string;
     bicarbonate?: string;
     heparin?: string;

@@ -423,6 +423,17 @@
   background: var(--c-heparin-bg);
 }
 
+/* AK 輪替：大字是當次，小字列完整輪替字串 */
+.ak-rotation {
+  display: block;
+  margin-top: 2px;
+  font-size: clamp(0.8rem, 1vw, 0.95rem);
+  font-weight: 700;
+  opacity: 0.75;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+}
+
 /* 抗凝劑：一格內分 Rinse / Loading / Maintain 三小列（無結構化資料時單列顯示原字串） */
 .heparin-lines {
   list-style: none;

@@ -1,6 +1,7 @@
 import { generateDailyScheduleFromRules } from './scheduleSync.js'
 import { getDailyInjections } from './dailyInjectionService.js'
-import { getTaipeiTodayString } from '../utils/dateUtils.js'
+import { getTaipeiDayIndex, getTaipeiTodayString } from '../utils/dateUtils.js'
+import { resolveDailyRotationValue } from '../utils/scheduleUtils.js'
 
 export const DASHBOARD_SHIFTS = ['early', 'noon', 'late']
 
@@ -256,7 +257,30 @@ function getLatestDialysisOrders(db, patient, date) {
   }
 }
 
-function normalizeDialysisOrder(orderSource, patient, slotData) {
+/**
+ * 病人頻率來源優先序（與前端 my-patients 一致）：
+ * 總表 MASTER_SCHEDULE 規則 → patients.schedule_rule → 醫囑 freq（已淘汰欄位）→ 排程 slot freq。
+ */
+function resolvePatientFreq(db, patient, orders, slotData) {
+  if (!patient) return ''
+  const masterDoc = db.prepare("SELECT schedule FROM base_schedules WHERE id = 'MASTER_SCHEDULE'").get()
+  const masterRules = safeJsonParse(masterDoc?.schedule, {})
+  const scheduleRule = safeJsonParse(patient.schedule_rule, {})
+  return getValue(masterRules?.[patient.id]?.freq, scheduleRule?.freq, orders?.freq, slotData?.freq)
+}
+
+/**
+ * AK 以 / 分隔代表一週各次輪替（第 1 段=本週第 1 次…），依日期星期與頻率取當次那一顆；
+ * 無法判定（頻率未知、非透析日、段數不足）時 akToday 回傳完整原值（與備物計算相同的保守策略）。
+ */
+function resolveAkForDate(ak, freq, date) {
+  const raw = String(ak ?? '').trim()
+  if (!raw) return { akToday: '', akIsRotation: false }
+  const dayIndex = getTaipeiDayIndex(new Date(`${date}T00:00:00Z`))
+  return { akToday: resolveDailyRotationValue(raw, freq, dayIndex), akIsRotation: raw.includes('/') }
+}
+
+function normalizeDialysisOrder(orderSource, patient, slotData, freq = '', date = getTaipeiTodayString()) {
   const orders = orderSource.orders || {}
   const mode = getValue(slotData?.modeOverride, orders.modeOverride, orders.mode, orders.dialysisMode)
   const dialysisTime = parseDialysisTime(orders)
@@ -278,6 +302,8 @@ function normalizeDialysisOrder(orderSource, patient, slotData) {
     effectiveDate: orderSource.effectiveDate || null,
     mode,
     ak: getValue(orders.ak, orders.dialyzer, orders.artificialKidney),
+    ...resolveAkForDate(getValue(orders.ak, orders.dialyzer, orders.artificialKidney), freq, date),
+    freq,
     dialysateCa: getValue(orders.dialysateCa, orders.dialysate, orders.dialysateA),
     bicarbonate: getValue(orders.bicarbonate, orders.dialysateB, orders.bPowder),
     heparin,
@@ -491,7 +517,8 @@ export function getDashboardData(db, { bedKey: rawBedKey, date, shift = 'auto' }
 
   const patientInfo = normalizePatient(patient, targetDate)
   const orderSource = patient ? getLatestDialysisOrders(db, patient, targetDate) : { orders: {}, source: 'none' }
-  const dialysisOrder = patient ? normalizeDialysisOrder(orderSource, patient, slotData) : null
+  const patientFreq = patient ? resolvePatientFreq(db, patient, orderSource.orders, slotData) : ''
+  const dialysisOrder = patient ? normalizeDialysisOrder(orderSource, patient, slotData, patientFreq, targetDate) : null
   const medicationsToday = patient ? getDailyInjections(db, targetDate, [patient.id]) : []
   const handoverItems = patient ? getHandoverItems(db, patient.id, targetDate, selectedShift) : []
 

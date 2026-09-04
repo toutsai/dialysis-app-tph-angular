@@ -138,9 +138,13 @@
             <div class="panel-title">透析醫囑</div>
             <!-- 前三格是重點（AK / 透析A液Ca / 抗凝劑）放大上色；抗凝劑一格內分 Rinse/Loading/Maintain 三小列 -->
             <div class="clinical-grid">
+              <!-- AK 含 / 輪替時顯示後端依當天星期解析的當次那一顆，下方小字列完整輪替 -->
               <div class="order-cell key-cell key-ak">
                 <span>AK</span>
-                <strong>{{ value(data()?.dialysisOrder?.ak) }}</strong>
+                <strong>{{ value(data()?.dialysisOrder?.akToday || data()?.dialysisOrder?.ak) }}</strong>
+                <small class="ak-rotation" *ngIf="data()?.dialysisOrder?.akIsRotation">
+                  輪替 {{ data()?.dialysisOrder?.ak }}
+                </small>
               </div>
               <div class="order-cell key-cell key-ca">
                 <span>透析A液Ca</span>

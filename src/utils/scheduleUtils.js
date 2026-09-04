@@ -46,3 +46,31 @@ export function getScheduleKey(bedNum, shiftCode) {
   // 一般床位
   return `bed-${bedNumStr}-${shiftCode}`
 }
+
+/**
+ * 病人在指定星期（0=週一 … 6=週日，同 FREQ_MAP_TO_DAY_INDEX）是一週療程中的第幾次透析（0-based）。
+ * 頻率未知或當天非該病人透析日回傳 -1。與前端 utils/scheduleUtils.ts 的 getWeeklySessionIndex 同義（前端 dayOfWeek 為 1=週一）。
+ */
+export function getWeeklySessionIndex(freq, dayIndex) {
+  if (!freq || dayIndex === null || dayIndex === undefined) return -1
+  const days = FREQ_MAP_TO_DAY_INDEX[freq]
+  if (!days) return -1
+  return days.indexOf(dayIndex)
+}
+
+/**
+ * 解析「以 / 分隔、每次透析輪替」的醫囑值（如 AK "21S/Hi23/Hi23"），取指定星期當次該用的那一段。
+ * 單一值直接回傳；無法確定次序（頻率未知、當天非透析日、段數不足）時保守回傳完整原值。
+ */
+export function resolveDailyRotationValue(rawValue, freq, dayIndex) {
+  const value = String(rawValue ?? '').trim()
+  if (!value.includes('/')) return value
+  const parts = value
+    .split('/')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  if (parts.length <= 1) return parts[0] ?? value
+  const idx = getWeeklySessionIndex(freq, dayIndex)
+  if (idx >= 0 && idx < parts.length) return parts[idx]
+  return value
+}
