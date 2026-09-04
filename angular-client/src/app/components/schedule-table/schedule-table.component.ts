@@ -10,6 +10,8 @@ interface PatientDetails {
   medicalRecordNumber: string;
   diseases: string[];
   patient: any;
+  /** 當格透析模式：調班加洗寫入的 slot.modeOverride 優先，否則病人常規 mode（與護理分組/我的病人同規則） */
+  mode: string;
 }
 
 @Component({
@@ -105,6 +107,7 @@ export class ScheduleTableComponent implements AfterViewInit, OnDestroy {
       medicalRecordNumber: patient.medicalRecordNumber,
       diseases: this.diseaseAbbrs(patient.diseases),
       patient: patient,
+      mode: String(slotData.modeOverride || patient.mode || ''),
     };
   }
 

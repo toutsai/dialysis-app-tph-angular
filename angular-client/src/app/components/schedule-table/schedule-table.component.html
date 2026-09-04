@@ -49,9 +49,9 @@
                       </div>
                       <div class="patient-mrn">
                         {{ details.medicalRecordNumber }}
-                        @if (details.patient.mode && details.patient.mode !== 'HD') {
+                        @if (details.mode && details.mode !== 'HD') {
                           <span class="special-dialysis-label">
-                            ({{ details.patient.mode }})
+                            ({{ details.mode }})
                           </span>
                         }
                       </div>
@@ -93,9 +93,9 @@
                         </div>
                         <div class="patient-mrn">
                           {{ details.medicalRecordNumber }}
-                          @if (details.patient.mode && details.patient.mode !== 'HD') {
+                          @if (details.mode && details.mode !== 'HD') {
                             <span class="special-dialysis-label">
-                              ({{ details.patient.mode }})
+                              ({{ details.mode }})
                             </span>
                           }
                         </div>
