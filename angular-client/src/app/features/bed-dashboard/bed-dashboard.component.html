@@ -136,7 +136,7 @@
         <section class="top-grid">
           <article class="order-panel">
             <div class="panel-title">透析醫囑</div>
-            <!-- 第一列三個重點（AK / 透析A液Ca / 抗凝劑）放大上色，其餘五項第二列 -->
+            <!-- 前三格是重點（AK / 透析A液Ca / 抗凝劑）放大上色；抗凝劑一格內分 Rinse/Loading/Maintain 三小列 -->
             <div class="clinical-grid">
               <div class="order-cell key-cell key-ak">
                 <span>AK</span>
@@ -146,9 +146,14 @@
                 <span>透析A液Ca</span>
                 <strong>{{ value(data()?.dialysisOrder?.dialysateCa) }}</strong>
               </div>
-              <div class="order-cell key-cell key-heparin key-cell-wide">
+              <div class="order-cell key-cell key-heparin">
                 <span>抗凝劑</span>
-                <strong>{{ formatHeparinOrder(data()?.dialysisOrder || null) }}</strong>
+                <ul class="heparin-lines">
+                  <li *ngFor="let line of heparinLines()" [class.single]="!line.label">
+                    <em *ngIf="line.label">{{ line.label }}</em>
+                    <b>{{ line.value }}</b>
+                  </li>
+                </ul>
               </div>
               <div class="order-cell">
                 <span>模式</span>
@@ -196,9 +201,13 @@
         </section>
 
         <section class="bottom-grid">
+          <!-- 清單超出面板高度時在面板內捲動；底部出現「往下滑」提示，滑到底自動消失 -->
           <article class="handover-panel">
-            <div class="panel-title">交班事項</div>
-            <div class="handover-list">
+            <div class="panel-title">
+              交班事項
+              <span class="panel-count" *ngIf="(data()?.handoverItems?.length || 0) > 0">{{ data()?.handoverItems?.length }}</span>
+            </div>
+            <div class="handover-list scroll-list" #handoverList (scroll)="onListScroll()">
               <div *ngIf="(data()?.handoverItems?.length || 0) === 0" class="empty-list">
                 目前無未結案交班事項
               </div>
@@ -222,19 +231,28 @@
                 <p>{{ item.content }}</p>
               </div>
             </div>
+            <button *ngIf="handoverHasMore()" type="button" class="list-more-hint" (click)="scrollListDown('handover')">
+              <i class="fas fa-chevron-down"></i> 還有更多，往下滑
+            </button>
           </article>
 
           <article class="med-panel">
-            <div class="panel-title">今日應施打藥物</div>
+            <div class="panel-title">
+              今日應施打藥物
+              <span class="panel-count" *ngIf="(data()?.medicationsToday?.length || 0) > 0">{{ data()?.medicationsToday?.length }}</span>
+            </div>
             <div *ngIf="(data()?.medicationsToday?.length || 0) === 0" class="empty-list">
               今日無系統判定應施打針劑
             </div>
-            <ul class="med-list">
+            <ul class="med-list scroll-list" #medList (scroll)="onListScroll()">
               <li *ngFor="let med of data()?.medicationsToday">
                 <i class="fas fa-syringe"></i>
                 {{ formatMedication(med) }}
               </li>
             </ul>
+            <button *ngIf="medHasMore()" type="button" class="list-more-hint" (click)="scrollListDown('med')">
+              <i class="fas fa-chevron-down"></i> 還有更多，往下滑
+            </button>
           </article>
         </section>
       </ng-container>
@@ -242,6 +260,7 @@
 
     <footer class="dashboard-footer">
       <span>最後更新 {{ lastRefreshLabel() || '-' }}</span>
+      <span>{{ viewportLabel() }}</span>
       <span>低血壓預測模型未啟用</span>
     </footer>
   </ng-container>

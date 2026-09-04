@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DashboardData, DashboardHandoverItem, DashboardService, DashboardShift } from '@services/dashboard.service';
@@ -38,6 +38,34 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
   readonly needsPin = signal(false);
   readonly lastRefreshLabel = signal('');
   readonly completingId = signal<string | null>(null);
+
+  // 交班事項 / 藥物清單超出面板高度時，底部顯示「還有更多，往下滑」；滑到底自動消失。
+  @ViewChild('handoverList') private handoverListRef?: ElementRef<HTMLElement>;
+  @ViewChild('medList') private medListRef?: ElementRef<HTMLElement>;
+  readonly handoverHasMore = signal(false);
+  readonly medHasMore = signal(false);
+  // 頁尾顯示目前視窗尺寸（CSS px），方便在平板上確認落在哪個版面斷點。
+  readonly viewportLabel = signal('');
+  private readonly onResize = () => {
+    this.updateViewportLabel();
+    this.scheduleOverflowCheck();
+  };
+
+  /** 抗凝劑分 Rinse / Loading / Maintain 三小列；沒有結構化欄位時退回單列原字串。 */
+  readonly heparinLines = computed<{ label: string; value: string }[]>(() => {
+    const order = this.data()?.dialysisOrder;
+    if (!order) return [{ label: '', value: '-' }];
+    const rinse = this.value(order.heparinRinse);
+    const loading = this.value(order.heparinLoading);
+    const maintain = this.value(order.heparinMaintain);
+    const hasStructuredValue = [rinse, loading, maintain].some((part) => part !== '-');
+    if (!hasStructuredValue) return [{ label: '', value: this.value(order.heparin) }];
+    return [
+      { label: 'Rinse', value: rinse },
+      { label: 'Loading', value: loading },
+      { label: 'Maintain', value: maintain },
+    ];
+  });
 
   // 固定床邊平板會一直開著：日期預設跟著「今天」走，跨日自動切到當天排程、班別回到自動。
   // 若網址帶了非今天的 date、或有人手動改日期，當天內尊重該選擇；到隔天再自動回到今天。
@@ -112,6 +140,8 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
     this.onFullscreenChange();
 
     document.addEventListener('visibilitychange', this.onVisibilityChange);
+    window.addEventListener('resize', this.onResize);
+    this.updateViewportLabel();
     void this.requestWakeLock();
   }
 
@@ -121,6 +151,7 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
     }
     document.removeEventListener('fullscreenchange', this.onFullscreenChange);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
+    window.removeEventListener('resize', this.onResize);
     void this.releaseWakeLock();
   }
 
@@ -207,6 +238,7 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
         this.selectedShift(),
       );
       this.data.set(dashboard);
+      this.scheduleOverflowCheck();
       this.lastRefreshLabel.set(new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }));
     } catch (error) {
       const message = error instanceof Error ? error.message : '讀取床邊儀表板失敗';
@@ -302,17 +334,34 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
     return String(value);
   }
 
-  formatHeparinOrder(order: DashboardData['dialysisOrder']): string {
-    if (!order) return '-';
+  /** 清單是否還有內容在可視區之下（超出 4px 才算，避免小數誤差） */
+  private hasMoreBelow(el?: HTMLElement | null): boolean {
+    if (!el) return false;
+    return el.scrollHeight - el.scrollTop - el.clientHeight > 4;
+  }
 
-    const rinse = this.value(order.heparinRinse);
-    const loading = this.value(order.heparinLoading);
-    const maintain = this.value(order.heparinMaintain);
-    const hasStructuredValue = [rinse, loading, maintain].some((part) => part !== '-');
+  private checkOverflow(): void {
+    this.handoverHasMore.set(this.hasMoreBelow(this.handoverListRef?.nativeElement));
+    this.medHasMore.set(this.hasMoreBelow(this.medListRef?.nativeElement));
+  }
 
-    if (!hasStructuredValue) return this.value(order.heparin);
+  /** 資料換過後 DOM 要下一輪才更新，延後一個 tick 再量。 */
+  private scheduleOverflowCheck(): void {
+    setTimeout(() => this.checkOverflow(), 0);
+  }
 
-    return `Rinse：${rinse} / Loading：${loading} / Maintain：${maintain}`;
+  onListScroll(): void {
+    this.checkOverflow();
+  }
+
+  scrollListDown(which: 'handover' | 'med'): void {
+    const el = which === 'handover' ? this.handoverListRef?.nativeElement : this.medListRef?.nativeElement;
+    if (!el) return;
+    el.scrollBy({ top: Math.max(120, el.clientHeight * 0.8), behavior: 'smooth' });
+  }
+
+  private updateViewportLabel(): void {
+    this.viewportLabel.set(`${window.innerWidth}×${window.innerHeight}`);
   }
 
   maskPatientName(name?: string | null): string {
