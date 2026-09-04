@@ -1,4 +1,5 @@
 import { createHmac } from 'crypto'
+import { MAIN_BED_NUMBERS } from '../utils/scheduleUtils.js'
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
@@ -9,7 +10,8 @@ function getPositiveInt(value, fallback) {
 
 export const DASHBOARD_PIN_ROTATION_DAYS = getPositiveInt(process.env.DASHBOARD_PIN_ROTATION_DAYS, 30)
 export const DASHBOARD_PIN_LENGTH = getPositiveInt(process.env.DASHBOARD_PIN_LENGTH, 4)
-export const DASHBOARD_DEFAULT_BED_COUNT = getPositiveInt(process.env.DASHBOARD_DEFAULT_BED_COUNT, 44)
+// 預設床位清單改用 MAIN_BED_NUMBERS（2026-09-04）：舊環境變數 DASHBOARD_DEFAULT_BED_COUNT 不再使用
+const MAIN_BED_NUMBER_SET = new Set(MAIN_BED_NUMBERS)
 
 function getPinSecret() {
   return (
@@ -54,11 +56,11 @@ export function isDefaultDashboardBedKey(bedKey) {
   const match = String(bedKey || '').match(/^bed-(\d+)$/i)
   if (!match) return false
   const bedNumber = Number(match[1])
-  return Number.isInteger(bedNumber) && bedNumber >= 1 && bedNumber <= DASHBOARD_DEFAULT_BED_COUNT
+  return MAIN_BED_NUMBER_SET.has(bedNumber)
 }
 
 export function getDefaultDashboardBedKeys() {
-  return Array.from({ length: DASHBOARD_DEFAULT_BED_COUNT }, (_, index) => `bed-${index + 1}`)
+  return MAIN_BED_NUMBERS.map((bedNumber) => `bed-${bedNumber}`)
 }
 
 export function deriveDashboardPin(bedKey, now = new Date()) {

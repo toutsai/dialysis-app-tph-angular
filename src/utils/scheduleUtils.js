@@ -26,6 +26,19 @@ export const FREQ_MAP_TO_DAY_INDEX = {
 export const SHIFTS = ['early', 'noon', 'late']
 
 /**
+ * 透析中心主床床號（不含外圍床）。跳過尾數 0/4 與 40 開頭的號碼，最後一床是 65，共 44 床。
+ * 必須與前端各元件寫死的 bedLayout 一致（如 components/dialogs/exception-create-dialog、features/my-patients）。
+ */
+export const MAIN_BED_NUMBERS = [
+  1, 2, 3, 5, 6, 7, 8, 9,
+  11, 12, 13, 15, 16, 17, 18, 19,
+  21, 22, 23, 25, 26, 27, 28, 29,
+  31, 32, 33, 35, 36, 37, 38, 39,
+  51, 52, 53, 55, 56, 57, 58, 59,
+  61, 62, 63, 65,
+]
+
+/**
  * 產生排程的 key (例如: bed-1-early, peripheral-1-noon)
  */
 export function getScheduleKey(bedNum, shiftCode) {
