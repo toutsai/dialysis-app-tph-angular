@@ -12,6 +12,13 @@
   --c-handover-2: #3b82f6;
   --c-med: #be123c;
   --c-med-2: #e11d48;
+  /* 醫囑三個重點格：AK 紫 / 透析A液Ca 藍 / 抗凝劑 玫紅 */
+  --c-ak: #6d28d9;
+  --c-ak-bg: #f3e8ff;
+  --c-ca: #0369a1;
+  --c-ca-bg: #e0f2fe;
+  --c-heparin: #be123c;
+  --c-heparin-bg: #ffe4e6;
   --ink: #0f172a;
   --ink-soft: #475569;
   --line: #cbd5e1;
@@ -147,9 +154,10 @@
 
 .dashboard-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 18px;
+  gap: 14px 18px;
   background: #fff;
   border: 1px solid var(--line);
   border-left: 6px solid var(--c-order);
@@ -204,8 +212,11 @@
   background: #e7eef5;
 }
 
+/* 班別導航在標題列內；直向/桌機時佔滿一整列（order 排到最後），橫向平板時與姓名同列（見下方 media query） */
 .shift-tabs {
-  margin: 14px 0;
+  order: 3;
+  flex-basis: 100%;
+  margin: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(140px, 1fr));
   gap: 10px;
@@ -381,15 +392,45 @@
   color: var(--ink);
 }
 
-/* 模式與血管通路是上針前最先看的兩格，用醫囑主色標出 */
-.clinical-grid .order-cell:nth-child(1) strong,
-.clinical-grid .order-cell:nth-child(4) strong {
-  color: var(--c-order);
+/* 三個重點格（AK / 透析A液Ca / 抗凝劑）：各自底色 + 標籤與數值同色 + 數值放大 */
+.clinical-grid .key-cell {
+  border-left: 6px solid currentColor;
 }
 
-.clinical-grid .compact-value strong {
-  font-size: clamp(1.05rem, 1.45vw, 1.45rem);
-  line-height: 1.28;
+.clinical-grid .key-cell span {
+  color: inherit;
+  opacity: 0.85;
+  font-size: clamp(1.05rem, 1.5vw, 1.45rem);
+}
+
+.clinical-grid .key-cell strong {
+  color: inherit;
+  font-size: clamp(1.6rem, 2.8vw, 2.9rem);
+}
+
+.clinical-grid .key-ak {
+  color: var(--c-ak);
+  background: var(--c-ak-bg);
+}
+
+.clinical-grid .key-ca {
+  color: var(--c-ca);
+  background: var(--c-ca-bg);
+}
+
+.clinical-grid .key-heparin {
+  color: var(--c-heparin);
+  background: var(--c-heparin-bg);
+}
+
+.clinical-grid .key-cell-wide {
+  grid-column: span 2;
+}
+
+/* 抗凝劑是長字串，比另外兩個重點格小一號才放得下 */
+.clinical-grid .key-heparin strong {
+  font-size: clamp(1.25rem, 1.9vw, 1.9rem);
+  line-height: 1.25;
 }
 
 .weight-list {
@@ -601,13 +642,56 @@
 
   .dashboard-header {
     flex-shrink: 0;
+    flex-wrap: nowrap;
     align-items: center;
-    padding: 8px 16px;
+    gap: 12px;
+    padding: 6px 14px;
+  }
+
+  .header-patient {
+    flex: 0 1 auto;
+    min-width: 0;
   }
 
   .dashboard-header h1 {
     margin-top: 3px;
-    font-size: clamp(1.5rem, 4.4vh, 2.4rem);
+    font-size: clamp(1.4rem, 4.2vh, 2.3rem);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* 班別導航併入標題列：與姓名同一列，操作鈕只留圖示 */
+  .shift-tabs {
+    order: 0;
+    flex: 1 1 auto;
+    flex-basis: auto;
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .shift-tabs button {
+    flex: 1 1 0;
+    max-width: 170px;
+    min-width: 0;
+    padding: 4px 8px;
+  }
+
+  .header-actions {
+    flex: 0 0 auto;
+    gap: 6px;
+  }
+
+  .header-actions .btn-label {
+    display: none;
+  }
+
+  .header-actions .ghost-button {
+    min-width: 40px;
+    padding: 6px 10px;
+    font-size: 1.1rem;
   }
 
   .header-meta {
@@ -630,20 +714,15 @@
     font-size: 1rem;
   }
 
-  .shift-tabs {
-    flex-shrink: 0;
-    margin: 8px 0;
-    gap: 8px;
-  }
-
   .shift-tabs button {
-    min-height: 52px;
+    min-height: 48px;
     gap: 0;
-    font-size: clamp(1rem, 2.6vh, 1.25rem);
+    font-size: clamp(0.95rem, 2.4vh, 1.2rem);
+    line-height: 1.2;
   }
 
   .shift-tabs button span {
-    font-size: clamp(0.9rem, 2.2vh, 1.1rem);
+    font-size: clamp(0.85rem, 2.1vh, 1.05rem);
   }
 
   .banner {
@@ -684,8 +763,29 @@
     font-size: clamp(1.1rem, 3.2vh, 1.6rem);
   }
 
+  /* 5 欄：第一列 AK | A液Ca | 抗凝劑(佔 3 欄)，第二列 模式/時間/通路/血流/透析液流速 */
   .clinical-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .clinical-grid .key-cell-wide {
+    grid-column: span 3;
+  }
+
+  .clinical-grid .key-cell {
+    padding: 8px 12px 10px;
+  }
+
+  .clinical-grid .key-cell span {
+    font-size: clamp(1rem, 2.7vh, 1.35rem);
+  }
+
+  .clinical-grid .key-cell strong {
+    font-size: clamp(1.6rem, 6vh, 3.1rem);
+  }
+
+  .clinical-grid .key-heparin strong {
+    font-size: clamp(1.2rem, 4vh, 2rem);
   }
 
   .weight-list {
@@ -708,11 +808,7 @@
 
   .clinical-grid strong,
   .weight-list strong {
-    font-size: clamp(1.3rem, 4.6vh, 2.4rem);
-  }
-
-  .clinical-grid .compact-value strong {
-    font-size: clamp(1rem, 2.8vh, 1.4rem);
+    font-size: clamp(1.2rem, 4.2vh, 2.2rem);
   }
 
   .panel-note {
@@ -740,7 +836,7 @@
 
   .med-list li {
     padding: 10px 0;
-    font-size: clamp(1.1rem, 3.2vh, 1.6rem);
+    font-size: clamp(1.15rem, 3.5vh, 1.75rem);
   }
 
   .handover-item {
@@ -760,7 +856,7 @@
   }
 
   .handover-item p {
-    font-size: clamp(1.05rem, 3vh, 1.5rem);
+    font-size: clamp(1.1rem, 3.3vh, 1.65rem);
     line-height: 1.35;
   }
 
@@ -785,7 +881,10 @@
     justify-content: flex-start;
   }
 
-  .shift-tabs,
+  .shift-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .top-grid,
   .bottom-grid {
     grid-template-columns: 1fr;
@@ -804,6 +903,10 @@
 
   .clinical-grid {
     grid-template-columns: 1fr;
+  }
+
+  .clinical-grid .key-cell-wide {
+    grid-column: auto;
   }
 
   .clinical-grid div,
