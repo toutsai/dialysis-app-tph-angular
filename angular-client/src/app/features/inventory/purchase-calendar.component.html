@@ -8,12 +8,25 @@
       <button type="button" class="pc-today-btn" (click)="goToday()">今天</button>
     </div>
     <div class="pc-filters">
-      <select [ngModel]="filterCategory()" (ngModelChange)="filterCategory.set($event)">
+      <select [ngModel]="filterCategory()" (ngModelChange)="setFilterCategory($event)" title="篩選類別">
         <option value="">全部類別</option>
         @for (cat of categoryKeys; track cat) {
           <option [value]="cat">{{ CATEGORY_NAMES[cat] }}</option>
         }
       </select>
+      <select class="pc-item-filter" [ngModel]="filterItem()" (ngModelChange)="setFilterItem($event)" title="篩選單一品項">
+        <option value="">全部品項</option>
+        @for (g of itemFilterGroups(); track g.category) {
+          <optgroup [label]="g.label">
+            @for (it of g.items; track it) {
+              <option [value]="it">{{ it }}</option>
+            }
+          </optgroup>
+        }
+      </select>
+      @if (hasFilter()) {
+        <button type="button" class="pc-clear-filter" (click)="clearFilters()" title="清除篩選">✕ 清除篩選</button>
+      }
       <span class="pc-legend"><i class="dot ordered"></i>待到貨</span>
       <span class="pc-legend"><i class="dot overdue"></i>逾期未到</span>
       <span class="pc-legend"><i class="dot arrived"></i>已到貨</span>
@@ -23,8 +36,11 @@
 
   <!-- 待到貨摘要 -->
   <div class="pc-summary" [class.has-overdue]="overdue().length > 0">
+    @if (hasFilter()) {
+      <span class="pc-filter-badge" title="只顯示此篩選的紀錄">篩選：{{ filterLabel() }}</span>
+    }
     @if (pending().length === 0) {
-      <span>目前沒有叫貨待到貨。</span>
+      <span>{{ hasFilter() ? '此篩選目前沒有叫貨待到貨。' : '目前沒有叫貨待到貨。' }}</span>
     } @else {
       <strong>待到貨 {{ pending().length }} 筆</strong>
       @if (overdue().length > 0) {

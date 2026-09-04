@@ -91,6 +91,39 @@ export class PurchaseCalendarComponent implements OnInit {
   all = signal<PurchaseEntry[]>([]);
   /** 篩選類別（空 = 全部） */
   filterCategory = signal('');
+  /** 篩選單一品項（空 = 全部；值 = 品項名稱） */
+  filterItem = signal('');
+
+  /** 品項篩選下拉的選項：依類別分組，= 已知品項 ∪ 紀錄裡出現過的品項 */
+  readonly itemFilterGroups = computed<{ category: string; label: string; items: string[] }[]>(() => {
+    const cat = this.filterCategory();
+    const rows = this.all();
+    return this.categoryKeys
+      .filter((c) => !cat || c === cat)
+      .map((c) => {
+        const set = new Set<string>(this.knownItems[c] || []);
+        for (const e of rows) if (e.category === c && e.item) set.add(e.item);
+        return { category: c, label: CATEGORY_NAMES[c], items: [...set].sort((a, b) => a.localeCompare(b, 'zh-Hant')) };
+      })
+      .filter((g) => g.items.length > 0);
+  });
+
+  /** 套用類別 + 品項篩選後的紀錄（行事曆、待到貨摘要、本月統計共用） */
+  readonly filtered = computed(() => {
+    const cat = this.filterCategory();
+    const item = this.filterItem();
+    if (!cat && !item) return this.all();
+    return this.all().filter((e) => (!cat || e.category === cat) && (!item || e.item === item));
+  });
+  readonly hasFilter = computed(() => !!this.filterCategory() || !!this.filterItem());
+  readonly filterLabel = computed(() => {
+    const cat = this.filterCategory();
+    const item = this.filterItem();
+    const parts: string[] = [];
+    if (cat) parts.push(CATEGORY_NAMES[cat] || cat);
+    if (item) parts.push(item);
+    return parts.join(' / ');
+  });
 
   /** 行事曆格子（週一起，6 列 × 7） */
   readonly weeks = computed<CalendarCell[][]>(() => {
@@ -127,9 +160,7 @@ export class PurchaseCalendarComponent implements OnInit {
   /** 顯示日期 → 條目（叫貨看預計到貨日、已到貨看到貨日） */
   private readonly entriesByDate = computed(() => {
     const map = new Map<string, PurchaseEntry[]>();
-    const cat = this.filterCategory();
-    for (const e of this.all()) {
-      if (cat && e.category !== cat) continue;
+    for (const e of this.filtered()) {
       const key = this.displayDate(e);
       if (!key) continue;
       if (!map.has(key)) map.set(key, []);
@@ -141,9 +172,9 @@ export class PurchaseCalendarComponent implements OnInit {
     return map;
   });
 
-  /** 全部待到貨（不限月份），依預計到貨日排序 */
+  /** 全部待到貨（不限月份、套用篩選），依預計到貨日排序 */
   readonly pending = computed(() =>
-    this.all()
+    this.filtered()
       .filter((e) => e.status === 'ordered')
       .sort((a, b) => String(a.expectedDate || '').localeCompare(String(b.expectedDate || ''))),
   );
@@ -152,7 +183,7 @@ export class PurchaseCalendarComponent implements OnInit {
     const ym = this.month();
     let ordered = 0;
     let arrived = 0;
-    for (const e of this.all()) {
+    for (const e of this.filtered()) {
       if (this.displayDate(e).substring(0, 7) !== ym) continue;
       if (e.status === 'ordered') ordered++;
       else arrived++;
@@ -218,6 +249,24 @@ export class PurchaseCalendarComponent implements OnInit {
   }
   goToday(): void {
     this.month.set(this.today.substring(0, 7));
+  }
+  /** 改類別篩選：目前選的品項若不屬於該類別就清掉 */
+  setFilterCategory(cat: string): void {
+    this.filterCategory.set(cat || '');
+    const item = this.filterItem();
+    if (item && !this.itemFilterGroups().some((g) => g.items.includes(item))) this.filterItem.set('');
+  }
+  /** 選品項時若沒選類別，自動帶上該品項所屬類別（同名品項跨類別時不帶） */
+  setFilterItem(item: string): void {
+    this.filterItem.set(item || '');
+    if (item && !this.filterCategory()) {
+      const owners = this.itemFilterGroups().filter((g) => g.items.includes(item));
+      if (owners.length === 1) this.filterCategory.set(owners[0].category);
+    }
+  }
+  clearFilters(): void {
+    this.filterCategory.set('');
+    this.filterItem.set('');
   }
   /** 表單變動 → 重算批次日期列（保留已填過的箱數） */
   touch(): void {

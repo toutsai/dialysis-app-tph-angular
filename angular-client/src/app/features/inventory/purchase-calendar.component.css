@@ -54,6 +54,32 @@
   border-radius: 4px;
   padding: 0 6px;
 }
+.pc-filters select.pc-item-filter {
+  max-width: 260px;
+}
+.pc-clear-filter {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #f5b7b1;
+  border-radius: 4px;
+  background: #fdecea;
+  color: #c0392b;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.pc-clear-filter:hover {
+  background: #f9d6d2;
+}
+.pc-filter-badge {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: #e8f0fe;
+  color: #1a56db;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
 .pc-legend {
   font-size: 0.85rem;
   color: #555;
