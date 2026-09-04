@@ -62,8 +62,20 @@ export function getWeeklySessionIndex(freq, dayIndex) {
  * 解析「以 / 分隔、每次透析輪替」的醫囑值（如 AK "21S/Hi23/Hi23"），取指定星期當次該用的那一段。
  * 單一值直接回傳；無法確定次序（頻率未知、當天非透析日、段數不足）時保守回傳完整原值。
  */
+/**
+ * AK 名稱別名：型號本身被誤寫成含 / 的字串時，先換成正式名稱再做輪替解析，
+ * 否則會被當成兩顆輪替（2026-09-04 使用者裁定：CAT/2000 一律呈現為 KAWASUMI CTA2000）。
+ */
+export const AK_TEXT_ALIASES = [[/CAT\s*\/\s*2000/gi, 'CTA2000']]
+
+export function normalizeAkAliases(rawValue) {
+  let value = String(rawValue ?? '').trim()
+  for (const [pattern, replacement] of AK_TEXT_ALIASES) value = value.replace(pattern, replacement)
+  return value
+}
+
 export function resolveDailyRotationValue(rawValue, freq, dayIndex) {
-  const value = String(rawValue ?? '').trim()
+  const value = normalizeAkAliases(rawValue)
   if (!value.includes('/')) return value
   const parts = value
     .split('/')

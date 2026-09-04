@@ -1,7 +1,7 @@
 import { generateDailyScheduleFromRules } from './scheduleSync.js'
 import { getDailyInjections } from './dailyInjectionService.js'
 import { getTaipeiDayIndex, getTaipeiTodayString } from '../utils/dateUtils.js'
-import { resolveDailyRotationValue } from '../utils/scheduleUtils.js'
+import { normalizeAkAliases, resolveDailyRotationValue } from '../utils/scheduleUtils.js'
 
 export const DASHBOARD_SHIFTS = ['early', 'noon', 'late']
 
@@ -274,10 +274,10 @@ function resolvePatientFreq(db, patient, orders, slotData) {
  * 無法判定（頻率未知、非透析日、段數不足）時 akToday 回傳完整原值（與備物計算相同的保守策略）。
  */
 function resolveAkForDate(ak, freq, date) {
-  const raw = String(ak ?? '').trim()
-  if (!raw) return { akToday: '', akIsRotation: false }
+  const raw = normalizeAkAliases(ak)
+  if (!raw) return { ak: '', akToday: '', akIsRotation: false }
   const dayIndex = getTaipeiDayIndex(new Date(`${date}T00:00:00Z`))
-  return { akToday: resolveDailyRotationValue(raw, freq, dayIndex), akIsRotation: raw.includes('/') }
+  return { ak: raw, akToday: resolveDailyRotationValue(raw, freq, dayIndex), akIsRotation: raw.includes('/') }
 }
 
 function normalizeDialysisOrder(orderSource, patient, slotData, freq = '', date = getTaipeiTodayString()) {

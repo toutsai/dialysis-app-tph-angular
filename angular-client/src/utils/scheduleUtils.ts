@@ -284,6 +284,18 @@ export function getWeeklySessionIndex(
 }
 
 /**
+ * AK 名稱別名：型號本身被誤寫成含 / 的字串時，先換成正式名稱再做輪替解析，否則會被當成兩顆輪替。
+ * 與後端 src/utils/scheduleUtils.js 的 AK_TEXT_ALIASES 保持一致（2026-09-04：CAT/2000 → KAWASUMI CTA2000）。
+ */
+const AK_TEXT_ALIASES: [RegExp, string][] = [[/CAT\s*\/\s*2000/gi, 'CTA2000']]
+
+export function normalizeAkAliases(rawValue: string | null | undefined): string {
+  let value = (rawValue ?? '').trim()
+  for (const [pattern, replacement] of AK_TEXT_ALIASES) value = value.replace(pattern, replacement)
+  return value
+}
+
+/**
  * 解析「以 / 分隔、每次透析輪替」的醫囑值，挑出指定日期當天該用的那一段。
  * 例：AK "21S/Hi23/Hi23" + 頻率 一三五 + 週三(第 1 次) → "Hi23"。
  *
@@ -299,7 +311,7 @@ export function resolveDailyRotationValue(
   freq: string | null | undefined,
   dayOfWeek: number | null | undefined,
 ): string {
-  const value = (rawValue ?? '').trim()
+  const value = normalizeAkAliases(rawValue)
   if (!value.includes('/')) return value
   const parts = value
     .split('/')
