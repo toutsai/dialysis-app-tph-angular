@@ -92,3 +92,16 @@ thead .sticky-col { z-index: 3; }
 /* 依上半頁籤強化下半報告的對應檢驗欄位 */
 .matrix-table thead th.focus-col { background: #ffe066; color: #c92a2a; font-weight: 700; }
 .matrix-table td.focus-col { background: #fff3bf; color: #c92a2a; font-weight: 700; }
+
+/* 內嵌於「醫師專用」（embedded）：去掉固定高度，改由父層 .tab-host 的 flex 撐滿 */
+:host(.embedded) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+:host(.embedded) .page-container {
+  height: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0;
+}

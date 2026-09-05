@@ -183,12 +183,12 @@
               </li>
             }
 
-            <!-- 4. [醫師班表] Admin, Contributor (Doc), Viewer -->
-            @if (canAccessPage('physicianSchedule')) {
+            <!-- 4. [醫師專用] Admin, Contributor (Doc), Viewer：醫師班表/醫囑藥囑管理/醫師藥物調整/研究專用 整合（2026-09-05） -->
+            @if (canAccessPage('physicianHub')) {
               <li>
-                <a routerLink="/physician-schedule" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
+                <a routerLink="/physician" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{ paths: 'exact', queryParams: 'ignored', matrixParams: 'ignored', fragment: 'ignored' }" class="nav-link">
                   <div class="nav-item-content">
-                    <span class="nav-title">醫師班表</span>
+                    <span class="nav-title">醫師專用</span>
                   </div>
                 </a>
               </li>
@@ -205,45 +205,12 @@
               </li>
             }
 
-            <!-- 6. [醫囑藥囑管理] Admin, Contributor (Doc) -->
-            @if (canAccessPage('orders')) {
-              <li>
-                <a routerLink="/orders" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
-                  <div class="nav-item-content">
-                    <span class="nav-title">醫囑藥囑管理</span>
-                  </div>
-                </a>
-              </li>
-            }
-
-            <!-- [醫師藥物調整] Admin, Contributor (Doc) -->
-            @if (canAccessPage('medAdjustment')) {
-              <li>
-                <a routerLink="/med-adjustment" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
-                  <div class="nav-item-content">
-                    <span class="nav-title">醫師藥物調整</span>
-                  </div>
-                </a>
-              </li>
-            }
-
             <!-- [重大傷病申請] Admin, Contributor (Doc) -->
             @if (canAccessPage('catastrophicIllness')) {
               <li>
                 <a routerLink="/catastrophic-illness" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
                   <div class="nav-item-content">
                     <span class="nav-title">重大傷病申請</span>
-                  </div>
-                </a>
-              </li>
-            }
-
-            <!-- [研究專用] Admin, Contributor (Doc) -->
-            @if (canAccessPage('research')) {
-              <li>
-                <a routerLink="/research" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
-                  <div class="nav-item-content">
-                    <span class="nav-title">研究專用</span>
                   </div>
                 </a>
               </li>

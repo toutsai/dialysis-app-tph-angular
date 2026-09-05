@@ -1,8 +1,10 @@
 <div class="page-container">
-  <header class="page-header">
-    <h1 class="page-title">醫囑藥囑管理</h1>
-    <p>上傳並查詢病患的透析醫囑與口服藥/針劑藥囑紀錄。藥囑：報表產生器 護理&gt;洗腎中心&gt;D1.1 洗腎醫囑(含停止日)；透析醫囑：E1. 備藥前置作業。</p>
-  </header>
+  @if (!embedded) {
+    <header class="page-header">
+      <h1 class="page-title">醫囑藥囑管理</h1>
+      <p>上傳並查詢病患的透析醫囑與口服藥/針劑藥囑紀錄。藥囑：報表產生器 護理&gt;洗腎中心&gt;D1.1 洗腎醫囑(含停止日)；透析醫囑：E1. 備藥前置作業。</p>
+    </header>
+  }
 
   <div class="tabs-navigation">
     <button [class.active]="activeTab() === 'query'" (click)="activeTab.set('query')">

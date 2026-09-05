@@ -1,9 +1,11 @@
 <div class="page-container">
   <header class="page-header">
-    <div class="title-block">
-      <h1 class="page-title">醫師藥物調整</h1>
-      <span class="subtitle">單一病人調藥工作檯：醫囑 / 貧血 / 鈣磷三頁籤，對照下方每月檢驗趨勢</span>
-    </div>
+    @if (!embedded) {
+      <div class="title-block">
+        <h1 class="page-title">醫師藥物調整</h1>
+        <span class="subtitle">單一病人調藥工作檯：醫囑 / 貧血 / 鈣磷三頁籤，對照下方每月檢驗趨勢</span>
+      </div>
+    }
     <div class="toolbar">
       <div class="ctrl-group group-filter">
         <span class="group-label">頻率 / 班別</span>

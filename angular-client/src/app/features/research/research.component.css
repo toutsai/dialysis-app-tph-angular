@@ -766,3 +766,13 @@ thead th {
 .research-page .tick {
   font-size: 11.5px;
 }
+
+/* 內嵌於「醫師專用」（embedded）：本頁無固定高度，改由 host 自行捲動並收斂內距 */
+:host(.embedded) {
+  display: block;
+  min-height: 0;
+  overflow-y: auto;
+}
+:host(.embedded) .research-page {
+  padding: 0 4px 24px;
+}

@@ -1,5 +1,5 @@
 // Standalone 版：已移除 Firebase
-import { Component, inject, signal, computed, OnInit, OnDestroy, effect } from '@angular/core';
+import { Component, HostBinding, Input, inject, signal, computed, OnInit, OnDestroy, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -26,6 +26,9 @@ import { exportRoundingWordDoc } from '@app/core/utils/physician-rounding-word';
   styleUrl: './physician-schedule.component.css'
 })
 export class PhysicianScheduleComponent implements OnInit, OnDestroy {
+  /** 內嵌於「醫師專用」主頁籤時：隱藏自帶標題、改由 flex 撐滿父層（2026-09-05） */
+  @HostBinding('class.embedded') @Input() embedded = false;
+
   private readonly firebaseService = inject(ApiConfigService);
   private readonly apiService = inject(ApiService);
   private readonly authService = inject(AuthService);

@@ -394,3 +394,16 @@ input[type='file'] {
   padding-left: 20px;
   margin-top: 10px;
 }
+
+/* 內嵌於「醫師專用」（embedded）：去掉固定高度，改由父層 .tab-host 的 flex 撐滿 */
+:host(.embedded) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+:host(.embedded) .page-container {
+  height: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0;
+}

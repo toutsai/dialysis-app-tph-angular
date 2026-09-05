@@ -1,0 +1,71 @@
+/* 醫師專用：版面比照書記專用（features/inventory） */
+.page-container {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 2rem);
+  padding: 0.5rem;
+  background-color: #f8f9fa;
+}
+
+.page-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  padding-bottom: 0.6rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid #dee2e6;
+}
+
+h1 {
+  font-size: 2rem;
+  margin: 0;
+}
+
+.main-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.main-tabs button {
+  padding: 0.4rem 1.2rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  border: 1px solid #dee2e6;
+  background-color: #fff;
+  color: #495057;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.main-tabs button.active {
+  background-color: #007bff;
+  border-color: #007bff;
+  color: #fff;
+}
+
+.main-tabs button:hover:not(.active) {
+  background-color: #e9ecef;
+}
+
+/* 內嵌子頁面的容器：子元件以 embedded 模式撐滿並自行捲動 */
+.tab-host {
+  flex-grow: 1;
+  min-height: 0;
+  background-color: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tab-host > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}

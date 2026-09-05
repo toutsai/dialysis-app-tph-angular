@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, computed, signal } from '@angular/core';
+import { Component, HostBinding, Input, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '@app/core/services/api.service';
@@ -164,6 +164,9 @@ type BlockTab = 'anemia' | 'mineral' | 'vafseo' | 'evidence';
   styleUrls: ['./research.component.css'],
 })
 export class ResearchComponent implements OnInit {
+  /** 內嵌於「醫師專用」主頁籤時：隱藏自帶標題、改由 flex 撐滿父層（2026-09-05） */
+  @HostBinding('class.embedded') @Input() embedded = false;
+
   readonly data = signal<StudyResponse | null>(null);
   readonly trends = signal<TrendsResponse | null>(null);
   readonly snapshot = signal<UnitSnapshot | null>(null);

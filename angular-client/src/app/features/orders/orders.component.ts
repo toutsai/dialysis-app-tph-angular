@@ -5,6 +5,8 @@ import {
   signal,
   computed,
   OnInit,
+  Input,
+  HostBinding,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -86,6 +88,9 @@ interface DialysisOrderRow {
   styleUrl: './orders.component.css',
 })
 export class OrdersComponent implements OnInit {
+  /** 內嵌於「醫師專用」主頁籤時：隱藏自帶標題、改由 flex 撐滿父層（2026-09-05） */
+  @HostBinding('class.embedded') @Input() embedded = false;
+
   private readonly firebaseService = inject(ApiConfigService);
   private readonly apiManagerService = inject(ApiManagerService);
   private readonly patientStore = inject(PatientStoreService);

@@ -2,7 +2,9 @@
   <header class="page-header">
     <div class="header-toolbar">
       <div class="toolbar-left">
-        <h1 class="page-title">研究專用</h1>
+        @if (!embedded) {
+          <h1 class="page-title">研究專用</h1>
+        }
         <nav class="block-tabs">
           <button class="tab-btn" [class.active]="activeBlock === 'anemia'" (click)="setBlock('anemia')">貧血趨勢</button>
           <button class="tab-btn" [class.active]="activeBlock === 'mineral'" (click)="setBlock('mineral')">鈣磷趨勢</button>

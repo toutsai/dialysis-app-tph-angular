@@ -4,6 +4,10 @@ import { roleGuard } from './core/guards/role.guard';
 import { specialistGuard } from './core/guards/specialist.guard';
 import { PAGE_ACCESS } from './core/config/page-access';
 
+/** 醫師專用（2026-09-05）：四頁整合為主頁籤；舊路由保留為別名（載入同一頁並以 data.tab 帶對應頁籤） */
+const loadPhysicianHub = () =>
+  import('./features/physician-hub/physician-hub.component').then((m) => m.PhysicianHubComponent);
+
 export const routes: Routes = [
   {
     path: 'login',
@@ -71,15 +75,23 @@ export const routes: Routes = [
         },
       },
       {
-        path: 'physician-schedule',
-        loadComponent: () =>
-          import(
-            './features/physician-schedule/physician-schedule.component'
-          ).then((m) => m.PhysicianScheduleComponent),
+        path: 'physician',
+        loadComponent: loadPhysicianHub,
         canActivate: [roleGuard],
         data: {
-          title: PAGE_ACCESS.physicianSchedule.title,
+          title: PAGE_ACCESS.physicianHub.title,
+          roles: PAGE_ACCESS.physicianHub.roles,
+        },
+      },
+      {
+        // 別名：醫師專用 → 醫師班表
+        path: 'physician-schedule',
+        loadComponent: loadPhysicianHub,
+        canActivate: [roleGuard],
+        data: {
+          title: PAGE_ACCESS.physicianHub.title,
           roles: PAGE_ACCESS.physicianSchedule.roles,
+          tab: 'schedule',
         },
       },
       {
@@ -230,22 +242,18 @@ export const routes: Routes = [
         },
       },
       {
+        // 別名：醫師專用 → 醫囑藥囑管理
         path: 'orders',
-        loadComponent: () =>
-          import('./features/orders/orders.component').then(
-            (m) => m.OrdersComponent
-          ),
+        loadComponent: loadPhysicianHub,
         canActivate: [roleGuard],
-        data: { title: PAGE_ACCESS.orders.title, roles: PAGE_ACCESS.orders.roles },
+        data: { title: PAGE_ACCESS.physicianHub.title, roles: PAGE_ACCESS.orders.roles, tab: 'orders' },
       },
       {
+        // 別名：醫師專用 → 醫師藥物調整
         path: 'med-adjustment',
-        loadComponent: () =>
-          import('./features/med-adjustment/med-adjustment.component').then(
-            (m) => m.MedAdjustmentComponent
-          ),
+        loadComponent: loadPhysicianHub,
         canActivate: [roleGuard],
-        data: { title: PAGE_ACCESS.medAdjustment.title, roles: PAGE_ACCESS.medAdjustment.roles },
+        data: { title: PAGE_ACCESS.physicianHub.title, roles: PAGE_ACCESS.medAdjustment.roles, tab: 'med' },
       },
       {
         path: 'catastrophic-illness',
@@ -257,13 +265,11 @@ export const routes: Routes = [
         data: { title: PAGE_ACCESS.catastrophicIllness.title, roles: PAGE_ACCESS.catastrophicIllness.roles },
       },
       {
+        // 別名：醫師專用 → 研究專用
         path: 'research',
-        loadComponent: () =>
-          import('./features/research/research.component').then(
-            (m) => m.ResearchComponent
-          ),
+        loadComponent: loadPhysicianHub,
         canActivate: [roleGuard],
-        data: { title: PAGE_ACCESS.research.title, roles: PAGE_ACCESS.research.roles },
+        data: { title: PAGE_ACCESS.physicianHub.title, roles: PAGE_ACCESS.research.roles, tab: 'research' },
       },
       {
         path: 'my-patients',
