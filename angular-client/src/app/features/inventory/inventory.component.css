@@ -9,8 +9,12 @@
 
 .page-header {
   flex-shrink: 0;
-  padding-bottom: 1rem;
-  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  padding-bottom: 0.6rem;
+  margin-bottom: 0.75rem;
   border-bottom: 1px solid #dee2e6;
 }
 
@@ -25,17 +29,18 @@ h1 {
   margin: 0.5rem 0 0 0;
 }
 
-/* === 書記專用三大主頁籤 === */
+/* === 書記專用主頁籤（與標題同一列，2026-09-05） === */
 .main-tabs {
   display: flex;
-  gap: 0.5rem;
+  flex-wrap: wrap;
+  gap: 0.4rem;
   flex-shrink: 0;
-  margin-bottom: 1rem;
+  margin-bottom: 0;
 }
 
 .main-tabs button {
-  padding: 0.6rem 1.6rem;
-  font-size: 1.15rem;
+  padding: 0.4rem 1.2rem;
+  font-size: 1.05rem;
   font-weight: 600;
   border: 1px solid #dee2e6;
   background-color: #fff;

@@ -1,18 +1,15 @@
 <div class="page-container">
+  <!-- 主頁籤併入標題列（2026-09-05 使用者要求：內容區多留高度），副標拿掉 -->
   <header class="page-header">
-    <div class="header-main-content">
-      <h1>書記專用</h1>
-      <p class="page-description">醫師班表列印、常規病人掛號、針劑發放名單與庫存管理。</p>
-    </div>
+    <h1>書記專用</h1>
+    <nav class="main-tabs" aria-label="書記專用功能">
+      <button [class.active]="mainTab() === 'physician'" (click)="mainTab.set('physician')">醫師班表列印</button>
+      <button [class.active]="mainTab() === 'register'" (click)="mainTab.set('register')">常規病人掛號</button>
+      <button [class.active]="mainTab() === 'injection'" (click)="mainTab.set('injection')">針劑發放名單</button>
+      <button [class.active]="mainTab() === 'gentamycin'" (click)="mainTab.set('gentamycin')">Gentamycin 開立清單</button>
+      <button [class.active]="mainTab() === 'inventory'" (click)="mainTab.set('inventory')">庫存管理</button>
+    </nav>
   </header>
-
-  <div class="main-tabs">
-    <button [class.active]="mainTab() === 'physician'" (click)="mainTab.set('physician')">醫師班表列印</button>
-    <button [class.active]="mainTab() === 'register'" (click)="mainTab.set('register')">常規病人掛號</button>
-    <button [class.active]="mainTab() === 'injection'" (click)="mainTab.set('injection')">針劑發放名單</button>
-    <button [class.active]="mainTab() === 'gentamycin'" (click)="mainTab.set('gentamycin')">Gentamycin 開立清單</button>
-    <button [class.active]="mainTab() === 'inventory'" (click)="mainTab.set('inventory')">庫存管理</button>
-  </div>
 
   @if (mainTab() === 'physician') {
     <div class="clerk-tab-host">
