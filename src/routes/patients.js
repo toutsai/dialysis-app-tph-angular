@@ -1520,9 +1520,11 @@ async function updatePatientHandler(req, res) {
     let deletedFutureExceptions = []
     let deletedFutureMessages = []
 
-    // 當日異動保護：身分/模式變更或刪除時，把「變更前」的快照寫進今天排程格的
+    // 當日異動保護：身分/模式/頻率變更或刪除時，把「變更前」的快照寫進今天排程格的
     // archivedPatientInfo，今日的統計/身分底色/模式顯示維持變更前狀態。
-    // 已有快照的格子不覆蓋（保留當天最早的狀態，多次變更以第一次為準）。
+    // 「維持原顯示」範圍內已有快照的格子不覆蓋（保留當天最早的狀態）；
+    // 「生效範圍」內的格子若留有同日先前變更的快照（例如上一次選了下一班起），一併清除，
+    // 否則本班會被舊快照鎖在舊顯示、怎麼改都改不動（2026-09-05 使用者反映後修正）。
     // 生效範圍 effectiveShiftScope（2026-08-30，取代舊 effectiveFromNextShift 布林，仍相容）：
     //   'all'（未帶）：今天所有格都快照 → 今日整天維持變更前顯示（舊行為）
     //   'next'：只快照「已開始的班別」格；未開始的班別即時渲染新身分（2026-08-04）
@@ -1584,6 +1586,10 @@ async function updatePatientHandler(req, res) {
               if (isDeleting && effectiveShiftScope !== 'all') {
                 delete todaySchedule[slotKey]
                 removedShifts.add(slotShift)
+                snapshotWritten = true
+              } else if (effectiveShiftScope !== 'all' && slot.archivedPatientInfo) {
+                // 同日先前變更留下的快照會把這格鎖在舊顯示；使用者明確選定生效範圍時以本次為準
+                delete slot.archivedPatientInfo
                 snapshotWritten = true
               }
               continue

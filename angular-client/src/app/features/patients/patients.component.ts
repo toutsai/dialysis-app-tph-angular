@@ -26,9 +26,9 @@ import { generateAutoNote, hasFrequencyConflict } from '@/utils/scheduleUtils';
 import { ORDERED_SHIFT_CODES, getShiftDisplayName } from '@/constants/scheduleConstants';
 import {
   EffectiveShiftScope,
-  buildShiftScopeMessage,
   getCurrentShiftCode,
   getShiftCodeFromSlotKey,
+  isShiftEndedToday,
 } from '@/utils/shiftTime';
 import { doNotMoveRangeText } from '@/utils/doNotMove';
 import { escapeHtml } from '@/utils/sanitize';
@@ -43,7 +43,7 @@ type BedSnapshotKey = 'preInpatientRule' | 'preCvvhdfRule';
 
 // Child component imports
 import { PatientFormModalComponent } from '@app/components/dialogs/patient-form-modal/patient-form-modal.component';
-import { SelectionDialogComponent } from '@app/components/dialogs/selection-dialog/selection-dialog.component';
+import { SelectionDialogComponent, type SelectionOption } from '@app/components/dialogs/selection-dialog/selection-dialog.component';
 import { AlertDialogComponent } from '@app/components/dialogs/alert-dialog/alert-dialog.component';
 import { ConfirmDialogComponent } from '@app/components/dialogs/confirm-dialog/confirm-dialog.component';
 import { DialysisOrderModalComponent } from '@app/components/dialogs/dialysis-order-modal/dialysis-order-modal.component';
@@ -160,10 +160,11 @@ export class PatientsComponent implements OnInit, OnDestroy {
   readonly schedulerPatient = signal<any>(null);
   readonly schedulerChangeType = signal('');
 
-  // Schedule conflict dialog state
+  // 當日異動守門對話框（2026-09-05 改為單一三選一：本班起立即變更 / 下一班起立即變更 / 預約未來日期）
   readonly isScheduleConflictDialogVisible = signal(false);
   readonly scheduleConflictTitle = signal('');
   readonly scheduleConflictMessage = signal('');
+  readonly scheduleConflictOptions = signal<SelectionOption[]>([]);
   private pendingOperationType = '';
   private pendingPatientId: string | null = null;
   /** 編輯守門：確認後要執行的存檔動作與取消時導向預約變更的類型 */
@@ -173,14 +174,8 @@ export class PatientsComponent implements OnInit, OnDestroy {
   private pendingShiftScope: EffectiveShiftScope | null = null;
   /** 刪除守門選定的生效範圍，等原因對話框選完後一併送出 */
   private pendingDeleteScope: EffectiveShiftScope | null = null;
-  /** 最近一次守門查到的病人今日班別（決定要不要問「本班/下一班」） */
+  /** 最近一次守門查到的病人今日班別（決定三選一要不要給「本班」選項、以及訊息列出的班別狀態） */
   private pendingTodayShifts: string[] = [];
-
-  // 「本班未結束」二選一對話框（確認當天變更後接續詢問）
-  readonly isShiftScopeDialogVisible = signal(false);
-  readonly shiftScopeTitle = signal('');
-  readonly shiftScopeMessage = signal('');
-  private shiftScopeResolve: ((scope: EffectiveShiftScope) => void) | null = null;
 
   // --- 頻率變更 → 床位指派（存檔攔截，共用總表的變更頻率/床位元件） ---
   readonly SHIFTS = ORDERED_SHIFT_CODES;
@@ -1165,8 +1160,9 @@ export class PatientsComponent implements OnInit, OnDestroy {
             ? 'UPDATE_MODE'
             : 'UPDATE_BASE_SCHEDULE_RULE';
         this.showScheduleConflictDialog(
-          '今日有排程 — 確認立即變更',
-          `病人「${patientData.name}」今天有排程透析，本次修改包含：${identityChanges.join('、')}。\n\n選「是」＝當天變更：立即生效；若本班（早07:30／午12:30／晚17:30 起算）尚未結束，接著會問要從本班還是下一班開始套用。\n\n選「否」＝預約變更：指定明天以後的日期生效。`,
+          '今日有排程 — 選擇生效方式',
+          '變更',
+          `本次修改包含：${identityChanges.join('、')}。`,
           'edit',
           patientData.id,
           null
@@ -1414,77 +1410,121 @@ export class PatientsComponent implements OnInit, OnDestroy {
     return (await this.getPatientTodayShifts(patientId)).length > 0;
   }
 
-  /**
-   * 當天變更確認後接續詢問生效範圍：病人在「進行中的本班」有格子才問（本班／下一班），
-   * 否則（07:30 前、或今天只在已結束/未開始的班別）直接視為「下一班起」（與 2026-08-04 行為相同）。
-   */
-  private askShiftScope(patientName: string, actionDesc: string): Promise<EffectiveShiftScope> {
+  /** 今日各班別狀態描述：早班（已結束）、午班（進行中）、晚班（未開始） */
+  private describeTodayShifts(shifts: string[]): string {
     const current = getCurrentShiftCode();
-    if (!current || !this.pendingTodayShifts.includes(current)) {
-      return Promise.resolve('next');
-    }
-    return new Promise<EffectiveShiftScope>((resolve) => {
-      this.shiftScopeResolve = resolve;
-      this.shiftScopeTitle.set(`${getShiftDisplayName(current)}尚未結束 — 從哪一班開始？`);
-      this.shiftScopeMessage.set(buildShiftScopeMessage(patientName, current, actionDesc));
-      this.isShiftScopeDialogVisible.set(true);
-    });
+    return (ORDERED_SHIFT_CODES as string[])
+      .filter((s) => shifts.includes(s))
+      .map((s) => {
+        const state = s === current ? '進行中' : isShiftEndedToday(s) ? '已結束' : '未開始';
+        return `${getShiftDisplayName(s)}（${state}）`;
+      })
+      .join('、');
   }
 
-  handleShiftScopeSelected(scope: EffectiveShiftScope): void {
-    this.isShiftScopeDialogVisible.set(false);
-    const resolve = this.shiftScopeResolve;
-    this.shiftScopeResolve = null;
-    resolve?.(scope);
-  }
-
+  /**
+   * 當日異動守門（2026-09-05 改為單一三選一視窗，取代原「是/否」＋「本班/下一班」兩層）：
+   *  current  ＝立即變更，本班也一起改（後端只保留已結束班別的快照；本班既有的舊快照會被清掉）
+   *  next     ＝立即變更，本班維持到下班（已開始班別維持原顯示，下一班起套用）
+   *  schedule ＝預約未來日期變更（開預約變更視窗，只能選明天以後）
+   * 病人不在「進行中的本班」（或 07:30 前）時 current 與 next 等價 → 只給「立即（今天起）」與「預約」兩個選項，
+   * 不再像過去靜默預設下一班。
+   */
   private showScheduleConflictDialog(
-    title: string, message: string, operationType: string,
+    title: string, actionDesc: string, detail: string, operationType: string,
     patientId: string, newStatus: string | null
   ): void {
+    const patientName = this.patientStore.allPatients().find((p) => p.id === patientId)?.name || '';
+    const current = getCurrentShiftCode();
+    const inCurrentShift = !!current && this.pendingTodayShifts.includes(current);
+    const currentName = current ? getShiftDisplayName(current) : '';
+    const scheduleOption: SelectionOption = {
+      value: 'schedule',
+      text: '預約未來日期變更',
+      hint: '指定明天以後生效，今天排程不動',
+    };
+    const options: SelectionOption[] = inCurrentShift
+      ? [
+          {
+            value: 'current',
+            text: `立即${actionDesc}，本班（${currentName}）一起改`,
+            hint: `${currentName}的格子立即套用，之後的班別也是；已結束的班次維持原記錄`,
+          },
+          {
+            value: 'next',
+            text: `立即${actionDesc}，本班（${currentName}）維持到下班`,
+            hint: `${currentName}維持原顯示到當班結束，下一班起才套用`,
+          },
+          scheduleOption,
+        ]
+      : [
+          {
+            value: 'current',
+            text: `立即${actionDesc}（今天起）`,
+            hint: '今天尚未開始的班次立即套用；已結束的班次維持原記錄',
+          },
+          scheduleOption,
+        ];
     this.scheduleConflictTitle.set(title);
-    this.scheduleConflictMessage.set(message);
+    this.scheduleConflictMessage.set(
+      `病人「${patientName}」今天排程：${this.describeTodayShifts(this.pendingTodayShifts) || '（無）'}\n${detail}`
+    );
+    this.scheduleConflictOptions.set(options);
     this.pendingOperationType = operationType;
     this.pendingPatientId = patientId;
     this.pendingNewStatus = newStatus;
     this.isScheduleConflictDialogVisible.set(true);
   }
 
-  async handleScheduleConflictConfirm(): Promise<void> {
+  /** 三選一結果：current / next 走立即變更（帶生效範圍）；schedule 走預約變更 */
+  handleScheduleConflictSelected(choice: string): void {
+    if (choice === 'schedule') {
+      this.openScheduledChangeFallback();
+      return;
+    }
+    const scope: EffectiveShiftScope = choice === 'current' ? 'current' : 'next';
     this.isScheduleConflictDialogVisible.set(false);
     const opType = this.pendingOperationType;
     const pid = this.pendingPatientId;
     const newStatus = this.pendingNewStatus;
     const editSave = this.pendingEditSave;
+    this.clearScheduleConflictState();
+
+    if (opType === 'delete') {
+      this.pendingDeleteScope = scope;
+      this.patientToDeleteId.set(pid);
+      this.isDeleteDialogVisible.set(true);
+    } else if (opType === 'transfer') {
+      void this.executeTransferPatient(pid!, newStatus!, scope);
+    } else if (opType === 'edit') {
+      editSave?.(scope);
+    }
+  }
+
+  /** 關閉（取消）：不做任何變更；編輯視窗維持開啟，頻率選床決定作廢（再存檔會重新選床） */
+  handleScheduleConflictDismiss(): void {
+    this.isScheduleConflictDialogVisible.set(false);
+    if (this.pendingOperationType === 'edit') this.pendingRuleDecision = null;
+    this.clearScheduleConflictState();
+  }
+
+  private clearScheduleConflictState(): void {
     this.pendingOperationType = '';
     this.pendingPatientId = null;
     this.pendingNewStatus = null;
     this.pendingEditSave = null;
     this.pendingEditFallbackType = '';
-
-    const patientName = this.patientStore.allPatients().find((p) => p.id === pid)?.name || '';
-    // 當天變更：本班未結束時問「本班起 / 下一班起」，否則預設下一班起（已開始班次維持原顯示）；
-    // 「明天開始」的需求走「否」→ 預約變更（生效日=明天）
-    if (opType === 'delete') {
-      this.pendingDeleteScope = await this.askShiftScope(patientName, '刪除');
-      this.patientToDeleteId.set(pid);
-      this.isDeleteDialogVisible.set(true);
-      return;
-    }
-    if (opType === 'transfer') {
-      const scope = await this.askShiftScope(patientName, '身分變更');
-      void this.executeTransferPatient(pid!, newStatus!, scope);
-    } else if (opType === 'edit') {
-      const scope = await this.askShiftScope(patientName, '變更');
-      editSave?.(scope);
-    }
   }
 
-  handleScheduleConflictCancel(): void {
+  /** 選「預約未來日期變更」：開預約變更視窗並帶入對應類型（原「否」分支） */
+  private openScheduledChangeFallback(): void {
     this.isScheduleConflictDialogVisible.set(false);
     const allPatients = this.patientStore.allPatients();
     const patient = allPatients.find((p) => p.id === this.pendingPatientId);
-    if (!patient) return;
+    if (!patient) {
+      this.clearScheduleConflictState();
+      return;
+    }
 
     if (this.pendingOperationType === 'delete') {
       this.schedulerChangeType.set('DELETE_PATIENT');
@@ -1505,11 +1545,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
 
     this.schedulerPatient.set(patient);
     this.isSchedulerDialogVisible.set(true);
-    this.pendingOperationType = '';
-    this.pendingPatientId = null;
-    this.pendingNewStatus = null;
-    this.pendingEditSave = null;
-    this.pendingEditFallbackType = '';
+    this.clearScheduleConflictState();
   }
 
   /** 床位元件確認：依模式續存（編輯攔截）或直接排入總表（新增病人） */
@@ -1859,8 +1895,9 @@ export class PatientsComponent implements OnInit, OnDestroy {
     if (isInTodaySchedule && this.isTodayFrozenWindow()) {
       const targetStatusText: Record<string, string> = { ipd: '住院', opd: '門診', er: '急診' };
       this.showScheduleConflictDialog(
-        '今日有排程 — 確認立即變更',
-        `病人「${patient.name}」今天有排程透析。\n\n選「是」＝當天轉為${targetStatusText[newStatus] || '未知'}：立即生效；若本班尚未結束，接著會問要從本班還是下一班開始顯示新身分。\n\n選「否」＝預約變更：指定明天以後的日期生效。`,
+        '今日有排程 — 選擇生效方式',
+        `轉為${targetStatusText[newStatus] || '未知'}`,
+        `本次操作：轉為${targetStatusText[newStatus] || '未知'}。`,
         'transfer',
         patientId,
         newStatus
@@ -1937,8 +1974,9 @@ export class PatientsComponent implements OnInit, OnDestroy {
     const isInTodaySchedule = await this.checkPatientInTodaySchedule(patientId);
     if (isInTodaySchedule && this.isTodayFrozenWindow()) {
       this.showScheduleConflictDialog(
-        '今日有排程 — 確認立即刪除',
-        `病人「${patient.name}」今天有排程透析。\n\n選「是」立即刪除：\n・若本班尚未結束，接著會問要從本班還是下一班起移出今日排程\n・已結束的班次維持原記錄\n・明日起自動從排程中移除\n（今天出院/轉出請選這個）\n\n若出院是未來日期才發生，選「否」改用預約變更。`,
+        '今日有排程 — 選擇刪除生效方式',
+        '刪除',
+        '立即刪除：生效範圍內的今日班次會自今日排程移除，已結束的班次維持原記錄，明日起自動移除（今天出院/轉出請選立即）。\n出院是未來日期才發生，請選預約。',
         'delete',
         patientId,
         null

@@ -5,6 +5,8 @@ import { FormsModule } from '@angular/forms';
 export interface SelectionOption {
   value: string;
   text: string;
+  /** 選填：按鈕下方的小字說明 */
+  hint?: string;
 }
 
 @Component({
@@ -17,6 +19,8 @@ export interface SelectionOption {
 export class SelectionDialogComponent implements OnChanges {
   @Input() isVisible = true;
   @Input() title = '';
+  /** 選填：標題下方的說明文字（保留換行） */
+  @Input() message = '';
   @Input() options: SelectionOption[] = [];
   /** 選填的日期欄位：設定 dateFieldLabel 即顯示，值由父層透過 template ref 讀取 dateValue */
   @Input() dateFieldLabel = '';

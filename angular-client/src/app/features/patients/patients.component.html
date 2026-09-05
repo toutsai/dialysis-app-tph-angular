@@ -514,25 +514,15 @@
     (cancel)="isWardDialogVisible.set(false)"
   ></app-ward-number-dialog>
 
-  <app-confirm-dialog
+  <!-- 當日異動守門：三選一（本班起立即 / 下一班起立即 / 預約未來日期） -->
+  <app-selection-dialog
     *ngIf="isScheduleConflictDialogVisible()"
     [title]="scheduleConflictTitle()"
     [message]="scheduleConflictMessage()"
-    confirmText="是，當天變更"
-    cancelText="否，預約未來日期"
-    (confirm)="handleScheduleConflictConfirm()"
-    (cancel)="handleScheduleConflictCancel()"
-  ></app-confirm-dialog>
-
-  <app-confirm-dialog
-    *ngIf="isShiftScopeDialogVisible()"
-    [title]="shiftScopeTitle()"
-    [message]="shiftScopeMessage()"
-    confirmText="從本班開始"
-    cancelText="從下一班開始"
-    (confirm)="handleShiftScopeSelected('current')"
-    (cancel)="handleShiftScopeSelected('next')"
-  ></app-confirm-dialog>
+    [options]="scheduleConflictOptions()"
+    (select)="handleScheduleConflictSelected($event)"
+    (cancel)="handleScheduleConflictDismiss()"
+  ></app-selection-dialog>
 
   <app-patient-update-scheduler-dialog
     *ngIf="isSchedulerDialogVisible()"

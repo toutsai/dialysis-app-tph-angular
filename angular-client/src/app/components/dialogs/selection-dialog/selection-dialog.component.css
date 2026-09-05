@@ -21,7 +21,7 @@
   border-radius: 12px;
   box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
   width: 90%;
-  max-width: 400px;
+  max-width: 460px;
   text-align: center;
 }
 
@@ -50,6 +50,31 @@
   margin-bottom: 25px;
   font-size: 1.5em;
   color: #333;
+}
+
+/* 標題下說明（當日異動守門：列出今日班別狀態與本次修改內容） */
+.dialog-message {
+  margin: -12px 0 16px;
+  padding: 10px 14px;
+  text-align: left;
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 0.95em;
+  line-height: 1.5;
+  color: #495057;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.button-group button .option-hint {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.78em;
+  font-weight: 400;
+  color: #6c757d;
+}
+.button-group button:hover .option-hint {
+  color: inherit;
 }
 
 .button-group {
