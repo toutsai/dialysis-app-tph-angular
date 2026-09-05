@@ -100,9 +100,9 @@ export const BIWEEKLY_FREQUENCIES: string[] = ['一四', '二五', '三六', '�
  * 資料照寫、歸檔/歷史不變；調班詳情仍在訊息中心與病人詳情的交班留言可查。
  * 顯示端一律先用 stripExceptionNotes 過濾 manualNote，再拆標籤。
  */
-const EXCEPTION_NOTE_RE = /((換班|臨時加洗|與[^()]*互調))/g
+const EXCEPTION_NOTE_RE = /\((換班|臨時加洗|與[^()]*互調)\)/g
 export function stripExceptionNotes(note: string | null | undefined): string {
-  return String(note || '').replace(EXCEPTION_NOTE_RE, ' ').replace(/s+/g, ' ').trim()
+  return String(note || '').replace(EXCEPTION_NOTE_RE, ' ').replace(/\s+/g, ' ').trim()
 }
 
 // 【新增】頻率數字對應表（用於自動備註）
