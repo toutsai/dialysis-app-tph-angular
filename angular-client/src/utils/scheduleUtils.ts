@@ -93,6 +93,18 @@ const FREQ_TO_DAYS_MAP: Record<string, number[]> = {
 // 【新增】兩班頻率定義（一週兩次）
 export const BIWEEKLY_FREQUENCIES: string[] = ['一四', '二五', '三六', '一五', '二六']
 
+/**
+ * 調班套用時後端寫進排程格 manualNote 的備註：(換班)／(臨時加洗)／(與X互調)
+ * （src/services/exceptionHandler.js、scheduleSync.js）。
+ * 2026-09-05 使用者裁定：每日排程、護理分組、我的病人三頁不顯示這些字（簡化畫面），
+ * 資料照寫、歸檔/歷史不變；調班詳情仍在訊息中心與病人詳情的交班留言可查。
+ * 顯示端一律先用 stripExceptionNotes 過濾 manualNote，再拆標籤。
+ */
+const EXCEPTION_NOTE_RE = /((換班|臨時加洗|與[^()]*互調))/g
+export function stripExceptionNotes(note: string | null | undefined): string {
+  return String(note || '').replace(EXCEPTION_NOTE_RE, ' ').replace(/s+/g, ' ').trim()
+}
+
 // 【新增】頻率數字對應表（用於自動備註）
 const FREQ_NUMBER_MAP: Record<string, string> = {
   一四: '14',

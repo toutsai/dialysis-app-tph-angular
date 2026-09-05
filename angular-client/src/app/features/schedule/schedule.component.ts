@@ -61,6 +61,7 @@ import {
   createEmptySlotData,
   generateAutoNote,
   getUnifiedCellStyle,
+  stripExceptionNotes,
 } from '@/utils/scheduleUtils';
 import {
   formatDateToYYYYMMDD,
@@ -1972,7 +1973,8 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   private buildCombinedNote(slotData: ScheduleSlotData | undefined): string {
     if (!slotData) return '';
     const autoTags = (slotData.autoNote || '').split(' ').filter(Boolean);
-    const manualTags = (slotData.manualNote || '').split(' ').filter(Boolean);
+    // 調班備註 (換班)/(臨時加洗)/(與X互調) 不顯示（2026-09-05 使用者裁定；列印區塊同源亦不顯示）
+    const manualTags = stripExceptionNotes(slotData.manualNote).split(' ').filter(Boolean);
     const combinedTags = [...new Set([...autoTags, ...manualTags])];
     const finalTags = combinedTags.filter((tag) => !['住', '急'].includes(tag));
     return finalTags.join(' ');

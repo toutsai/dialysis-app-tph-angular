@@ -19,7 +19,7 @@ import { SseEventsService, type ScheduleSavedPayload } from '@app/core/services/
 import { Subject, Subscription, firstValueFrom } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { SHIFT_CODES, earlyTeams as importedEarlyTeams, lateTeams as importedLateTeams, baseTeams } from '@/constants/scheduleConstants';
-import { generateAutoNote, getUnifiedCellStyle } from '@/utils/scheduleUtils';
+import { generateAutoNote, getUnifiedCellStyle, stripExceptionNotes } from '@/utils/scheduleUtils';
 import { isDoNotMoveActiveOn, doNotMoveRangeText } from '@/utils/doNotMove';
 import {
   fetchTeamsByDate,
@@ -417,9 +417,10 @@ export class StatsComponent implements OnInit, OnDestroy {
           mode: shiftDetails.modeOverride || patientInfo.mode,
           wardNumber: patientInfo.wardNumber || '',
           dialysisBed: shiftId.startsWith('peripheral') ? '外圍' : shiftId.split('-')[1] || '',
+          // 調班備註 (換班)/(臨時加洗)/(與X互調) 不顯示（2026-09-05 使用者裁定；Excel 匯出同源亦不帶）
           finalTags: [...new Set([
             ...(shiftDetails.autoNote || '').split(' '),
-            ...(shiftDetails.manualNote || '').split(' '),
+            ...stripExceptionNotes(shiftDetails.manualNote).split(' '),
           ])].filter((tag: string) => tag && !['住', '急'].includes(tag)).join(' '),
           classes: 'patient-item ' + Object.entries(cellStyles)
             .filter(([, v]) => v)

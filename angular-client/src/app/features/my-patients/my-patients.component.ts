@@ -30,7 +30,7 @@ import {
   type FirestoreRecord,
 } from '@services/api-manager.service';
 import { formatDateToYYYYMMDD, getTaipeiWeekdayIndex } from '@/utils/dateUtils';
-import { resolveDailyRotationValue, getUnifiedCellStyle } from '@/utils/scheduleUtils';
+import { resolveDailyRotationValue, getUnifiedCellStyle, stripExceptionNotes } from '@/utils/scheduleUtils';
 import { ORDERED_SHIFT_CODES, getShiftDisplayName } from '@/constants/scheduleConstants';
 import { handleTaskCreated } from '@/utils/taskHandlers';
 import {
@@ -309,7 +309,8 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
       const status = String(info?.['status'] || '');
       const modeRaw = String(slot.modeOverride || info?.['mode'] || patient?.['mode'] || '');
       const autoTags = String(slot.autoNote || '').split(' ').filter(Boolean);
-      const manualTags = String(slot.manualNote || '').split(' ').filter(Boolean);
+      // 調班備註 (換班)/(臨時加洗)/(與X互調) 不顯示（2026-09-05 使用者裁定）
+      const manualTags = stripExceptionNotes(slot.manualNote).split(' ').filter(Boolean);
       const allTags = [...new Set([...autoTags, ...manualTags])];
       const note = allTags.filter((tag) => !['住', '急'].includes(tag)).join(' ');
       const hepatitisTags = allTags.filter((tag) => HEPATITIS_PRINT_TAGS.has(tag)).join(' ');
