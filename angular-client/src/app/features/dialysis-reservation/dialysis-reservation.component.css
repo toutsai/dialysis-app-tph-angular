@@ -1,0 +1,155 @@
+/* 預約洗腎登記本：版面比照重大傷病申請頁（標題列／頁籤／選人下拉／彈窗） */
+.reservation-page { padding: 4px 0; }
+
+.page-header { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #dee2e6; }
+.page-title { margin: 0; font-size: 2rem; font-weight: 700; color: #343a40; }
+.page-hint { color: #78909c; font-size: 0.85rem; }
+
+/* 頁籤 */
+.tabs { display: flex; gap: 4px; border-bottom: 2px solid #1971c2; margin-bottom: 8px; }
+.tab { display: inline-flex; align-items: center; gap: 6px; padding: 8px 24px; border: 1px solid #dee2e6; border-bottom: none; border-radius: 6px 6px 0 0; background: #f1f3f5; cursor: pointer; font-size: 1em; }
+.tab.active { background: #1971c2; color: #fff; border-color: #1971c2; font-weight: 700; }
+.tab-badge { display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 10px; background: #e03131; color: #fff; font-size: 0.75em; font-weight: 700; line-height: 1.6; text-align: center; }
+.tab.active .tab-badge { background: #fff; color: #1971c2; }
+
+/* 工具列 */
+.toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.status-filters { display: flex; gap: 4px; }
+.chip { padding: 4px 12px; border: 1px solid #c5dbf0; border-radius: 14px; background: #f8fbff; cursor: pointer; font-size: 0.9em; color: #1971c2; }
+.chip.active { background: #1971c2; color: #fff; border-color: #1971c2; font-weight: 600; }
+.search-input { flex: 1; min-width: 220px; max-width: 360px; padding: 6px 10px; border: 1px solid #ced4da; border-radius: 4px; }
+.btn-new { margin-left: auto; padding: 6px 14px; border: none; border-radius: 4px; background: #2f9e44; color: #fff; cursor: pointer; font-size: 0.95em; }
+.btn-new:hover { background: #2b8a3e; }
+.error-bar { margin-bottom: 8px; padding: 6px 12px; background: #fff5f5; border: 1px solid #ffc9c9; color: #c92a2a; border-radius: 5px; }
+
+/* 清單 */
+.table-wrap { overflow-x: auto; border: 1px solid #dee2e6; border-radius: 8px; background: #fff; }
+.reservation-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.92em; }
+.reservation-table th { position: sticky; top: 0; background: #f1f3f5; color: #495057; font-weight: 700; text-align: left; padding: 8px 10px; border-bottom: 1px solid #dee2e6; white-space: nowrap; }
+.reservation-table td { padding: 8px 10px; border-bottom: 1px solid #f1f3f5; vertical-align: top; }
+.reservation-table tbody tr:hover { background: #f8fbff; }
+.row-scheduled { background: #ebfbee; }
+.row-cancelled { color: #868e96; }
+.row-cancelled .name { text-decoration: line-through; }
+.col-date { white-space: nowrap; }
+.col-freq, .col-shift, .col-hep, .col-status { white-space: nowrap; }
+.name-cell { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.name { font-weight: 600; }
+.mrn { color: #868e96; font-size: 0.85em; }
+.note { color: #868e96; font-size: 0.85em; margin-top: 2px; }
+.relation { color: #868e96; }
+.tag-deleted { color: #c92a2a; background: #fff5f5; border-radius: 4px; padding: 0 6px; font-size: 0.8em; }
+.tag-iso { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 4px; background: #fff4e6; color: #d9480f; border: 1px solid #ffd8a8; font-size: 0.78em; font-weight: 700; vertical-align: middle; }
+
+/* B/C 肝四態 */
+.hep { display: inline-block; min-width: 30px; margin-right: 3px; padding: 0 6px; border-radius: 4px; font-size: 0.85em; font-weight: 700; text-align: center; border: 1px solid transparent; }
+.hep-pos { background: #ffe3e3; color: #c92a2a; border-color: #ffa8a8; }
+.hep-neg { background: #e6fcf5; color: #087f5b; border-color: #96f2d7; }
+.hep-pending { background: #fff9db; color: #e67700; border-color: #ffe066; }
+.hep-none { background: #f1f3f5; color: #868e96; }
+
+/* 狀態 */
+.status { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.85em; font-weight: 600; }
+.status-pending { background: #e7f5ff; color: #1971c2; }
+.status-scheduled { background: #d3f9d8; color: #2b8a3e; }
+.status-cancelled { background: #f1f3f5; color: #868e96; }
+.matched-bed { margin-top: 2px; font-weight: 700; color: #2b8a3e; }
+
+/* 操作 */
+.actions { display: flex; gap: 4px; flex-wrap: wrap; }
+.actions button { padding: 3px 9px; border: 1px solid transparent; border-radius: 4px; cursor: pointer; font-size: 0.85em; white-space: nowrap; }
+.btn-match { background: #1971c2; color: #fff; }
+.btn-match:hover:not(:disabled) { background: #1864ab; }
+.btn-match:disabled { background: #adb5bd; cursor: not-allowed; }
+.btn-edit { background: #f1f3f5; color: #495057; border-color: #dee2e6 !important; }
+.btn-cancel { background: #fff4e6; color: #d9480f; border-color: #ffd8a8 !important; }
+.btn-restore { background: #e7f5ff; color: #1971c2; border-color: #a5d8ff !important; }
+.btn-delete { background: #fff; color: #c92a2a; border-color: #ffc9c9 !important; }
+.btn-delete:hover { background: #fff5f5; }
+.empty-state { padding: 40px; text-align: center; color: #868e96; }
+
+/* 彈窗 */
+.overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; }
+.dialog { display: flex; flex-direction: column; min-height: 0; background: #fff; border-radius: 8px; padding: 16px 20px; max-width: 95vw; max-height: 92vh; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
+.dialog h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 1.15rem; color: #343a40; flex-shrink: 0; }
+.kind-tag { padding: 1px 8px; border-radius: 10px; background: #e7f5ff; color: #1971c2; font-size: 0.75em; font-weight: 600; }
+.form-dialog { width: 760px; }
+.match-dialog { width: 820px; }
+.dialog-error { margin-top: 8px; color: #c92a2a; font-size: 0.9em; flex-shrink: 0; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; flex-shrink: 0; }
+.dialog-actions button { padding: 6px 16px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.95em; }
+.btn-save { background: #1971c2; color: #fff; }
+.btn-save:hover:not(:disabled) { background: #1864ab; }
+.btn-save:disabled { background: #adb5bd; cursor: default; }
+.btn-close { background: #e9ecef; color: #495057; }
+
+/* 表單 */
+.form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 14px; overflow-y: auto; min-height: 0; }
+.form-grid label, .form-grid .field { display: flex; flex-direction: column; gap: 3px; font-size: 0.88em; color: #495057; }
+.form-grid .span2 { grid-column: span 2; }
+.form-grid .span3 { grid-column: span 3; }
+.lbl { font-weight: 600; display: flex; align-items: baseline; gap: 6px; }
+.lbl small { font-weight: 400; color: #868e96; }
+.lbl-value { margin-left: auto; color: #1971c2; font-weight: 700; }
+.form-grid input[type="text"], .form-grid input[type="date"], .form-grid input[type="tel"], .form-grid select, .form-grid textarea {
+  padding: 6px 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 1.05em; font-family: inherit;
+}
+.form-grid textarea { resize: vertical; }
+.muted { color: #868e96; font-size: 0.9em; }
+
+/* 星期／班別點選 */
+.toggle-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.toggle { min-width: 52px; padding: 8px 14px; border: 1px solid #c5dbf0; border-radius: 6px; background: #f8fbff; color: #1971c2; cursor: pointer; font-size: 1.05em; font-weight: 600; }
+.toggle:hover { background: #e7f5ff; }
+.toggle.active { background: #1971c2; color: #fff; border-color: #1971c2; }
+.day-toggle { min-width: 56px; }
+.shift-toggle { min-width: 80px; }
+.shift-toggle.active { background: #2f9e44; border-color: #2f9e44; }
+
+.hep-readonly { display: flex; align-items: center; gap: 4px; min-height: 34px; }
+.hep-selects { display: flex; gap: 6px; }
+.hep-selects select { flex: 1; min-width: 0; }
+.contact-row { display: flex; gap: 6px; }
+.contact-row input:first-child { flex: 3; min-width: 0; }
+.contact-row input:last-child { flex: 2; min-width: 0; }
+
+/* 本院病人選取下拉 */
+.picker-box { position: relative; }
+.picker-input { width: 100%; box-sizing: border-box; padding-right: 28px; }
+.picker-selected { background: #ebfbee; border-color: #8ce99a !important; font-weight: 600; }
+.picker-clear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: none; background: none; color: #868e96; cursor: pointer; font-size: 0.9em; }
+.picker-dropdown { position: absolute; top: 100%; left: 0; right: 0; z-index: 30; background: #fff; border: 1px solid #c5dbf0; border-radius: 4px; max-height: 280px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+.picker-item { display: flex; gap: 8px; padding: 6px 10px; cursor: pointer; align-items: baseline; }
+.picker-item:hover { background: #edf2ff; }
+.picker-name { font-weight: 600; }
+.picker-mrn { color: #868e96; font-size: 0.85em; }
+.picker-status { margin-left: auto; color: #1971c2; font-size: 0.8em; }
+.picker-empty { padding: 10px; color: #868e96; text-align: center; }
+
+/* 空床比對 */
+.match-summary { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; flex-shrink: 0; }
+.pill { padding: 3px 10px; border-radius: 12px; background: #f1f3f5; color: #495057; font-size: 0.9em; font-weight: 600; }
+.pill-iso { background: #fff4e6; color: #d9480f; }
+.pill-warn { background: #fff9db; color: #e67700; }
+.match-hint { color: #868e96; font-size: 0.85em; margin-bottom: 10px; flex-shrink: 0; }
+.match-loading { padding: 30px; text-align: center; color: #868e96; }
+.bed-section { margin-bottom: 12px; overflow-y: auto; min-height: 0; }
+.bed-section-other { opacity: 0.85; }
+.bed-section-title { font-weight: 700; color: #343a40; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+.count { padding: 0 7px; border-radius: 10px; background: #e7f5ff; color: #1971c2; font-size: 0.8em; }
+.bed-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.bed { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 64px; padding: 8px 10px; border: 2px solid #8ce99a; border-radius: 8px; background: #ebfbee; cursor: pointer; }
+.bed:hover:not(:disabled) { background: #d3f9d8; }
+.bed:disabled { opacity: 0.6; cursor: default; }
+.bed-num { font-size: 1.3em; font-weight: 700; color: #2b8a3e; }
+.bed-iso { border-color: #ffa94d; background: #fff4e6; }
+.bed-iso .bed-num { color: #d9480f; }
+.bed-warn { border-style: dashed; }
+.bed-note { font-size: 0.72em; color: #e67700; max-width: 120px; text-align: center; line-height: 1.2; }
+.bed-other { background: #f8f9fa; border-color: #ced4da; }
+.bed-other .bed-num { color: #868e96; }
+.bed-empty { padding: 14px; color: #868e96; border: 1px dashed #ced4da; border-radius: 6px; width: 100%; text-align: center; }
+.link-btn { border: none; background: none; color: #1971c2; cursor: pointer; padding: 0; font-size: 0.9em; text-decoration: underline; }
+.occupied-table { width: 100%; margin-top: 6px; border-collapse: separate; border-spacing: 0; font-size: 0.85em; }
+.occupied-table th, .occupied-table td { padding: 4px 8px; border-bottom: 1px solid #f1f3f5; text-align: left; vertical-align: top; }
+.occupied-table th { background: #f1f3f5; color: #495057; }

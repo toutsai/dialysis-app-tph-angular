@@ -1,0 +1,335 @@
+<div class="reservation-page">
+  <div class="page-header">
+    <h1 class="page-title">預約洗腎登記本</h1>
+    <span class="page-hint">登記預約洗腎需求，依「預約頻率 ＋ 預約班別 ＋ B/C 肝」比對床位總表的長期空床。他院待排病人排定後請再至病人管理建檔。</span>
+  </div>
+
+  <!-- 頁籤：本院既有病人 / 他院待排病人 -->
+  <div class="tabs">
+    <button class="tab" [class.active]="activeTab() === 'existing'" (click)="setTab('existing')">
+      本院既有病人
+      @if (pendingCounts.existing > 0) { <span class="tab-badge">{{ pendingCounts.existing }}</span> }
+    </button>
+    <button class="tab" [class.active]="activeTab() === 'external'" (click)="setTab('external')">
+      他院待排病人
+      @if (pendingCounts.external > 0) { <span class="tab-badge">{{ pendingCounts.external }}</span> }
+    </button>
+  </div>
+
+  <!-- 工具列 -->
+  <div class="toolbar">
+    <div class="status-filters">
+      <button class="chip" [class.active]="statusFilter === 'pending'" (click)="setStatusFilter('pending')">待排</button>
+      <button class="chip" [class.active]="statusFilter === 'scheduled'" (click)="setStatusFilter('scheduled')">已排定</button>
+      <button class="chip" [class.active]="statusFilter === 'cancelled'" (click)="setStatusFilter('cancelled')">已取消</button>
+      <button class="chip" [class.active]="statusFilter === 'all'" (click)="setStatusFilter('all')">全部</button>
+    </div>
+    <input
+      type="text"
+      class="search-input"
+      [(ngModel)]="searchText"
+      (input)="refreshVisible()"
+      placeholder="搜尋姓名 / 病歷號 / 診所 / 聯絡人 / 電話"
+    />
+    <button class="btn-new" (click)="openCreate()">＋ 新增登記</button>
+  </div>
+
+  @if (loadError) {
+    <div class="error-bar">{{ loadError }}</div>
+  }
+
+  <!-- 清單 -->
+  <div class="table-wrap">
+    <table class="reservation-table">
+      <thead>
+        <tr>
+          <th class="col-date">登記日期</th>
+          <th class="col-name">病人姓名</th>
+          <th class="col-freq">預約頻率</th>
+          <th class="col-shift">預約班別</th>
+          <th class="col-clinic">原有透析診所</th>
+          <th class="col-hep">B/C肝</th>
+          <th class="col-contact">聯絡人/關係</th>
+          <th class="col-phone">電話</th>
+          <th class="col-status">狀態</th>
+          <th class="col-actions">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of visibleRows; track row.id) {
+          <tr [class.row-scheduled]="row.status === 'scheduled'" [class.row-cancelled]="row.status === 'cancelled'">
+            <td class="col-date">{{ row.registeredDate }}</td>
+            <td class="col-name">
+              <div class="name-cell">
+                <span class="name">{{ row.name }}</span>
+                @if (row.medicalRecordNumber) { <span class="mrn">{{ row.medicalRecordNumber }}</span> }
+                @if (row.kind === 'existing' && row.patientDeleted) { <span class="tag-deleted">已轉出</span> }
+              </div>
+              @if (row.note) { <div class="note">{{ row.note }}</div> }
+            </td>
+            <td class="col-freq">{{ freqLabel(row) }}</td>
+            <td class="col-shift">{{ shiftLabel(row.shift) }}</td>
+            <td class="col-clinic">{{ row.originClinic || '—' }}</td>
+            <td class="col-hep">
+              <span class="hep" [ngClass]="hepClass(row.hbsag)" title="HBsAg（B 肝）">B{{ hepLabel(row.hbsag) }}</span>
+              <span class="hep" [ngClass]="hepClass(row.antihcv)" title="Anti-HCV（C 肝）">C{{ hepLabel(row.antihcv) }}</span>
+              @if (isolationNeeded(row)) { <span class="tag-iso">隔離床</span> }
+            </td>
+            <td class="col-contact">
+              {{ row.contactName || '—' }}
+              @if (row.contactRelation) { <span class="relation">/ {{ row.contactRelation }}</span> }
+            </td>
+            <td class="col-phone">{{ row.contactPhone || '—' }}</td>
+            <td class="col-status">
+              <span class="status" [ngClass]="'status-' + row.status">{{ statusLabel(row.status) }}</span>
+              @if (row.status === 'scheduled' && row.matchedBed) {
+                <div class="matched-bed">{{ row.matchedBed }} 床 {{ shiftLabel(row.shift) }}</div>
+              }
+            </td>
+            <td class="col-actions">
+              <div class="actions">
+                @if (row.status !== 'cancelled') {
+                  <button class="btn-match" [disabled]="!canMatch(row)" (click)="openMatch(row)"
+                    [title]="canMatch(row) ? '依頻率／班別／B,C 肝比對空床' : '請先填預約頻率與班別'">比對空床</button>
+                }
+                <button class="btn-edit" (click)="openEdit(row)">編輯</button>
+                @if (row.status === 'pending') {
+                  <button class="btn-cancel" (click)="setStatus(row, 'cancelled')">取消</button>
+                } @else {
+                  <button class="btn-restore" (click)="setStatus(row, 'pending')">復原待排</button>
+                }
+                <button class="btn-delete" (click)="remove(row)" title="刪除登記">刪除</button>
+              </div>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="10" class="empty-state">
+              @if (loading) { 載入中… } @else { 目前沒有{{ statusFilter === 'all' ? '' : statusLabel($any(statusFilter)) }}登記 }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ============ 登記表單 ============ -->
+@if (formOpen) {
+  <div class="overlay" (click)="closeForm()">
+    <div class="dialog form-dialog" (click)="$event.stopPropagation()">
+      <h3>{{ editingId ? '編輯登記' : '新增登記' }}<span class="kind-tag">{{ form.kind === 'existing' ? '本院既有病人' : '他院待排病人' }}</span></h3>
+
+      <div class="form-grid">
+        <!-- 1. 登記日期 -->
+        <label>
+          <span class="lbl">登記日期</span>
+          <input type="date" [(ngModel)]="form.registeredDate" />
+        </label>
+
+        <!-- 2. 病人姓名 -->
+        <label class="span2">
+          <span class="lbl">病人姓名</span>
+          @if (form.kind === 'existing') {
+            <div class="picker-box">
+              <input
+                type="text"
+                [(ngModel)]="pickerText"
+                (focus)="onPickerFocus()"
+                (input)="updatePickerFilter()"
+                (blur)="onPickerBlur()"
+                placeholder="輸入姓名或病歷號搜尋本院病人"
+                class="picker-input"
+                [class.picker-selected]="!!form.patientId"
+              />
+              @if (form.patientId) {
+                <button type="button" class="picker-clear" (mousedown)="clearPatient()" title="清除">✕</button>
+              }
+              @if (pickerOpen) {
+                <div class="picker-dropdown">
+                  @for (p of filteredPatients; track p.id) {
+                    <div class="picker-item" (mousedown)="selectPatient(p)">
+                      <span class="picker-name">{{ p.name }}</span>
+                      <span class="picker-mrn">{{ p.medicalRecordNumber }}</span>
+                      <span class="picker-status">{{ patientStatusLabel(p) }}</span>
+                    </div>
+                  } @empty {
+                    <div class="picker-empty">查無符合病人（他院病人請改用「他院待排病人」頁籤登記）</div>
+                  }
+                </div>
+              }
+            </div>
+          } @else {
+            <input type="text" [(ngModel)]="form.name" placeholder="病人姓名" />
+          }
+        </label>
+
+        <!-- 3. 預約頻率 -->
+        <div class="field span3">
+          <span class="lbl">預約頻率 <small>（點選星期，可多選）</small>
+            @if (form.freqDays.length) { <span class="lbl-value">{{ formFreqLabel() }}</span> }
+          </span>
+          <div class="toggle-row">
+            @for (d of DAY_OPTIONS; track d.idx) {
+              <button type="button" class="toggle day-toggle" [class.active]="isDaySelected(d.idx)" (click)="toggleDay(d.idx)">{{ d.label }}</button>
+            }
+          </div>
+        </div>
+
+        <!-- 4. 預約班別 -->
+        <div class="field span3">
+          <span class="lbl">預約班別</span>
+          <div class="toggle-row">
+            @for (s of SHIFT_OPTIONS; track s.code) {
+              <button type="button" class="toggle shift-toggle" [class.active]="form.shift === s.code" (click)="setShift(s.code)">{{ s.label }}</button>
+            }
+          </div>
+        </div>
+
+        <!-- 5. 原有透析診所 -->
+        <label class="span2">
+          <span class="lbl">原有透析診所</span>
+          <input type="text" [(ngModel)]="form.originClinic" placeholder="例：○○診所／○○醫院" />
+        </label>
+
+        <!-- 6. B/C 肝 -->
+        <div class="field">
+          <span class="lbl">B/C肝 @if (form.kind === 'existing') { <small>（由病人清單帶入）</small> }</span>
+          @if (form.kind === 'existing') {
+            <div class="hep-readonly">
+              <span class="hep" [ngClass]="hepClass(form.hbsag)">B{{ hepLabel(form.hbsag) }}</span>
+              <span class="hep" [ngClass]="hepClass(form.antihcv)">C{{ hepLabel(form.antihcv) }}</span>
+              @if (!form.patientId) { <span class="muted">選擇病人後顯示</span> }
+            </div>
+          } @else {
+            <div class="hep-selects">
+              <select [(ngModel)]="form.hbsag" title="HBsAg（B 肝）">
+                @for (o of HEP_OPTIONS; track o.value) { <option [ngValue]="o.value">B肝：{{ o.label }}</option> }
+              </select>
+              <select [(ngModel)]="form.antihcv" title="Anti-HCV（C 肝）">
+                @for (o of HEP_OPTIONS; track o.value) { <option [ngValue]="o.value">C肝：{{ o.label }}</option> }
+              </select>
+            </div>
+          }
+        </div>
+
+        <!-- 7. 聯絡人 / 關係 -->
+        <div class="field span2">
+          <span class="lbl">聯絡人 / 關係</span>
+          <div class="contact-row">
+            <input type="text" [(ngModel)]="form.contactName" placeholder="聯絡人" />
+            <input type="text" [(ngModel)]="form.contactRelation" placeholder="關係" list="reservation-relations" />
+            <datalist id="reservation-relations">
+              @for (r of RELATION_SUGGESTIONS; track r) { <option [value]="r"></option> }
+            </datalist>
+          </div>
+        </div>
+
+        <!-- 8. 電話 -->
+        <label>
+          <span class="lbl">電話</span>
+          <input type="tel" [(ngModel)]="form.contactPhone" placeholder="聯絡電話" />
+        </label>
+
+        <label class="span3">
+          <span class="lbl">備註</span>
+          <textarea rows="2" [(ngModel)]="form.note" placeholder="其他需求（例：需輪椅、透析時間限制…）"></textarea>
+        </label>
+      </div>
+
+      @if (formError) { <div class="dialog-error">{{ formError }}</div> }
+
+      <div class="dialog-actions">
+        <button type="button" class="btn-close" (click)="closeForm()">取消</button>
+        <button type="button" class="btn-save" [disabled]="saving" (click)="save()">{{ saving ? '儲存中…' : '儲存' }}</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ============ 空床比對 ============ -->
+@if (matchOpen && matchTarget; as target) {
+  <div class="overlay" (click)="closeMatch()">
+    <div class="dialog match-dialog" (click)="$event.stopPropagation()">
+      <h3>比對空床：{{ target.name }}</h3>
+      <div class="match-summary">
+        <span class="pill">頻率 {{ freqLabel(target) }}</span>
+        <span class="pill">{{ shiftLabel(target.shift) }}</span>
+        <span class="pill" [class.pill-iso]="isolationNeeded(target)">
+          B{{ hepLabel(target.hbsag) }} C{{ hepLabel(target.antihcv) }}
+          {{ isolationNeeded(target) ? '→ 需隔離床（31/32/33/35/36）' : '→ 一般床' }}
+        </span>
+        @if (matchResult?.hepatitisUnknown) {
+          <span class="pill pill-warn">B/C 肝未確認，請先確認再排隔離床或一般床</span>
+        }
+      </div>
+
+      @if (matchLoading) {
+        <div class="match-loading">比對中…</div>
+      } @else if (matchError) {
+        <div class="dialog-error">{{ matchError }}</div>
+      } @else {
+        @if (matchResult; as result) {
+        <div class="match-hint">
+          依床位總表比對：同床同班在 {{ result.freqLabel }} 皆無常規病人才列為可用；
+          並檢查 {{ result.horizonStart }} ～ {{ result.horizonEnd }} 排程中總表以外的臨時佔用（調班／臨時加洗）。
+          @if (target.kind === 'existing') { 已排除病人自己目前的床位。 }
+        </div>
+
+        <div class="bed-section">
+          <div class="bed-section-title">建議床位（{{ result.isolationRequired ? '隔離床' : '一般床' }}）<span class="count">{{ recommendedBeds.length }}</span></div>
+          <div class="bed-grid">
+            @for (bed of recommendedBeds; track bed.bedNum) {
+              <button type="button" class="bed" [class.bed-iso]="bed.isolation" [class.bed-warn]="bed.scheduleConflicts.length > 0"
+                [disabled]="assigning" (click)="assignBed(bed)" [title]="conflictText(bed) || '長期空床，點選排定'">
+                <span class="bed-num">{{ bed.bedNum }}</span>
+                @if (bed.scheduleConflicts.length) { <span class="bed-note">{{ scheduleWarning(bed) }}</span> }
+              </button>
+            } @empty {
+              <div class="bed-empty">此頻率／班別沒有符合的{{ result.isolationRequired ? '隔離床' : '一般床' }}空床</div>
+            }
+          </div>
+        </div>
+
+        @if (otherAvailableBeds.length) {
+          <div class="bed-section bed-section-other">
+            <div class="bed-section-title">其他空床（{{ result.isolationRequired ? '一般床，病人為 B/C 肝陽性' : '隔離床，病人非陽性' }}，請自行判斷）<span class="count">{{ otherAvailableBeds.length }}</span></div>
+            <div class="bed-grid">
+              @for (bed of otherAvailableBeds; track bed.bedNum) {
+                <button type="button" class="bed bed-other" [class.bed-iso]="bed.isolation" [class.bed-warn]="bed.scheduleConflicts.length > 0"
+                  [disabled]="assigning" (click)="assignBed(bed)" [title]="conflictText(bed) || '長期空床（隔離屬性不符）'">
+                  <span class="bed-num">{{ bed.bedNum }}</span>
+                  @if (bed.scheduleConflicts.length) { <span class="bed-note">{{ scheduleWarning(bed) }}</span> }
+                </button>
+              }
+            </div>
+          </div>
+        }
+
+        <div class="bed-section">
+          <button type="button" class="link-btn" (click)="showOccupied = !showOccupied">
+            {{ showOccupied ? '收合' : '展開' }}已被佔用的床位（{{ occupiedBeds.length }}）
+          </button>
+          @if (showOccupied) {
+            <table class="occupied-table">
+              <thead><tr><th>床</th><th>常規病人（頻率，衝突星期）</th></tr></thead>
+              <tbody>
+                @for (bed of occupiedBeds; track bed.bedNum) {
+                  <tr>
+                    <td>{{ bed.bedNum }}@if (bed.isolation) { <span class="tag-iso">隔</span> }</td>
+                    <td>{{ conflictText(bed) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </div>
+        }
+      }
+
+      <div class="dialog-actions">
+        <button type="button" class="btn-close" (click)="closeMatch()">關閉</button>
+      </div>
+    </div>
+  </div>
+}

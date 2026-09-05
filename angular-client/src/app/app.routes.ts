@@ -302,6 +302,18 @@ export const routes: Routes = [
         },
       },
       {
+        path: 'dialysis-reservation',
+        loadComponent: () =>
+          import('./features/dialysis-reservation/dialysis-reservation.component').then(
+            (m) => m.DialysisReservationComponent
+          ),
+        canActivate: [roleGuard],
+        data: {
+          title: PAGE_ACCESS.dialysisReservation.title,
+          roles: PAGE_ACCESS.dialysisReservation.roles,
+        },
+      },
+      {
         path: 'kidit-quarterly-input',
         loadComponent: () =>
           import('./features/kidit-quarterly-input/kidit-quarterly-input.component').then(

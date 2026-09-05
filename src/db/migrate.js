@@ -796,6 +796,43 @@ export function runMigrations() {
       migrationsApplied++
     }
 
+    // 預約洗腎登記本（2026-09-05）：本院既有病人 / 他院待排病人 的預約登記與空床比對
+    // ⚠️ 他院病人刻意不寫入 patients 表（同 PD 病人作法）
+    const reservationsExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='dialysis_reservations'")
+      .get()
+    if (!reservationsExists) {
+      console.log('📋 建立 dialysis_reservations 表格...')
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS dialysis_reservations (
+          id TEXT PRIMARY KEY,
+          kind TEXT NOT NULL,
+          patient_id TEXT,
+          name TEXT NOT NULL,
+          medical_record_number TEXT,
+          registered_date TEXT NOT NULL,
+          freq_days TEXT DEFAULT '[]',
+          freq TEXT,
+          shift TEXT,
+          origin_clinic TEXT,
+          hbsag TEXT,
+          antihcv TEXT,
+          contact_name TEXT,
+          contact_relation TEXT,
+          contact_phone TEXT,
+          status TEXT NOT NULL DEFAULT 'pending',
+          matched_bed TEXT,
+          note TEXT,
+          created_by TEXT DEFAULT '{}',
+          updated_by TEXT DEFAULT '{}',
+          created_at TEXT DEFAULT (datetime('now', 'localtime')),
+          updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_dialysis_reservations_kind_status ON dialysis_reservations(kind, status);
+      `)
+      migrationsApplied++
+    }
+
     // ========================================
     // 病史與問題列表（2026-08-19）：病人清單操作欄新彈窗
     // patient_problems = 問題列表（問題/起始/治療處置/解決時間）

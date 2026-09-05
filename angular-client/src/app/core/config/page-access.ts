@@ -96,6 +96,13 @@ export const PAGE_ACCESS = {
     roles: STAFF_ROLES,
     roleLabel: '管理員、編輯者',
   },
+  dialysisReservation: {
+    // 預約洗腎登記本：本院既有病人 / 他院待排病人 的預約登記與空床比對（側欄置於 KiDit 申報下）
+    path: '/dialysis-reservation',
+    title: '預約洗腎登記本',
+    roles: STAFF_ROLES,
+    roleLabel: '管理員、編輯者',
+  },
   kiditQuarterlyInput: {
     // 主護（contributor）為照護清單分配病人填寫季度 KiDit 表單（透析紀錄/醫療狀況評估/合併症）
     path: '/kidit-quarterly-input',

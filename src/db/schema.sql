@@ -969,6 +969,36 @@ CREATE TABLE IF NOT EXISTS catastrophic_illness_pd_patients (
     updated_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
+-- 預約洗腎登記本（2026-09-05）：本院既有病人（existing，patient_id 指 patients）/ 他院待排病人（external，手填）
+-- ⚠️ 他院病人刻意不進 patients 表（同 PD 病人作法）；freq_days 為星期索引 JSON（0=週一…5=週六），
+-- freq 為對應 FREQ_MAP_TO_DAY_INDEX 的標準頻率鍵（湊不出標準組合為 NULL）；existing 的 B/C 肝顯示以 patients 即時值為準
+CREATE TABLE IF NOT EXISTS dialysis_reservations (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    patient_id TEXT,
+    name TEXT NOT NULL,
+    medical_record_number TEXT,
+    registered_date TEXT NOT NULL,
+    freq_days TEXT DEFAULT '[]',
+    freq TEXT,
+    shift TEXT,
+    origin_clinic TEXT,
+    hbsag TEXT,
+    antihcv TEXT,
+    contact_name TEXT,
+    contact_relation TEXT,
+    contact_phone TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    matched_bed TEXT,
+    note TEXT,
+    created_by TEXT DEFAULT '{}',
+    updated_by TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_dialysis_reservations_kind_status ON dialysis_reservations(kind, status);
+
 -- 病人 KiDit 獨有基本資料（1:1，2026-08-27）：與 patients 人口學欄位合為病人基本資料單一權威；
 -- KiDit 事件的 kidit_profile 保留為申報快照（不追溯）。updated_by JSON {uid,name}
 CREATE TABLE IF NOT EXISTS patient_kidit_profile (

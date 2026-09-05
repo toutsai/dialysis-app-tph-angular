@@ -39,6 +39,25 @@ export const MAIN_BED_NUMBERS = [
 ]
 
 /**
+ * B/C 肝隔離床（主床中專供 HBsAg/Anti-HCV 陽性病人）。
+ * 前端 bed-assignment-dialog / bed-change-dialog 各自寫死同一份 hepatitisBedNumbers，改動時三處要一起改。
+ */
+export const HEPATITIS_BED_NUMBERS = [31, 32, 33, 35, 36]
+
+/**
+ * 由星期索引陣列（0=週一…5=週六）反查 FREQ_MAP_TO_DAY_INDEX 的標準頻率鍵；湊不出標準組合回 null。
+ * 預約洗腎登記本以星期多選登記，存檔時轉成與病人清單/總表相同的頻率字串。
+ */
+export function getFreqFromDayIndices(days) {
+  if (!Array.isArray(days) || days.length === 0) return null
+  const wanted = [...new Set(days.map(Number))].sort((a, b) => a - b).join(',')
+  for (const [freq, freqDays] of Object.entries(FREQ_MAP_TO_DAY_INDEX)) {
+    if ([...freqDays].sort((a, b) => a - b).join(',') === wanted) return freq
+  }
+  return null
+}
+
+/**
  * 產生排程的 key (例如: bed-1-early, peripheral-1-noon)
  */
 export function getScheduleKey(bedNum, shiftCode) {
