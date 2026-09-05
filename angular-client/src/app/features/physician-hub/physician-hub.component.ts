@@ -1,7 +1,8 @@
-// 醫師專用（2026-09-05）：醫師班表 / 醫囑藥囑管理 / 醫師藥物調整 / 研究專用 四頁整合為主頁籤，
-// 比照書記專用（features/inventory）：h1 與主頁籤同一列，內容區 .tab-host 內嵌既有元件（embedded 模式隱藏各自標題）。
-// 舊路由 /physician-schedule、/orders、/med-adjustment、/research 保留為別名：載入本頁並帶對應頁籤（app.routes.ts data.tab）。
-// 權限：頁面 DOCTOR_VIEW_ROLES（含書記 viewer，只看醫師班表）；醫囑/調藥/研究三頁籤只給 admin/contributor。
+// 醫師專師專用（2026-09-05，原名「醫師專用」同日改名）：醫師班表 / 醫囑藥囑管理 / 醫師藥物調整 / 重大傷病申請 / 研究專用
+// 五頁整合為主頁籤，比照書記專用（features/inventory）：h1 與主頁籤同一列，內容區 .tab-host 內嵌既有元件（embedded 模式隱藏各自標題）。
+// 舊路由 /physician-schedule、/orders、/med-adjustment、/catastrophic-illness、/research 保留為別名：載入本頁並帶對應頁籤（app.routes.ts data.tab）。
+// 權限：頁面 DOCTOR_VIEW_ROLES（含書記 viewer：看醫師班表與重大傷病申請）；醫囑/調藥/研究三頁籤只給 admin/contributor。
+// 重大傷病申請同時也掛在書記專用（features/inventory）頁籤，同一元件兩處內嵌。
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -9,9 +10,10 @@ import { AuthService } from '@services/auth.service';
 import { PhysicianScheduleComponent } from '../physician-schedule/physician-schedule.component';
 import { OrdersComponent } from '../orders/orders.component';
 import { MedAdjustmentComponent } from '../med-adjustment/med-adjustment.component';
+import { CatastrophicIllnessComponent } from '../catastrophic-illness/catastrophic-illness.component';
 import { ResearchComponent } from '../research/research.component';
 
-export type PhysicianHubTab = 'schedule' | 'orders' | 'med' | 'research';
+export type PhysicianHubTab = 'schedule' | 'orders' | 'med' | 'ci' | 'research';
 
 interface HubTab {
   key: PhysicianHubTab;
@@ -24,6 +26,7 @@ const TABS: HubTab[] = [
   { key: 'schedule', label: '醫師班表', doctorOnly: false },
   { key: 'orders', label: '醫囑藥囑管理', doctorOnly: true },
   { key: 'med', label: '醫師藥物調整', doctorOnly: true },
+  { key: 'ci', label: '重大傷病申請', doctorOnly: false },
   { key: 'research', label: '研究專用', doctorOnly: true },
 ];
 
@@ -32,7 +35,7 @@ const DOCTOR_ROLES = ['admin', 'contributor'];
 @Component({
   selector: 'app-physician-hub',
   standalone: true,
-  imports: [CommonModule, PhysicianScheduleComponent, OrdersComponent, MedAdjustmentComponent, ResearchComponent],
+  imports: [CommonModule, PhysicianScheduleComponent, OrdersComponent, MedAdjustmentComponent, CatastrophicIllnessComponent, ResearchComponent],
   templateUrl: './physician-hub.component.html',
   styleUrls: ['./physician-hub.component.css'],
 })

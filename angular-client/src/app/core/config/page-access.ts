@@ -130,9 +130,9 @@ export const PAGE_ACCESS = {
     roleLabel: '管理員、編輯者、貢獻者',
   },
   physicianHub: {
-    // 醫師專用（2026-09-05）：醫師班表/醫囑藥囑/藥物調整/研究 四頁整合為主頁籤；viewer（書記）只看醫師班表
+    // 醫師專師專用（2026-09-05）：醫師班表/醫囑藥囑/藥物調整/重大傷病申請/研究 整合為主頁籤；viewer（書記）只看醫師班表與重大傷病申請
     path: '/physician',
-    title: '醫師專用',
+    title: '醫師專師專用',
     roles: DOCTOR_VIEW_ROLES,
     roleLabel: '管理員、貢獻者、查看者',
   },

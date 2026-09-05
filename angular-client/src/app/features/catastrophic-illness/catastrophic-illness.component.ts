@@ -1,7 +1,7 @@
 // 重大傷病申請工作檯：初次/再次兩頁籤，選病人自動帶入基本資料與最近檢驗值，
 // 儲存至 catastrophic_illness_applications，並可依官方附表版面列印匯出
 // 權限：admin/contributor（醫師與專師）可寫表單；viewer（書記）僅進度總覽＋填送出日期/到期日
-import { Component, OnInit, computed, signal } from '@angular/core';
+import { Component, HostBinding, Input, OnInit, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -99,6 +99,9 @@ const RENEWAL_PREP_PROPS: Record<RenewalPrepKey, 'renewalRegisteredDate' | 'rene
   styleUrls: ['./catastrophic-illness.component.css'],
 })
 export class CatastrophicIllnessComponent implements OnInit {
+  /** 內嵌於「書記專用」／「醫師專師專用」主頁籤時隱藏自帶標題並自行捲動（2026-09-05） */
+  @HostBinding('class.embedded') @Input() embedded = false;
+
   readonly SYMPTOM_OPTIONS = SYMPTOM_OPTIONS;
   readonly COMORBIDITY_OPTIONS = COMORBIDITY_OPTIONS;
   readonly ULTRASOUND_OPTIONS = ULTRASOUND_OPTIONS;

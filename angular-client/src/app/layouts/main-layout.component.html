@@ -183,12 +183,12 @@
               </li>
             }
 
-            <!-- 4. [醫師專用] Admin, Contributor (Doc), Viewer：醫師班表/醫囑藥囑管理/醫師藥物調整/研究專用 整合（2026-09-05） -->
+            <!-- 4. [醫師專師專用] Admin, Contributor (Doc), Viewer：醫師班表/醫囑藥囑管理/醫師藥物調整/重大傷病申請/研究專用 整合（2026-09-05） -->
             @if (canAccessPage('physicianHub')) {
               <li>
                 <a routerLink="/physician" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{ paths: 'exact', queryParams: 'ignored', matrixParams: 'ignored', fragment: 'ignored' }" class="nav-link">
                   <div class="nav-item-content">
-                    <span class="nav-title">醫師專用</span>
+                    <span class="nav-title">醫師專師專用</span>
                   </div>
                 </a>
               </li>
@@ -205,18 +205,7 @@
               </li>
             }
 
-            <!-- [重大傷病申請] Admin, Contributor (Doc) -->
-            @if (canAccessPage('catastrophicIllness')) {
-              <li>
-                <a routerLink="/catastrophic-illness" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
-                  <div class="nav-item-content">
-                    <span class="nav-title">重大傷病申請</span>
-                  </div>
-                </a>
-              </li>
-            }
-
-            <!-- 7. [書記專用] Admin, Viewer（醫師班表列印/常規病人掛號/庫存管理） -->
+            <!-- 7. [書記專用] Admin, Viewer（醫師班表列印/常規病人掛號/針劑/Gentamycin/重大傷病申請/庫存管理） -->
             @if (canAccessPage('inventory')) {
               <li>
                 <a routerLink="/inventory" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">

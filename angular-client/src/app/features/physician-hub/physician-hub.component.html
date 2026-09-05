@@ -1,8 +1,8 @@
 <div class="page-container">
   <!-- 標題與主頁籤同一列（比照書記專用） -->
   <header class="page-header">
-    <h1>醫師專用</h1>
-    <nav class="main-tabs" aria-label="醫師專用功能">
+    <h1>醫師專師專用</h1>
+    <nav class="main-tabs" aria-label="醫師專師專用功能">
       @for (t of tabs(); track t.key) {
         <button [class.active]="mainTab() === t.key" (click)="setTab(t.key)">{{ t.label }}</button>
       }
@@ -24,6 +24,12 @@
   @if (mainTab() === 'med') {
     <div class="tab-host">
       <app-med-adjustment [embedded]="true" />
+    </div>
+  }
+
+  @if (mainTab() === 'ci') {
+    <div class="tab-host">
+      <app-catastrophic-illness [embedded]="true" />
     </div>
   }
 

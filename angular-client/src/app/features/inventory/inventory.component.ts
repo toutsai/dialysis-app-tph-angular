@@ -17,6 +17,7 @@ import { ClerkPhysicianPrintComponent } from './clerk-physician-print.component'
 import { ClerkRegistrationComponent } from './clerk-registration.component';
 import { ClerkInjectionPrintComponent } from './clerk-injection-print.component';
 import { ClerkGentamycinListComponent } from './clerk-gentamycin-list.component';
+import { CatastrophicIllnessComponent } from '../catastrophic-illness/catastrophic-illness.component';
 import { PurchaseCalendarComponent } from './purchase-calendar.component';
 import {
   ApiManagerService,
@@ -77,6 +78,7 @@ const DEFAULT_ITEMS: Record<string, string[]> = {
     ClerkRegistrationComponent,
     ClerkInjectionPrintComponent,
     ClerkGentamycinListComponent,
+    CatastrophicIllnessComponent,
     PurchaseCalendarComponent,
   ],
   templateUrl: './inventory.component.html',
@@ -103,8 +105,8 @@ export class InventoryComponent implements OnInit {
   readonly CATEGORY_NAMES = CATEGORY_NAMES;
   readonly categoryKeys = Object.keys(CATEGORY_NAMES);
 
-  /** 書記專用主頁籤：醫師班表列印 / 常規病人掛號 / 針劑發放名單 / Gentamycin 開立清單 / 庫存管理 */
-  mainTab = signal<'physician' | 'register' | 'injection' | 'gentamycin' | 'inventory'>('physician');
+  /** 書記專用主頁籤：醫師班表列印 / 常規病人掛號 / 針劑發放名單 / Gentamycin 開立清單 / 重大傷病申請 / 庫存管理 */
+  mainTab = signal<'physician' | 'register' | 'injection' | 'gentamycin' | 'catastrophic' | 'inventory'>('physician');
 
   activeTab = signal('dashboard');
 

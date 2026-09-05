@@ -256,13 +256,11 @@ export const routes: Routes = [
         data: { title: PAGE_ACCESS.physicianHub.title, roles: PAGE_ACCESS.medAdjustment.roles, tab: 'med' },
       },
       {
+        // 別名：醫師專師專用 → 重大傷病申請（同一元件也掛在書記專用頁籤）
         path: 'catastrophic-illness',
-        loadComponent: () =>
-          import('./features/catastrophic-illness/catastrophic-illness.component').then(
-            (m) => m.CatastrophicIllnessComponent
-          ),
+        loadComponent: loadPhysicianHub,
         canActivate: [roleGuard],
-        data: { title: PAGE_ACCESS.catastrophicIllness.title, roles: PAGE_ACCESS.catastrophicIllness.roles },
+        data: { title: PAGE_ACCESS.physicianHub.title, roles: PAGE_ACCESS.catastrophicIllness.roles, tab: 'ci' },
       },
       {
         // 別名：醫師專用 → 研究專用
