@@ -97,9 +97,9 @@ export const PAGE_ACCESS = {
     roleLabel: '管理員、編輯者',
   },
   dialysisReservation: {
-    // 預約洗腎登記本：本院既有病人 / 他院待排病人 的預約登記與空床比對（側欄置於 KiDit 申報下）
+    // 預約洗腎登記：本院既有病人 / 他院待排病人 的預約登記與空床比對（側欄置於初透衛教進度下）
     path: '/dialysis-reservation',
-    title: '預約洗腎登記本',
+    title: '預約洗腎登記',
     roles: STAFF_ROLES,
     roleLabel: '管理員、編輯者',
   },

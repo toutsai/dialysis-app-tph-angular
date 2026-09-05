@@ -150,17 +150,6 @@
               </li>
             }
 
-            <!-- 3-0. [預約洗腎登記本] Admin, Editor：置於 KiDit 申報下 -->
-            @if (canAccessPage('dialysisReservation')) {
-              <li>
-                <a routerLink="/dialysis-reservation" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
-                  <div class="nav-item-content">
-                    <span class="nav-title">預約洗腎登記本</span>
-                  </div>
-                </a>
-              </li>
-            }
-
             <!-- 3-1. [初透衛教進度] Admin, Editor -->
             @if (canAccessPage('educationDashboard')) {
               <li>
@@ -172,7 +161,18 @@
               </li>
             }
 
-            <!-- [腎臟病地圖] 專師專用（admin 或 專科護理師），置於初透衛教進度下 -->
+            <!-- 3-2. [預約洗腎登記] Admin, Editor：置於初透衛教進度下（2026-09-05 使用者指定） -->
+            @if (canAccessPage('dialysisReservation')) {
+              <li>
+                <a routerLink="/dialysis-reservation" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
+                  <div class="nav-item-content">
+                    <span class="nav-title">預約洗腎登記</span>
+                  </div>
+                </a>
+              </li>
+            }
+
+            <!-- [腎臟病地圖] 專師專用（admin 或 專科護理師），置於預約洗腎登記下 -->
             @if (canAccessSpecialist()) {
               <li>
                 <a routerLink="/aki-map" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">

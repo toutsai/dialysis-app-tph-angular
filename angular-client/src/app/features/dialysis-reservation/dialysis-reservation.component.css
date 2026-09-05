@@ -1,4 +1,4 @@
-/* 預約洗腎登記本：版面比照重大傷病申請頁（標題列／頁籤／選人下拉／彈窗） */
+/* 預約洗腎登記：版面比照重大傷病申請頁（標題列／頁籤／選人下拉／彈窗） */
 .reservation-page { padding: 4px 0; }
 
 .page-header { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #dee2e6; }
