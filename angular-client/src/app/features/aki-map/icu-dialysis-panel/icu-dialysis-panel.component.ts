@@ -10,15 +10,31 @@ import {
 } from '@app/core/services/aki-api.service';
 import { ORDERED_SHIFT_CODES, getShiftDisplayName } from '@/constants/scheduleConstants';
 
-type YesNoField = 'vasopressor' | 'ecmo' | 'ufDifficulty';
+type YesNoField = 'vasopressor' | 'ecmo' | 'ufDifficulty' | 'vasoHigh' | 'mapLow' | 'lactateHigh' | 'brainInjury';
 type DetailField = 'vasopressorDetail' | 'ecmoDetail' | 'oxygenDetail' | 'ufDetail';
 
 // 是/否欄位 → 對應的細節欄位（改為「無」時一併清空，避免留下過期的藥物/劑量）
-const DETAIL_OF: Record<YesNoField, DetailField> = {
+const DETAIL_OF: Partial<Record<YesNoField, DetailField>> = {
   vasopressor: 'vasopressorDetail',
   ecmo: 'ecmoDetail',
   ufDifficulty: 'ufDetail',
 };
+
+// CRRT 風險檢核：人工勾選項（自動項＝升壓劑 +2、脫水困難 +2、呼吸器 +1、ECMO +1，由後端算）
+interface CrrtCheckItem {
+  field: 'vasoHigh' | 'mapLow' | 'lactateHigh' | 'brainInjury';
+  label: string;
+  pts: string;
+  hint: string;
+  /** 只在升壓劑「有」時顯示 */
+  needsVaso?: boolean;
+}
+const CRRT_CHECK_ITEMS: CrrtCheckItem[] = [
+  { field: 'vasoHigh', label: 'NE ≥0.3／24h 加量', pts: '+1', hint: 'Norepinephrine ≥0.3 µg/kg/min，或 24 小時內加量／加第二種升壓劑（外推，無切點證據）', needsVaso: true },
+  { field: 'mapLow', label: 'MAP <65', pts: '+1', hint: '透析前平均動脈壓 <65 mmHg（Bitker 2016、Passos 2019：MAP 每低 1 mmHg OR 0.93–0.96）' },
+  { field: 'lactateHigh', label: '乳酸 >2／CRT ≥3s', pts: '+1', hint: '乳酸 >2 mmol/L 或微血管再充填 ≥3 秒（SOCRATE，Bigé 2020）' },
+  { field: 'brainInjury', label: '腦損傷／肝衰竭', pts: '直接', hint: '急性腦損傷／顱內壓升高／急性肝衰竭：KDIGO 2012 建議 CRRT（2B），不計分直接建議' },
+];
 
 // AKI 分期徽章色（與 aki-map.component 的 CATEGORY_DEFS 對齊）
 const AKI_BADGE: Record<string, { label: string; bg: string; fg: string }> = {
@@ -56,6 +72,9 @@ export class IcuDialysisPanelComponent implements OnInit {
 
   readonly yesNoOptions: IcuYesNo[] = ['有', '無'];
   readonly oxygenOptions = ['室內空氣', '鼻導管', '面罩', 'HFNC', 'NIV', '呼吸器'];
+  readonly crrtCheckItems = CRRT_CHECK_ITEMS;
+  /** CRRT 風險檢核說明（摺疊） */
+  readonly showCrrtHelp = signal(false);
 
   ngOnInit(): void {
     this.load();
@@ -116,6 +135,21 @@ export class IcuDialysisPanelComponent implements OnInit {
     return u.patients.filter((p) => this.isUnassessed(p)).length;
   }
 
+  /** 該區「疑需 CRRT」人數（HD/SLED 達門檻或直接考慮者） */
+  crrtFlagCount(u: IcuDialysisUnit): number {
+    return u.patients.filter((p) => p.crrtFlag).length;
+  }
+
+  /** 全院疑需 CRRT 人數（借第 6 台的依據） */
+  crrtFlagTotal(): number {
+    return this.units().reduce((s, u) => s + this.crrtFlagCount(u), 0);
+  }
+
+  crrtLevel(p: IcuDialysisPatient): 'hi' | 'mid' | 'lo' {
+    if (p.crrtFlag) return 'hi';
+    return p.crrtScore >= 2 ? 'mid' : 'lo';
+  }
+
   /** 區塊統計列：HD n / SLED n / CVVHDF n（固定順序，0 的模式仍顯示；其他模式併入「其他」） */
   modeCounts(u: IcuDialysisUnit): { mode: string; n: number }[] {
     const counts: Record<string, number> = { HD: 0, SLED: 0, CVVHDF: 0 };
@@ -154,8 +188,15 @@ export class IcuDialysisPanelComponent implements OnInit {
     p[field] = next;
     if (next !== '有') {
       const detail = DETAIL_OF[field];
-      p[detail] = '';
-      payload[detail] = '';
+      if (detail) {
+        p[detail] = '';
+        payload[detail] = '';
+      }
+      // 升壓劑取消／無 → 高劑量勾選一併清空（該項只在有升壓劑時計分）
+      if (field === 'vasopressor' && p.vasoHigh) {
+        p.vasoHigh = '';
+        payload.vasoHigh = '';
+      }
     }
     this.save(p, payload);
   }

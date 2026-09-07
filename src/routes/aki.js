@@ -649,6 +649,7 @@ const ICU_STATUS_COLUMNS = `vasopressor, vasopressor_detail AS vasopressorDetail
        ecmo, ecmo_detail AS ecmoDetail,
        oxygen, oxygen_detail AS oxygenDetail,
        uf_difficulty AS ufDifficulty, uf_detail AS ufDetail,
+       vaso_high AS vasoHigh, map_low AS mapLow, lactate_high AS lactateHigh, brain_injury AS brainInjury,
        updated_by AS updatedBy, updated_at AS updatedAt`
 
 // camelCase → DB 欄位（PUT 部分更新用；updated_by/updated_at 由伺服器寫）
@@ -661,6 +662,11 @@ const ICU_STATUS_FIELD_MAP = {
   oxygenDetail: 'oxygen_detail',
   ufDifficulty: 'uf_difficulty',
   ufDetail: 'uf_detail',
+  // CRRT 風險檢核人工勾選項
+  vasoHigh: 'vaso_high',
+  mapLow: 'map_low',
+  lactateHigh: 'lactate_high',
+  brainInjury: 'brain_injury',
 }
 
 function icuStatusFields(s) {
@@ -673,8 +679,43 @@ function icuStatusFields(s) {
     oxygenDetail: s?.oxygenDetail || '',
     ufDifficulty: s?.ufDifficulty || '',
     ufDetail: s?.ufDetail || '',
+    vasoHigh: s?.vasoHigh || '',
+    mapLow: s?.mapLow || '',
+    lactateHigh: s?.lactateHigh || '',
+    brainInjury: s?.brainInjury || '',
     statusUpdatedBy: s?.updatedBy || '',
     statusUpdatedAt: s?.updatedAt || null,
+  }
+}
+
+// ---------- CRRT 需求風險檢核（排程借機用；由 IHD 透析中低血壓預測因子外推，非經驗證的臨床分數） ----------
+// 門檻由使用者裁定（2026-09-07）：≥4 分或「腦損傷／顱內壓↑／急性肝衰竭」直接考慮 → 建議提前借第 6 台。
+// 只對 HD / SLED 病人計算；CVVHDF 病人已在 CRRT 上，不適用。
+export const CRRT_RISK_THRESHOLD = 4
+export const CRRT_RISK_ITEMS = [
+  { key: 'vaso', label: '使用升壓劑', pts: 2, hit: (f) => f.vasopressor === '有' },
+  { key: 'vasoHigh', label: 'NE ≥0.3 µg/kg/min 或 24h 內加量／加第二種', pts: 1, hit: (f) => f.vasopressor === '有' && f.vasoHigh === '有' },
+  { key: 'mapLow', label: '透析前 MAP <65', pts: 1, hit: (f) => f.mapLow === '有' },
+  { key: 'lactate', label: '乳酸 >2 或 CRT ≥3 秒', pts: 1, hit: (f) => f.lactateHigh === '有' },
+  { key: 'uf', label: '上次 HD/SLED 脫水達不到目標或低血壓中止', pts: 2, hit: (f) => f.ufDifficulty === '有' },
+  { key: 'vent', label: '侵入性機械通氣', pts: 1, hit: (f) => f.oxygen === '呼吸器' },
+  { key: 'ecmo', label: 'ECMO', pts: 1, hit: (f) => f.ecmo === '有' },
+]
+export const CRRT_RISK_MAX = CRRT_RISK_ITEMS.reduce((s, i) => s + i.pts, 0)
+
+export function computeCrrtRisk(fields, mode) {
+  const hits = CRRT_RISK_ITEMS.filter((i) => i.hit(fields))
+  const score = hits.reduce((s, i) => s + i.pts, 0)
+  const direct = fields.brainInjury === '有'
+  const applicable = String(mode || '').toUpperCase() !== 'CVVHDF'
+  return {
+    crrtApplicable: applicable,
+    crrtScore: score,
+    crrtMax: CRRT_RISK_MAX,
+    crrtThreshold: CRRT_RISK_THRESHOLD,
+    crrtDirect: direct,
+    crrtFlag: applicable && (direct || score >= CRRT_RISK_THRESHOLD),
+    crrtItems: hits.map((i) => `${i.label} +${i.pts}`),
   }
 }
 
@@ -712,6 +753,7 @@ router.get('/icu-dialysis', (req, res) => {
       const paddedMrn = looseMrn(r.mrn).padStart(10, '0')
       const pts = looseMrn(r.mrn) ? getPointsByMrn(db, paddedMrn) : []
       const staging = pts.length ? stageForSeries(pts) : null
+      const statusFields = icuStatusFields(statusMap.get(r.id))
       items.push({
         id: r.id,
         mrn: r.mrn,
@@ -733,11 +775,14 @@ router.get('/icu-dialysis', (req, res) => {
         dialysisTimeText: orders.dialysisTimeText || (orders.dialysisHours != null ? `${orders.dialysisHours}時` : ''),
         inpatientReason: r.inpatientReason || '',
         doNotMove: !!pstatus?.doNotMove?.active,
+        // 首次透析標註（SOCRATE：首次 ICU 透析不耐受 43%）：本院初透或首次透析旗標 active
+        firstDialysis: !!(pstatus?.isFirstDialysis?.active || pstatus?.hospitalFirstDialysis?.active),
         akiCategory: staging?.category || null,
         akiStage: staging?.stage ?? null,
         latestCr: staging?.latest?.value ?? null,
         latestCrDate: staging?.latest?.date ?? null,
-        ...icuStatusFields(statusMap.get(r.id)),
+        ...statusFields,
+        ...computeCrrtRisk(statusFields, mode),
       })
     }
     items.sort((a, b) => a.unit.localeCompare(b.unit) || a.bedSort - b.bedSort || a.name.localeCompare(b.name, 'zh-Hant'))
@@ -759,7 +804,9 @@ router.put('/icu-status/:patientId', (req, res) => {
     const db = getDatabase()
     const patientId = String(req.params.patientId || '').trim()
     if (!patientId) return res.status(400).json({ error: true, message: '缺少病人 ID' })
-    const patient = db.prepare('SELECT id, medical_record_number AS mrn FROM patients WHERE id = ? AND is_deleted = 0').get(patientId)
+    const patient = db
+      .prepare('SELECT id, medical_record_number AS mrn, dialysis_orders AS dialysisOrders FROM patients WHERE id = ? AND is_deleted = 0')
+      .get(patientId)
     if (!patient) return res.status(404).json({ error: true, message: '找不到病人' })
 
     const b = req.body || {}
@@ -780,7 +827,10 @@ router.put('/icu-status/:patientId', (req, res) => {
     db.prepare(`UPDATE icu_dialysis_status SET ${sets.join(', ')} WHERE patient_id = ?`).run(...vals, patientId)
 
     logAuditWithRequest(req, 'ICU_DIALYSIS_STATUS_SAVE', 'icu_dialysis_status', patientId, { mrn: patient.mrn, fields: Object.keys(b) })
-    res.json({ success: true, status: icuStatusFields(getIcuStatus(db, patientId)) })
+    const orders = safeObj(patient.dialysisOrders)
+    const mode = orders.mode != null && String(orders.mode).trim() ? normalizeDialysisMode(String(orders.mode)) : ''
+    const statusFields = icuStatusFields(getIcuStatus(db, patientId))
+    res.json({ success: true, status: { ...statusFields, ...computeCrrtRisk(statusFields, mode) } })
   } catch (error) {
     res.status(500).json({ error: true, message: error.message || '儲存 ICU 狀態失敗' })
   }

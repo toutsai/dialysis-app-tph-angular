@@ -224,11 +224,28 @@ export interface IcuDialysisStatusFields {
   oxygenDetail: string;
   ufDifficulty: IcuYesNo;
   ufDetail: string;
+  /** CRRT 風險檢核人工勾選項 */
+  vasoHigh: IcuYesNo;
+  mapLow: IcuYesNo;
+  lactateHigh: IcuYesNo;
+  brainInjury: IcuYesNo;
   statusUpdatedBy: string;
   statusUpdatedAt: string | null;
 }
 
-export interface IcuDialysisPatient extends IcuDialysisStatusFields {
+/** 後端計算的 CRRT 需求風險（HD/SLED 適用；門檻由後端回傳） */
+export interface IcuCrrtRisk {
+  crrtApplicable: boolean;
+  crrtScore: number;
+  crrtMax: number;
+  crrtThreshold: number;
+  crrtDirect: boolean;
+  crrtFlag: boolean;
+  crrtItems: string[];
+}
+
+export interface IcuDialysisPatient extends IcuDialysisStatusFields, IcuCrrtRisk {
+  firstDialysis: boolean;
   id: string;
   mrn: string;
   name: string;
@@ -315,7 +332,7 @@ export class AkiApiService {
 
   saveIcuStatus(patientId: string, payload: IcuStatusSavePayload) {
     return firstValueFrom(
-      this.api.put<{ success: boolean; status: IcuDialysisStatusFields }>(`/aki/icu-status/${patientId}`, payload),
+      this.api.put<{ success: boolean; status: IcuDialysisStatusFields & IcuCrrtRisk }>(`/aki/icu-status/${patientId}`, payload),
     );
   }
 

@@ -6,6 +6,10 @@
       <span class="icu-hint">依病人清單「住院／急診＋病房號 ICUA / ICUB / ICUD」即時取得；卡片欄位改動即存檔</span>
     </div>
     <div class="icu-actions">
+      @if (crrtFlagTotal()) {
+        <span class="crrt-total" title="HD/SLED 病人達 CRRT 風險門檻或直接考慮者">疑需 CRRT {{ crrtFlagTotal() }} 人</span>
+      }
+      <button class="btn ghost" (click)="showCrrtHelp.set(!showCrrtHelp())">CRRT 風險說明</button>
       <span class="legend">
         <span class="mode mode-hd">HD</span>
         <span class="mode mode-sled">SLED</span>
@@ -18,6 +22,15 @@
 
   @if (error(); as err) {
     <div class="banner error">{{ err }}</div>
+  }
+
+  @if (showCrrtHelp()) {
+    <div class="crrt-help">
+      <b>CRRT 需求風險檢核（0–9 分，≥4 分或「腦損傷／肝衰竭」→ 建議提前借第 6 台）</b>
+      <span>自動計分：使用升壓劑 +2、上次 HD/SLED 脫水達不到目標或低血壓中止 +2、呼吸器 +1、ECMO +1。</span>
+      <span>人工勾選：NE ≥0.3 µg/kg/min 或 24h 內加量／加第二種 +1、透析前 MAP &lt;65 +1、乳酸 &gt;2 或 CRT ≥3 秒 +1；腦損傷／顱內壓升高／急性肝衰竭不計分，直接建議 CRRT（KDIGO 2012, 2B）。</span>
+      <span>依據：升壓劑使用（Passos 2019/2024 OR 15–16）、MAP（Bitker 2016）、乳酸／CRT（SOCRATE, Bigé 2020）、ECMO（ADQI/ELSO 2026 共識）。文獻中沒有經驗證的「SLED/HD → CRRT 轉換」分數，本表為排程借機用的外推檢核，不是臨床決策工具；CVVHDF 病人不適用。首次透析另標註（SOCRATE：首次 ICU 透析不耐受 43%）。</span>
+    </div>
   }
 
   @if (loading() && !units().length) {
@@ -33,6 +46,9 @@
           <div class="unit-title">
             <h3>{{ u.key }} <small>{{ u.label }}</small></h3>
             <span class="unit-n">{{ u.patients.length }} 人</span>
+            @if (crrtFlagCount(u)) {
+              <span class="unit-crrt" title="HD/SLED 病人達 CRRT 風險門檻或直接考慮">疑需 CRRT {{ crrtFlagCount(u) }}</span>
+            }
             @if (pendingCount(u)) {
               <span class="unit-pending" title="四項狀態皆未登錄">未評估 {{ pendingCount(u) }}</span>
             }
@@ -53,12 +69,14 @@
           <article class="icu-card"
                    [class]="'icu-card ' + modeClass(p.mode)"
                    [class.saved]="savedId() === p.id"
-                   [class.crit]="p.vasopressor === '有' || p.ecmo === '有'">
+                   [class.crit]="p.vasopressor === '有' || p.ecmo === '有'"
+                   [class.crrt-flag]="p.crrtFlag">
             <header class="card-head">
               <span class="bed">{{ p.bedNo }}</span>
               <span class="mode" [class]="'mode ' + modeClass(p.mode)">{{ p.mode || '模式未填' }}</span>
               @if (p.status === 'er') { <span class="tag er">急診</span> }
               @if (p.doNotMove) { <span class="tag lock" title="病人勿動">勿動</span> }
+              @if (p.firstDialysis) { <span class="tag first" title="首次透析：首次 ICU 透析不耐受率高（SOCRATE 43%）">首次透析</span> }
               @if (akiBadge(p); as b) {
                 <span class="tag aki" [style.background]="b.bg" [style.color]="b.fg">{{ b.label }}</span>
               }
@@ -150,6 +168,41 @@
                 </div>
               }
             </div>
+
+            <!-- CRRT 需求風險檢核（HD / SLED 適用；門檻由後端回傳） -->
+            @if (p.crrtApplicable) {
+              <div class="crrt" [class]="'crrt lv-' + crrtLevel(p)">
+                <div class="crrt-head">
+                  <span class="lbl">CRRT 風險</span>
+                  <span class="crrt-score" [title]="p.crrtItems.join('、') || '尚無命中項目'">{{ p.crrtScore }}/{{ p.crrtMax }}</span>
+                  @if (p.crrtFlag) {
+                    <span class="crrt-advice">{{ p.crrtDirect ? '直接考慮 CRRT' : '達門檻 ≥' + p.crrtThreshold }}・建議提前借第 6 台</span>
+                  } @else {
+                    <span class="crrt-sub">門檻 {{ p.crrtThreshold }} 分</span>
+                  }
+                </div>
+                @if (p.crrtItems.length) {
+                  <div class="crrt-items">
+                    @for (it of p.crrtItems; track it) { <span class="crrt-item">{{ it }}</span> }
+                  </div>
+                }
+                <div class="crrt-checks">
+                  @for (c of crrtCheckItems; track c.field) {
+                    @if (!c.needsVaso || p.vasopressor === '有') {
+                      <div class="crrt-check" [title]="c.hint">
+                        <span class="clbl">{{ c.label }} <small>{{ c.pts }}</small></span>
+                        <span class="seg mini">
+                          @for (v of yesNoOptions; track v) {
+                            <button type="button" [class.on-yes]="v === '有' && p[c.field] === v" [class.on-no]="v === '無' && p[c.field] === v"
+                                    (click)="setYesNo(p, c.field, v)">{{ v }}</button>
+                          }
+                        </span>
+                      </div>
+                    }
+                  }
+                </div>
+              </div>
+            }
 
             <footer class="card-foot">
               @if (savingId() === p.id) {

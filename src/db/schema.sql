@@ -872,6 +872,11 @@ CREATE TABLE IF NOT EXISTS icu_dialysis_status (
     oxygen_detail TEXT,                -- 氧氣細節（FiO2 / 流量 / 呼吸器設定）
     uf_difficulty TEXT,                -- HD/SLED 脫水困難（有/無）
     uf_detail TEXT,                    -- 脫水困難說明
+    -- CRRT 需求風險檢核人工勾選項（有/無/空白；升壓劑/ECMO/呼吸器/脫水困難由上列欄位自動計分）
+    vaso_high TEXT,                    -- NE ≥0.3 µg/kg/min 或 24h 內加量／加第二種升壓劑
+    map_low TEXT,                      -- 透析前 MAP <65
+    lactate_high TEXT,                 -- 乳酸 >2 或 CRT ≥3 秒
+    brain_injury TEXT,                 -- 腦損傷／顱內壓升高／急性肝衰竭（直接考慮 CRRT）
     updated_by TEXT,
     updated_at TEXT DEFAULT (datetime('now', 'localtime')),
     created_at TEXT DEFAULT (datetime('now', 'localtime'))

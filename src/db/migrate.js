@@ -552,6 +552,10 @@ export function runMigrations() {
           oxygen_detail TEXT,
           uf_difficulty TEXT,
           uf_detail TEXT,
+          vaso_high TEXT,
+          map_low TEXT,
+          lactate_high TEXT,
+          brain_injury TEXT,
           updated_by TEXT,
           updated_at TEXT DEFAULT (datetime('now', 'localtime')),
           created_at TEXT DEFAULT (datetime('now', 'localtime'))
@@ -559,6 +563,11 @@ export function runMigrations() {
         CREATE INDEX IF NOT EXISTS idx_icu_dialysis_status_patient ON icu_dialysis_status(patient_id);
       `)
       migrationsApplied++
+    } else {
+      // CRRT 風險檢核人工勾選項（2026-09-07 第二輪）
+      for (const col of ['vaso_high', 'map_low', 'lactate_high', 'brain_injury']) {
+        if (addColumnIfNotExists(db, 'icu_dialysis_status', col, 'TEXT')) migrationsApplied++
+      }
     }
 
     // ========================================

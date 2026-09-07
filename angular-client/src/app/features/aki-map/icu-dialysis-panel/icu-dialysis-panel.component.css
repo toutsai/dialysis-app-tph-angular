@@ -199,6 +199,73 @@
 .o2 { flex-shrink: 0; }
 .detail:focus, .o2:focus { outline: none; border-color: #1976d2; }
 
+/* CRRT 需求風險檢核 */
+.crrt-total {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #fff;
+  background: #c62828;
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+}
+.crrt-help {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.76rem;
+  color: #37474f;
+  background: #fff8e1;
+  border: 1px solid #ffe082;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  line-height: 1.5;
+}
+.unit-crrt {
+  font-size: 0.7rem;
+  background: #c62828;
+  color: #fff;
+  border-radius: 4px;
+  padding: 0.05rem 0.4rem;
+  font-weight: 700;
+}
+.icu-card.crrt-flag { box-shadow: 0 0 0 2px #c62828; }
+.tag.first { background: #e1f5fe; color: #01579b; }
+.crrt {
+  border-top: 1px dashed #eceff1;
+  padding-top: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.crrt-head { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.crrt-score {
+  font-weight: 800;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  padding: 0.02rem 0.45rem;
+  background: #eceff1;
+  color: #455a64;
+  font-variant-numeric: tabular-nums;
+}
+.crrt.lv-mid .crrt-score { background: #fff3e0; color: #e65100; }
+.crrt.lv-hi .crrt-score { background: #c62828; color: #fff; }
+.crrt-advice { font-size: 0.74rem; font-weight: 700; color: #c62828; }
+.crrt-sub { font-size: 0.7rem; color: #90a4ae; }
+.crrt-items { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.crrt-item {
+  font-size: 0.66rem;
+  color: #6d4c41;
+  background: #efebe9;
+  border-radius: 999px;
+  padding: 0.05rem 0.45rem;
+}
+.crrt-checks { display: flex; flex-wrap: wrap; gap: 0.3rem 0.6rem; }
+.crrt-check { display: inline-flex; align-items: center; gap: 0.3rem; }
+.clbl { font-size: 0.72rem; color: #546e7a; white-space: nowrap; }
+.clbl small { color: #90a4ae; font-size: 0.64rem; }
+.seg.mini button { padding: 0.12rem 0.45rem; font-size: 0.7rem; min-width: 2rem; }
+
 .card-foot { font-size: 0.68rem; color: #90a4ae; display: flex; justify-content: flex-end; }
 .card-foot .unassessed { color: #ef6c00; }
 .card-foot .saving { color: #1976d2; }
