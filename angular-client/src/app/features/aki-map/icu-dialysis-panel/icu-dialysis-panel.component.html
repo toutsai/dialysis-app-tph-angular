@@ -30,11 +30,19 @@
     @for (u of units(); track u.key) {
       <div class="icu-unit">
         <div class="icu-unit-head">
-          <h3>{{ u.key }} <small>{{ u.label }}</small></h3>
-          <span class="unit-n">{{ u.patients.length }} 人</span>
-          @if (pendingCount(u)) {
-            <span class="unit-pending" title="四項狀態皆未登錄">未評估 {{ pendingCount(u) }}</span>
-          }
+          <div class="unit-title">
+            <h3>{{ u.key }} <small>{{ u.label }}</small></h3>
+            <span class="unit-n">{{ u.patients.length }} 人</span>
+            @if (pendingCount(u)) {
+              <span class="unit-pending" title="四項狀態皆未登錄">未評估 {{ pendingCount(u) }}</span>
+            }
+          </div>
+          <!-- 模式統計列：HD n / SLED n / CVVHDF n -->
+          <div class="unit-stats">
+            @for (s of modeCounts(u); track s.mode) {
+              <span class="mode" [class]="'mode ' + modeClass(s.mode)">{{ s.mode }} {{ s.n }}</span>
+            }
+          </div>
         </div>
 
         @if (!u.patients.length) {

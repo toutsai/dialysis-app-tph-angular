@@ -116,6 +116,20 @@ export class IcuDialysisPanelComponent implements OnInit {
     return u.patients.filter((p) => this.isUnassessed(p)).length;
   }
 
+  /** 區塊統計列：HD n / SLED n / CVVHDF n（固定順序，0 的模式仍顯示；其他模式併入「其他」） */
+  modeCounts(u: IcuDialysisUnit): { mode: string; n: number }[] {
+    const counts: Record<string, number> = { HD: 0, SLED: 0, CVVHDF: 0 };
+    let other = 0;
+    for (const p of u.patients) {
+      const m = String(p.mode || '').toUpperCase();
+      if (m in counts) counts[m] += 1;
+      else other += 1;
+    }
+    const out = Object.entries(counts).map(([mode, n]) => ({ mode, n }));
+    if (other) out.push({ mode: '其他', n: other });
+    return out;
+  }
+
   /** 'YYYY-MM-DD HH:MM:SS'（本地時間字串）→ 'MM/DD HH:MM' */
   fmtTime(s: string | null): string {
     if (!s) return '';

@@ -60,13 +60,16 @@
 }
 .icu-unit-head {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.3rem;
   padding: 0.55rem 0.25rem 0.2rem;
 }
-.icu-unit-head h3 { margin: 0; font-size: 1rem; font-weight: 700; color: #1565c0; }
+.unit-title { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.icu-unit-head h3 { margin: 0; font-size: 1rem; font-weight: 700; color: #1565c0; white-space: nowrap; }
 .icu-unit-head h3 small { font-size: 0.75rem; color: #607d8b; font-weight: 500; margin-left: 0.3rem; }
-.unit-n { color: #546e7a; font-size: 0.78rem; margin-left: auto; }
+.unit-stats { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+.unit-stats .mode { font-size: 0.72rem; padding: 0.08rem 0.5rem; }
+.unit-n { color: #546e7a; font-size: 0.78rem; margin-left: auto; white-space: nowrap; }
 .unit-pending {
   font-size: 0.7rem;
   background: #fff3e0;
@@ -89,9 +92,10 @@
   flex-direction: column;
   gap: 0.35rem;
 }
-.icu-card.mode-hd { --m: #0277bd; }
-.icu-card.mode-sled { --m: #00838f; }
-.icu-card.mode-cvvhdf { --m: #6a1b9a; }
+/* 模式色（使用者要求明亮）：HD 亮藍 / SLED 亮青綠 / CVVHDF 亮紫 */
+.icu-card.mode-hd { --m: #2196f3; }
+.icu-card.mode-sled { --m: #00bfa5; }
+.icu-card.mode-cvvhdf { --m: #ab47bc; }
 .icu-card.mode-other { --m: #90a4ae; }
 .icu-card.crit { box-shadow: 0 0 0 1px #ef9a9a; }
 .icu-card.saved { animation: flashSaved 1.2s ease; }
@@ -109,9 +113,9 @@
   padding: 0 0.35rem;
   background: #90a4ae;
 }
-.mode.mode-hd { background: #0277bd; }
-.mode.mode-sled { background: #00838f; }
-.mode.mode-cvvhdf { background: #6a1b9a; }
+.mode.mode-hd { background: #2196f3; }
+.mode.mode-sled { background: #00bfa5; }
+.mode.mode-cvvhdf { background: #ab47bc; }
 .tag {
   font-size: 0.62rem;
   font-weight: 700;
