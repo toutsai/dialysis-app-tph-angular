@@ -210,6 +210,64 @@ export interface AkiCareSavePayload {
   clearSign?: boolean;
 }
 
+// ---------- ICU 透析病人（腎臟病地圖 ICU 頁籤） ----------
+
+/** 是/否欄位：'有' / '無'；空字串 = 尚未評估 */
+export type IcuYesNo = '' | '有' | '無';
+
+export interface IcuDialysisStatusFields {
+  vasopressor: IcuYesNo;
+  vasopressorDetail: string;
+  ecmo: IcuYesNo;
+  ecmoDetail: string;
+  oxygen: string;
+  oxygenDetail: string;
+  ufDifficulty: IcuYesNo;
+  ufDetail: string;
+  statusUpdatedBy: string;
+  statusUpdatedAt: string | null;
+}
+
+export interface IcuDialysisPatient extends IcuDialysisStatusFields {
+  id: string;
+  mrn: string;
+  name: string;
+  status: 'ipd' | 'er';
+  wardNumber: string;
+  unit: string;
+  bedNo: string;
+  bedSort: number;
+  gender: string;
+  age: number | null;
+  physician: string;
+  vascAccess: string;
+  mode: string;
+  freq: string;
+  bedNum: string | number | null;
+  shiftIndex: number | null;
+  dryWeight: number | string | null;
+  dialysisTimeText: string;
+  inpatientReason: string;
+  doNotMove: boolean;
+  akiCategory: AkiCategory | null;
+  akiStage: number | null;
+  latestCr: number | null;
+  latestCrDate: string | null;
+}
+
+export interface IcuDialysisUnit {
+  key: string;
+  label: string;
+  patients: IcuDialysisPatient[];
+}
+
+export interface IcuDialysisResponse {
+  units: IcuDialysisUnit[];
+  total: number;
+}
+
+export type IcuStatusSavePayload = Partial<Omit<IcuDialysisStatusFields, 'statusUpdatedBy' | 'statusUpdatedAt'>>;
+
 @Injectable({ providedIn: 'root' })
 export class AkiApiService {
   private readonly api = inject(ApiService);
@@ -248,6 +306,16 @@ export class AkiApiService {
   saveCare(mrn: string, payload: AkiCareSavePayload) {
     return firstValueFrom(
       this.api.put<{ success: boolean; care: any }>(`/aki/care/${mrn}`, payload),
+    );
+  }
+
+  getIcuDialysis(): Promise<IcuDialysisResponse> {
+    return firstValueFrom(this.api.get<IcuDialysisResponse>('/aki/icu-dialysis'));
+  }
+
+  saveIcuStatus(patientId: string, payload: IcuStatusSavePayload) {
+    return firstValueFrom(
+      this.api.put<{ success: boolean; status: IcuDialysisStatusFields }>(`/aki/icu-status/${patientId}`, payload),
     );
   }
 

@@ -11,6 +11,7 @@ import {
   AkiPatientDetail,
   AkiUploadBatch,
 } from '@app/core/services/aki-api.service';
+import { IcuDialysisPanelComponent } from './icu-dialysis-panel/icu-dialysis-panel.component';
 
 // 主篩選（與分期色碼篩選 AND 疊加）
 type CourseFilter = 'all' | 'ckd' | 'admission-aki' | 'today-aki';
@@ -103,7 +104,7 @@ function compareWard(a: string, b: string): number {
 @Component({
   selector: 'app-aki-map',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, IcuDialysisPanelComponent],
   templateUrl: './aki-map.component.html',
   styleUrl: './aki-map.component.css',
 })
@@ -135,8 +136,8 @@ export class AkiMapComponent implements OnInit {
   readonly detail = signal<AkiPatientDetail | null>(null);
   readonly detailLoading = signal(false);
 
-  // 頁籤：map（腎臟病地圖）/ ckd（CKD 關懷名單）/ care（AKI 關懷名單）/ discharged（出院待追蹤名單）
-  readonly activeTab = signal<'map' | 'ckd' | 'care' | 'discharged'>('map');
+  // 頁籤：map（腎臟病地圖）/ ckd（CKD 關懷名單）/ care（AKI 關懷名單）/ discharged（出院待追蹤名單）/ icu（ICU 透析病人）
+  readonly activeTab = signal<'map' | 'ckd' | 'care' | 'discharged' | 'icu'>('map');
 
   // CKD 關懷名單
   readonly ckdItems = signal<AkiCareItem[]>([]);
@@ -424,7 +425,7 @@ export class AkiMapComponent implements OnInit {
 
   // ---------- 頁籤 / 關懷名單 ----------
 
-  switchTab(tab: 'map' | 'ckd' | 'care' | 'discharged'): void {
+  switchTab(tab: 'map' | 'ckd' | 'care' | 'discharged' | 'icu'): void {
     const prev = this.activeTab();
     if (prev === 'ckd' || prev === 'care' || prev === 'discharged') this.wardFilterByTab[prev] = this.careWardFilter();
     this.activeTab.set(tab);

@@ -859,6 +859,25 @@ CREATE TABLE IF NOT EXISTS aki_care_records (
 );
 CREATE INDEX IF NOT EXISTS idx_aki_care_mrn ON aki_care_records(mrn);
 
+-- ICU 透析病人臨床狀態（腎臟病地圖「ICU 透析病人」頁籤；每位病人一筆，以 patients.id 為鍵）
+-- 是/否欄位存 '有' / '無'，空字串 = 尚未評估
+CREATE TABLE IF NOT EXISTS icu_dialysis_status (
+    id TEXT PRIMARY KEY,
+    patient_id TEXT NOT NULL UNIQUE,   -- patients.id
+    vasopressor TEXT,                  -- 升壓劑（有/無）
+    vasopressor_detail TEXT,           -- 升壓劑藥物/劑量
+    ecmo TEXT,                         -- ECMO（有/無）
+    ecmo_detail TEXT,                  -- ECMO 備註（VA/VV 等）
+    oxygen TEXT,                       -- 氧氣使用（室內空氣/鼻導管/面罩/HFNC/NIV/呼吸器）
+    oxygen_detail TEXT,                -- 氧氣細節（FiO2 / 流量 / 呼吸器設定）
+    uf_difficulty TEXT,                -- HD/SLED 脫水困難（有/無）
+    uf_detail TEXT,                    -- 脫水困難說明
+    updated_by TEXT,
+    updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+    created_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_icu_dialysis_status_patient ON icu_dialysis_status(patient_id);
+
 -- ========================================
 -- 血管通路事件（主護填寫 → 組長確認 → KiDit 造管申報）
 -- 唯一權威來源；工作日誌與 KiDit 清單皆為視圖，勿寫回 daily_logs 的 vascular_access_log JSON

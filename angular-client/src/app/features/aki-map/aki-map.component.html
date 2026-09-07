@@ -56,7 +56,12 @@
     <button class="tab" [class.active]="activeTab() === 'ckd'" (click)="switchTab('ckd')">CKD 關懷名單</button>
     <button class="tab" [class.active]="activeTab() === 'care'" (click)="switchTab('care')">AKI 關懷名單</button>
     <button class="tab" [class.active]="activeTab() === 'discharged'" (click)="switchTab('discharged')">出院待追蹤名單</button>
+    <button class="tab" [class.active]="activeTab() === 'icu'" (click)="switchTab('icu')">ICU 透析病人</button>
   </nav>
+
+  @if (activeTab() === 'icu') {
+    <app-icu-dialysis-panel />
+  }
 
   @if (activeTab() === 'map') {
   <!-- 摘要列（可點擊篩選） -->

@@ -533,6 +533,35 @@ export function runMigrations() {
     }
 
     // ========================================
+    // ICU 透析病人臨床狀態（腎臟病地圖 ICU 頁籤，2026-09-07）
+    // ========================================
+    const icuStatusExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='icu_dialysis_status'")
+      .get()
+    if (!icuStatusExists) {
+      console.log('📋 建立 icu_dialysis_status 表格...')
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS icu_dialysis_status (
+          id TEXT PRIMARY KEY,
+          patient_id TEXT NOT NULL UNIQUE,
+          vasopressor TEXT,
+          vasopressor_detail TEXT,
+          ecmo TEXT,
+          ecmo_detail TEXT,
+          oxygen TEXT,
+          oxygen_detail TEXT,
+          uf_difficulty TEXT,
+          uf_detail TEXT,
+          updated_by TEXT,
+          updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+          created_at TEXT DEFAULT (datetime('now', 'localtime'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_icu_dialysis_status_patient ON icu_dialysis_status(patient_id);
+      `)
+      migrationsApplied++
+    }
+
+    // ========================================
     // 護理師固定照護病人分配（單一 JSON 文件）
     // ========================================
     const nursePatientCareExists = db

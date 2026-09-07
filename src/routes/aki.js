@@ -608,6 +608,184 @@ router.put('/care/:mrn', (req, res) => {
   }
 })
 
+// ---------- ICU 透析病人（HD / SLED / CVVHDF）分區清單 ----------
+// 資料來源以透析系統 patients 表為準（護理師即時維護的住院狀態＋病房號 ICUA-xx/ICUB-xx/ICUD-xx），
+// 不用 AKI 住院快照（專師定期上傳，會落後）；AKI 分期只當附加資訊以病歷號對接。
+const ICU_UNITS = [
+  { key: 'ICUA', label: '第一加護病房' },
+  { key: 'ICUB', label: '第二加護病房' },
+  { key: 'ICUD', label: '第三加護病房' },
+]
+
+// 病房號 "ICUA-01" / "ICUD-8" / "icub 15" → { unit:'ICUA', bedNo:'ICUA-08', bedSort:8 }；非 ICU → null
+function parseIcuWard(wardNumber) {
+  const s = String(wardNumber == null ? '' : wardNumber).trim().toUpperCase()
+  const m = s.match(/^ICU\s*-?\s*([A-Z])\s*-?\s*(\d+)?/)
+  if (!m) return null
+  const unit = `ICU${m[1]}`
+  const bedSort = m[2] ? Number(m[2]) : 999
+  const bedNo = m[2] ? `${unit}-${String(bedSort).padStart(2, '0')}` : unit
+  return { unit, bedNo, bedSort }
+}
+
+function safeObj(s) {
+  try {
+    const v = JSON.parse(s || '{}')
+    return v && typeof v === 'object' ? v : {}
+  } catch {
+    return {}
+  }
+}
+
+function ageFrom(birthDate, today) {
+  if (!birthDate || !/^\d{4}-\d{2}-\d{2}/.test(String(birthDate))) return null
+  const b = String(birthDate).slice(0, 10)
+  let age = Number(today.slice(0, 4)) - Number(b.slice(0, 4))
+  if (today.slice(5) < b.slice(5)) age -= 1
+  return age >= 0 && age < 130 ? age : null
+}
+
+const ICU_STATUS_COLUMNS = `vasopressor, vasopressor_detail AS vasopressorDetail,
+       ecmo, ecmo_detail AS ecmoDetail,
+       oxygen, oxygen_detail AS oxygenDetail,
+       uf_difficulty AS ufDifficulty, uf_detail AS ufDetail,
+       updated_by AS updatedBy, updated_at AS updatedAt`
+
+// camelCase → DB 欄位（PUT 部分更新用；updated_by/updated_at 由伺服器寫）
+const ICU_STATUS_FIELD_MAP = {
+  vasopressor: 'vasopressor',
+  vasopressorDetail: 'vasopressor_detail',
+  ecmo: 'ecmo',
+  ecmoDetail: 'ecmo_detail',
+  oxygen: 'oxygen',
+  oxygenDetail: 'oxygen_detail',
+  ufDifficulty: 'uf_difficulty',
+  ufDetail: 'uf_detail',
+}
+
+function icuStatusFields(s) {
+  return {
+    vasopressor: s?.vasopressor || '',
+    vasopressorDetail: s?.vasopressorDetail || '',
+    ecmo: s?.ecmo || '',
+    ecmoDetail: s?.ecmoDetail || '',
+    oxygen: s?.oxygen || '',
+    oxygenDetail: s?.oxygenDetail || '',
+    ufDifficulty: s?.ufDifficulty || '',
+    ufDetail: s?.ufDetail || '',
+    statusUpdatedBy: s?.updatedBy || '',
+    statusUpdatedAt: s?.updatedAt || null,
+  }
+}
+
+function getIcuStatus(db, patientId) {
+  return db.prepare(`SELECT ${ICU_STATUS_COLUMNS} FROM icu_dialysis_status WHERE patient_id = ?`).get(patientId) || null
+}
+
+// GET /api/aki/icu-dialysis —— 目前在 ICU 的透析病人，依 ICUA / ICUB / ICUD 分區
+router.get('/icu-dialysis', (req, res) => {
+  try {
+    const db = getDatabase()
+    const rows = db
+      .prepare(`SELECT id, medical_record_number AS mrn, name, status, ward_number AS wardNumber,
+                       gender, birth_date AS birthDate, physician, vasc_access AS vascAccess,
+                       dialysis_orders AS dialysisOrders, schedule_rule AS scheduleRule,
+                       inpatient_reason AS inpatientReason, patient_status AS patientStatus
+                FROM patients
+                WHERE is_deleted = 0 AND status IN ('ipd', 'er') AND UPPER(TRIM(COALESCE(ward_number, ''))) LIKE 'ICU%'`)
+      .all()
+    const statusMap = new Map(
+      db.prepare(`SELECT patient_id AS patientId, ${ICU_STATUS_COLUMNS} FROM icu_dialysis_status`).all()
+        .map((r) => [r.patientId, r]),
+    )
+    const today = getTaipeiTodayString()
+
+    const items = []
+    for (const r of rows) {
+      const icu = parseIcuWard(r.wardNumber)
+      if (!icu) continue
+      const orders = safeObj(r.dialysisOrders)
+      const rule = safeObj(r.scheduleRule)
+      const pstatus = safeObj(r.patientStatus)
+      const mode = orders.mode != null && String(orders.mode).trim() ? normalizeDialysisMode(String(orders.mode)) : ''
+      // AKI 檢驗散點 mrn 為 10 碼補零；patients 病歷號 6~7 碼（偶有前導 0），去 0 再補齊
+      const paddedMrn = looseMrn(r.mrn).padStart(10, '0')
+      const pts = looseMrn(r.mrn) ? getPointsByMrn(db, paddedMrn) : []
+      const staging = pts.length ? stageForSeries(pts) : null
+      items.push({
+        id: r.id,
+        mrn: r.mrn,
+        name: r.name,
+        status: r.status,
+        wardNumber: r.wardNumber,
+        unit: icu.unit,
+        bedNo: icu.bedNo,
+        bedSort: icu.bedSort,
+        gender: r.gender || '',
+        age: ageFrom(r.birthDate, today),
+        physician: r.physician || '',
+        vascAccess: r.vascAccess || orders.vascAccess || '',
+        mode,
+        freq: rule.freq || orders.freq || '',
+        bedNum: rule.bedNum ?? null,
+        shiftIndex: rule.shiftIndex ?? null,
+        dryWeight: orders.dryWeight ?? null,
+        dialysisTimeText: orders.dialysisTimeText || (orders.dialysisHours != null ? `${orders.dialysisHours}時` : ''),
+        inpatientReason: r.inpatientReason || '',
+        doNotMove: !!pstatus?.doNotMove?.active,
+        akiCategory: staging?.category || null,
+        akiStage: staging?.stage ?? null,
+        latestCr: staging?.latest?.value ?? null,
+        latestCrDate: staging?.latest?.date ?? null,
+        ...icuStatusFields(statusMap.get(r.id)),
+      })
+    }
+    items.sort((a, b) => a.unit.localeCompare(b.unit) || a.bedSort - b.bedSort || a.name.localeCompare(b.name, 'zh-Hant'))
+
+    const units = ICU_UNITS.map((u) => ({ ...u, patients: items.filter((i) => i.unit === u.key) }))
+    const others = items.filter((i) => !ICU_UNITS.some((u) => u.key === i.unit))
+    if (others.length) units.push({ key: 'OTHER', label: '其他加護單位', patients: others })
+
+    res.json({ units, total: items.length })
+  } catch (error) {
+    res.status(500).json({ error: true, message: error.message || '取得 ICU 透析病人失敗' })
+  }
+})
+
+// PUT /api/aki/icu-status/:patientId —— 儲存 ICU 臨床狀態（升壓劑/ECMO/氧氣/脫水困難）
+// 只更新 body 有帶的欄位（undefined = 不動）
+router.put('/icu-status/:patientId', (req, res) => {
+  try {
+    const db = getDatabase()
+    const patientId = String(req.params.patientId || '').trim()
+    if (!patientId) return res.status(400).json({ error: true, message: '缺少病人 ID' })
+    const patient = db.prepare('SELECT id, medical_record_number AS mrn FROM patients WHERE id = ? AND is_deleted = 0').get(patientId)
+    if (!patient) return res.status(404).json({ error: true, message: '找不到病人' })
+
+    const b = req.body || {}
+    const updatedBy = req.user?.name || req.user?.username || ''
+    const sets = []
+    const vals = []
+    for (const [key, col] of Object.entries(ICU_STATUS_FIELD_MAP)) {
+      if (b[key] !== undefined) {
+        sets.push(`${col} = ?`)
+        vals.push(b[key] == null ? '' : String(b[key]).slice(0, 500))
+      }
+    }
+    if (!sets.length) return res.status(400).json({ error: true, message: '沒有可更新的欄位' })
+
+    db.prepare('INSERT OR IGNORE INTO icu_dialysis_status (id, patient_id) VALUES (?, ?)').run(uuidv4(), patientId)
+    sets.push('updated_by = ?', "updated_at = datetime('now','localtime')")
+    vals.push(updatedBy)
+    db.prepare(`UPDATE icu_dialysis_status SET ${sets.join(', ')} WHERE patient_id = ?`).run(...vals, patientId)
+
+    logAuditWithRequest(req, 'ICU_DIALYSIS_STATUS_SAVE', 'icu_dialysis_status', patientId, { mrn: patient.mrn, fields: Object.keys(b) })
+    res.json({ success: true, status: icuStatusFields(getIcuStatus(db, patientId)) })
+  } catch (error) {
+    res.status(500).json({ error: true, message: error.message || '儲存 ICU 狀態失敗' })
+  }
+})
+
 // ---------- 上傳批次紀錄 ----------
 router.get('/batches', (req, res) => {
   try {
