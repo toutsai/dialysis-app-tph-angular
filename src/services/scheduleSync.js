@@ -108,14 +108,65 @@ function generateDailyScheduleFromRules(masterRules, dateStr, patientsMap = null
   return dailySchedule
 }
 
+// ===================================================================
+// 已生效調班查詢（SQL 粗篩）
+// ===================================================================
+
+const ACTIVE_EXCEPTION_STATUSES = `('applied', 'conflict_requires_resolution')`
+
 /**
- * 同步總表變更到未來排程
+ * 取出「可能影響 dateStr」的已生效調班。
+ * 這是 SQL 粗篩，語意為**超集合**：精確判定仍由呼叫端既有的 JS 邏輯決定
+ * （SUSPEND 看 start/end 區間；其餘看 date / start_date / from.sourceDate / to.goalDate）。
+ * 目的只是避免每重建一天就把整張表（applied 千餘筆）撈回並各 JSON.parse 四次，
+ * 60 天同步時解析量從十萬級降到百級（2026-09-08 審查 P0-C）。
+ */
+function loadActiveExceptionsForDate(db, dateStr) {
+  return db.prepare(`
+    SELECT * FROM schedule_exceptions
+    WHERE status IN ${ACTIVE_EXCEPTION_STATUSES}
+      AND (
+        date = @d
+        OR start_date = @d
+        OR (type = 'SUSPEND' AND start_date IS NOT NULL AND end_date IS NOT NULL
+            AND start_date <= @d AND end_date >= @d)
+        OR (json_valid(from_data) AND json_extract(from_data, '$.sourceDate') = @d)
+        OR (json_valid(to_data) AND json_extract(to_data, '$.goalDate') = @d)
+      )
+  `).all({ d: dateStr })
+}
+
+/**
+ * 取出「可能影響 [firstDate, lastDate] 區間內任一天」的已生效調班（同樣是超集合粗篩）。
+ */
+function loadActiveExceptionsForRange(db, firstDate, lastDate) {
+  return db.prepare(`
+    SELECT * FROM schedule_exceptions
+    WHERE status IN ${ACTIVE_EXCEPTION_STATUSES}
+      AND (
+        (date >= @a AND date <= @b)
+        OR (start_date >= @a AND start_date <= @b)
+        OR (type = 'SUSPEND' AND start_date IS NOT NULL AND end_date IS NOT NULL
+            AND start_date <= @b AND end_date >= @a)
+        OR (json_valid(from_data) AND json_extract(from_data, '$.sourceDate') BETWEEN @a AND @b)
+        OR (json_valid(to_data) AND json_extract(to_data, '$.goalDate') BETWEEN @a AND @b)
+      )
+  `).all({ a: firstDate, b: lastDate })
+}
+
+/**
+ * 同步總表變更到未來排程（同步版，整個過程包在單一交易）
+ *
+ * 第一階段（diff 套用到 60 天）+ 第二階段（調班整合）全部在一個 db.transaction 內：
+ * 中途任何一步 throw 就整份回滾，不會留下「前半段新規則、後半段舊規則」的半套排程
+ * （2026-09-08 審查 P0-C）。呼叫端若把總表寫入也放進同一交易，總表與未來排程即為原子更新。
+ *
  * @param {Object} beforeRules - 變更前的總表規則
  * @param {Object} afterRules - 變更後的總表規則
  * @param {Object} modifiedBy - 修改者資訊 {uid, name}
  * @returns {Object} 同步結果
  */
-export async function syncMasterScheduleToFuture(beforeRules, afterRules, modifiedBy = {}) {
+export function syncMasterScheduleToFutureSync(beforeRules, afterRules, modifiedBy = {}) {
   console.log('🚀 [ScheduleSync] 開始同步總表到未來 60 天排程...')
 
   // 如果規則沒有實質變更，跳過同步
@@ -126,7 +177,7 @@ export async function syncMasterScheduleToFuture(beforeRules, afterRules, modifi
 
   const db = getDatabase()
 
-  try {
+  const runSync = db.transaction(() => {
     // 載入所有病人資料用於動態生成 autoNote
     const patients = db.prepare(`
       SELECT * FROM patients WHERE is_deleted = 0
@@ -313,7 +364,7 @@ export async function syncMasterScheduleToFuture(beforeRules, afterRules, modifi
 
     // 🔥 第二階段：整合現有的調班申請到受影響的日期
     console.log('🔄 [ScheduleSync] 第二階段：開始整合調班申請...')
-    const mergeResult = await mergeExceptionsIntoSchedules(afterRules, futureDates, patientsMap, modifiedBy)
+    const mergeResult = mergeExceptionsIntoSchedulesSync(afterRules, futureDates, patientsMap, modifiedBy)
 
     return {
       success: true,
@@ -322,11 +373,22 @@ export async function syncMasterScheduleToFuture(beforeRules, afterRules, modifi
       updatedCount,
       mergedCount: mergeResult.mergedCount,
     }
+  })
 
+  try {
+    return runSync()
   } catch (error) {
-    console.error('❌ [ScheduleSync] 同步失敗:', error)
+    console.error('❌ [ScheduleSync] 同步失敗（本次同步已整份回滾）:', error)
     throw error
   }
+}
+
+/**
+ * async 包裝：沿用既有呼叫端（scheduler.js 預約變更、first-dialysis-plan）的 await 介面。
+ * 內部就是同步交易，await 只是相容用；需要跟其他寫入合併成同一交易時請直接用 syncMasterScheduleToFutureSync。
+ */
+export async function syncMasterScheduleToFuture(beforeRules, afterRules, modifiedBy = {}) {
+  return syncMasterScheduleToFutureSync(beforeRules, afterRules, modifiedBy)
 }
 
 /**
@@ -640,11 +702,8 @@ function exceptionShiftsOnDate(ex, dateStr) {
  */
 function rebuildSingleDaySchedule(dateStr, masterRules, patientsMap) {
   const db = getDatabase()
-  // 取得所有已生效的調班申請
-  const allExceptions = db.prepare(`
-    SELECT * FROM schedule_exceptions
-    WHERE status IN ('applied', 'conflict_requires_resolution')
-  `).all()
+  // 取得「可能影響這一天」的已生效調班（SQL 粗篩超集合；下方 JS 才是精確判定）
+  const allExceptions = loadActiveExceptionsForDate(db, dateStr)
 
   const todaysExceptions = []
   allExceptions.forEach((row) => {
@@ -831,17 +890,20 @@ export function isTodayScheduleFrozen(dateStr) {
  * @param {object} modifiedBy - 修改者資訊
  * @returns {object} - 合併結果
  */
-export async function mergeExceptionsIntoSchedules(masterRules, futureDates, patientsMap, modifiedBy = {}) {
+function mergeExceptionsIntoSchedulesSync(masterRules, futureDates, patientsMap, modifiedBy = {}) {
   console.log('🔄 [ScheduleSync] 開始整合調班申請...')
 
   const db = getDatabase()
 
   try {
-    // 取得所有已生效的調班申請
-    const allExceptions = db.prepare(`
-      SELECT * FROM schedule_exceptions
-      WHERE status IN ('applied', 'conflict_requires_resolution')
-    `).all()
+    if (!futureDates || futureDates.length === 0) {
+      return { success: true, mergedCount: 0 }
+    }
+
+    // 取得「可能影響此區間」的已生效調班（SQL 粗篩超集合；下方 JS 才是精確判定）。
+    // futureDates 由呼叫端產生為連續日期，取首尾當區間即可。
+    const sortedDates = [...futureDates].sort()
+    const allExceptions = loadActiveExceptionsForRange(db, sortedDates[0], sortedDates[sortedDates.length - 1])
 
     if (allExceptions.length === 0) {
       console.log('✅ [ScheduleSync] 沒有需要整合的調班申請')
@@ -920,11 +982,17 @@ export async function mergeExceptionsIntoSchedules(masterRules, futureDates, pat
   }
 }
 
+/** async 包裝（相容既有 import）；核心為同步的 mergeExceptionsIntoSchedulesSync */
+export async function mergeExceptionsIntoSchedules(masterRules, futureDates, patientsMap, modifiedBy = {}) {
+  return mergeExceptionsIntoSchedulesSync(masterRules, futureDates, patientsMap, modifiedBy)
+}
+
 // 導出用於自動生成排程的輔助函數
 export { generateDailyScheduleFromRules, generateAutoNote, rebuildSingleDaySchedule }
 
 export default {
   syncMasterScheduleToFuture,
+  syncMasterScheduleToFutureSync,
   initializeFutureSchedules,
   mergeExceptionsIntoSchedules,
   generateDailyScheduleFromRules,

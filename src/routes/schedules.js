@@ -3,7 +3,7 @@ import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isEditor, logAudit } from '../middleware/auth.js'
-import { syncMasterScheduleToFuture, initializeFutureSchedules, mergeExceptionsIntoSchedules, generateDailyScheduleFromRules, rebuildSingleDaySchedule, isTodayScheduleFrozen } from '../services/scheduleSync.js'
+import { syncMasterScheduleToFuture, syncMasterScheduleToFutureSync, initializeFutureSchedules, mergeExceptionsIntoSchedules, generateDailyScheduleFromRules, rebuildSingleDaySchedule, isTodayScheduleFrozen } from '../services/scheduleSync.js'
 import { processScheduleException } from '../services/exceptionHandler.js'
 import { isSingleDayMove, reconcileSingleDayMove, resolveSourceConflict, retargetConflict } from '../services/exceptionReconcile.js'
 import { syncEventsToKiditLogbook } from '../services/kiditSync.js'
@@ -858,34 +858,34 @@ async function putBaseScheduleMaster(req, res) {
       SELECT schedule FROM base_schedules WHERE id = 'MASTER_SCHEDULE'
     `).get()
     const beforeRules = beforeDoc ? JSON.parse(beforeDoc.schedule || '{}') : {}
+    const modifiedBy = { uid: req.user.id, name: req.user.name }
 
-    // 更新總表
-    db.prepare(`
-      INSERT INTO base_schedules (id, schedule, updated_at)
-      VALUES ('MASTER_SCHEDULE', ?, datetime('now', 'localtime'))
-      ON CONFLICT(id) DO UPDATE SET
-        schedule = excluded.schedule,
-        updated_at = datetime('now', 'localtime')
-    `).run(JSON.stringify(schedule))
+    // 總表寫入 + 未來 60 天同步包在同一交易（2026-09-08 審查 P0-C）：
+    // 同步失敗則總表也不更新、回 500，使用者重送即可。
+    // 舊寫法先寫總表再「不 await」地同步：同步失敗時總表已改而未來排程沒改，
+    // 重送因 before/after 無差異會被「無實質變更」跳過，未來排程永遠同步不到。
+    let syncResult = null
+    const updated = db.transaction(() => {
+      db.prepare(`
+        INSERT INTO base_schedules (id, schedule, updated_at)
+        VALUES ('MASTER_SCHEDULE', ?, datetime('now', 'localtime'))
+        ON CONFLICT(id) DO UPDATE SET
+          schedule = excluded.schedule,
+          updated_at = datetime('now', 'localtime')
+      `).run(JSON.stringify(schedule))
 
-    const updated = db.prepare(`
-      SELECT * FROM base_schedules WHERE id = 'MASTER_SCHEDULE'
-    `).get()
+      syncResult = syncMasterScheduleToFutureSync(beforeRules, schedule, modifiedBy)
 
+      return db.prepare(`
+        SELECT * FROM base_schedules WHERE id = 'MASTER_SCHEDULE'
+      `).get()
+    })()
+    console.log('📅 [MasterSchedule] 同步完成:', syncResult?.message)
 
     await logAudit('BASE_SCHEDULE_UPDATE', req.user.id, req.user.name, 'base_schedules', 'MASTER_SCHEDULE', {
-      patientCount: Object.keys(schedule).length
+      patientCount: Object.keys(schedule).length,
+      sync: syncResult?.message,
     })
-
-    // 🔥 同步到未來 60 天排程（非同步執行，不阻塞回應）
-    const modifiedBy = { uid: req.user.id, name: req.user.name }
-    syncMasterScheduleToFuture(beforeRules, schedule, modifiedBy)
-      .then(result => {
-        console.log('📅 [MasterSchedule] 同步完成:', result.message)
-      })
-      .catch(err => {
-        console.error('❌ [MasterSchedule] 同步失敗:', err.message)
-      })
 
     res.json({
       id: updated.id,
@@ -897,7 +897,7 @@ async function putBaseScheduleMaster(req, res) {
     console.error('更新排班總表錯誤:', error)
     res.status(500).json({
       error: true,
-      message: '更新排班總表失敗'
+      message: '更新排班總表失敗（總表與未來排程皆未變更，請重試）'
     })
   }
 }
@@ -930,25 +930,21 @@ async function patchBaseSchedulePatient(req, res) {
       delete schedule[patientId]
     }
 
-    // 儲存更新
-    db.prepare(`
-      UPDATE base_schedules
-      SET schedule = ?, updated_at = datetime('now', 'localtime')
-      WHERE id = 'MASTER_SCHEDULE'
-    `).run(JSON.stringify(schedule))
+    // 總表寫入 + 未來 60 天同步包在同一交易（理由同 putBaseScheduleMaster，2026-09-08 P0-C）
+    const modifiedBy = { uid: req.user.id, name: req.user.name }
+    let syncResult = null
+    db.transaction(() => {
+      db.prepare(`
+        UPDATE base_schedules
+        SET schedule = ?, updated_at = datetime('now', 'localtime')
+        WHERE id = 'MASTER_SCHEDULE'
+      `).run(JSON.stringify(schedule))
 
+      syncResult = syncMasterScheduleToFutureSync(beforeRules, schedule, modifiedBy)
+    })()
+    console.log('📅 [PatientRule] 同步完成:', syncResult?.message)
 
     await logAudit('PATIENT_SCHEDULE_RULE_UPDATE', req.user.id, req.user.name, 'base_schedules', patientId, rule)
-
-    // 🔥 同步到未來 60 天排程（非同步執行）
-    const modifiedBy = { uid: req.user.id, name: req.user.name }
-    syncMasterScheduleToFuture(beforeRules, schedule, modifiedBy)
-      .then(result => {
-        console.log('📅 [PatientRule] 同步完成:', result.message)
-      })
-      .catch(err => {
-        console.error('❌ [PatientRule] 同步失敗:', err.message)
-      })
 
     res.json({
       success: true,
@@ -960,7 +956,7 @@ async function patchBaseSchedulePatient(req, res) {
     console.error('更新病人排班規則錯誤:', error)
     res.status(500).json({
       error: true,
-      message: '更新病人排班規則失敗'
+      message: '更新病人排班規則失敗（總表與未來排程皆未變更，請重試）'
     })
   }
 }
