@@ -33,38 +33,82 @@
     </div>
   }
 
+  <!-- 篩選列（純前端） -->
+  @if (units().length) {
+    <div class="icu-filters">
+      <div class="fgroup">
+        <span class="flabel">分區</span>
+        <span class="chips">
+          <button type="button" class="chip" [class.on]="unitFilter() === 'all'" (click)="unitFilter.set('all')">全部</button>
+          @for (u of units(); track u.key) {
+            <button type="button" class="chip" [class.on]="unitFilter() === u.key" (click)="unitFilter.set(u.key)"><span>{{ u.key }}</span><b>{{ u.patients.length }}</b></button>
+          }
+        </span>
+      </div>
+      <div class="fgroup">
+        <span class="flabel">模式</span>
+        <span class="chips">
+          @for (m of modeOptions; track m) {
+            <button type="button" [class]="'chip ' + modeClass(m)" [class.on]="modeFilter().has(m)" (click)="toggleMode(m)">{{ m }}</button>
+          }
+        </span>
+      </div>
+      <div class="fgroup">
+        <span class="flabel">狀態</span>
+        <span class="chips">
+          @for (s of statusOptions; track s.key) {
+            <button type="button" [class]="'chip ' + (s.cls || '')" [class.on]="statusFilter() === s.key" (click)="statusFilter.set(s.key)">
+              <span>{{ s.label }}</span>@if (s.key !== 'all') {<b>{{ statusCount(s.key) }}</b>}
+            </button>
+          }
+        </span>
+      </div>
+      <input class="fsearch" type="text" placeholder="搜尋 姓名／病歷號／床號／醫師／住院原因"
+             [ngModel]="search()" (ngModelChange)="search.set($event)" />
+      @if (hasFilter()) {
+        <span class="fresult">符合 {{ shownCount() }} / {{ total() }} 人</span>
+        <button type="button" class="btn fclear" (click)="clearFilters()">清除篩選</button>
+      }
+    </div>
+  }
+
   @if (loading() && !units().length) {
     <div class="placeholder">載入中…</div>
   } @else if (!units().length) {
     <div class="placeholder">目前 ICU 沒有透析病人。</div>
   }
 
-  <div class="icu-units">
-    @for (u of units(); track u.key) {
+  <div class="icu-units" [class.single]="unitFilter() !== 'all'">
+    @for (u of filteredUnits(); track u.key) {
       <div class="icu-unit">
         <div class="icu-unit-head">
           <div class="unit-title">
             <h3>{{ u.key }} <small>{{ u.label }}</small></h3>
-            <span class="unit-n">{{ u.patients.length }} 人</span>
-            @if (crrtFlagCount(u)) {
-              <span class="unit-crrt" title="HD/SLED 病人達 CRRT 風險門檻或直接考慮">疑需 CRRT {{ crrtFlagCount(u) }}</span>
+            <span class="unit-n">
+              @if (u.patients.length !== u.all.length) { 顯示 {{ u.patients.length }} / }{{ u.all.length }} 人
+            </span>
+            @if (crrtFlagCount(u.all)) {
+              <span class="unit-crrt" title="HD/SLED 病人達 CRRT 風險門檻或直接考慮">疑需 CRRT {{ crrtFlagCount(u.all) }}</span>
             }
-            @if (pendingCount(u)) {
-              <span class="unit-pending" title="四項狀態皆未登錄">未評估 {{ pendingCount(u) }}</span>
+            @if (pendingCount(u.all)) {
+              <span class="unit-pending" title="四項狀態皆未登錄">未評估 {{ pendingCount(u.all) }}</span>
             }
           </div>
-          <!-- 模式統計列：HD n / SLED n / CVVHDF n -->
+          <!-- 模式統計列：HD n / SLED n / CVVHDF n（依原始名單，不受篩選影響） -->
           <div class="unit-stats">
-            @for (s of modeCounts(u); track s.mode) {
+            @for (s of modeCounts(u.all); track s.mode) {
               <span class="mode" [class]="'mode ' + modeClass(s.mode)">{{ s.mode }} {{ s.n }}</span>
             }
           </div>
         </div>
 
-        @if (!u.patients.length) {
+        @if (!u.all.length) {
           <div class="unit-empty">目前無透析病人</div>
+        } @else if (!u.patients.length) {
+          <div class="unit-empty">無符合篩選的病人</div>
         }
 
+        <div class="cards">
         @for (p of u.patients; track p.id) {
           <article class="icu-card"
                    [class]="'icu-card ' + modeClass(p.mode)"
@@ -215,6 +259,7 @@
             </footer>
           </article>
         }
+        </div>
       </div>
     }
   </div>
