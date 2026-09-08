@@ -143,9 +143,13 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
       if (ex.type === 'MOVE' && ex.from && ex.to) {
         // 一筆調班合併成一條「原班→新班」；跨天時兩天各放同一條（同內容），
         // 取代舊的 [原班]/[新班] 兩條事件（換床多時行事曆爆量、也看不出對應關係）
+        // 跨日時兩側各帶 M/D（例：9/11早班55床→9/12午班33床），否則同一條出現在兩天看不出哪邊是哪天
+        const crossDay = ex.from.sourceDate !== ex.to.goalDate;
+        const fromLabel = `${crossDay ? this.formatShortDate(ex.from.sourceDate) : ''}${this.formatShiftBed(ex.from)}`;
+        const toLabel = `${crossDay ? this.formatShortDate(ex.to.goalDate) : ''}${this.formatShiftBed(ex.to)}`;
         const moveEvent = (id: string, start: string) => ({
           id,
-          title: `${style.prefix} 調班 ${patientName} ${this.formatShiftBed(ex.from)}→${this.formatShiftBed(ex.to)}`,
+          title: `${style.prefix} 調班 ${patientName} ${fromLabel}→${toLabel}`,
           start,
           allDay: true,
           backgroundColor: finalColor,
@@ -343,6 +347,13 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
       default:
         return `${patientName} - ${this.typeMap[ex.type] || '未知'}`;
     }
+  }
+
+  /** 行事曆用短日期：'2026-09-11' → '9/11'（不合法或空值回空字串） */
+  private formatShortDate(dateStr: any): string {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr || ''));
+    if (!m) return '';
+    return `${Number(m[2])}/${Number(m[3])}`;
   }
 
   /** 行事曆用精簡格式：「早班35床」「午班外圍3」（無法判定時退回 formatBedAndShift 的 N/A） */
