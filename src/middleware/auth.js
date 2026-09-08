@@ -58,6 +58,15 @@ export function verifyToken(token) {
 }
 
 /**
+ * 是否為床邊儀表板裝置 token（routes/dashboard.js 以同一把 JWT_SECRET 簽發，payload 帶 type='bed_dashboard'）。
+ * 這種 token 只能用於 /api/dashboard/bed/:bedKey（由 dashboard.js 的 verifyDashboardAccess 自行驗證），
+ * 不得通過一般員工的 authenticate / SSE 驗證——否則 4 位數 PIN 換到的 token 就能打全站 authenticate-only 端點。
+ */
+export function isBedDashboardToken(decoded) {
+  return !!decoded && decoded.type === 'bed_dashboard'
+}
+
+/**
  * 解碼 JWT Token（不驗證）
  */
 export function decodeToken(token) {
@@ -358,6 +367,15 @@ export function authenticate(req, res, next) {
     return res.status(401).json({
       error: true,
       message: '無效或過期的認證令牌',
+    })
+  }
+
+  // 床邊儀表板裝置 token 不是員工身分，不得通過一般認證（2026-09-08 審查 P0-A）
+  if (isBedDashboardToken(decoded)) {
+    return res.status(401).json({
+      error: true,
+      message: '床位儀表板憑證不可用於此功能，請以員工帳號登入',
+      code: 'TOKEN_SCOPE',
     })
   }
 

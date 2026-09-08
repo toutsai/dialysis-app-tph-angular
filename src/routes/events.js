@@ -1,7 +1,7 @@
 // Server-Sent Events 端點：排程例外 (schedule_exceptions) 即時通知
 // EventSource 不支援自訂 headers，因此採 ?token=<JWT> query param 驗證
 import express from 'express'
-import { verifyToken, isTokenBlacklisted } from '../middleware/auth.js'
+import { verifyToken, isTokenBlacklisted, isBedDashboardToken } from '../middleware/auth.js'
 import { subscribeEvents } from '../services/eventBus.js'
 
 const router = express.Router()
@@ -14,6 +14,10 @@ router.get('/exceptions', (req, res) => {
   const payload = verifyToken(token)
   if (!payload) {
     return res.status(401).json({ error: true, message: 'Invalid token' })
+  }
+  // 床邊儀表板裝置 token 不得訂閱全院事件流（2026-09-08 審查 P0-A）
+  if (isBedDashboardToken(payload)) {
+    return res.status(401).json({ error: true, message: 'Token scope not allowed', code: 'TOKEN_SCOPE' })
   }
   if (isTokenBlacklisted(token)) {
     return res.status(401).json({ error: true, message: 'Token revoked' })
