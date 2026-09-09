@@ -1151,7 +1151,7 @@
     [isVisible]="isConfirmDialogVisible()"
     [title]="confirmDialogTitle()"
     [message]="confirmDialogMessage()"
-    (confirmEvent)="handleConfirm()"
-    (cancelEvent)="handleCancel()"
+    (confirm)="handleConfirm()"
+    (cancel)="handleCancel()"
   ></app-confirm-dialog>
 </div>
