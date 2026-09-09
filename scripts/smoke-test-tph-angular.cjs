@@ -1,22 +1,32 @@
 const { spawn } = require('child_process');
-const { existsSync } = require('fs');
+const crypto = require('crypto');
+const { existsSync, mkdtempSync, readFileSync, rmSync } = require('fs');
+const net = require('net');
+const os = require('os');
 const path = require('path');
+const { pathToFileURL } = require('url');
 const Database = require('better-sqlite3');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 
 const ROOT = path.resolve(__dirname, '..');
-const DB_PATH = process.env.DB_PATH || path.join(ROOT, 'data', 'dialysis.db');
+const PRODUCTION_DB_PATH = path.resolve(ROOT, 'data', 'dialysis.db');
 const STATIC_PATH =
   process.env.STATIC_PATH || path.join(ROOT, 'dist', 'browser');
-const BASE_URL = process.env.SMOKE_BASE_URL || 'http://127.0.0.1:3000';
-const TEST_PASSWORD = 'CodexSmoke123!';
+const TEST_PASSWORD = crypto.randomBytes(24).toString('base64url');
+const TEST_JWT_SECRET = crypto.randomBytes(48).toString('base64url');
 const stamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
-const prefix = `codex_smoke_${stamp}`;
+const prefix = `codex_smoke_${stamp}_${crypto.randomBytes(4).toString('hex')}`;
 
 const results = [];
 let server = null;
-let adminBackup = null;
+let serverStartError = null;
+let serverOutput = '';
+let tempDir = null;
+let DB_PATH = null;
+let BACKUP_DIR = null;
+let PORT = null;
+let BASE_URL = null;
 
 function pass(name, detail = '') {
   results.push({ ok: true, name, detail });
@@ -28,6 +38,100 @@ function fail(name, detail = '') {
   console.error(`FAIL ${name}${detail ? ` - ${detail}` : ''}`);
 }
 
+function isServerStopped() {
+  return (
+    !server ||
+    !server.pid ||
+    server.exitCode !== null ||
+    server.signalCode !== null
+  );
+}
+
+function isPathInside(parentPath, candidatePath) {
+  const relative = path.relative(path.resolve(parentPath), path.resolve(candidatePath));
+  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
+function assertTemporaryDatabasePath() {
+  if (!tempDir || !DB_PATH) {
+    throw new Error('Smoke test temporary database has not been initialized');
+  }
+
+  const resolvedTempDir = path.resolve(tempDir);
+  const resolvedDbPath = path.resolve(DB_PATH);
+  const expectedDbPath = path.join(resolvedTempDir, 'dialysis-smoke.db');
+  const temporaryRoot = path.resolve(os.tmpdir());
+
+  if (!isPathInside(temporaryRoot, resolvedTempDir)) {
+    throw new Error(`Refusing smoke directory outside OS temp: ${resolvedTempDir}`);
+  }
+  if (resolvedDbPath.toLowerCase() === PRODUCTION_DB_PATH.toLowerCase()) {
+    throw new Error(`Refusing production database path: ${resolvedDbPath}`);
+  }
+  if (resolvedDbPath.toLowerCase() !== expectedDbPath.toLowerCase()) {
+    throw new Error(`Refusing unexpected smoke database path: ${resolvedDbPath}`);
+  }
+}
+
+function createTemporaryWorkspace() {
+  tempDir = mkdtempSync(path.join(os.tmpdir(), 'dialysis-smoke-'));
+  DB_PATH = path.join(tempDir, 'dialysis-smoke.db');
+  BACKUP_DIR = path.join(tempDir, 'backups');
+  assertTemporaryDatabasePath();
+}
+
+async function initializeTemporaryDatabase() {
+  assertTemporaryDatabasePath();
+
+  const schema = readFileSync(path.join(ROOT, 'src', 'db', 'schema.sql'), 'utf8');
+  const db = new Database(DB_PATH);
+  try {
+    db.exec(schema);
+  } finally {
+    db.close();
+  }
+
+  // schema.sql is the baseline; migrations contain newer additive structures.
+  // Run both against the isolated database so a smoke run never needs production data.
+  const previousDbPath = process.env.DB_PATH;
+  process.env.DB_PATH = DB_PATH;
+  try {
+    const migrationUrl = pathToFileURL(path.join(ROOT, 'src', 'db', 'migrate.js')).href;
+    const { runMigrations } = await import(`${migrationUrl}?smoke=${Date.now()}`);
+    runMigrations();
+  } finally {
+    if (previousDbPath === undefined) delete process.env.DB_PATH;
+    else process.env.DB_PATH = previousDbPath;
+  }
+
+  const verifyDb = new Database(DB_PATH, { readonly: true });
+  try {
+    const integrity = verifyDb.pragma('quick_check', { simple: true });
+    if (integrity !== 'ok') {
+      throw new Error(`Temporary database quick_check failed: ${integrity}`);
+    }
+  } finally {
+    verifyDb.close();
+  }
+}
+
+function allocatePort() {
+  return new Promise((resolve, reject) => {
+    const listener = net.createServer();
+    listener.unref();
+    listener.once('error', reject);
+    listener.listen(0, '127.0.0.1', () => {
+      const address = listener.address();
+      const port = typeof address === 'object' && address ? address.port : null;
+      listener.close((error) => {
+        if (error) reject(error);
+        else if (!port) reject(new Error('Failed to allocate a smoke-test port'));
+        else resolve(port);
+      });
+    });
+  });
+}
+
 async function request(method, urlPath, body, token) {
   const headers = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -37,6 +141,7 @@ async function request(method, urlPath, body, token) {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(15000),
   });
 
   const text = await res.text();
@@ -70,9 +175,23 @@ async function expectStatus(name, method, urlPath, expected, body, token) {
 async function waitForHealth(timeoutMs = 20000) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
+    if (serverStartError) throw serverStartError;
+    if (isServerStopped()) {
+      const tail = serverOutput.slice(-1000).trim();
+      throw new Error(
+        `Smoke server exited before becoming healthy${tail ? `: ${tail}` : ''}`,
+      );
+    }
+
     try {
-      const { res } = await request('GET', '/api/health');
-      if (res.status === 200) return true;
+      const { res, data } = await request('GET', '/api/health');
+      if (
+        res.status === 200 &&
+        data?.smokeRunId === prefix &&
+        !isServerStopped()
+      ) {
+        return true;
+      }
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
@@ -80,19 +199,12 @@ async function waitForHealth(timeoutMs = 20000) {
 }
 
 function prepareAdmin() {
+  assertTemporaryDatabasePath();
   const db = new Database(DB_PATH);
   try {
     const existing = db
       .prepare('SELECT * FROM users WHERE username = ?')
       .get('admin');
-    adminBackup = existing
-      ? {
-          id: existing.id,
-          password_hash: existing.password_hash,
-          is_active: existing.is_active,
-        }
-      : null;
-
     const passwordHash = bcrypt.hashSync(TEST_PASSWORD, 10);
     if (existing) {
       db.prepare(
@@ -111,106 +223,23 @@ function prepareAdmin() {
   }
 }
 
-function cleanupDailyLogMovements(db) {
-  const rows = db
-    .prepare(
-      `SELECT date, patient_movements FROM daily_logs WHERE patient_movements LIKE ?`,
-    )
-    .all(`%${prefix}%`);
-
-  const update = db.prepare(
-    `UPDATE daily_logs
-     SET patient_movements = ?, updated_at = datetime('now', 'localtime')
-     WHERE date = ?`,
-  );
-
-  for (const row of rows) {
-    let movements = [];
-    try {
-      movements = JSON.parse(row.patient_movements || '[]');
-    } catch {
-      continue;
-    }
-
-    const cleaned = movements.filter((movement) => {
-      return !JSON.stringify(movement).includes(prefix);
-    });
-
-    if (cleaned.length !== movements.length) {
-      update.run(JSON.stringify(cleaned), row.date);
-    }
-  }
-}
-
-function cleanupKiditLogbookEvents(db) {
-  const rows = db
-    .prepare(
-      `SELECT date, events FROM kidit_logbook WHERE events LIKE ?`,
-    )
-    .all(`%${prefix}%`);
-
-  const update = db.prepare(
-    `UPDATE kidit_logbook
-     SET events = ?, updated_at = datetime('now', 'localtime')
-     WHERE date = ?`,
-  );
-
-  for (const row of rows) {
-    let events = [];
-    try {
-      events = JSON.parse(row.events || '[]');
-    } catch {
-      continue;
-    }
-
-    const cleaned = events.filter((event) => {
-      return !JSON.stringify(event).includes(prefix);
-    });
-
-    if (cleaned.length !== events.length) {
-      update.run(JSON.stringify(cleaned), row.date);
-    }
-  }
-}
-
-function restoreAdminAndCleanup() {
-  const db = new Database(DB_PATH);
-  try {
-    if (adminBackup) {
-      db.prepare(
-        `UPDATE users
-         SET password_hash = ?, is_active = ?, updated_at = datetime('now', 'localtime')
-         WHERE username = 'admin'`,
-      ).run(adminBackup.password_hash, adminBackup.is_active);
-    }
-
-    db.prepare(`DELETE FROM memos WHERE content LIKE ?`).run(`${prefix}%`);
-    db.prepare(`DELETE FROM tasks WHERE id LIKE ? OR title LIKE ?`).run(
-      `${prefix}%`,
-      `${prefix}%`,
-    );
-    db.prepare(`DELETE FROM inventory_items WHERE name LIKE ?`).run(`${prefix}%`);
-    db.prepare(`DELETE FROM patient_history WHERE patient_id LIKE ?`).run(
-      `${prefix}%`,
-    );
-    cleanupDailyLogMovements(db);
-    cleanupKiditLogbookEvents(db);
-    db.prepare(`DELETE FROM patients WHERE id LIKE ? OR name LIKE ?`).run(
-      `${prefix}%`,
-      `${prefix}%`,
-    );
-  } finally {
-    db.close();
-  }
-}
-
 function startServer() {
+  assertTemporaryDatabasePath();
   server = spawn(process.execPath, ['src/index.js'], {
     cwd: ROOT,
     env: {
       ...process.env,
       DB_PATH,
+      BACKUP_DIR,
+      PORT: String(PORT),
+      BIND_HOST: '127.0.0.1',
       STATIC_PATH,
+      NODE_ENV: 'test',
+      LOCAL_AUTH_BYPASS: '0',
+      JWT_SECRET: TEST_JWT_SECRET,
+      DASHBOARD_PIN_SECRET: crypto.randomBytes(48).toString('base64url'),
+      DISABLE_SCHEDULER: '1',
+      SMOKE_RUN_ID: prefix,
       ALLOWED_ORIGINS: 'http://127.0.0.1:5173,http://localhost:5173',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -218,9 +247,53 @@ function startServer() {
 
   server.stdout.on('data', (chunk) => {
     const text = chunk.toString();
+    serverOutput = `${serverOutput}${text}`.slice(-10000);
     if (/error|EADDRINUSE/i.test(text)) process.stdout.write(text);
   });
-  server.stderr.on('data', (chunk) => process.stderr.write(chunk));
+  server.stderr.on('data', (chunk) => {
+    const text = chunk.toString();
+    serverOutput = `${serverOutput}${text}`.slice(-10000);
+    process.stderr.write(chunk);
+  });
+  server.once('error', (error) => {
+    serverStartError = error;
+  });
+}
+
+function waitForServerExit(timeoutMs) {
+  if (isServerStopped()) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const onExit = () => {
+      clearTimeout(timer);
+      resolve(true);
+    };
+    const timer = setTimeout(() => {
+      server.off('exit', onExit);
+      resolve(false);
+    }, timeoutMs);
+    server.once('exit', onExit);
+  });
+}
+
+async function stopServer() {
+  if (isServerStopped()) return;
+
+  server.kill('SIGTERM');
+  if (await waitForServerExit(5000)) return;
+
+  server.kill('SIGKILL');
+  if (!(await waitForServerExit(5000))) {
+    throw new Error(`Unable to stop smoke server process ${server.pid}`);
+  }
+}
+
+function removeTemporaryWorkspace() {
+  if (!tempDir) return;
+  assertTemporaryDatabasePath();
+  rmSync(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  tempDir = null;
+  DB_PATH = null;
+  BACKUP_DIR = null;
 }
 
 async function testStaticRoutes() {
@@ -481,17 +554,66 @@ async function testCrud(token) {
   }
 }
 
-async function main() {
-  console.log(`Using DB_PATH=${DB_PATH}`);
-  console.log(`Using STATIC_PATH=${STATIC_PATH}`);
-  prepareAdmin();
-  startServer();
+let cleanupPromise = null;
 
-  try {
-    if (!(await waitForHealth())) {
-      throw new Error('Server did not become healthy on port 3000');
+function cleanupResources() {
+  if (cleanupPromise) return cleanupPromise;
+
+  cleanupPromise = (async () => {
+    let serverStopped = true;
+    try {
+      await stopServer();
+    } catch (error) {
+      serverStopped = false;
+      fail('server cleanup', error.message);
     }
-    pass('backend health');
+
+    if (!serverStopped) {
+      console.error(`Temporary smoke workspace retained for manual cleanup: ${tempDir}`);
+      return;
+    }
+
+    try {
+      removeTemporaryWorkspace();
+    } catch (error) {
+      fail('temporary workspace cleanup', error.message);
+      console.error(`Temporary smoke workspace retained for manual cleanup: ${tempDir}`);
+    }
+  })();
+
+  return cleanupPromise;
+}
+
+async function handleSignal(signal) {
+  console.error(`\n${signal} received; cleaning up isolated smoke resources...`);
+  await cleanupResources();
+  process.exit(signal === 'SIGINT' ? 130 : 143);
+}
+
+process.once('SIGINT', () => void handleSignal('SIGINT'));
+process.once('SIGTERM', () => void handleSignal('SIGTERM'));
+
+async function main() {
+  try {
+    createTemporaryWorkspace();
+    await initializeTemporaryDatabase();
+    prepareAdmin();
+    PORT = await allocatePort();
+    BASE_URL = `http://127.0.0.1:${PORT}`;
+
+    console.log('Smoke isolation enabled: external DB_PATH, PORT, and SMOKE_BASE_URL are ignored.');
+    console.log(`Using temporary DB_PATH=${DB_PATH}`);
+    console.log(`Using temporary BACKUP_DIR=${BACKUP_DIR}`);
+    console.log(`Using BASE_URL=${BASE_URL}`);
+    console.log(`Using STATIC_PATH=${STATIC_PATH}`);
+    pass('temporary database isolation', DB_PATH);
+
+    startServer();
+    if (!(await waitForHealth())) {
+      throw new Error(`Smoke server did not become healthy on port ${PORT}`);
+    }
+    pass('backend health', `pid=${server.pid}, ${BASE_URL}`);
+    pass('server instance identity', prefix);
 
     await testStaticRoutes();
 
@@ -507,29 +629,23 @@ async function main() {
 
     await testReadApis(token);
     await testCrud(token);
+  } catch (error) {
+    fail('fatal', error.stack || error.message);
   } finally {
-    if (server && !server.killed) {
-      server.kill('SIGTERM');
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      if (!server.killed) server.kill('SIGKILL');
-    }
-    restoreAdminAndCleanup();
+    await cleanupResources();
   }
 
-  const failed = results.filter((r) => !r.ok);
+  const failed = results.filter((result) => !result.ok);
   console.log(`\nSmoke test complete: ${results.length - failed.length}/${results.length} passed.`);
   if (failed.length > 0) {
     console.error('\nFailures:');
-    failed.forEach((r) => console.error(`- ${r.name}: ${r.detail}`));
+    failed.forEach((result) => console.error(`- ${result.name}: ${result.detail}`));
     process.exitCode = 1;
   }
 }
 
-main().catch((error) => {
+main().catch(async (error) => {
   fail('fatal', error.stack || error.message);
-  try {
-    if (server && !server.killed) server.kill('SIGTERM');
-    restoreAdminAndCleanup();
-  } catch {}
+  await cleanupResources();
   process.exitCode = 1;
 });

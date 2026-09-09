@@ -1006,6 +1006,17 @@ export function runMigrations() {
     const consumablesTableExists = db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='consumables_reports'")
       .get()
+
+    if (consumablesTableExists) {
+      if (addColumnIfNotExists(db, 'consumables_reports', 'patient_id', 'TEXT')) migrationsApplied++
+      if (addColumnIfNotExists(db, 'consumables_reports', 'patient_name', 'TEXT')) migrationsApplied++
+      if (addColumnIfNotExists(db, 'consumables_reports', 'medical_record_number', 'TEXT'))
+        migrationsApplied++
+      if (addColumnIfNotExists(db, 'consumables_reports', 'source_file', 'TEXT')) migrationsApplied++
+      db.exec('CREATE INDEX IF NOT EXISTS idx_consumables_patient ON consumables_reports(patient_id)')
+      db.exec('CREATE INDEX IF NOT EXISTS idx_consumables_date ON consumables_reports(report_date)')
+    }
+
     if (consumablesTableExists && columnExists(db, 'consumables_reports', 'source_file')) {
       const CATS = ['artificialKidney', 'dialysateCa', 'bicarbonateType']
       const rows = db

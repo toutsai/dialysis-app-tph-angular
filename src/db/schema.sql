@@ -641,12 +641,19 @@ CREATE TABLE IF NOT EXISTS medication_drafts (
 
 CREATE TABLE IF NOT EXISTS consumables_reports (
     id TEXT PRIMARY KEY,
+    patient_id TEXT,
+    patient_name TEXT,
+    medical_record_number TEXT,
     report_date TEXT,
     report_data TEXT DEFAULT '{}',  -- JSON
+    source_file TEXT,
     created_by TEXT DEFAULT '{}',
     created_at TEXT DEFAULT (datetime('now', 'localtime')),
     updated_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
+
+CREATE INDEX IF NOT EXISTS idx_consumables_patient ON consumables_reports(patient_id);
+CREATE INDEX IF NOT EXISTS idx_consumables_date ON consumables_reports(report_date);
 
 -- ========================================
 -- 系統配置與日誌

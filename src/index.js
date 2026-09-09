@@ -44,6 +44,7 @@ ensureDefaultAdmin().catch(err => {
 
 const app = express()
 const PORT = process.env.PORT || 3000
+const BIND_HOST = process.env.BIND_HOST || '0.0.0.0'
 
 // ========================================
 // 中介軟體 (Middleware)
@@ -175,7 +176,10 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
-    mode: 'standalone'
+    mode: 'standalone',
+    ...(process.env.NODE_ENV === 'test' && process.env.SMOKE_RUN_ID
+      ? { smokeRunId: process.env.SMOKE_RUN_ID }
+      : {})
   })
 })
 
@@ -284,7 +288,7 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
 // 啟動伺服器
 // ========================================
 
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, BIND_HOST, () => {
   console.log('\n========================================')
   console.log('  透析排程系統 - 本地伺服器')
   console.log('========================================')
@@ -293,18 +297,24 @@ app.listen(PORT, '0.0.0.0', () => {
 
   // 顯示區域網路 IP
   import('os').then(os => {
-    const interfaces = os.networkInterfaces()
-    for (const name of Object.keys(interfaces)) {
-      for (const iface of interfaces[name]) {
-        if (iface.family === 'IPv4' && !iface.internal) {
-          console.log(`📍 區域網路: http://${iface.address}:${PORT}`)
+    if (BIND_HOST === '0.0.0.0') {
+      const interfaces = os.networkInterfaces()
+      for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+          if (iface.family === 'IPv4' && !iface.internal) {
+            console.log(`📍 區域網路: http://${iface.address}:${PORT}`)
+          }
         }
       }
     }
     console.log('========================================\n')
 
-    // 啟動定時任務調度器
-    startScheduler()
+    if (process.env.NODE_ENV === 'test' && process.env.DISABLE_SCHEDULER === '1') {
+      console.log('⏭️ 已停用定時任務調度器')
+    } else {
+      // 啟動定時任務調度器
+      startScheduler()
+    }
   })
 })
 
