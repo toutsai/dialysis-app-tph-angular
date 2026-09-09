@@ -98,11 +98,30 @@ export const BIWEEKLY_FREQUENCIES: string[] = ['一四', '二五', '三六', '�
  * （src/services/exceptionHandler.js、scheduleSync.js）。
  * 2026-09-05 使用者裁定：每日排程、護理分組、我的病人三頁不顯示這些字（簡化畫面），
  * 資料照寫、歸檔/歷史不變；調班詳情仍在訊息中心與病人詳情的交班留言可查。
- * 顯示端一律先用 stripExceptionNotes 過濾 manualNote，再拆標籤。
+ * 2026-09-10 使用者再裁定：「常規門診」病人因調班產生的備註要顯示，讓常規病人的變動一眼可見。
+ * 常規門診＝病人清單「病人身份」分類 patientCategory 空或 'opd_regular' 且未刪除
+ * （與年度報表常規門診人數 src/services/patientCensus.js isRegularCategory、主護清單同一定義，
+ * 不看目前身分：常規病人暫轉住院/急診仍顯示）；非常規/查無主檔者維持不顯示。
+ * 顯示端一律用 filterExceptionNotes(manualNote, 病人主檔) 過濾，再拆標籤。
  */
 const EXCEPTION_NOTE_RE = /\((換班|臨時加洗|與[^()]*互調)\)/g
 export function stripExceptionNotes(note: string | null | undefined): string {
   return String(note || '').replace(EXCEPTION_NOTE_RE, ' ').replace(/\s+/g, ' ').trim()
+}
+
+/** 病人清單分類是否為常規門診（patientCategory 空或 'opd_regular'，且未刪除） */
+export function isRegularOpdPatient(patient: Record<string, unknown> | null | undefined): boolean {
+  if (!patient || patient['isDeleted']) return false
+  const category = patient['patientCategory']
+  return !category || category === 'opd_regular'
+}
+
+/** 常規門診病人保留調班備註，其餘剝除 */
+export function filterExceptionNotes(
+  note: string | null | undefined,
+  patient: Record<string, unknown> | null | undefined,
+): string {
+  return isRegularOpdPatient(patient) ? String(note || '').trim() : stripExceptionNotes(note)
 }
 
 // 【新增】頻率數字對應表（用於自動備註）

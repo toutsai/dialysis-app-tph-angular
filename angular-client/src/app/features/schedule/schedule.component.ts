@@ -61,7 +61,7 @@ import {
   createEmptySlotData,
   generateAutoNote,
   getUnifiedCellStyle,
-  stripExceptionNotes,
+  filterExceptionNotes,
 } from '@/utils/scheduleUtils';
 import {
   formatDateToYYYYMMDD,
@@ -466,7 +466,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
         patientName: ((patient?.['name'] || patientInfo?.['name']) as string) || '',
         medicalRecordNumber: ((patient?.['medicalRecordNumber'] || patientInfo?.['medicalRecordNumber']) as string) || '',
         mode,
-        combinedNote: this.buildCombinedNote(slotData),
+        combinedNote: this.buildCombinedNote(slotData, patient),
         cellStyle: getUnifiedCellStyle(slotData, patientInfo, null, dailyTypes),
         messageTypes: pendingTypes,
         wardNumber: ((patientInfo?.['wardNumber'] || patient?.['wardNumber']) as string) || '',
@@ -1970,11 +1970,15 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   // Private methods
   // ---------------------------------------------------------------------------
 
-  private buildCombinedNote(slotData: ScheduleSlotData | undefined): string {
+  private buildCombinedNote(
+    slotData: ScheduleSlotData | undefined,
+    patient?: Record<string, unknown>,
+  ): string {
     if (!slotData) return '';
     const autoTags = (slotData.autoNote || '').split(' ').filter(Boolean);
-    // 調班備註 (換班)/(臨時加洗)/(與X互調) 不顯示（2026-09-05 使用者裁定；列印區塊同源亦不顯示）
-    const manualTags = stripExceptionNotes(slotData.manualNote).split(' ').filter(Boolean);
+    // 調班備註 (換班)/(臨時加洗)/(與X互調)：只有病人清單分類為常規門診的病人才顯示
+    // （2026-09-05 全部隱藏 → 2026-09-10 常規門診病人加回；列印區塊同源）
+    const manualTags = filterExceptionNotes(slotData.manualNote, patient).split(' ').filter(Boolean);
     const combinedTags = [...new Set([...autoTags, ...manualTags])];
     const finalTags = combinedTags.filter((tag) => !['住', '急'].includes(tag));
     return finalTags.join(' ');
