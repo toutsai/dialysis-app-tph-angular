@@ -47,6 +47,11 @@ interface BasicProfileForm {
   emergencyContact: string;
   emergencyPhone: string;
   contactRelationship: string;
+  // 過敏史（站內欄位，2026-09-10）：'Y' | 'N' | ''；內容只在 'Y' 時有意義
+  allergyDrug: string;
+  allergyDrugDetail: string;
+  allergyFood: string;
+  allergyFoodDetail: string;
   // 住址
   phone: string;
   mobile: string;
@@ -143,6 +148,10 @@ export class PatientBasicProfileComponent implements OnChanges {
       emergencyContact: '',
       emergencyPhone: '',
       contactRelationship: '',
+      allergyDrug: '',
+      allergyDrugDetail: '',
+      allergyFood: '',
+      allergyFoodDetail: '',
       phone: '',
       mobile: '',
       postalCode: '',
@@ -177,6 +186,10 @@ export class PatientBasicProfileComponent implements OnChanges {
       emergencyContact: s(p.emergencyContact),
       emergencyPhone: s(p.emergencyPhone),
       contactRelationship: s(p.contactRelationship),
+      allergyDrug: s(p.allergyDrug),
+      allergyDrugDetail: s(p.allergyDrugDetail),
+      allergyFood: s(p.allergyFood),
+      allergyFoodDetail: s(p.allergyFoodDetail),
       phone: s(p.phone),
       mobile: s(p.mobile),
       postalCode: s(p.postalCode),
@@ -191,6 +204,25 @@ export class PatientBasicProfileComponent implements OnChanges {
   patch<K extends keyof BasicProfileForm>(key: K, value: BasicProfileForm[K]): void {
     this.form.update((f) => ({ ...f, [key]: value }));
   }
+
+  /** 過敏 是/否 切換：非「是」時內容欄一併清空（內容只在「是」時有意義） */
+  onAllergyFlagChange(kind: 'Drug' | 'Food', value: string): void {
+    const flagKey = `allergy${kind}` as 'allergyDrug' | 'allergyFood';
+    const detailKey = `allergy${kind}Detail` as 'allergyDrugDetail' | 'allergyFoodDetail';
+    this.form.update((f) => ({
+      ...f,
+      [flagKey]: value,
+      [detailKey]: value === 'Y' ? f[detailKey] : '',
+    }));
+  }
+
+  /** 「是」但未填內容：提示不擋存（使用者 2026-09-10 決定） */
+  readonly allergyDrugMissing = computed(
+    () => this.form().allergyDrug === 'Y' && !this.form().allergyDrugDetail.trim(),
+  );
+  readonly allergyFoodMissing = computed(
+    () => this.form().allergyFood === 'Y' && !this.form().allergyFoodDetail.trim(),
+  );
 
   /** 換大類時，若已選細類不屬於新大類則清空 */
   onCategoryChange(cat: string): void {
@@ -242,6 +274,10 @@ export class PatientBasicProfileComponent implements OnChanges {
       emergencyContact: f.emergencyContact.trim(),
       emergencyPhone: f.emergencyPhone.trim(),
       contactRelationship: f.contactRelationship,
+      allergyDrug: f.allergyDrug,
+      allergyDrugDetail: f.allergyDrug === 'Y' ? f.allergyDrugDetail.trim() : '',
+      allergyFood: f.allergyFood,
+      allergyFoodDetail: f.allergyFood === 'Y' ? f.allergyFoodDetail.trim() : '',
       phone: f.phone.trim(),
       mobile: f.mobile.trim(),
       postalCode: f.postalCode.trim(),

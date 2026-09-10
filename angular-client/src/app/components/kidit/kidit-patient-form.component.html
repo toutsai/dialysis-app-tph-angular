@@ -213,6 +213,49 @@
       </div>
     </div>
 
+    <!-- 站內欄：過敏史（2026-09-10；匯入格式無此欄，不匯出 CSV）；存檔回寫病人基本資料 -->
+    <div class="form-section">
+      <h4 class="section-title">過敏史 <span class="kd-note">站內欄位，不匯出 KiDit</span></h4>
+
+      <div class="kd-row">
+        <div class="kd-field">
+          <label>藥物過敏</label>
+          <div class="kd-choice-group">
+            @for (opt of opts.yesNo; track opt.value) {
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.allergyDrug === opt.value"
+                      (click)="setAllergyFlag('Drug', opt.value)">{{ opt.label }}</button>
+            }
+          </div>
+        </div>
+        <div class="kd-field kd-field-grow">
+          <label>藥物過敏內容</label>
+          <input type="text" class="w-full" [(ngModel)]="formData.allergyDrugDetail"
+                 placeholder="例：Penicillin、NSAID" [disabled]="formData.allergyDrug !== 'Y'" />
+        </div>
+        <span class="kd-note kd-note-bad" *ngIf="allergyMissing('Drug')">已選「是」但尚未填藥物內容</span>
+      </div>
+
+      <div class="kd-row">
+        <div class="kd-field">
+          <label>食物過敏</label>
+          <div class="kd-choice-group">
+            @for (opt of opts.yesNo; track opt.value) {
+              <button type="button" class="kd-choice"
+                      [class.active]="formData.allergyFood === opt.value"
+                      (click)="setAllergyFlag('Food', opt.value)">{{ opt.label }}</button>
+            }
+          </div>
+        </div>
+        <div class="kd-field kd-field-grow">
+          <label>食物過敏內容</label>
+          <input type="text" class="w-full" [(ngModel)]="formData.allergyFoodDetail"
+                 placeholder="例：海鮮、花生" [disabled]="formData.allergyFood !== 'Y'" />
+        </div>
+        <span class="kd-note kd-note-bad" *ngIf="allergyMissing('Food')">已選「是」但尚未填食物內容</span>
+      </div>
+    </div>
+
     <div class="form-section">
       <h4 class="section-title">住址</h4>
 

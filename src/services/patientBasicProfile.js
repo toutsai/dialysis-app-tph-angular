@@ -25,6 +25,11 @@ export const BASIC_FIELD_MAP = {
   emergencyContact: 'emergency_contact',
   emergencyPhone: 'emergency_phone',
   contactRelationship: 'contact_relationship',
+  // 過敏史（2026-09-10 站內欄位，官方匯入格式無此欄）：Y/N + 內容
+  allergyDrug: 'allergy_drug',
+  allergyDrugDetail: 'allergy_drug_detail',
+  allergyFood: 'allergy_food',
+  allergyFoodDetail: 'allergy_food_detail',
   // 只補空、永不覆寫：病歷號是識別鍵；初透日顯示權威仍是 patientStatus.isFirstDialysis.date
   medicalRecordNumber: 'medical_record_number',
   firstDialysisDate: 'first_dialysis_date',
@@ -107,6 +112,11 @@ export function mapKiditProfileToBasic(profile) {
     address: pick('address'),
     emergencyContact: pick('contactPerson'),
     contactRelationship: pick('relationship'),
+    // 過敏史站內欄（2026-09-10）：KiDit 建檔表單同鍵名；空白不清除（upsert skipEmpty）
+    allergyDrug: pick('allergyDrug'),
+    allergyDrugDetail: pick('allergyDrugDetail'),
+    allergyFood: pick('allergyFood'),
+    allergyFoodDetail: pick('allergyFoodDetail'),
     firstDialysisDate: pick('firstDialysisDate'),
   }
 }

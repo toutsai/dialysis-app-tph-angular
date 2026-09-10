@@ -355,6 +355,11 @@ function formatPatient(row) {
     isWelfare: row.is_welfare ?? null,
     kiditPatientCategory: row.kidit_patient_category ?? null,
     contactRelationship: row.contact_relationship ?? null,
+    // 過敏史（2026-09-10 站內欄位）：Y/N + 內容
+    allergyDrug: row.allergy_drug ?? null,
+    allergyDrugDetail: row.allergy_drug_detail ?? null,
+    allergyFood: row.allergy_food ?? null,
+    allergyFoodDetail: row.allergy_food_detail ?? null,
     basicSource: row.basic_source ?? 'manual',
     hisSyncedAt: row.his_synced_at ?? null,
     physician: row.physician,
@@ -443,6 +448,10 @@ function toDbFormat(data, existingPatient = null) {
   if (data.isWelfare !== undefined) result.is_welfare = data.isWelfare
   if (data.kiditPatientCategory !== undefined) result.kidit_patient_category = data.kiditPatientCategory
   if (data.contactRelationship !== undefined) result.contact_relationship = data.contactRelationship
+  if (data.allergyDrug !== undefined) result.allergy_drug = data.allergyDrug
+  if (data.allergyDrugDetail !== undefined) result.allergy_drug_detail = data.allergyDrugDetail
+  if (data.allergyFood !== undefined) result.allergy_food = data.allergyFood
+  if (data.allergyFoodDetail !== undefined) result.allergy_food_detail = data.allergyFoodDetail
   if (data.basicSource !== undefined) result.basic_source = data.basicSource
   if (data.hisSyncedAt !== undefined) result.his_synced_at = data.hisSyncedAt
   if (data.physician !== undefined) result.physician = data.physician

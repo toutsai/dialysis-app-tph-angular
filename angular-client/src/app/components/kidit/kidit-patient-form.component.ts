@@ -90,12 +90,28 @@ export class KiditPatientFormComponent implements OnChanges {
         hospitalStartDate: k.hospitalStartDate || '',
         diagnosisCategory: k.diagnosisCategory || '',
         diagnosisSubcategory: k.diagnosisSubcategory || '',
+        // 站內欄：過敏史（2026-09-10；匯入格式無此欄，不匯出 CSV）；存檔經 mapKiditProfileToBasic 回寫 patients
+        allergyDrug: p.allergyDrug || '',
+        allergyDrugDetail: p.allergyDrugDetail || '',
+        allergyFood: p.allergyFood || '',
+        allergyFoodDetail: p.allergyFoodDetail || '',
       };
     } else {
       this.formData = {};
     }
     this.rocBirthInput = isoToRocDisplay(this.formData?.birthDate || '');
     this.rocBirthError = false;
+  }
+
+  /** 過敏 是/否 切換：非「是」時內容欄一併清空 */
+  setAllergyFlag(kind: 'Drug' | 'Food', value: string): void {
+    this.formData[`allergy${kind}`] = value;
+    if (value !== 'Y') this.formData[`allergy${kind}Detail`] = '';
+  }
+
+  /** 「是」但未填內容：提示不擋存 */
+  allergyMissing(kind: 'Drug' | 'Food'): boolean {
+    return this.formData?.[`allergy${kind}`] === 'Y' && !String(this.formData?.[`allergy${kind}Detail`] || '').trim();
   }
 
   /** 西元日期欄輸入 → 同步民國顯示欄（官方版面兩欄並列，任填一欄自動換算） */

@@ -156,6 +156,14 @@ export interface Patient extends BaseEntity {
   isWelfare?: string;
   /** KiDit 02 病患類別（00 健保/11 自費）；與 patientCategory(opd_regular/non_regular) 無關 */
   kiditPatientCategory?: string;
+  /** 過敏史（站內欄位，2026-09-10）：藥物過敏 'Y'/'N' */
+  allergyDrug?: string;
+  /** 藥物過敏內容 */
+  allergyDrugDetail?: string;
+  /** 食物過敏 'Y'/'N' */
+  allergyFood?: string;
+  /** 食物過敏內容 */
+  allergyFoodDetail?: string;
   /** 基本資料最後寫入來源：manual / kidit / kidit_backfill / his */
   basicSource?: string;
   hisSyncedAt?: string | null;
