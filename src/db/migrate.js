@@ -165,6 +165,11 @@ export function runMigrations() {
         ['contact_relationship', 'TEXT'],
         ['basic_source', "TEXT DEFAULT 'manual'"],
         ['his_synced_at', 'TEXT'],
+        // 過敏史（2026-09-10 站內欄位，不匯出 KiDit CSV）：藥物/食物 Y/N + 內容
+        ['allergy_drug', 'TEXT'],
+        ['allergy_drug_detail', 'TEXT'],
+        ['allergy_food', 'TEXT'],
+        ['allergy_food_detail', 'TEXT'],
       ]) {
         if (addColumnIfNotExists(db, 'patients', col, def)) migrationsApplied++
       }

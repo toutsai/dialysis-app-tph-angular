@@ -85,6 +85,11 @@ CREATE TABLE IF NOT EXISTS patients (
     is_welfare TEXT,                  -- 低收入戶 Y/N
     kidit_patient_category TEXT,      -- KiDit 02 病患類別（00 健保/11 自費），與 patient_category 不同義
     contact_relationship TEXT,        -- 聯絡人關係（聯絡人沿用 emergency_contact）
+    -- 過敏史（2026-09-10 站內欄位，KiDit 匯入格式無此欄、不匯出 CSV）：Y/N + 內容
+    allergy_drug TEXT,                -- 藥物過敏 Y/N
+    allergy_drug_detail TEXT,         -- 藥物過敏內容（allergy_drug='Y' 時填）
+    allergy_food TEXT,                -- 食物過敏 Y/N
+    allergy_food_detail TEXT,         -- 食物過敏內容（allergy_food='Y' 時填）
     basic_source TEXT DEFAULT 'manual', -- 最後寫入來源 manual/kidit/kidit_backfill/his
     his_synced_at TEXT,
 
