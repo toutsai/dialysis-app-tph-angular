@@ -1,4 +1,5 @@
-import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { quarterSaveQueue } from '@/services/quarterSaveQueue';
+import { Component, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -6,7 +7,7 @@ import { PatientStoreService } from '@services/patient-store.service';
 import { AuthService } from '@services/auth.service';
 import { localApi } from '@/services/localApiClient';
 import { quarterRange, currentQuarter } from '@/services/kiditVascularCsvService';
-import { fetchQuarterRecords, saveQuarterRecord } from '@/services/kiditQuarterInputService';
+import { fetchQuarterRecords } from '@/services/kiditQuarterInputService';
 import {
   HDRX_FIELD_KEYS,
   HDRX_MODE_OPTIONS,
@@ -76,14 +77,25 @@ export class KiditHdrxQuarterlyComponent implements OnInit, OnDestroy {
     return all.filter((r) => r.nurseName === f);
   });
 
-  private saveTimer: ReturnType<typeof setTimeout> | null = null;
-  private pendingSaves = new Set<string>();
+  private readonly saveQueue = quarterSaveQueue('hdrx');
+  private loadGeneration = 0;
 
   ngOnInit(): void {
+    this.saveQueue.listen((state) => this.saveState.set(state));
     this.load();
   }
 
+  @HostListener('window:beforeunload', ['$event'])
+  beforeUnload(event: BeforeUnloadEvent): void {
+    if (this.saveQueue.hasPending()) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+  }
+
   ngOnDestroy(): void {
+    ++this.loadGeneration;
+    this.saveQueue.listen(null);
     this.flushPendingSaves();
   }
 
@@ -104,19 +116,23 @@ export class KiditHdrxQuarterlyComponent implements OnInit, OnDestroy {
   }
 
   async load(): Promise<void> {
+    const generation = ++this.loadGeneration;
+    const quarter = this.quarter();
     this.isLoading.set(true);
     this.rows.set([]);
-    this.saveState.set('');
     try {
       const { endDate } = quarterRange(this.year(), this.q());
+      await this.saveQueue.flush();
+      if (generation !== this.loadGeneration) return;
       await this.patientStore.fetchPatientsIfNeeded();
       const [records, historyAll, care] = await Promise.all([
-        fetchQuarterRecords(this.quarter()),
+        fetchQuarterRecords(quarter),
         // 醫囑歷史（created_at DESC）：處方可能上月/上上月開立，逐病人取「異動日 ≤ 季末」最新一筆
         localApi.get('/orders/history'),
         localApi.get('/nursing/patient-care'),
       ]);
 
+      if (generation !== this.loadGeneration) return;
       // 照護清單：patientId → 主護姓名（排除名單者不列入，同主護反查慣例）
       const excludedNurses = new Set<string>((care as any)?.excludedNurseIds || []);
       const nurseByPatient = new Map<string, string>();
@@ -169,7 +185,7 @@ export class KiditHdrxQuarterlyComponent implements OnInit, OnDestroy {
         const hist = latestOrderByPatient.get(p.id);
         const { values: prefill, akName, warnings } = buildHdrxPrefill(p, endDate, hist?.orders);
         if (!hist) warnings.push('季末前無醫囑歷史，採病人檔現行醫囑');
-        const saved = hdrxByPatient.get(p.id) || {};
+        const saved = (this.saveQueue.get(quarter, p.id) as any)?.hdrx || hdrxByPatient.get(p.id) || {};
         const overrideValues: Record<string, string> = { ...(saved.values || {}) };
         return {
           patientId: p.id,
@@ -197,10 +213,11 @@ export class KiditHdrxQuarterlyComponent implements OnInit, OnDestroy {
       );
       this.rows.set(built);
     } catch (error) {
+      if (generation !== this.loadGeneration) return;
       console.error('載入 HD處方季度資料失敗:', error);
       alert('載入 HD處方季度資料失敗，請稍後再試。');
     } finally {
-      this.isLoading.set(false);
+      if (generation === this.loadGeneration) this.isLoading.set(false);
     }
   }
 
@@ -222,39 +239,16 @@ export class KiditHdrxQuarterlyComponent implements OnInit, OnDestroy {
   }
 
   private scheduleSave(patientId: string): void {
-    this.pendingSaves.add(patientId);
-    this.saveState.set('saving');
-    if (this.saveTimer) clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => this.doSave(), 800);
+    if (this.isLoading()) return;
+    const row = this.rows().find((r) => r.patientId === patientId);
+    if (!row) return;
+    const data = { hdrx: { excluded: row.excluded, values: row.overrideValues } };
+    this.saveQueue.enqueue(this.quarter(), patientId, data);
   }
 
-  private async doSave(): Promise<void> {
-    const ids = [...this.pendingSaves];
-    this.pendingSaves.clear();
-    const byId = new Map(this.rows().map((r) => [r.patientId, r]));
-    try {
-      for (const pid of ids) {
-        const row = byId.get(pid);
-        if (!row) continue;
-        await saveQuarterRecord(this.quarter(), pid, {
-          hdrx: { excluded: row.excluded, values: row.overrideValues },
-        } as any);
-      }
-      this.saveState.set('saved');
-    } catch (error) {
-      console.error('儲存 HD處方覆寫失敗:', error);
-      ids.forEach((id) => this.pendingSaves.add(id));
-      this.saveState.set('error');
-    }
-  }
+  retrySave(): void { void this.saveQueue.flush(); }
 
-  private flushPendingSaves(): void {
-    if (this.saveTimer) {
-      clearTimeout(this.saveTimer);
-      this.saveTimer = null;
-    }
-    if (this.pendingSaves.size) void this.doSave();
-  }
+  private flushPendingSaves(): void { void this.saveQueue.flush(); }
 
   exportCsv(): void {
     const rows = this.rows().filter((r) => !r.excluded);

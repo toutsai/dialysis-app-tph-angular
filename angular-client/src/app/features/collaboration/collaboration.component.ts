@@ -429,7 +429,7 @@ export class CollaborationComponent implements OnInit, OnDestroy {
       const existingLog: any = await this.logsApi.fetchById(dateStr);
       const existingAnnouncements = existingLog?.announcements || [];
       existingAnnouncements.push(newAnnouncement);
-      await this.logsApi.save(dateStr, { announcements: existingAnnouncements } as any);
+      await this.logsApi.save(dateStr, { version: existingLog?.version ?? 'new', announcements: existingAnnouncements } as any);
       this.newAnnouncementText.set('');
       // Refresh bulletin
       await this.refreshBulletin(dateStr);

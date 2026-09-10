@@ -1,4 +1,5 @@
-import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { quarterSaveQueue } from '@/services/quarterSaveQueue';
+import { Component, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -9,7 +10,6 @@ import { quarterRange, currentQuarter } from '@/services/kiditVascularCsvService
 import {
   KiditQuarterData,
   fetchQuarterRecords,
-  saveQuarterRecord,
   buildPrefill,
   mergeWithPrefill,
   YN_OPTIONS,
@@ -72,8 +72,8 @@ export class KiditQuarterlyInputComponent implements OnInit, OnDestroy {
   /** 病人 → 合併後表單資料（saved 蓋 prefill；ngModel 直接綁定物件屬性） */
   private dataByPatient: Record<string, KiditQuarterData> = {};
 
-  private saveTimer: ReturnType<typeof setTimeout> | null = null;
-  private pendingSaves = new Set<string>();
+  private readonly saveQueue = quarterSaveQueue('nurse');
+  private loadGeneration = 0;
 
   /** admin/editor 可切換檢視的主護；contributor 鎖定自己 */
   readonly canPickNurse = computed(() => {
@@ -86,10 +86,21 @@ export class KiditQuarterlyInputComponent implements OnInit, OnDestroy {
   );
 
   ngOnInit(): void {
+    this.saveQueue.listen((state) => this.saveState.set(state));
     this.load();
   }
 
+  @HostListener('window:beforeunload', ['$event'])
+  beforeUnload(event: BeforeUnloadEvent): void {
+    if (this.saveQueue.hasPending()) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+  }
+
   ngOnDestroy(): void {
+    ++this.loadGeneration;
+    this.saveQueue.listen(null);
     this.flushPendingSaves();
   }
 
@@ -99,6 +110,8 @@ export class KiditQuarterlyInputComponent implements OnInit, OnDestroy {
   }
 
   async load(): Promise<void> {
+    if (this.isLoading()) return;
+    const generation = ++this.loadGeneration;
     this.isLoading.set(true);
     this.loadError.set('');
     try {
@@ -107,6 +120,7 @@ export class KiditQuarterlyInputComponent implements OnInit, OnDestroy {
         this.patientStore.fetchPatientsIfNeeded(),
       ]);
 
+      if (generation !== this.loadGeneration) return;
       const excluded = new Set<string>((care as any)?.excludedNurseIds || []);
       const assignments: NurseAssignment[] = ((care as any)?.assignments || []).filter(
         (a: NurseAssignment) => !excluded.has(a.nurseId) && (a.patientIds || []).length > 0,
@@ -134,6 +148,9 @@ export class KiditQuarterlyInputComponent implements OnInit, OnDestroy {
 
   /** 載入目前季度＋目前主護的病人資料、儲存值與預帶值 */
   private async loadQuarterData(): Promise<void> {
+    const generation = ++this.loadGeneration;
+    const quarter = this.quarter();
+    this.dataByPatient = {};
     const assignment = this.targetNurse();
     if (!assignment) {
       this.patients.set([]);
@@ -152,14 +169,17 @@ export class KiditQuarterlyInputComponent implements OnInit, OnDestroy {
     const patientIds = patients.map((p: any) => p.id);
     const { startDate, endDate } = this.range();
 
+    await this.saveQueue.flush();
+    if (generation !== this.loadGeneration) return;
     const [records, medsAll, labs] = await Promise.all([
-      fetchQuarterRecords(this.quarter()),
+      fetchQuarterRecords(quarter),
       localApi.get('/orders/medications'),
       patientIds.length
         ? localApi.post('/patients/lab-reports/query', { field: 'patientId', values: patientIds })
         : Promise.resolve([]),
     ]);
 
+    if (generation !== this.loadGeneration) return;
     const savedByPatient = new Map<string, KiditQuarterData>();
     for (const r of records) savedByPatient.set(r.patientId, r.data || {});
 
@@ -183,7 +203,7 @@ export class KiditQuarterlyInputComponent implements OnInit, OnDestroy {
         quarterStart: startDate,
         quarterEnd: endDate,
       });
-      merged[p.id] = mergeWithPrefill(savedByPatient.get(p.id) || {}, prefill);
+      merged[p.id] = mergeWithPrefill(this.saveQueue.get(quarter, p.id) || savedByPatient.get(p.id) || {}, prefill);
     }
     this.dataByPatient = merged;
 
@@ -193,6 +213,7 @@ export class KiditQuarterlyInputComponent implements OnInit, OnDestroy {
   }
 
   async changeQuarter(offset: number): Promise<void> {
+    if (this.isLoading()) return;
     this.flushPendingSaves();
     let q = this.q() + offset;
     let y = this.year();
@@ -212,6 +233,7 @@ export class KiditQuarterlyInputComponent implements OnInit, OnDestroy {
   }
 
   async selectNurse(nurseId: string): Promise<void> {
+    if (this.isLoading()) return;
     this.flushPendingSaves();
     this.targetNurseId.set(nurseId);
     this.selectedPatientId.set(null);
@@ -277,37 +299,16 @@ export class KiditQuarterlyInputComponent implements OnInit, OnDestroy {
 
   /** 任一欄位變更：標記待存並 debounce 自動儲存 */
   onFieldChange(patientId: string): void {
-    this.pendingSaves.add(patientId);
-    this.saveState.set('saving');
-    if (this.saveTimer) clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => this.doSave(), 800);
-  }
-
-  private async doSave(): Promise<void> {
-    const ids = [...this.pendingSaves];
-    this.pendingSaves.clear();
+    const current = this.dataByPatient[patientId];
+    if (!current || this.isLoading()) return;
     const cu = this.authService.currentUser();
-    try {
-      for (const pid of ids) {
-        const data = this.dataByPatient[pid];
-        if (!data) continue;
-        data.nurse = { uid: String(cu?.uid || cu?.id || ''), name: String(cu?.name || '') };
-        await saveQuarterRecord(this.quarter(), pid, data);
-      }
-      this.saveState.set('saved');
-    } catch (error) {
-      console.error('儲存季度 KiDit 輸入失敗:', error);
-      ids.forEach((id) => this.pendingSaves.add(id));
-      this.saveState.set('error');
-    }
+    const data = { ...current, nurse: { uid: String(cu?.uid || cu?.id || ''), name: String(cu?.name || '') } };
+    this.saveQueue.enqueue(this.quarter(), patientId, data);
   }
 
-  /** 離開頁面/切季度/切主護前立即送出未儲存變更 */
-  private flushPendingSaves(): void {
-    if (this.saveTimer) {
-      clearTimeout(this.saveTimer);
-      this.saveTimer = null;
-    }
-    if (this.pendingSaves.size) void this.doSave();
-  }
+  retrySave(): void { void this.saveQueue.flush(); }
+
+  private flushPendingSaves(): void { void this.saveQueue.flush(); }
+
+
 }

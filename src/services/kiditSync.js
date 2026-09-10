@@ -159,10 +159,19 @@ export async function syncEventsToKiditLogbook(dateStr, dailyLogData) {
     const existingEvents = existingDoc
       ? JSON.parse(existingDoc.events || '[]')
       : []
+    // Keep removed event snapshots, including completed forms, outside active
+    // reporting. Reinstating the same movement ID restores its last saved form.
+    const archiveKey = `kidit_removed_events_${dateStr}`
+    const archivedRow = db.prepare('SELECT config_data FROM site_config WHERE id = ?').get(archiveKey)
+    const archived = JSON.parse(archivedRow?.config_data || '[]')
+    const recoverable = new Map(archived.map(entry => [entry.event.id, entry.event]))
+    const activeIds = new Set(existingEvents.map(event => event.id))
 
     // 建立事件映射，保留現有的勾選狀態
     const eventsMap = new Map()
-    dailyLogEvents.forEach(e => eventsMap.set(e.id, e))
+    dailyLogEvents.forEach(e => eventsMap.set(e.id, {
+      ...(!activeIds.has(e.id) ? recoverable.get(e.id) : undefined), ...e,
+    }))
 
     existingEvents.forEach(existing => {
       if (eventsMap.has(existing.id)) {
@@ -178,6 +187,8 @@ export async function syncEventsToKiditLogbook(dateStr, dailyLogData) {
         // 相容舊資料：access_ 事件已停產，但上面掛了建檔/造管手填資料或勾選者原樣保留，
         // 避免該日重建時連申報資料一起消失；純顯示用的 access_ 事件則隨重建淘汰
         eventsMap.set(existing.id, existing)
+      } else {
+        archived.push({ removedAt: new Date().toLocaleString('sv-SE'), reason: 'source_removed', event: existing })
       }
     })
 
@@ -197,13 +208,18 @@ export async function syncEventsToKiditLogbook(dateStr, dailyLogData) {
       dialysisMode: e.dialysisMode || '',
     }))
 
-    db.prepare(`
-      INSERT INTO kidit_logbook (id, date, events, updated_at)
-      VALUES (?, ?, ?, datetime('now', 'localtime'))
-      ON CONFLICT(id) DO UPDATE SET
-        events = excluded.events,
-        updated_at = datetime('now', 'localtime')
-    `).run(dateStr, dateStr, JSON.stringify(eventsToSave))
+    db.transaction(() => {
+      if (archived.length) db.prepare(`INSERT INTO site_config (id, config_data, updated_at)
+        VALUES (?, ?, datetime('now','localtime')) ON CONFLICT(id) DO UPDATE SET
+        config_data = excluded.config_data, updated_at = excluded.updated_at`).run(archiveKey, JSON.stringify(archived))
+      db.prepare(`
+        INSERT INTO kidit_logbook (id, date, events, updated_at)
+        VALUES (?, ?, ?, datetime('now', 'localtime'))
+        ON CONFLICT(id) DO UPDATE SET
+          events = excluded.events,
+          updated_at = datetime('now', 'localtime')
+      `).run(dateStr, dateStr, JSON.stringify(eventsToSave))
+    })()
 
     console.log(`[KIDIT Sync] ✅ 成功同步 ${eventsToSave.length} 個事件到 kidit_logbook`)
 

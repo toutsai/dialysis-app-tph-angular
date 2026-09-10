@@ -2,8 +2,7 @@
 // HTTP 攔截器：自動附加 JWT token 並處理 401 回應
 
 import { HttpInterceptorFn, HttpHandlerFn, HttpRequest } from '@angular/common/http';
-import { inject } from '@angular/core';
-import { Router } from '@angular/router';
+import { notifyUnauthorized } from '@/services/localApiClient';
 import { catchError, throwError } from 'rxjs';
 
 /**
@@ -15,7 +14,7 @@ export const authInterceptor: HttpInterceptorFn = (
   req: HttpRequest<unknown>,
   next: HttpHandlerFn,
 ) => {
-  const router = inject(Router);
+  const requestToken = sessionStorage.getItem('auth_token');
 
   // 只攔截 /api 相關請求
   if (req.url.includes('/api')) {
@@ -31,12 +30,11 @@ export const authInterceptor: HttpInterceptorFn = (
 
   return next(req).pipe(
     catchError((error) => {
-      if (error.status === 401) {
+      if (error.status === 401 && req.url.includes('/api') && requestToken && requestToken === sessionStorage.getItem('auth_token')) {
         // Token 過期或無效，清除 token 並導向登入頁（帶上原因供登入頁顯示提示）
-        sessionStorage.removeItem('auth_token');
         const code = (error.error as { code?: string } | null)?.code;
         const reason = code === 'TOKEN_BLACKLISTED' ? 'another_device' : 'expired';
-        router.navigate(['/login'], { queryParams: { reason } });
+        notifyUnauthorized(reason);
       }
       return throwError(() => error);
     }),

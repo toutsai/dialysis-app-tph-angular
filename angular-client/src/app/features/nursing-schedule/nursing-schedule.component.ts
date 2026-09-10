@@ -16,6 +16,8 @@ import { FormsModule } from '@angular/forms';
 import { AuthService } from '@app/core/services/auth.service';
 import { ApiConfigService } from '@services/api-config.service';
 import { ApiManagerService } from '@app/core/services/api-manager.service';
+import { ApiService } from '@app/core/services/api.service';
+import { firstValueFrom } from 'rxjs';
 import { NotificationService } from '@app/core/services/notification.service';
 import { GroupAssignerService } from './group-assigner.service';
 import {
@@ -45,6 +47,23 @@ export class NursingScheduleComponent implements OnInit {
   protected readonly auth = inject(AuthService);
   private readonly apiManagerService = inject(ApiManagerService);
   private readonly notificationService = inject(NotificationService);
+  private readonly api = inject(ApiService);
+  isLoadingDuties = signal(true);
+  isSavingDuties = signal(false);
+  private dutiesVersion = 'new';
+
+  canLeave(): boolean {
+    if (this.isUploading() || this.isSavingDuties()) return false;
+    return !(this.hasChanges() || this.hasUnsavedShiftChanges() || (this.isGroupEditMode() && this.tempScheduleWithGroups)) ||
+      window.confirm('有未儲存的變更，確定放棄並離開？');
+  }
+
+  @HostListener('window:beforeunload', ['$event'])
+  beforeUnload(event: BeforeUnloadEvent): void {
+    if (this.hasChanges() || this.hasUnsavedShiftChanges() || this.isGroupEditMode() || this.isSavingDuties() || this.isUploading()) {
+      event.preventDefault(); event.returnValue = '';
+    }
+  }
 
   private readonly nursingSchedulesApi = this.apiManagerService.create<any>('nursing_schedules');
 
@@ -1363,7 +1382,7 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   enterEditMode(type: string, rowIndex: number, field: string): void {
-    if (!this.auth.isAdmin()) return;
+    if (!this.auth.isAdmin() || this.isLoadingDuties() || this.isSavingDuties()) return;
     this.editingCell = { type, rowIndex, field };
     setTimeout(() => {
       if (this.inputRef) {
@@ -1385,7 +1404,8 @@ export class NursingScheduleComponent implements OnInit {
     );
   }
 
-  loadData(): void {
+  async loadData(): Promise<void> {
+    this.isLoadingDuties.set(true);
     this.announcementText =
       '一、班別規則：護病比為1:4為原則，採團隊分工方式執行，無法執行時主動告知與協助。\n二、休息時間：實際狀況依各組協調調整，給予30分鐘。務必配合以免影響他人，白班為11:00-11:30；11:30-12:00；13:20-13:50，晚班為18:00-18:30；18:30-19:00；19:00-19:30。\n三、各班組別工作內容';
     this.dayShiftData = {
@@ -1425,13 +1445,26 @@ export class NursingScheduleComponent implements OnInit {
       '3. COVER 者主動巡視病人或協助查房。',
     ];
     this.lastModifiedInfo = { date: '114.09.22', user: '系統預設' };
-    setTimeout(() => {
+    try {
+      const data = await firstValueFrom(this.api.get<any>('/nursing/duties'));
+      this.dutiesVersion = data.version;
+      if (data.announcement !== undefined) this.announcementText = data.announcement;
+      if (data.dayShift) this.dayShiftData = data.dayShift;
+      if (data.shift128) this.shift128Data = data.shift128;
+      if (data.nightShift) this.nightShiftDuties = data.nightShift;
+      if (data.checklist) this.checklistItems = data.checklist;
+      if (data.teamwork) this.teamworkItems = data.teamwork;
+      if (data.lastModified) this.lastModifiedInfo = data.lastModified;
       this.hasChanges.set(false);
-    });
+      this.isLoadingDuties.set(false);
+    } catch (error: any) {
+      this.notificationService.createGlobalNotification('工作職責載入失敗，請重新載入後再編輯。', 'error');
+    }
   }
 
   async saveData(): Promise<void> {
-    if (!this.hasChanges() || !this.auth.isAdmin()) return;
+    if (!this.hasChanges() || !this.auth.isAdmin() || this.isSavingDuties() || this.isLoadingDuties()) return;
+    this.isSavingDuties.set(true);
     try {
       const now = new Date();
       const formattedDate = `${now.getFullYear() - 1911}.${String(
@@ -1442,15 +1475,20 @@ export class NursingScheduleComponent implements OnInit {
       const rawPayload = {
         announcement: this.announcementText,
         dayShift: this.dayShiftData,
+        shift128: this.shift128Data,
         nightShift: this.nightShiftDuties,
         checklist: this.checklistItems,
         teamwork: this.teamworkItems,
         lastModified: { date: formattedDate, user: currentUserFullName },
       };
       const payload = JSON.parse(JSON.stringify(rawPayload));
-      // API call would go here
-      this.lastModifiedInfo = payload.lastModified;
-      this.hasChanges.set(false);
+      const result = await firstValueFrom(this.api.put<any>('/nursing/duties', { ...payload, version: this.dutiesVersion }));
+      this.dutiesVersion = result.version;
+      this.lastModifiedInfo = result.lastModified;
+      const current = { announcement: this.announcementText, dayShift: this.dayShiftData, shift128: this.shift128Data,
+        nightShift: this.nightShiftDuties, checklist: this.checklistItems, teamwork: this.teamworkItems };
+      delete payload.lastModified;
+      this.hasChanges.set(JSON.stringify(current) !== JSON.stringify(payload));
       this.exitEditMode();
       this.notificationService.createGlobalNotification(
         '工作職責已成功儲存！',
@@ -1458,9 +1496,11 @@ export class NursingScheduleComponent implements OnInit {
       );
     } catch (error: any) {
       this.notificationService.createGlobalNotification(
-        error.message || '儲存失敗，請稍後再試',
+        error?.error?.message || error.message || '儲存失敗，草稿已保留，請稍後再試',
         'error'
       );
+    } finally {
+      this.isSavingDuties.set(false);
     }
   }
 
@@ -1490,8 +1530,20 @@ export class NursingScheduleComponent implements OnInit {
     this.uploadStatus.set(`${this.selectedMonth} 組別配置已更新`);
   }
 
-  onMonthChange(): void {
+  onMonthChange(newMonth?: string, input?: HTMLInputElement): void {
+    if (newMonth !== undefined) {
+      if (!this.confirmDiscardEditsForNav()) {
+        if (input) input.value = this.selectedMonth;
+        return;
+      }
+      this.selectedMonth = newMonth;
+    }
     this.loadGroupConfig();
+    this.loadMonthlySchedule();
+  }
+
+  reloadMonthlySchedule(): void {
+    if (!this.confirmDiscardEditsForNav()) return;
     this.loadMonthlySchedule();
   }
 
@@ -1508,6 +1560,7 @@ export class NursingScheduleComponent implements OnInit {
 
   /** 編輯中有未存變更時，跨月導航先確認（loadMonthlySchedule 會取消編輯模式） */
   private confirmDiscardEditsForNav(): boolean {
+    if (this.isUploading() || this.isSavingDuties()) return false;
     const editing =
       (this.isGroupEditMode() && this.tempScheduleWithGroups) ||
       (this.isShiftEditMode() && this.hasUnsavedShiftChanges());

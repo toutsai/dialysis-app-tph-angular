@@ -1324,6 +1324,9 @@ async function updatePatientHandler(req, res) {
       .filter(([k]) => k !== 'updated_at')
       .map(([, v]) => v)
 
+    const afterCommit = []
+    const options = { strict: true, afterCommit }
+    const { updated, deletedFutureExceptions, deletedFutureMessages } = db.transaction(() => {
     db.prepare(`UPDATE patients SET ${updates} WHERE id = ?`).run(...values, id)
 
     const updated = db.prepare(`SELECT ${PATIENT_SELECT_COLUMNS} FROM patients p WHERE p.id = ?`).get(id)
@@ -1345,7 +1348,7 @@ async function updatePatientHandler(req, res) {
     //   'next'：只快照「已開始的班別」格；未開始的班別即時渲染新身分（2026-08-04）
     //   'current'：只快照「已結束的班別」格；進行中的本班與之後的班別即時渲染新身分
     // 刪除時，'next'/'current' 未快照的格（=生效範圍內）直接自今日排程移除。
-    snapshotPatientScheduleChange(db, existing, updated, data, req.user)
+    snapshotPatientScheduleChange(db, existing, updated, data, req.user, options)
 
     if (!wasDeleted && isNowDeleted) {
       // 刪除操作：從正常狀態 → 已刪除
@@ -1354,6 +1357,7 @@ async function updatePatientHandler(req, res) {
         id,
         'patient_deleted',
         modifiedBy,
+        options,
       )
       deletedFutureMessages = deleteFutureMessagesForPatient(db, id)
 
@@ -1369,7 +1373,7 @@ async function updatePatientHandler(req, res) {
         fromStatus: existing.status
       }, createPatientSnapshot(existing))
 
-      addMovementToDailyLog(db, {
+      afterCommit.push(() => addMovementToDailyLog(db, {
         id: `auto_delete_${id}_${Date.now()}`,
         type: '刪除',
         name: existing.name,
@@ -1381,7 +1385,7 @@ async function updatePatientHandler(req, res) {
         remarks: data.deleteReason
           ? `從「${STATUS_MAP[existing.status] || existing.status}」刪除；原因：${data.deleteReason}`
           : `從「${STATUS_MAP[existing.status] || existing.status}」刪除`,
-      })
+      }))
     } else if (wasDeleted && !isNowDeleted) {
       // 復原操作：從已刪除 → 正常狀態
       const restoreStatus = data.status || updated.status || 'opd'
@@ -1390,7 +1394,7 @@ async function updatePatientHandler(req, res) {
         restoredTo: restoreStatus
       }, createPatientSnapshot(updated))
 
-      addMovementToDailyLog(db, {
+      afterCommit.push(() => addMovementToDailyLog(db, {
         id: `auto_restore_${id}_${Date.now()}`,
         type: '復原',
         name: existing.name,
@@ -1400,7 +1404,7 @@ async function updatePatientHandler(req, res) {
         physician: updated.physician || '',
         reason: '',
         remarks: `復原至「${STATUS_MAP[restoreStatus] || restoreStatus}」`,
-      })
+      }))
     } else if (!wasDeleted && !isNowDeleted && data.status && existing.status !== data.status) {
       // 🔥 檢查狀態變更，自動記錄歷史和動態（只在非刪除/復原情況下）
       const fromStatus = existing.status
@@ -1415,7 +1419,7 @@ async function updatePatientHandler(req, res) {
           reason: data.inpatientReason || ''
         }, createPatientSnapshot(updated))
 
-        addMovementToDailyLog(db, {
+        afterCommit.push(() => addMovementToDailyLog(db, {
           id: `auto_transfer_in_${id}_${Date.now()}`,
           type: '轉移',
           name: existing.name,
@@ -1425,7 +1429,7 @@ async function updatePatientHandler(req, res) {
           physician: updated.physician || '',
           reason: data.inpatientReason || '',
           remarks: `從「${STATUS_MAP[fromStatus]}」轉入「${STATUS_MAP[toStatus]}」`,
-        })
+        }))
       } else if ((fromStatus === 'ipd' || fromStatus === 'er') && toStatus === 'opd') {
         // 住院/急診 → 門診 (轉出)
         deletedFutureExceptions = deleteFutureScheduleExceptionsForPatient(
@@ -1433,6 +1437,7 @@ async function updatePatientHandler(req, res) {
           id,
           'patient_transferred_to_opd',
           modifiedBy,
+          options,
         )
 
         recordPatientHistory(db, id, existing.name, 'TRANSFER', {
@@ -1440,7 +1445,7 @@ async function updatePatientHandler(req, res) {
           toStatus,
         }, createPatientSnapshot(updated))
 
-        addMovementToDailyLog(db, {
+        afterCommit.push(() => addMovementToDailyLog(db, {
           id: `auto_transfer_out_${id}_${Date.now()}`,
           type: '轉移',
           name: existing.name,
@@ -1451,7 +1456,7 @@ async function updatePatientHandler(req, res) {
           physician: existing.physician || '',
           reason: '',
           remarks: `從「${STATUS_MAP[fromStatus]}」轉回「${STATUS_MAP[toStatus]}」`,
-        })
+        }))
       } else {
         // 其他狀態變更
         recordPatientHistory(db, id, existing.name, 'STATUS_CHANGE', {
@@ -1460,7 +1465,7 @@ async function updatePatientHandler(req, res) {
         }, createPatientSnapshot(updated))
 
         if (toStatus === 'ipd' || toStatus === 'opd') {
-          addMovementToDailyLog(db, {
+          afterCommit.push(() => addMovementToDailyLog(db, {
             id: `auto_transfer_${id}_${Date.now()}`,
             type: '轉移',
             name: existing.name,
@@ -1474,14 +1479,20 @@ async function updatePatientHandler(req, res) {
               toStatus === 'ipd'
                 ? `從「${STATUS_MAP[fromStatus] || fromStatus}」轉入「${STATUS_MAP[toStatus] || toStatus}」`
                 : `從「${STATUS_MAP[fromStatus] || fromStatus}」轉回「${STATUS_MAP[toStatus] || toStatus}」`,
-          })
+          }))
         }
       }
     }
 
     deletedFutureExceptions = deletedFutureExceptions.concat(
-      applyPatientModeChange(db, existing, updated, req.user),
+      applyPatientModeChange(db, existing, updated, req.user, options),
     )
+
+    return { updated, deletedFutureExceptions, deletedFutureMessages }
+    })()
+    for (const notify of afterCommit) {
+      try { notify() } catch (error) { console.warn('[patients] 通知失敗:', error.message) }
+    }
 
     await logAudit('PATIENT_UPDATE', req.user.id, req.user.name, 'patients', id, {
       updatedFields: Object.keys(data),
@@ -1602,6 +1613,9 @@ router.delete('/:id', ...isEditor, async (req, res) => {
 
     // 住院/急診刪除時會診醫師一併清除（同 PUT 軟刪路徑，2026-08-30）
     const clearPhysician = ['ipd', 'er'].includes(existing.status)
+    const afterCommit = []
+    const options = { strict: true, afterCommit }
+    const { deletedFutureExceptions, deletedFutureMessages } = db.transaction(() => {
     db.prepare(`
       UPDATE patients
       SET is_deleted = 1,
@@ -1622,11 +1636,14 @@ router.delete('/:id', ...isEditor, async (req, res) => {
       JSON.stringify({ uid: req.user.id, name: req.user.name }),
       id
     )
+    const updated = db.prepare('SELECT * FROM patients WHERE id = ?').get(id)
+    snapshotPatientScheduleChange(db, existing, updated, req.body, req.user, options)
     const deletedFutureExceptions = deleteFutureScheduleExceptionsForPatient(
       db,
       id,
       'patient_deleted',
       { uid: req.user.id, name: req.user.name },
+      options,
     )
     const deletedFutureMessages = deleteFutureMessagesForPatient(db, id)
 
@@ -1637,7 +1654,7 @@ router.delete('/:id', ...isEditor, async (req, res) => {
     }, createPatientSnapshot(existing))
 
     // 🔥 自動加入當日動態
-    addMovementToDailyLog(db, {
+    afterCommit.push(() => addMovementToDailyLog(db, {
       id: `auto_delete_${id}_${Date.now()}`,
       type: '刪除',
       name: existing.name,
@@ -1649,9 +1666,15 @@ router.delete('/:id', ...isEditor, async (req, res) => {
       remarks: reason
         ? `從「${STATUS_MAP[existing.status] || existing.status}」刪除；原因：${reason}`
         : `從「${STATUS_MAP[existing.status] || existing.status}」刪除`,
-    })
+    }))
 
 
+
+    return { deletedFutureExceptions, deletedFutureMessages }
+    })()
+    for (const notify of afterCommit) {
+      try { notify() } catch (error) { console.warn('[patients] 通知失敗:', error.message) }
+    }
 
     await logAudit('PATIENT_DELETE', req.user.id, req.user.name, 'patients', id, {
       name: existing.name,

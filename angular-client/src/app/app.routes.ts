@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
 import { roleGuard } from './core/guards/role.guard';
+import { manualEditorGuard } from './core/guards/manual-editor.guard';
 import { specialistGuard } from './core/guards/specialist.guard';
 import { PAGE_ACCESS } from './core/config/page-access';
 
@@ -219,6 +220,7 @@ export const routes: Routes = [
       },
       {
         path: 'daily-log',
+        canDeactivate: [manualEditorGuard],
         loadComponent: () =>
           import('./features/daily-log/daily-log.component').then(
             (m) => m.DailyLogComponent
@@ -283,6 +285,7 @@ export const routes: Routes = [
       },
       {
         path: 'nursing-schedule',
+        canDeactivate: [manualEditorGuard],
         loadComponent: () =>
           import(
             './features/nursing-schedule/nursing-schedule.component'

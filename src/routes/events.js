@@ -1,68 +1,73 @@
-// Server-Sent Events 端點：排程例外 (schedule_exceptions) 即時通知
-// EventSource 不支援自訂 headers，因此採 ?token=<JWT> query param 驗證
+﻿// EventSource uses a query token; requestLogger excludes all query strings.
 import express from 'express'
-import { verifyToken, isTokenBlacklisted, isBedDashboardToken } from '../middleware/auth.js'
+import { verifyToken, hashToken, isBedDashboardToken } from '../middleware/auth.js'
+import { getDatabase } from '../db/init.js'
 import { subscribeEvents } from '../services/eventBus.js'
+import { subscribeSessionRevocations } from '../services/sessionEvents.js'
 
 const router = express.Router()
-
 router.get('/exceptions', (req, res) => {
   const token = req.query.token
-  if (!token || typeof token !== 'string') {
-    return res.status(401).json({ error: true, message: 'Missing token' })
+  const payload = typeof token === 'string' && verifyToken(token)
+  if (!payload || !payload.id || !Number.isFinite(payload.exp) || isBedDashboardToken(payload)) {
+    return res.status(401).json({ error: true, message: 'Invalid token or token scope' })
   }
-  const payload = verifyToken(token)
-  if (!payload) {
-    return res.status(401).json({ error: true, message: 'Invalid token' })
+  const tokenHash = hashToken(token)
+  const isAuthorized = () => {
+    if (Date.now() >= payload.exp * 1000) return false
+    try {
+      const db = getDatabase()
+      if (db.prepare('SELECT 1 FROM token_blacklist WHERE token_hash = ?').get(tokenHash)) return false
+      const user = db.prepare('SELECT is_active, role, title FROM users WHERE id = ?').get(payload.id)
+      if (!user?.is_active || user.role !== payload.role || (user.title || '') !== (payload.title || '')) return false
+      const session = db.prepare('SELECT token_hash FROM active_sessions WHERE user_id = ?').get(payload.id)
+      return session?.token_hash === tokenHash
+    } catch {
+      return false // Authorization lookup failures must not release an event.
+    }
   }
-  // 床邊儀表板裝置 token 不得訂閱全院事件流（2026-09-08 審查 P0-A）
-  if (isBedDashboardToken(payload)) {
-    return res.status(401).json({ error: true, message: 'Token scope not allowed', code: 'TOKEN_SCOPE' })
-  }
-  if (isTokenBlacklisted(token)) {
-    return res.status(401).json({ error: true, message: 'Token revoked' })
-  }
+  if (!isAuthorized()) return res.status(401).json({ error: true, message: 'Session expired or revoked' })
 
-  // SSE headers
+  let closed = false
+  let heartbeat
+  let expiry
+  let unsubscribe = () => {}
+  let unsubscribeRevocations = () => {}
+  const cleanup = () => {
+    if (closed) return
+    closed = true
+    clearInterval(heartbeat)
+    clearTimeout(expiry)
+    unsubscribe()
+    unsubscribeRevocations()
+    req.off('close', cleanup)
+    req.off('aborted', cleanup)
+    res.off('error', cleanup)
+    res.end()
+  }
+  const send = text => {
+    if (closed) return
+    if (!isAuthorized()) return cleanup()
+    try { res.write(text) } catch { cleanup() }
+  }
   res.set({
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-transform',
     Connection: 'keep-alive',
-    'X-Accel-Buffering': 'no', // 停用 Nginx buffering
+    'X-Accel-Buffering': 'no',
   })
   res.flushHeaders?.()
-
-  // 初始 hello，讓前端確認連線成功
-  res.write(`event: hello\ndata: ${JSON.stringify({ userId: payload.id })}\n\n`)
-
-  const unsubscribe = subscribeEvents((topic, msg) => {
-    try {
-      res.write(`event: ${topic}\ndata: ${JSON.stringify(msg)}\n\n`)
-    } catch (err) {
-      console.warn('[SSE] write failed, closing:', err.message)
-      cleanup()
-    }
+  unsubscribe = subscribeEvents((topic, msg) => send(`event: ${topic}\ndata: ${JSON.stringify(msg)}\n\n`))
+  unsubscribeRevocations = subscribeSessionRevocations(event => {
+    if (event.userId === payload.id && (!event.tokenHash || event.tokenHash === tokenHash)) cleanup()
   })
-
-  // 心跳：每 25 秒送註解行，避免反向代理逾時關閉
-  const heartbeat = setInterval(() => {
-    try {
-      res.write(`: ping ${Date.now()}\n\n`)
-    } catch (err) {
-      cleanup()
-    }
-  }, 25000)
-
-  const cleanup = () => {
-    clearInterval(heartbeat)
-    unsubscribe()
-    try {
-      res.end()
-    } catch {}
-  }
-
+  heartbeat = setInterval(() => send(`: ping ${Date.now()}\n\n`), 25000)
+  expiry = setTimeout(cleanup, Math.max(0, Math.min(payload.exp * 1000 - Date.now(), 2147483647)))
+  heartbeat.unref?.()
+  expiry.unref?.()
   req.on('close', cleanup)
   req.on('aborted', cleanup)
+  res.on('error', cleanup)
+  send(`event: hello\ndata: ${JSON.stringify({ userId: payload.id })}\n\n`)
 })
-
 export default router
