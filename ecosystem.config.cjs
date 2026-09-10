@@ -1,9 +1,9 @@
 // Angular production PM2 config
 // - 不同 PM2 name (dialysis-server-angular)
-// - 不同 port (3001)
+// - Angular 正式 port 3000（舊 Vue 站為 3001）
 // - 不同安裝資料夾 (D:\dialysis-app-angular)
 // - 不同 SQLite DB（避免兩個 backend 同時寫同一個 DB 撞 schema）
-// 確認 angular 版穩定後再走方案 A 取代 tph 版
+// 發布與回復程序見 DEPLOYMENT.md
 module.exports = {
   apps: [
     {
