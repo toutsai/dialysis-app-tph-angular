@@ -7,6 +7,7 @@ import { authenticate, isContributor, isEditor, logAudit, requireAnyRole } from 
 import { getTaipeiMonthString, getTaipeiTodayString } from '../utils/dateUtils.js'
 import { normalizeDialysisMode, normalizeDialysisOrdersMode } from '../utils/dialysisMode.js'
 import { FREQ_MAP_TO_DAY_INDEX } from '../utils/scheduleUtils.js'
+import { snapshotPatientScheduleChange, applyPatientModeChange } from '../services/patientOrderEffects.js'
 import { saveDialysisOrder } from '../services/dialysisOrderService.js'
 
 const router = Router()
@@ -2556,14 +2557,6 @@ router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
         source_file = excluded.source_file,
         updated_at = datetime('now', 'localtime')
     `)
-    db.transaction(() => {
-      for (const r of rowsToUpsert) {
-        upsert.run(uuidv4(), r.patientId, r.patientName, r.mrn, r.effectiveDate, JSON.stringify(r.orders), fileName)
-        if (existingKeys.has(`${r.mrn}|${r.effectiveDate}`)) updatedCount++
-        else insertedCount++
-      }
-    })()
-
     // 回寫病人現行醫囑：本次上傳觸及的病人，各取全表最新一筆
     const stableStringify = (obj) =>
       JSON.stringify(
@@ -2593,7 +2586,15 @@ router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
       UPDATE patients SET dialysis_orders = ?, updated_at = datetime('now', 'localtime') WHERE id = ?
     `)
 
+    const afterCommit = []
+    const options = { strict: true, afterCommit }
     db.transaction(() => {
+      for (const r of rowsToUpsert) {
+        upsert.run(uuidv4(), r.patientId, r.patientName, r.mrn, r.effectiveDate, JSON.stringify(r.orders), fileName)
+        if (existingKeys.has(`${r.mrn}|${r.effectiveDate}`)) updatedCount++
+        else insertedCount++
+      }
+
       for (const r of latestStmt.all()) {
         if (!touchedPatientIds.has(r.patient_id)) continue
         const patient = patientsById.get(r.patient_id)
@@ -2615,11 +2616,17 @@ router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
           continue
         }
         patientUpdate.run(JSON.stringify(merged), r.patient_id)
+        const updated = db.prepare('SELECT * FROM patients WHERE id = ?').get(r.patient_id)
+        snapshotPatientScheduleChange(db, patient, updated, {}, req.user, options)
+        applyPatientModeChange(db, patient, updated, req.user, options)
         historyInsert.run(uuidv4(), r.patient_id, r.patient_name || patient.name || '', JSON.stringify(merged))
         writtenBackCount++
       }
     })()
 
+    for (const notify of afterCommit) {
+      try { notify() } catch (error) { console.warn('[DialysisOrders] 通知失敗:', error.message) }
+    }
     invalidateListCache()
 
     await logAudit('DIALYSIS_ORDERS_UPLOAD', req.user.id, req.user.name, 'dialysis_order_uploads', fileName, {

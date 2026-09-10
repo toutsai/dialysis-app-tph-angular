@@ -28,7 +28,9 @@ for (const role of ['admin', 'editor', 'contributor', 'viewer']) {
   db.prepare('INSERT INTO users (id, username, name, password_hash, role, title) VALUES (?, ?, ?, ?, ?, ?)')
     .run(user.id, user.username, user.name, passwordHash, user.role, user.title)
   tokens[role] = auth.generateToken(user)
-  auth.registerSession(user.id, tokens[role], '127.0.0.1', 'Synthetic tests')
+  await auth.registerSession(user.id, tokens[role], {
+    headers: { 'user-agent': 'Synthetic tests' }, socket: { remoteAddress: '127.0.0.1' },
+  })
 }
 
 const app = express()

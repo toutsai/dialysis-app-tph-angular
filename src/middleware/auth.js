@@ -2,6 +2,7 @@
 import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
 import { getDatabase } from '../db/init.js'
+import { notifySessionRevoked } from '../services/sessionEvents.js'
 
 // ========================================
 // JWT 配置
@@ -108,6 +109,7 @@ export async function blacklistToken(token, userId, reason = 'logout') {
     `,
     ).run(tokenHash, userId, reason, expiresAt)
 
+    notifySessionRevoked(userId, tokenHash)
     return true
   } catch (error) {
     console.error('加入黑名單失敗:', error)
@@ -231,6 +233,7 @@ export async function registerSession(userId, token, req) {
     `,
     ).run(uuidv4(), userId, tokenHash, ipAddress, userAgent, expiresAt)
 
+    if (existingSession) notifySessionRevoked(userId, existingSession.token_hash)
     return kickedSession
   } catch (error) {
     console.error('註冊 session 失敗:', error)
@@ -266,6 +269,7 @@ export function revokeUserSessions(userId, reason = 'admin_revoke') {
 
     db.prepare(`DELETE FROM active_sessions WHERE user_id = ?`).run(userId)
 
+    notifySessionRevoked(userId, session.token_hash)
     console.log(`🔒 已作廢使用者 ${userId} 的現行 token（${reason}）`)
     return true
   } catch (error) {
@@ -287,6 +291,7 @@ export function removeSession(userId) {
     `,
     ).run(userId)
 
+    notifySessionRevoked(userId)
   } catch (error) {
     console.error('移除 session 失敗:', error)
   }

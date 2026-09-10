@@ -61,10 +61,10 @@
           <input
             type="month"
             id="schedule-month"
-            [(ngModel)]="selectedMonth"
-            (change)="onMonthChange()"
+            [ngModel]="selectedMonth"
+            #monthInput0 (ngModelChange)="onMonthChange($event, monthInput0)"
           />
-          <button (click)="loadMonthlySchedule()" [disabled]="isLoadingSchedule()" class="btn-primary">
+          <button (click)="reloadMonthlySchedule()" [disabled]="isLoadingSchedule()" class="btn-primary">
             {{ isLoadingSchedule() ? '載入中...' : '重新載入' }}
           </button>
         </div>
@@ -178,8 +178,8 @@
               type="month"
               id="schedule-month-weekly"
               title="月份"
-              [(ngModel)]="selectedMonth"
-              (change)="onMonthChange()"
+              [ngModel]="selectedMonth"
+              #monthInput1 (ngModelChange)="onMonthChange($event, monthInput1)"
             />
             <button class="month-nav-btn" (click)="shiftMonth(1)" title="下個月">
               <i class="fas fa-chevron-right"></i>

@@ -6,7 +6,7 @@
 import cron from 'node-cron'
 import { getDatabase } from '../db/init.js'
 import { createBackup } from '../utils/backup.js'
-import { initializeFutureSchedules, syncMasterScheduleToFutureSync } from './scheduleSync.js'
+import { initializeFutureSchedules, syncMasterScheduleToFutureSync, isTodayScheduleFrozen } from './scheduleSync.js'
 import { cleanupExpiredBlacklist, cleanupExpiredSessions } from '../middleware/auth.js'
 import { getTaipeiTodayString, getTaipeiYesterdayString, formatDateToYYYYMMDD } from '../utils/dateUtils.js'
 import { FREQ_MAP_TO_DAY_INDEX } from '../utils/scheduleUtils.js'
@@ -15,6 +15,7 @@ import { addAutoMovementToDailyLog } from './dailyLogMovementSync.js'
 import { recordPatientHistory, createPatientSnapshot } from './patientHistory.js'
 import { hourlyNurseAssignmentSnapshot } from './nurseAssignmentRevisions.js'
 import { countCurrentCensus, recordDailyCensus } from './patientCensus.js'
+import { deleteFutureScheduleExceptionsForPatient } from './patientOrderEffects.js'
 
 // 狀態碼中文對照（與 routes/patients.js 一致）
 const SCHED_STATUS_MAP = { opd: '門診', ipd: '住院', er: '急診' }
@@ -436,7 +437,9 @@ async function applyScheduledPatientUpdates() {
 
       try {
         const payload = JSON.parse(updateTask.change_data || '{}')
-        let processedInTransaction = false
+        const afterCommit = []
+        db.transaction(() => {
+        if (!db.prepare('SELECT id FROM patients WHERE id = ?').get(patientId)) throw new Error('病人不存在')
         switch (changeType) {
           case 'UPDATE_STATUS':
           case 'UPDATE_MODE':
@@ -512,6 +515,7 @@ async function applyScheduledPatientUpdates() {
             }
 
             // 同步工作日誌 / KiDit / 病人歷史（比照即時操作；非致命）
+            afterCommit.push(() => {
             try {
               if (beforePatient) {
                 const afterPatient = db
@@ -523,6 +527,7 @@ async function applyScheduledPatientUpdates() {
             } catch (syncErr) {
               console.error(`    - ⚠️ 工作日誌同步失敗 (非致命): ${syncErr.message}`)
             }
+            })
             break
 
           case 'UPDATE_FREQ':
@@ -547,8 +552,7 @@ async function applyScheduledPatientUpdates() {
             console.log(`    - 成功更新 patient/${patientId} 的頻率為 ${payload.freq}`)
             break
 
-          case 'UPDATE_BASE_SCHEDULE_RULE':
-            db.transaction(() => {
+          case 'UPDATE_BASE_SCHEDULE_RULE': {
             const { bedNum, shiftIndex, freq } = payload
             if (bedNum === undefined || shiftIndex === undefined || !freq) {
               throw new Error('Payload for UPDATE_BASE_SCHEDULE_RULE is incomplete')
@@ -644,14 +648,11 @@ async function applyScheduledPatientUpdates() {
               })
               console.log(`    - 已同步總表變更到未來 60 天排程`)
 
-            db.prepare(`UPDATE scheduled_patient_updates
-              SET status = 'processed', error_message = NULL, processed_at = datetime('now', 'localtime')
-              WHERE id = ?`).run(taskId)
-            })()
-            processedInTransaction = true
 
             console.log(`    - 成功更新 patient/${patientId} 和總表規則`)
             break
+
+          }
 
           case 'DELETE_PATIENT':
             // 擷取刪除前的病人資料（供工作日誌/歷史；刪除後 status 會變成 'deleted'）
@@ -676,6 +677,7 @@ async function applyScheduledPatientUpdates() {
             ).run(payload.deleteReason || '預約刪除', payload.remarks || '', patientId)
 
             // 同步工作日誌 / KiDit / 病人歷史（比照即時刪除；非致命）
+            afterCommit.push(() => {
             try {
               if (beforeDeletePatient) {
                 recordPatientHistory(db, patientId, beforeDeletePatient.name, 'DELETE',
@@ -695,6 +697,7 @@ async function applyScheduledPatientUpdates() {
             } catch (syncErr) {
               console.error(`    - ⚠️ 工作日誌同步失敗 (非致命): ${syncErr.message}`)
             }
+            })
 
             // 從總表移除
             const masterDocForDelete = db
@@ -726,6 +729,7 @@ async function applyScheduledPatientUpdates() {
               const targetDate = new Date(todayStr + 'T00:00:00Z')
               targetDate.setUTCDate(targetDate.getUTCDate() + i)
               const dateStr = formatDateToYYYYMMDD(targetDate)
+              if (isTodayScheduleFrozen(dateStr)) continue
 
               const scheduleDoc = db
                 .prepare(
@@ -774,11 +778,12 @@ async function applyScheduledPatientUpdates() {
 
             for (const assignment of assignments) {
               const teamsData = JSON.parse(assignment.teams || '{}')
+              const teamsMap = teamsData.teams || teamsData
               let needsUpdate = false
 
-              for (const teamKey in teamsData) {
+              for (const teamKey in teamsMap) {
                 if (teamKey.startsWith(patientId + '-')) {
-                  delete teamsData[teamKey]
+                  delete teamsMap[teamKey]
                   needsUpdate = true
                   assignmentCount++
                 }
@@ -796,21 +801,13 @@ async function applyScheduledPatientUpdates() {
             }
             console.log(`    - 共清理了 ${assignmentCount} 個護理分組`)
 
-            // 取消該病人的未來調班申請
-            console.log(`    - 開始取消 ${patientId} 的調班申請...`)
-            const cancelResult = db
-              .prepare(
-                `
-              UPDATE schedule_exceptions
-              SET status = 'cancelled',
-                  cancel_reason = '病人已刪除',
-                  cancelled_at = datetime('now', 'localtime')
-              WHERE patient_id = ?
-                AND status IN ('pending', 'applied', 'processing', 'conflict_requires_resolution')
-            `,
-              )
-              .run(patientId)
-            console.log(`    - 取消了 ${cancelResult.changes} 個調班申請`)
+            // 共用未來日期/SWAP 所屬判斷與重建；過去調班保留，必要清理失敗則整筆回滾。
+            const removedExceptions = deleteFutureScheduleExceptionsForPatient(
+              db, patientId, 'patient_deleted',
+              { uid: 'system-scheduler', name: '預約變更自動套用' },
+              { strict: true, afterCommit },
+            )
+            console.log(`    - 清理了 ${removedExceptions.length} 個未來調班申請`)
 
             console.log(`    - 成功將 patient/${patientId} 標記為刪除並完成所有清理`)
             break
@@ -831,6 +828,7 @@ async function applyScheduledPatientUpdates() {
             console.log(`    - 成功復原 patient/${patientId} 為 ${payload.status}`)
 
             // 同步工作日誌 / KiDit / 病人歷史（比照即時復原；非致命）
+            afterCommit.push(() => {
             try {
               const afterRestorePatient = db
                 .prepare('SELECT * FROM patients WHERE id = ?')
@@ -851,20 +849,23 @@ async function applyScheduledPatientUpdates() {
             } catch (syncErr) {
               console.error(`    - ⚠️ 工作日誌同步失敗 (非致命): ${syncErr.message}`)
             }
+            })
             break
 
           default:
-            console.log(`    - ⚠️ 未知的變更類型: ${changeType}`)
+            throw new Error(`未知的變更類型: ${changeType}`)
         }
 
         // 標記任務為已處理
-        if (!processedInTransaction) db.prepare(
+        db.prepare(
           `
           UPDATE scheduled_patient_updates
-          SET status = 'processed', processed_at = datetime('now', 'localtime')
+          SET status = 'processed', error_message = NULL, processed_at = datetime('now', 'localtime')
           WHERE id = ?
         `,
         ).run(taskId)
+        })()
+        for (const notify of afterCommit) notify()
       } catch (taskError) {
         console.error(`    - ❌ 處理任務 ${taskId} 失敗:`, taskError.message)
 

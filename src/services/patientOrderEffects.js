@@ -19,7 +19,7 @@ function removeOrderAutoMovement(db, date, movementId, options) {
   const dailyLog = db.prepare('SELECT * FROM daily_logs WHERE date = ?').get(date)
   if (!dailyLog) return
   const movements = JSON.parse(dailyLog.patient_movements || '[]')
-  const next = movements.filter(item => item.id !== movementId)
+  const next = movements.filter(item => item.id !== movementId || item.originalAutoId)
   if (next.length === movements.length) return
   db.prepare("UPDATE daily_logs SET patient_movements = ?, updated_at = datetime('now', 'localtime') WHERE date = ?").run(JSON.stringify(next), date)
   afterCommit(options, () => syncEventsToKiditLogbook(date, {

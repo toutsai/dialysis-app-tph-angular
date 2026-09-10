@@ -13,6 +13,8 @@ import {
   listKiditLogbooks,
 } from '../services/kiditSync.js'
 import { normalizeDialysisMode } from '../utils/dialysisMode.js'
+import { dailyLogVersion, preserveMovementMetadata } from '../services/dailyLogVersion.js'
+import { createHash } from 'node:crypto'
 import {
   upsertPatientBasicProfile,
   mapKiditProfileToBasic,
@@ -36,6 +38,7 @@ function isDailyLogLockedForUser(date, user) {
 function formatDailyLog(log, user = null) {
   return {
     id: log.id,
+    version: dailyLogVersion(log),
     date: log.date,
     patientMovements: JSON.parse(log.patient_movements || '[]'),
     vascularAccessLog: JSON.parse(log.vascular_access_log || '[]'),
@@ -92,12 +95,14 @@ router.get('/duties', authenticate, (req, res) => {
       return res.json({
         id: 'main',
         duties: {},
+        version: 'new',
       })
     }
 
     res.json({
       id: duties.id,
       ...JSON.parse(duties.duties || '{}'),
+      version: createHash('sha256').update(duties.duties || '{}').digest('hex'),
       createdAt: duties.created_at,
       updatedAt: duties.updated_at,
     })
@@ -116,8 +121,23 @@ router.get('/duties', authenticate, (req, res) => {
  */
 router.put('/duties', ...isAdmin, async (req, res) => {
   try {
-    const data = req.body
+    const { version, ...data } = req.body || {}
+    const text = value => typeof value === 'string' && value.length <= 50000
+    const shift = value => value && !Array.isArray(value) && text(value.codes) && text(value.tasks)
+    if (!text(data.announcement) || !shift(data.dayShift) || !shift(data.shift128) ||
+        !Array.isArray(data.nightShift) || data.nightShift.length > 100 ||
+        !data.nightShift.every(row => row && text(row.code) && text(row.tasks)) ||
+        !['checklist', 'teamwork'].every(key => Array.isArray(data[key]) && data[key].length <= 100 && data[key].every(text)) ||
+        Object.keys(data).some(key => !['announcement', 'dayShift', 'shift128', 'nightShift', 'checklist', 'teamwork', 'lastModified'].includes(key))) {
+      return res.status(400).json({ error: true, message: '工作職責資料格式錯誤' })
+    }
     const db = getDatabase()
+    const old = db.prepare("SELECT duties FROM nursing_duties WHERE id = 'main'").get()
+    const currentVersion = old ? createHash('sha256').update(old.duties || '{}').digest('hex') : 'new'
+    if ((version ?? 'new') !== currentVersion) {
+      return res.status(409).json({ error: true, code: 'DUTIES_CONFLICT', message: '工作職責已被更新，草稿仍保留，請重新核對後儲存' })
+    }
+    data.lastModified = { date: new Date().toLocaleString('sv-SE'), user: req.user.name }
 
     db.prepare(
       `
@@ -133,6 +153,8 @@ router.put('/duties', ...isAdmin, async (req, res) => {
     res.json({
       success: true,
       message: '護理職責已更新',
+      version: createHash('sha256').update(JSON.stringify(data)).digest('hex'),
+      lastModified: data.lastModified,
     })
   } catch (error) {
     console.error('更新護理職責錯誤:', error)
@@ -1316,6 +1338,7 @@ router.get('/daily-logs/:date', authenticate, (req, res) => {
         id: date,
         date,
         isNew: true, // 標記這是新的日誌，前端應該從排程計算統計
+        version: 'new',
         patientMovements: [],
         vascularAccessLog: [],
         announcements: [],
@@ -1387,7 +1410,7 @@ router.get('/daily-logs/:date/revisions', authenticate, (req, res) => {
 router.put('/daily-logs/:date', ...isEditor, async (req, res) => {
   try {
     const { date } = req.params
-    const { patientMovements, announcements, notes, vascularAccessLog, stats, leader, otherNotes } =
+    let { patientMovements, announcements, notes, vascularAccessLog, stats, leader, otherNotes } =
       req.body
 
     const db = getDatabase()
@@ -1402,6 +1425,35 @@ router.put('/daily-logs/:date', ...isEditor, async (req, res) => {
 
     // 先查詢是否已有該日紀錄
     const existing = db.prepare('SELECT * FROM daily_logs WHERE date = ?').get(date)
+    if ((req.body.version ?? 'new') !== dailyLogVersion(existing)) {
+      return res.status(409).json({ error: true, code: 'DAILY_LOG_CONFLICT',
+        message: '此日誌已被其他操作更新。您的草稿已保留，請核對最新內容後再儲存。' })
+    }
+    if (req.body.movementUpdates !== undefined) {
+      if (patientMovements !== undefined || !Array.isArray(req.body.movementUpdates)) {
+        return res.status(400).json({ error: true, message: '病人動態更新格式錯誤' })
+      }
+      const merged = new Map(JSON.parse(existing?.patient_movements || '[]').map(item => [String(item.id), item]))
+      for (const item of req.body.movementUpdates) {
+        if (!item || !['string', 'number'].includes(typeof item.id)) {
+          return res.status(400).json({ error: true, message: '病人動態需有 ID' })
+        }
+        merged.set(String(item.id), { ...merged.get(String(item.id)), ...item })
+      }
+      patientMovements = [...merged.values()]
+    }
+    for (const [key, value] of Object.entries({ patientMovements, vascularAccessLog, announcements })) {
+      if (value !== undefined && (!Array.isArray(value) || value.length > 5000)) {
+        return res.status(400).json({ error: true, message: `${key} 必須是陣列` })
+      }
+    }
+    if (patientMovements !== undefined) {
+      if (patientMovements.some(item => !item || !['string', 'number'].includes(typeof item.id)) ||
+          new Set(patientMovements.map(item => String(item.id))).size !== patientMovements.length) {
+        return res.status(400).json({ error: true, message: '病人動態需有唯一 ID' })
+      }
+      patientMovements = preserveMovementMetadata(patientMovements, JSON.parse(existing?.patient_movements || '[]'))
+    }
 
     if (existing) {
       // 已有紀錄：只更新前端有傳送的欄位，未傳送的保留原值
@@ -1484,6 +1536,7 @@ router.put('/daily-logs/:date', ...isEditor, async (req, res) => {
     res.json({
       success: true,
       message: '工作日誌已更新',
+      version: savedLog.version,
     })
   } catch (error) {
     console.error('更新工作日誌錯誤:', error)
@@ -1833,6 +1886,12 @@ router.get('/kidit-monthly-basic-data', authenticate, (req, res) => {
  * GET /api/nursing/kidit-logbook/:date
  * 取得特定日期的 Kidit 日誌本
  */
+router.get('/kidit-logbook/:date/removed-events', authenticate, (req, res) => {
+  const row = getDatabase().prepare('SELECT config_data FROM site_config WHERE id = ?')
+    .get(`kidit_removed_events_${req.params.date}`)
+  res.json(JSON.parse(row?.config_data || '[]'))
+})
+
 router.get('/kidit-logbook/:date', authenticate, (req, res) => {
   try {
     const { date } = req.params

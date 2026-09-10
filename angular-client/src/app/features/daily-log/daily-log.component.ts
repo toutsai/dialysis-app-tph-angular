@@ -1,5 +1,5 @@
 // Standalone 版：已移除 Firebase，改用 REST API + polling
-import { Component, inject, signal, OnInit, ViewChild, ElementRef } from '@angular/core';
+import { Component, inject, signal, OnInit, ViewChild, ElementRef, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -56,6 +56,33 @@ export class DailyLogComponent implements OnInit {
   isLoading = signal(false);
   selectedDate = signal(this.formatDate(new Date()));
   hasUnsavedChanges = signal(false);
+  private loadedSnapshot: Record<string, string> = {};
+  private loadRequest = 0;
+  private loadedDate = '';
+  private readonly savedFields = ['patientMovements', 'vascularAccessLog', 'announcements', 'stats', 'leader', 'otherNotes', 'notes'];
+
+  private snapshot(): Record<string, string> {
+    return Object.fromEntries(this.savedFields.map(key => [key, JSON.stringify(this.dailyLog?.[key], (name, value) => name === 'isEdited' ? undefined : value)]));
+  }
+
+  hasPendingDraft(): boolean {
+    const current = this.snapshot();
+    return Object.keys(this.loadedSnapshot).length > 0 && this.savedFields.some(key => current[key] !== this.loadedSnapshot[key]);
+  }
+
+  canLeave(): boolean {
+    if (this.isLoading()) return false;
+    return !this.hasPendingDraft() || window.confirm('日誌有未儲存變更，確定放棄並離開？');
+  }
+
+  @HostListener('window:beforeunload', ['$event'])
+  beforeUnload(event: BeforeUnloadEvent): void {
+    if (this.hasPendingDraft() || this.isLoading()) { event.preventDefault(); event.returnValue = ''; }
+  }
+
+  @HostListener('input')
+  @HostListener('change')
+  onEditorInput(): void { this.hasUnsavedChanges.set(this.hasPendingDraft()); }
   currentSchedule: any = {};
   dailyLog: any;
   readonly vascularAccessLocationOptions = ['本院', '新泰', '新仁', '宏仁', '新光', '振興', '其他'];
@@ -297,12 +324,12 @@ export class DailyLogComponent implements OnInit {
   // Core Business Logic
   // ===================================================================
   async loadDailyLog(dateStr: string): Promise<void> {
+    const request = ++this.loadRequest;
+    const previous = this.cloneData(this.dailyLog);
+    const previousSnapshot = { ...this.loadedSnapshot };
+    const previousSchedule = this.currentSchedule;
+    const previousHandoverNotes = this.handoverNotes;
     this.isLoading.set(true);
-    this.hasUnsavedChanges.set(false);
-    Object.assign(this.dailyLog, this.initialLogState(), { date: dateStr });
-    this.currentSchedule = {};
-    this.handoverNotes = '';
-    this.newMovementId = null;
 
     // 主護血管通路事件每次切換日期都重抓（狀態可能在他處變更，刻意不進 dailyLogCache）
     void this.loadVascularEvents(dateStr);
@@ -318,6 +345,8 @@ export class DailyLogComponent implements OnInit {
           cachedLog.handoverNotes,
         );
         this.isLoading.set(false);
+        this.loadedDate = dateStr;
+        this.loadedSnapshot = this.snapshot();
         setTimeout(() => this.handleTextareaInput(), 0);
         return;
       }
@@ -336,6 +365,11 @@ export class DailyLogComponent implements OnInit {
         this.handoverLogsApi.fetchById('latest'),
         schedulePromise,
       ]);
+      if (request !== this.loadRequest) return;
+      Object.assign(this.dailyLog, this.initialLogState(), { date: dateStr });
+      this.currentSchedule = {};
+      this.handoverNotes = '';
+      this.newMovementId = null;
       const scheduleData = isPast
         ? (scheduleResp ? [scheduleResp] : [])
         : ((scheduleResp as any[]) || []).filter((s: any) => s.date === dateStr);
@@ -444,12 +478,24 @@ export class DailyLogComponent implements OnInit {
         schedule: this.cloneData(this.currentSchedule),
         handoverNotes: this.handoverNotes,
       });
+      this.loadedDate = dateStr;
+      this.loadedSnapshot = this.snapshot();
+      this.hasUnsavedChanges.set(false);
     } catch (error) {
+      if (request !== this.loadRequest) return;
+      if (previous) this.dailyLog = previous;
+      this.currentSchedule = previousSchedule;
+      this.handoverNotes = previousHandoverNotes;
+      this.loadedSnapshot = previousSnapshot;
+      if (this.loadedDate) this.selectedDate.set(this.loadedDate);
+      this.hasUnsavedChanges.set(this.hasPendingDraft());
       console.error('載入日誌失敗:', error);
       this.showAlert('載入失敗', '載入日誌時發生錯誤');
     } finally {
+      if (request === this.loadRequest) {
       this.isLoading.set(false);
       setTimeout(() => this.handleTextareaInput(), 0);
+      }
     }
   }
 
@@ -473,13 +519,6 @@ export class DailyLogComponent implements OnInit {
       this.dailyLog.stats.staffing.late = totals.late;
     }
 
-    this.dailyLog.patientMovements = this.dailyLog.patientMovements.filter(
-      (item: any) => item.name || item.medicalRecordNumber,
-    );
-    this.dailyLog.vascularAccessLog = this.dailyLog.vascularAccessLog.filter(
-      (item: any) => item.name || item.medicalRecordNumber,
-    );
-
     try {
       const dataToSave = JSON.parse(JSON.stringify(this.dailyLog));
       if (dataToSave.stats?.staffing) {
@@ -495,21 +534,20 @@ export class DailyLogComponent implements OnInit {
         delete dataToSave.handoverNotes;
       }
 
-      if (this.dailyLog.id) {
-        await this.dailyLogsApi.update(this.dailyLog.id, dataToSave);
-      } else {
-        const docId = this.selectedDate();
-        await this.dailyLogsApi.save(docId, dataToSave);
-        this.dailyLog.id = docId;
-      }
-      this.hasUnsavedChanges.set(false);
+      const submitted = this.snapshot();
+      const result = await this.dailyLogsApi.save(this.selectedDate(), dataToSave);
+      this.dailyLog.id = this.selectedDate();
+      this.dailyLog.version = (result as any).version;
+      this.loadedSnapshot = submitted;
+      this.hasUnsavedChanges.set(this.hasPendingDraft());
       this.dailyLogCache.delete(this.selectedDate());
       if (showSuccessAlert) {
         this.showAlert('操作成功', successMessage);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('儲存日誌失敗:', error);
-      this.showAlert('儲存失敗', '儲存日誌時發生錯誤');
+      this.hasUnsavedChanges.set(true);
+      this.showAlert('儲存失敗', error?.error?.message || '儲存日誌時發生錯誤，草稿已保留。');
     } finally {
       this.isLoading.set(false);
     }
@@ -768,6 +806,7 @@ export class DailyLogComponent implements OnInit {
   // Date Navigation
   // ===================================================================
   changeDate(days: number): void {
+    if (!this.canLeave()) return;
     const newDate = new Date(this.selectedDate());
     newDate.setDate(newDate.getDate() + days);
     const formatted = this.formatDate(newDate);
@@ -776,12 +815,17 @@ export class DailyLogComponent implements OnInit {
   }
 
   goToToday(): void {
+    if (!this.canLeave()) return;
     const formatted = this.formatDate(new Date());
     this.selectedDate.set(formatted);
     this.loadDailyLog(formatted);
   }
 
   onDateChange(newDate: string): void {
+    if (!newDate || !this.canLeave()) {
+      if (this.hiddenDateInputRef) this.hiddenDateInputRef.nativeElement.value = this.selectedDate();
+      return;
+    }
     this.selectedDate.set(newDate);
     if (newDate) this.loadDailyLog(newDate);
   }
@@ -817,6 +861,7 @@ export class DailyLogComponent implements OnInit {
         id: newId, name: '', medicalRecordNumber: '', date: this.selectedDate(), interventions: [], location: '',
       });
     }
+    this.markDirty();
   }
 
   deleteRow(index: number, targetArrayKey: string): void {
@@ -825,6 +870,7 @@ export class DailyLogComponent implements OnInit {
     this.showConfirm('確認移除', '您確定要移除這一行嗎？', () => {
       if (item.id === this.newMovementId) this.newMovementId = null;
       this.dailyLog[targetArrayKey].splice(index, 1);
+      this.markDirty();
     });
   }
 
@@ -851,44 +897,46 @@ export class DailyLogComponent implements OnInit {
     }
     if (item.isEdited && item.originalType) {
       item.originalAutoId = item.id;
-      item.id = `edited_${item.id}`;
       item.type = '手動';
     }
-    if (item.id === this.newMovementId) this.newMovementId = null;
-    item.isEdited = false;
-    await this.saveJustMovements();
+    if (await this.saveJustMovements(item)) {
+      if (item.id === this.newMovementId) this.newMovementId = null;
+      item.isEdited = false;
+    }
   }
 
-  async saveJustMovements(): Promise<void> {
+  async saveJustMovements(item?: any): Promise<boolean> {
+    if (this.isLoading()) return false;
     if (this.isPageLocked) {
       this.showAlert(
         this.isHistoricalLog ? '歷史日誌已鎖定' : '權限不足',
         this.isHistoricalLog ? '今天以前的工作日誌已鎖定，無法修改病人動態。' : '您沒有權限修改工作日誌。',
       );
-      return;
+      return false;
     }
     this.isLoading.set(true);
     try {
       const docId = this.selectedDate();
-      if (this.dailyLog.id) {
-        // Document exists: only update patientMovements
-        const dataToUpdate = {
-          patientMovements: JSON.parse(JSON.stringify(this.dailyLog.patientMovements)),
-        };
-        await this.dailyLogsApi.update(docId, dataToUpdate);
-      } else {
-        // Document doesn't exist: save full log to avoid losing other fields
-        // (stats, staffing, patient_care, leader, etc.)
-        const fullData = JSON.parse(JSON.stringify(this.dailyLog));
-        await this.dailyLogsApi.save(docId, fullData);
-        this.dailyLog.id = docId;
-      }
-      this.hasUnsavedChanges.set(false);
+      const submitted = JSON.parse(JSON.stringify(item ? [item] : this.dailyLog.patientMovements));
+      const result = await this.dailyLogsApi.save(docId, {
+        version: this.dailyLog.version,
+        ...(item ? { movementUpdates: submitted } : { patientMovements: submitted }),
+      });
+      this.dailyLog.id = docId;
+      this.dailyLog.version = (result as any).version;
+      const baseline = item ? JSON.parse(this.loadedSnapshot['patientMovements'] || '[]') : [];
+      const byId = new Map<string, any>(baseline.map((row: any) => [String(row.id), row]));
+      for (const row of submitted) { delete row.isEdited; byId.set(String(row.id), row); }
+      this.loadedSnapshot['patientMovements'] = JSON.stringify([...byId.values()]);
+      this.hasUnsavedChanges.set(this.hasPendingDraft());
       this.dailyLogCache.delete(docId); // Clear cache to force fresh reload
       this.showAlert('操作成功', '病人動態已更新！');
-    } catch (error) {
+      return true;
+    } catch (error: any) {
       console.error('儲存病人動態失敗:', error);
-      this.showAlert('儲存失敗', '更新病人動態時發生錯誤。');
+      this.hasUnsavedChanges.set(true);
+      this.showAlert('儲存失敗', error?.error?.message || '更新病人動態時發生錯誤，草稿已保留。');
+      return false;
     } finally {
       this.isLoading.set(false);
     }

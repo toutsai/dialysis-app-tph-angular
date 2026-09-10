@@ -22,7 +22,7 @@
     <span class="hx-save-state" [ngSwitch]="saveState()">
       <span *ngSwitchCase="'saving'" class="hx-saving"><i class="fas fa-circle-notch fa-spin"></i> 儲存中…</span>
       <span *ngSwitchCase="'saved'" class="hx-saved"><i class="fas fa-check"></i> 已儲存</span>
-      <span *ngSwitchCase="'error'" class="hx-error"><i class="fas fa-exclamation-triangle"></i> 儲存失敗</span>
+      <span *ngSwitchCase="'error'" class="hx-error"><i class="fas fa-exclamation-triangle"></i> 儲存失敗，草稿已保留 <button type="button" (click)="retrySave()">重試儲存</button></span>
     </span>
 
     <span class="hx-warn-count" *ngIf="!isLoading() && warningCount() > 0">

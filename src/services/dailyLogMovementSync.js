@@ -1,5 +1,6 @@
 import { getTaipeiTodayString } from '../utils/dateUtils.js'
 import { syncEventsToKiditLogbook } from './kiditSync.js'
+import { preserveMovementMetadata } from './dailyLogVersion.js'
 
 function parseJson(value, fallback) {
   try {
@@ -39,7 +40,7 @@ export function addAutoMovementToDailyLog(db, date, movementData) {
           console.log(`[DailyLog] Auto movement ${movement.id} was manually edited; skipping update`)
           return
         }
-        movements[existingIndex] = movement
+        movements[existingIndex] = preserveMovementMetadata([movement], [movements[existingIndex]])[0]
       } else {
         movements.push(movement)
       }
@@ -70,7 +71,7 @@ export function removeAutoMovementFromDailyLog(db, date, movementId) {
     if (!dailyLog) return
 
     const movements = parseJson(dailyLog.patient_movements, [])
-    const nextMovements = movements.filter((item) => item.id !== movementId)
+    const nextMovements = movements.filter((item) => item.id !== movementId || item.originalAutoId)
     if (nextMovements.length === movements.length) return
 
     db.prepare(`
