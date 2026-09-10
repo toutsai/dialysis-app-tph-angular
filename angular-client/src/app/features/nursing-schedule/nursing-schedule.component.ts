@@ -1,3 +1,4 @@
+import { loadXlsx } from '@/utils/xlsxLoader';
 import {
   Component,
   inject,
@@ -762,7 +763,7 @@ export class NursingScheduleComponent implements OnInit {
 
   // --- Excel 匯出 ---
   async exportWeeklyScheduleToExcel(): Promise<void> {
-    const XLSX = await import('xlsx');
+    const XLSX = await loadXlsx();
     if (!this.monthlySchedule || this.activeWeekTab() === 0) {
       alert(
         !this.monthlySchedule

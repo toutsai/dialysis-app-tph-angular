@@ -1,3 +1,4 @@
+import { loadXlsx } from '@/utils/xlsxLoader';
 // Standalone 版：已移除 Firebase
 import { Component, inject, signal, computed, OnInit, OnDestroy, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -30,6 +31,8 @@ import {
 } from '@/utils/scheduleUtils';
 import { formatDateToYYYYMMDD, addDays } from '@/utils/dateUtils';
 import { isDoNotMoveActiveOn, doNotMoveRangeText } from '@/utils/doNotMove';
+import { ScheduleDraft, copyOccupiedScheduleSlots } from '@/utils/scheduleDraft';
+import { extractVersionConflict, formatVersionConflictMessage } from '@/utils/versionConflict';
 
 @Component({
   selector: 'app-weekly',
@@ -86,6 +89,8 @@ export class WeeklyComponent implements OnInit, OnDestroy {
   weekScheduleRecords = signal<Map<string, any>>(new Map());
   currentWeekStartDate = signal<Date>(this.getStartOfWeek(new Date()));
   hasUnsavedChanges = signal(false);
+  readonly isSaving = signal(false);
+  private readonly draft = new ScheduleDraft();
   statusText = signal('資料已載入');
   draggedItem = signal<any>(null);
   columnWidths = signal<number[]>([]);
@@ -239,7 +244,7 @@ export class WeeklyComponent implements OnInit, OnDestroy {
     this.loadDataForWeek();
   }
 
-  ngOnDestroy(): void {}
+  ngOnDestroy(): void { this.draft.invalidate(); }
 
   getStartOfWeek(date: Date): Date {
     const d = new Date(date);
@@ -293,7 +298,9 @@ export class WeeklyComponent implements OnInit, OnDestroy {
   }
 
   async loadDataForWeek(): Promise<void> {
-    this.hasUnsavedChanges.set(false);
+    if (this.isSaving()) return;
+    const weekKey = formatDateToYYYYMMDD(this.currentWeekStartDate());
+    const request = this.draft.beginLoad(weekKey);
     this.statusText.set('讀取中...');
     try {
       const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -307,6 +314,8 @@ export class WeeklyComponent implements OnInit, OnDestroy {
         this.fetchLiveSchedulesForWeek(liveDates),
         this.fetchArchivedSchedulesForWeek(pastDates),
       ]);
+
+      if (!this.draft.canApplyLoad(request, formatDateToYYYYMMDD(this.currentWeekStartDate()))) return;
 
       const fetchedRecords = [...liveRecords, ...archivedRecords];
 
@@ -323,14 +332,17 @@ export class WeeklyComponent implements OnInit, OnDestroy {
       });
 
       const newWeekRecords = new Map<string, any>();
-      this.weekDates().forEach((day: any) => newWeekRecords.set(day.queryDate, { id: null, date: day.queryDate, schedule: {} }));
+      // Missing dates still save through PUT /schedules/:date; -1 requires the row to remain absent.
+      this.weekDates().forEach((day: any) => newWeekRecords.set(day.queryDate, { id: day.queryDate, date: day.queryDate, version: -1, schedule: {} }));
       fetchedRecords.forEach((record: any) => {
         if (record?.date) newWeekRecords.set(record.date, record);
       });
 
       this.weekScheduleRecords.set(newWeekRecords);
+      this.hasUnsavedChanges.set(false);
       this.statusText.set('資料已載入');
     } catch (error) {
+      if (!this.draft.isUnchanged(request, formatDateToYYYYMMDD(this.currentWeekStartDate()))) return;
       console.error('[WeeklyView] 讀取週排班資料失敗:', error);
       this.statusText.set('讀取失敗');
     }
@@ -408,6 +420,7 @@ export class WeeklyComponent implements OnInit, OnDestroy {
 
   setChange(): void {
     if (this.isPageLocked()) return;
+    this.draft.markEdited();
     this.hasUnsavedChanges.set(true);
     this.statusText.set('有未儲存的變更');
   }
@@ -434,7 +447,7 @@ export class WeeklyComponent implements OnInit, OnDestroy {
       return;
     }
     const newWeekRecords = new Map(this.weekScheduleRecords());
-    const oldRecord = newWeekRecords.get(dateStr) || { id: null, date: dateStr, schedule: {}, names: {} };
+    const oldRecord = newWeekRecords.get(dateStr) || { id: dateStr, date: dateStr, version: -1, schedule: {}, names: {} };
     const newDailySchedule = { ...oldRecord.schedule };
     if (slotData?.patientId) {
       const patient = this.patientMap().get(slotData.patientId);
@@ -551,41 +564,55 @@ export class WeeklyComponent implements OnInit, OnDestroy {
 
   async saveChangesToCloud(): Promise<void> {
     if (this.isPageLocked()) { this.showAlert('操作失敗', '操作被鎖定：權限不足。'); return; }
+    if (!this.hasUnsavedChanges()) return;
+    const weekKey = formatDateToYYYYMMDD(this.currentWeekStartDate());
+    const request = this.draft.beginSave(weekKey);
+    if (!request) return;
+    this.isSaving.set(true);
     this.statusText.set('儲存中...');
     try {
-      const promises: Promise<any>[] = [];
-      for (const date of this.weekDates().map((d: any) => d.queryDate)) {
-        // 僅存今天：過去=歷史、未來=唯讀（未來直存會繞過調班帳本被重算蓋掉）
-        if (!this.isDateEditable(this.weekDates().findIndex((d: any) => d.queryDate === date))) continue;
-        const dailyRecord = this.weekScheduleRecords().get(date);
-        if (dailyRecord) {
-          const scheduleToSave: Record<string, any> = {};
-          for (const shiftId in dailyRecord.schedule) {
-            const slotData = dailyRecord.schedule[shiftId];
-            if (slotData?.patientId) {
-              const cleanSlotData = { patientId: slotData.patientId, shiftId: slotData.shiftId, autoNote: slotData.autoNote || '', manualNote: slotData.manualNote || '' };
-              if (cleanSlotData.shiftId === undefined) {
-                this.showAlert('儲存失敗', `資料錯誤：在 ${date} 的排班中發現無效資料（shiftId 未定義），無法儲存。請重新整理頁面後，再進行操作。`);
-                this.statusText.set('儲存失敗');
-                return;
-              }
-              scheduleToSave[shiftId] = cleanSlotData;
-            }
-          }
-          const dataToSave = { date, schedule: scheduleToSave };
-          if (dailyRecord.id) promises.push(optimizedUpdateSchedule(dailyRecord.id, dataToSave));
-          else if (Object.keys(scheduleToSave).length > 0) promises.push(optimizedSaveSchedule(dataToSave));
-        }
+      // Only today's record is writable. Snapshot before sending, preserving all slot metadata.
+      const dayIndex = this.weekDates().findIndex((_: any, index: number) => this.isDateEditable(index));
+      if (dayIndex < 0) return;
+      const date = this.weekDates()[dayIndex].queryDate;
+      const record = this.weekScheduleRecords().get(date);
+      if (!record) return;
+      const schedule = copyOccupiedScheduleSlots(record.schedule || {});
+      if (record.id && typeof record.version !== 'number') {
+        throw new Error('排程缺少版本資訊，請重新載入後再儲存。');
       }
-      await Promise.all(promises);
-      this.hasUnsavedChanges.set(false);
-      this.statusText.set('變更已儲存！');
-      this.showAlert('操作成功', '週排班已成功儲存！');
-      await this.loadDataForWeek();
+      const payload = { date, schedule, expectedVersion: record.version };
+      const saved = record.id
+        ? await optimizedUpdateSchedule(record.id, payload)
+        : await optimizedSaveSchedule(payload);
+      if (!this.draft.isCurrent(request, formatDateToYYYYMMDD(this.currentWeekStartDate()))) return;
+      // Update only the server identity/version, never overwrite edits made while saving.
+      this.weekScheduleRecords.update((records) => {
+        const next = new Map(records);
+        next.set(date, { ...records.get(date), id: saved?.id || record.id || date, version: saved?.version });
+        return next;
+      });
+      if (this.draft.isUnchanged(request, weekKey)) {
+        this.hasUnsavedChanges.set(false);
+        this.statusText.set('變更已儲存！');
+        this.showAlert('操作成功', '週排班已成功儲存！');
+      } else {
+        this.statusText.set('先前變更已儲存，仍有新的變更待儲存');
+      }
     } catch (error: any) {
+      if (!this.draft.isCurrent(request, formatDateToYYYYMMDD(this.currentWeekStartDate()))) return;
+      const conflict = extractVersionConflict(error);
+      if (conflict) {
+        this.statusText.set('儲存衝突，您的修改仍保留');
+        this.showAlert('排程已被更新', `${formatVersionConflictMessage(conflict)}\n您的修改仍保留，請先核對最新排程後再處理。`);
+        return;
+      }
       console.error('[WeeklyView] 儲存失敗:', error);
       this.statusText.set('儲存失敗');
       this.showAlert('儲存失敗', `儲存失敗：${error.message}`);
+    } finally {
+      this.draft.finishSave(request);
+      this.isSaving.set(false);
     }
   }
 
@@ -668,6 +695,7 @@ export class WeeklyComponent implements OnInit, OnDestroy {
   }
 
   changeWeek(days: number): void {
+    if (this.isSaving()) return;
     const doChange = () => {
       const newDate = new Date(this.currentWeekStartDate());
       newDate.setDate(newDate.getDate() + days);
@@ -680,6 +708,7 @@ export class WeeklyComponent implements OnInit, OnDestroy {
   }
 
   goToToday(): void {
+    if (this.isSaving()) return;
     const doChange = () => { this.currentWeekStartDate.set(this.getStartOfWeek(new Date())); this.loadDataForWeek(); };
     if (this.hasUnsavedChanges() && !this.isPageLocked()) {
       this.showConfirmDialog('未儲存的變更', '您有未儲存的變更，確定要切換到本週嗎？', doChange);
@@ -777,7 +806,7 @@ export class WeeklyComponent implements OnInit, OnDestroy {
   openBedAssignmentDialog(): void { if (!this.isPageLocked()) this.isProblemSolverDialogVisible.set(true); }
 
   async exportWeeklyScheduleToExcel(): Promise<void> {
-    const XLSX = await import('xlsx');
+    const XLSX = await loadXlsx();
     if (this.patientStore.isLoading()) { this.showAlert('提示', '資料正在載入中，請稍後再試。'); return; }
     const data: any[][] = [['部立台北醫院 週排班總表'], [`週別: ${this.weekDisplay()}`], []];
     const headers = ['床號', ...this.weekDates().map((d: any) => `${d.weekday} ${d.date}`)];

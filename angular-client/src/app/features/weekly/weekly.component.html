@@ -5,12 +5,12 @@
         <div class="toolbar-left">
           <h1 class="page-title">週排班表</h1>
           <div class="date-navigator">
-            <button (click)="changeWeek(-7)">&lt; 上一週</button>
+            <button [disabled]="isSaving()" (click)="changeWeek(-7)">&lt; 上一週</button>
             <span class="week-display-text">{{ weekDisplay() }}</span>
-            <button (click)="changeWeek(7)">下一週 &gt;</button>
+            <button [disabled]="isSaving()" (click)="changeWeek(7)">下一週 &gt;</button>
           </div>
           <div class="main-actions">
-            <button (click)="goToToday()">回到本週</button>
+            <button [disabled]="isSaving()" (click)="goToToday()">回到本週</button>
             <button class="btn btn-warning" (click)="runScheduleCheck()">排程檢視</button>
             <button
               class="btn btn-info"
@@ -49,7 +49,7 @@
           <span class="status-text">{{ statusText() }}</span>
           <button
             class="btn-save"
-            [disabled]="!hasUnsavedChanges() || isPageLocked()"
+            [disabled]="!hasUnsavedChanges() || isPageLocked() || isSaving()"
             (click)="saveChangesToCloud()"
           >
             儲存變更

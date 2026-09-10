@@ -1,3 +1,4 @@
+import { loadXlsx } from '@/utils/xlsxLoader';
 // Standalone 版：已移除 Firebase
 import { Component, inject, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -1967,7 +1968,7 @@ export class StatsComponent implements OnInit, OnDestroy {
   // --- Excel Export ---
 
   async exportAssignmentsToExcel(): Promise<void> {
-    const XLSX = await import('xlsx');
+    const XLSX = await loadXlsx();
     if (this.isLoading) {
       this.showAlert('提示', '資料仍在載入中，請稍後再試。');
       return;

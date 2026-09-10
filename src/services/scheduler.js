@@ -6,7 +6,7 @@
 import cron from 'node-cron'
 import { getDatabase } from '../db/init.js'
 import { createBackup } from '../utils/backup.js'
-import { initializeFutureSchedules, syncMasterScheduleToFuture } from './scheduleSync.js'
+import { initializeFutureSchedules, syncMasterScheduleToFutureSync } from './scheduleSync.js'
 import { cleanupExpiredBlacklist, cleanupExpiredSessions } from '../middleware/auth.js'
 import { getTaipeiTodayString, getTaipeiYesterdayString, formatDateToYYYYMMDD } from '../utils/dateUtils.js'
 import { FREQ_MAP_TO_DAY_INDEX } from '../utils/scheduleUtils.js'
@@ -431,11 +431,12 @@ async function applyScheduledPatientUpdates() {
       const taskId = updateTask.id
       const patientId = updateTask.patient_id
       const changeType = updateTask.change_type
-      const payload = JSON.parse(updateTask.change_data || '{}')
 
       console.log(`  - 處理任務 ${taskId} for patient ${patientId} (${changeType})...`)
 
       try {
+        const payload = JSON.parse(updateTask.change_data || '{}')
+        let processedInTransaction = false
         switch (changeType) {
           case 'UPDATE_STATUS':
           case 'UPDATE_MODE':
@@ -547,6 +548,7 @@ async function applyScheduledPatientUpdates() {
             break
 
           case 'UPDATE_BASE_SCHEDULE_RULE':
+            db.transaction(() => {
             const { bedNum, shiftIndex, freq } = payload
             if (bedNum === undefined || shiftIndex === undefined || !freq) {
               throw new Error('Payload for UPDATE_BASE_SCHEDULE_RULE is incomplete')
@@ -636,15 +638,17 @@ async function applyScheduledPatientUpdates() {
 
             // 同步變更到未來 60 天既有排程（與總表 PUT 路徑 schedules.js 一致，
             // 否則既有排程列仍顯示舊床位/班別）
-            try {
-              await syncMasterScheduleToFuture(beforeMasterRules, schedule, {
+              syncMasterScheduleToFutureSync(beforeMasterRules, schedule, {
                 uid: 'system-scheduler',
                 name: '預約變更自動套用',
               })
               console.log(`    - 已同步總表變更到未來 60 天排程`)
-            } catch (syncErr) {
-              console.error(`    - ⚠️ 未來排程同步失敗 (非致命): ${syncErr.message}`)
-            }
+
+            db.prepare(`UPDATE scheduled_patient_updates
+              SET status = 'processed', error_message = NULL, processed_at = datetime('now', 'localtime')
+              WHERE id = ?`).run(taskId)
+            })()
+            processedInTransaction = true
 
             console.log(`    - 成功更新 patient/${patientId} 和總表規則`)
             break
@@ -854,7 +858,7 @@ async function applyScheduledPatientUpdates() {
         }
 
         // 標記任務為已處理
-        db.prepare(
+        if (!processedInTransaction) db.prepare(
           `
           UPDATE scheduled_patient_updates
           SET status = 'processed', processed_at = datetime('now', 'localtime')

@@ -1,0 +1,36 @@
+name: Verify development changes
+
+on:
+  push:
+    branches: [onsite-main-dev]
+  pull_request:
+    branches: [onsite-main, onsite-main-dev]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      TZ: Asia/Taipei
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            angular-client/package-lock.json
+      - run: npm ci
+      - run: npm ci --prefix angular-client
+      - run: npm run check:syntax
+      - run: npm test
+      - run: npm run build:angular
+      - run: npm run smoke:tph-angular

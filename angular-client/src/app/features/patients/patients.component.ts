@@ -1,3 +1,4 @@
+import { loadXlsx } from '@/utils/xlsxLoader';
 import {
   Component,
   inject,
@@ -2242,7 +2243,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
 
   // --- Export ---
   async exportDeletedPatients(): Promise<void> {
-    const XLSX = await import('xlsx');
+    const XLSX = await loadXlsx();
     const allPatients = this.patientStore.allPatients();
     const deletedPatients = allPatients.filter((p: any) => p.isDeleted);
     if (deletedPatients.length === 0) {

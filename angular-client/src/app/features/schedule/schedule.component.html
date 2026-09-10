@@ -15,7 +15,7 @@
       <div class="toolbar-left">
         <h1 class="page-title">每日排程</h1>
         <div class="date-navigator">
-          <button class="btn" (click)="changeDate(-1)">&laquo;<span class="btn-label"> 前一天</span></button>
+          <button class="btn" [disabled]="isSaving()" (click)="changeDate(-1)">&laquo;<span class="btn-label"> 前一天</span></button>
           <span class="current-date-text date-clickable" (click)="openDatePicker()" title="點擊選擇日期">{{ currentDateDisplay() }}</span>
           <span class="weekday-display date-clickable" (click)="openDatePicker()" title="點擊選擇日期">({{ weekdayDisplay() }})</span>
           <input
@@ -25,8 +25,8 @@
             [value]="currentDateInputValue()"
             (change)="onDatePicked($event)"
           />
-          <button class="btn" (click)="changeDate(1)"><span class="btn-label">後一天 </span>&raquo;</button>
-          <button class="btn btn-today-ghost" (click)="goToToday()">今天</button>
+          <button class="btn" [disabled]="isSaving()" (click)="changeDate(1)"><span class="btn-label">後一天 </span>&raquo;</button>
+          <button class="btn btn-today-ghost" [disabled]="isSaving()" (click)="goToToday()">今天</button>
           <button class="btn btn-warning desktop-only" (click)="runScheduleCheck()">排程檢視</button>
           @if (auth.canEditSchedules()) {
             <button

@@ -1,3 +1,4 @@
+import { loadXlsx } from '@/utils/xlsxLoader';
 // 書記專用 > 常規病人掛號
 // 呈現比照每日排程「臨床查閱」簡表：列=床位、欄=班別，格內病歷號可點擊複製，
 // 身分（門診/住院/急診/兩班頻率）用與每日排程相同的格子底色，住院/急診另帶病房號徽章。
@@ -195,7 +196,7 @@ export class ClerkRegistrationComponent implements OnInit {
   }
 
   async exportExcel(): Promise<void> {
-    const XLSX = await import('xlsx');
+    const XLSX = await loadXlsx();
     const flat: RegCell[] = [];
     for (const cells of this.dayCellMap().values()) flat.push(...cells);
     if (flat.length === 0) return;

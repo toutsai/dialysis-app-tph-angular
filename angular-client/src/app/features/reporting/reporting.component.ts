@@ -1,3 +1,4 @@
+import { loadXlsx } from '@/utils/xlsxLoader';
 // Standalone 版：已移除 Firebase
 import { Component, inject, signal, computed, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -589,7 +590,7 @@ export class ReportingComponent implements AfterViewInit {
   // --- Excel Export ---
 
   async exportToExcel(): Promise<void> {
-    const XLSX = await import('xlsx');
+    const XLSX = await loadXlsx();
     if (this.noData()) return;
     let headers!: string[];
     let dataRows!: any[][];

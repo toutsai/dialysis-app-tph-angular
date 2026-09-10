@@ -1,3 +1,4 @@
+import { loadXlsx } from '@/utils/xlsxLoader';
 import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -984,7 +985,7 @@ export class InventoryComponent implements OnInit {
   }
 
   async exportConsumablesToExcel(): Promise<void> {
-    const XLSX = await import('xlsx');
+    const XLSX = await loadXlsx();
     const data = this.processedConsumptionData();
     if (!data || data.length === 0) {
       this.showAlert('提示', '沒有可匯出的資料。');
@@ -1396,7 +1397,7 @@ export class InventoryComponent implements OnInit {
   }
 
   async exportMonthlySummary(): Promise<void> {
-    const XLSX = await import('xlsx');
+    const XLSX = await loadXlsx();
     const rows: any[][] = [['類別', '品項', '每箱數量', '當月消耗(個)', '當月消耗(箱)']];
 
     for (const category of Object.keys(CATEGORY_NAMES)) {
@@ -2032,7 +2033,7 @@ export class InventoryComponent implements OnInit {
   }
 
   async confirmExportOrder(): Promise<void> {
-    const XLSX = await import('xlsx');
+    const XLSX = await loadXlsx();
     const rows: any[][] = [];
 
     // Row 1: Order date

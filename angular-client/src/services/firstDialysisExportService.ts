@@ -1,3 +1,4 @@
+import { loadXlsx } from '@/utils/xlsxLoader';
 // src/services/firstDialysisExportService.ts
 // 院內首透名單匯出（來源：病人狀態標記「本院初透」，2026-08-15 起）
 
@@ -17,7 +18,7 @@ export async function exportFirstDialysisExcel(
   rows: FirstDialysisRow[],
   filename: string = 'FirstDialysis_Export.xlsx',
 ): Promise<void> {
-  const XLSX = await import('xlsx');
+  const XLSX = await loadXlsx();
   const sheetData = rows.map((r) => ({
     姓名: r.name || '',
     病歷號: r.medicalRecordNumber || '',

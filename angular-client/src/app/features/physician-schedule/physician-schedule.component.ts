@@ -1,3 +1,4 @@
+import { loadXlsx } from '@/utils/xlsxLoader';
 // Standalone 版：已移除 Firebase
 import { Component, HostBinding, Input, inject, signal, computed, OnInit, OnDestroy, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -884,7 +885,7 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   }
 
   async exportEmergencyRecords(): Promise<void> {
-    const XLSX = await import('xlsx');
+    const XLSX = await loadXlsx();
     if (this.emergencyRecords.length === 0) { this.showAlert('提示', '沒有緊急出勤紀錄可供匯出。'); return; }
     const aoa: any[][] = [];
     const title = `${this.selectedMonth()}月 腎臟科醫師緊急出勤名單`;

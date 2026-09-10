@@ -17,7 +17,7 @@
 //   4. 時間方向：baseline 必須早於 peak；天真的「窗內min/窗內max」會把恢復中的
 //      病人誤判為新發 AKI，切勿改回。
 
-import XLSX from 'xlsx'
+import XLSX from '../utils/spreadsheet.js'
 
 // 全段最低 Cr >= 此值視為慢性腎衰/ESRD（≈ eGFR<15）
 export const ESRD_MIN_CR = 4.0

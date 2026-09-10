@@ -1,3 +1,4 @@
+import { loadXlsx } from '@/utils/xlsxLoader';
 import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { nameWithModeFreq } from '@/utils/patientDisplay';
@@ -530,7 +531,7 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
   }
 
   async exportBaseScheduleToExcel(): Promise<void> {
-    const XLSX = await import('xlsx');
+    const XLSX = await loadXlsx();
     const record = this.masterRecord();
     if (!record || !record.schedule) {
       this.showAlert('提示', '沒有總表資料可匯出。');

@@ -1,12 +1,13 @@
 // 醫囑與相關資料路由
 import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
-import XLSX from 'xlsx'
+import XLSX from '../utils/spreadsheet.js'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isContributor, isEditor, logAudit, requireAnyRole } from '../middleware/auth.js'
 import { getTaipeiMonthString, getTaipeiTodayString } from '../utils/dateUtils.js'
 import { normalizeDialysisMode, normalizeDialysisOrdersMode } from '../utils/dialysisMode.js'
 import { FREQ_MAP_TO_DAY_INDEX } from '../utils/scheduleUtils.js'
+import { saveDialysisOrder } from '../services/dialysisOrderService.js'
 
 const router = Router()
 const isDoctorRole = isContributor
@@ -562,37 +563,8 @@ router.post('/history/batch', authenticate, (req, res) => {
  */
 router.post('/history', ...isDoctorRole, async (req, res) => {
   try {
-    const { patientId, patientName, operationType, orders } = req.body
-
-    if (!patientId) {
-      return res.status(400).json({
-        error: true,
-        message: '病人 ID 為必填',
-      })
-    }
-
-    const id = uuidv4()
-    const db = getDatabase()
-
-    // 正規化透析模式拼法（統一 SLED / CVVHDF 等），歷史與當前醫囑一致
-    const normalizedOrders = normalizeDialysisOrdersMode({ ...(orders || {}) })
-
-    db.prepare(
-      `
-      INSERT INTO dialysis_orders_history (id, patient_id, patient_name, operation_type, orders)
-      VALUES (?, ?, ?, ?, ?)
-    `,
-    ).run(id, patientId, patientName || '', operationType || 'CREATE', JSON.stringify(normalizedOrders))
-
-    // 同時更新病人的當前醫囑
-    db.prepare(
-      `
-      UPDATE patients
-      SET dialysis_orders = ?, updated_at = datetime('now', 'localtime')
-      WHERE id = ?
-    `,
-    ).run(JSON.stringify(normalizedOrders), patientId)
-
+    const result = saveDialysisOrder(req.body, req.user)
+    const { id, patientId, patientName, deletedFutureExceptions } = result
 
     await logAudit(
       'DIALYSIS_ORDER_CREATE',
@@ -603,21 +575,16 @@ router.post('/history', ...isDoctorRole, async (req, res) => {
       {
         patientId,
         patientName,
+        deletedFutureExceptions,
       },
     )
 
-    res.status(201).json({
-      id,
-      patientId,
-      patientName,
-      operationType,
-      orders,
-    })
+    res.status(201).json(result)
   } catch (error) {
     console.error('新增醫囑記錄錯誤:', error)
-    res.status(500).json({
+    res.status(error.status || 500).json({
       error: true,
-      message: '新增醫囑記錄失敗',
+      message: error.status ? error.message : '新增醫囑記錄失敗',
     })
   }
 })
@@ -3019,7 +2986,7 @@ router.get('/bed-settings', authenticate, (req, res) => {
  * PUT /api/orders/bed-settings/:id
  * 更新單一床位的設備設定（upsert；:id 為床位編號如 38、外1）
  */
-router.put('/bed-settings/:id', authenticate, async (req, res) => {
+router.put('/bed-settings/:id', ...isInventoryRole, async (req, res) => {
   try {
     const { id } = req.params
     const db = getDatabase()
@@ -3040,7 +3007,7 @@ router.put('/bed-settings/:id', authenticate, async (req, res) => {
  * PUT /api/orders/bed-settings
  * 整包覆寫床位設備設定（相容既有介面；接受 map 或陣列）
  */
-router.put('/bed-settings', authenticate, async (req, res) => {
+router.put('/bed-settings', ...isInventoryRole, async (req, res) => {
   try {
     const db = getDatabase()
     const body = req.body
@@ -3084,7 +3051,7 @@ router.get('/machine-bicarbonate-config', authenticate, (req, res) => {
  * POST /api/orders/machine-bicarbonate-config
  * 新增一筆洗腎機 Bicarbonate 設定
  */
-router.post('/machine-bicarbonate-config', authenticate, async (req, res) => {
+router.post('/machine-bicarbonate-config', ...isInventoryRole, async (req, res) => {
   try {
     const db = getDatabase()
     const id = uuidv4()
@@ -3105,7 +3072,7 @@ router.post('/machine-bicarbonate-config', authenticate, async (req, res) => {
  * PUT /api/orders/machine-bicarbonate-config/:id（前端送 PATCH，由 index.js 全域轉為 PUT）
  * 更新單筆洗腎機 Bicarbonate 設定
  */
-router.put('/machine-bicarbonate-config/:id', authenticate, async (req, res) => {
+router.put('/machine-bicarbonate-config/:id', ...isInventoryRole, async (req, res) => {
   try {
     const { id } = req.params
     const db = getDatabase()
@@ -3129,7 +3096,7 @@ router.put('/machine-bicarbonate-config/:id', authenticate, async (req, res) => 
  * DELETE /api/orders/machine-bicarbonate-config/:id
  * 刪除單筆洗腎機 Bicarbonate 設定
  */
-router.delete('/machine-bicarbonate-config/:id', authenticate, async (req, res) => {
+router.delete('/machine-bicarbonate-config/:id', ...isInventoryRole, async (req, res) => {
   try {
     const { id } = req.params
     const db = getDatabase()

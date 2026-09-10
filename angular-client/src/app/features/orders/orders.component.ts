@@ -1,3 +1,4 @@
+import { loadXlsx } from '@/utils/xlsxLoader';
 // Standalone 版：已移除 Firebase
 import {
   Component,
@@ -488,7 +489,7 @@ export class OrdersComponent implements OnInit {
 
   // --- Excel Export ---
   async exportOrdersToExcel(): Promise<void> {
-    const XLSX = await import('xlsx');
+    const XLSX = await loadXlsx();
     const results = this.searchResult();
     if (!results || results.length === 0) {
       alert('沒有可匯出的資料。');
@@ -717,7 +718,7 @@ export class OrdersComponent implements OnInit {
   }
 
   async exportDialysisOrdersToExcel(): Promise<void> {
-    const XLSX = await import('xlsx');
+    const XLSX = await loadXlsx();
     try {
       const rows = this.displayedDialysisRows();
       const isGroup = this.dialysisViewMode() === 'group';

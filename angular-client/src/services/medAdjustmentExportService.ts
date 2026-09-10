@@ -1,3 +1,4 @@
+import { loadXlsx } from '@/utils/xlsxLoader';
 // src/services/medAdjustmentExportService.ts
 // 醫師藥物調整：匯出整班當月修正（列=床號/病歷號/姓名，欄=醫囑+貧血+鈣磷修改項目）
 
@@ -6,7 +7,7 @@ export async function exportMedAdjustmentExcel(
   itemLabels: string[],
   filename: string = 'MedAdjustment_Export.xlsx',
 ): Promise<void> {
-  const XLSX = await import('xlsx');
+  const XLSX = await loadXlsx();
   const header = ['床號', '病歷號', '姓名', ...itemLabels];
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet(rows, { header });

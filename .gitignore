@@ -68,6 +68,7 @@ web_modules/
 
 # Output of 'npm pack'
 *.tgz
+!/vendor/xlsx-0.20.3.tgz
 
 # Yarn Integrity file
 .yarn-integrity
@@ -139,6 +140,7 @@ tmp/
 
 # 只忽略 repo 根目錄的 DB 資料夾（加 / 錨定），避免誤傷 angular-client/src/data 等原始碼資料夾
 /data/
+/data-dev/
 .claude/settings.local.json
 .env
 /data/dialysis.db

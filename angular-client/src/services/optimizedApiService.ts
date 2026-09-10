@@ -292,6 +292,13 @@ export async function createDialysisOrderAndUpdatePatient(
     },
   };
 
+  // 保留未提供欄位；明確提供空值時，交由後端合併成完整醫囑與歷史。
+  for (const key of ['memo', 'crrtOrders', 'firstDialysisPlan']) {
+    if (Object.prototype.hasOwnProperty.call(orderData, key)) {
+      historyRecord.orders[key] = orderData[key];
+    }
+  }
+
   // AK 週欄位（一~六）為資料權威；輪替字串 ak 由 modal 依頻率自動產生
   if (Array.isArray(orderData.akWeekly) && orderData.akWeekly.length === 6) {
     historyRecord.orders.akWeekly = orderData.akWeekly.map((v: any) => String(v || ''));
@@ -310,10 +317,7 @@ export async function createDialysisOrderAndUpdatePatient(
   }
 
   try {
-    await Promise.all([
-      saveDialysisOrderHistory(historyRecord),
-      updatePatient(patientId, { dialysisOrders: { ...historyRecord.orders }, updatedAt: now }),
-    ]);
+    await saveDialysisOrderHistory(historyRecord);
     clearCacheByPattern('patients');
   } catch (error: any) {
     console.error(`Failed to create order for ${patientName}:`, error);

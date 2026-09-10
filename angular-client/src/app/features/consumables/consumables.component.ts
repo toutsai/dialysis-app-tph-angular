@@ -1,3 +1,4 @@
+import { loadXlsx } from '@/utils/xlsxLoader';
 import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -149,7 +150,7 @@ export class ConsumablesComponent implements OnInit {
   }
 
   async exportConsumablesToExcel(): Promise<void> {
-    const XLSX = await import('xlsx');
+    const XLSX = await loadXlsx();
     const data = this.processedData();
     if (!data || data.length === 0) {
       alert('沒有可匯出的資料。');

@@ -14,7 +14,13 @@
     "build:angular": "cd angular-client && npm run build",
     "install:angular": "cd angular-client && npm install",
     "dev:angular": "cd angular-client && npx ng serve --configuration development --port 5173",
-    "smoke:tph-angular": "node scripts/smoke-test-tph-angular.cjs"
+    "smoke:tph-angular": "node scripts/smoke-test-tph-angular.cjs",
+    "test": "node scripts/run-regression-tests.mjs",
+    "check:syntax": "node scripts/check-syntax.mjs",
+    "start:review": "node scripts/start-review-dev.mjs"
+  },
+  "engines": {
+    "node": ">=22.0.0 <23"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -26,7 +32,7 @@
     "morgan": "^1.10.0",
     "node-cron": "^4.2.1",
     "uuid": "^9.0.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "file:vendor/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "nodemon": "^3.0.3"

@@ -1,3 +1,4 @@
+import { loadXlsx } from '@/utils/xlsxLoader';
 // Standalone 版：已移除 Firebase
 import {
   Component,
@@ -526,7 +527,7 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
 
   /** 臨床查閱簡表匯出 Excel（矩陣型：列＝床號、欄＝三班） */
   async exportClinicalExcel(): Promise<void> {
-    const XLSX = await import('xlsx');
+    const XLSX = await loadXlsx();
     const rows = this.clinicalRows();
     if (rows.length === 0) return;
     const data: unknown[][] = [];

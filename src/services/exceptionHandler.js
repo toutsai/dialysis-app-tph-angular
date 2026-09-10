@@ -64,36 +64,36 @@ export async function processScheduleException(exceptionId, exceptionData) {
       return { success: false, message: '狀態不是 pending' }
     }
 
-    // 更新狀態為處理中
+    let processedDates = []
+    let conflicts = []
+    db.transaction(() => {
+    // 排程及帳本狀態同時提交；SUSPEND 的多日寫入也共用這個交易。
     db.prepare(`
       UPDATE schedule_exceptions
       SET status = 'processing', updated_at = datetime('now', 'localtime')
       WHERE id = ?
     `).run(exceptionId)
 
-    let processedDates = []
-    let conflicts = []
-
     // ===== 處理 MOVE 類型 =====
     if (exceptionData.type === 'MOVE') {
-      const result = await handleMove(db, exceptionId, exceptionData)
+      const result = handleMove(db, exceptionId, exceptionData)
       processedDates = result.processedDates
       conflicts = result.conflicts
 
     // ===== 處理 SUSPEND 類型 =====
     } else if (exceptionData.type === 'SUSPEND') {
-      const result = await handleSuspend(db, exceptionId, exceptionData)
+      const result = handleSuspend(db, exceptionId, exceptionData)
       processedDates = result.processedDates
 
     // ===== 處理 ADD_SESSION 類型 =====
     } else if (exceptionData.type === 'ADD_SESSION') {
-      const result = await handleAddSession(db, exceptionId, exceptionData)
+      const result = handleAddSession(db, exceptionId, exceptionData)
       processedDates = result.processedDates
       conflicts = result.conflicts
 
     // ===== 處理 SWAP 類型 =====
     } else if (exceptionData.type === 'SWAP') {
-      const result = await handleSwap(db, exceptionId, exceptionData)
+      const result = handleSwap(db, exceptionId, exceptionData)
       processedDates = result.processedDates
 
     } else {
@@ -107,6 +107,7 @@ export async function processScheduleException(exceptionId, exceptionData) {
           updated_at = datetime('now', 'localtime')
       WHERE id = ?
     `).run(exceptionId)
+    })()
 
     console.log(`✅ [ExceptionHandler] 調班 ${exceptionId} 已成功套用`)
     emitExceptionChange('updated', {
@@ -165,7 +166,7 @@ export async function processScheduleException(exceptionId, exceptionData) {
 /**
  * 處理 MOVE 調班
  */
-async function handleMove(db, exceptionId, data) {
+function handleMove(db, exceptionId, data) {
   const { from, to, patientId, patientName } = data
 
   if (!patientId || !from?.sourceDate || !from?.bedNum || !from?.shiftCode ||
@@ -265,7 +266,7 @@ async function handleMove(db, exceptionId, data) {
 /**
  * 處理 SUSPEND 調班 (暫停透析)
  */
-async function handleSuspend(db, exceptionId, data) {
+function handleSuspend(db, exceptionId, data) {
   const { patientId, patientName, startDate, endDate } = data
 
   if (!patientId || !startDate || !endDate) {
@@ -315,7 +316,7 @@ async function handleSuspend(db, exceptionId, data) {
 /**
  * 處理 ADD_SESSION 調班 (臨時加洗)
  */
-async function handleAddSession(db, exceptionId, data) {
+function handleAddSession(db, exceptionId, data) {
   const { to, patientId, patientName, reason } = data
 
   if (!patientId || !to?.goalDate || !to?.bedNum || !to?.shiftCode) {
@@ -391,7 +392,7 @@ async function handleAddSession(db, exceptionId, data) {
 /**
  * 處理 SWAP 調班 (交換床位)
  */
-async function handleSwap(db, exceptionId, data) {
+function handleSwap(db, exceptionId, data) {
   const { date, patient1, patient2 } = data
 
   if (!date || !patient1?.patientId || !patient1?.fromBedNum || !patient1?.fromShiftCode ||
