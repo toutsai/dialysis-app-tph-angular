@@ -123,7 +123,7 @@
               <tr>
                 <th class="nurse-name-col">護理師</th>
                 <th
-                  *ngFor="let dayInfo of monthDays"
+                  *ngFor="let dayInfo of monthDays; trackBy: trackByDay"
                   [ngClass]="['date-col', dayInfo.isWeekend ? 'weekend' : '']"
                 >
                   <div class="date-num">{{ dayInfo.day }}</div>
@@ -132,7 +132,7 @@
               </tr>
             </thead>
             <tbody *ngIf="sortedSchedule && monthDays && monthDays.length > 0">
-              <tr *ngFor="let entry of objectEntries(sortedSchedule)">
+              <tr *ngFor="let entry of objectEntries(sortedSchedule); trackBy: trackByNurseId">
                 <td class="nurse-name">
                   {{ entry[1].nurseName }}
                   <span *ngIf="showUsername && entry[1].nurseUsername" class="nurse-username">
@@ -140,7 +140,7 @@
                   </span>
                 </td>
                 <td
-                  *ngFor="let dayInfo of monthDays; let i = index"
+                  *ngFor="let dayInfo of monthDays; let i = index; trackBy: trackByDay"
                   [ngClass]="['shift-cell', dayInfo.isWeekend ? 'weekend' : '']"
                 >
                   <span
@@ -313,7 +313,7 @@
                 </tr>
               </thead>
               <tbody *ngIf="groupCountsDashboard">
-                <tr *ngFor="let nurse of groupCountsDashboard.nurses">
+                <tr *ngFor="let nurse of groupCountsDashboard.nurses; trackBy: trackByNurse">
                   <td>{{ nurse.name }}</td>
                   <td
                     *ngFor="let group of groupCountsDashboard.header.slice(1)"
@@ -360,7 +360,7 @@
                         累積組別
                       </th>
                       <th
-                        *ngFor="let dayInfo of weekData.days; let dayIdx = index"
+                        *ngFor="let dayInfo of weekData.days; let dayIdx = index; trackBy: trackByDay"
                         [ngClass]="{
                           'weekend': dayInfo.isWeekend,
                           'other-month-header': !dayInfo.isCurrentMonth
@@ -408,7 +408,7 @@
                         <ng-template #noCum>—</ng-template>
                       </td>
                       <td
-                        *ngFor="let dayInfo of weekData.days; let dayIdx = index"
+                        *ngFor="let dayInfo of weekData.days; let dayIdx = index; trackBy: trackByDay"
                         [ngClass]="{
                           'weekend': dayInfo.isWeekend,
                           'other-month': !dayInfo.isCurrentMonth,

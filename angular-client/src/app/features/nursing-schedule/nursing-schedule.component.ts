@@ -101,6 +101,9 @@ export class NursingScheduleComponent implements OnInit {
   private _cachedWeeklyDataKey = '';
   private _cachedSortedSchedule: Record<string, any> = {};
   private _cachedSortedScheduleKey = '';
+  private monthDaysKey = '';
+  private cachedMonthDays: any[] = [];
+  private readonly entriesCache = new WeakMap<object, [string, any][]>();
 
   // --- "工作職責" 頁籤的狀態 ---
   announcementText = '';
@@ -136,17 +139,22 @@ export class NursingScheduleComponent implements OnInit {
     const [year, month] = yearMonth.split('-').map(Number);
     const daysInMonth =
       source?.maxDaysInMonth || new Date(year, month, 0).getDate();
+    const key = `${yearMonth}:${daysInMonth}`;
+    if (key === this.monthDaysKey) return this.cachedMonthDays;
     const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
     const days: any[] = [];
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month - 1, day);
       const dayOfWeek = date.getDay();
       days.push({
+        date: `${yearMonth}-${String(day).padStart(2, '0')}`,
         day: day,
         weekday: weekdays[dayOfWeek],
         isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
       });
     }
+    this.monthDaysKey = key;
+    this.cachedMonthDays = days;
     return days;
   }
 
@@ -351,6 +359,8 @@ export class NursingScheduleComponent implements OnInit {
   // trackBy 函數 - 避免 *ngFor 重建 DOM
   trackByWeekNumber = (_index: number, week: any) => week.weekNumber;
   trackByNurseId = (_index: number, entry: [string, any]) => entry[0];
+  trackByDay = (_index: number, day: any) => day.date;
+  trackByNurse = (_index: number, nurse: any) => nurse.id;
 
   /** 取得目前選取的週班表資料（直接渲染，不需 *ngFor + *ngIf 組合） */
   get currentWeekData(): any | null {
@@ -1616,6 +1626,13 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   objectEntries(obj: any): [string, any][] {
-    return obj ? Object.entries(obj) : [];
+    if (!obj) return [];
+    const cached = this.entriesCache.get(obj);
+    const keys = Object.keys(obj);
+    // Detect in-place additions/replacements without discarding stable row tuples.
+    if (cached?.length === keys.length && cached.every(([key, value], index) => key === keys[index] && value === obj[key])) return cached;
+    const entries = Object.entries(obj);
+    this.entriesCache.set(obj, entries);
+    return entries;
   }
 }

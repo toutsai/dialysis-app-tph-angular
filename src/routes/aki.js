@@ -5,7 +5,9 @@ import { getDatabase } from '../db/init.js'
 import { isSpecialist, logAuditWithRequest } from '../middleware/auth.js'
 import { getTaipeiTodayString } from '../utils/dateUtils.js'
 import { normalizeDialysisMode } from '../utils/dialysisMode.js'
-import { parseInpatients, parseLabs, stageForSeries, analyzeSeries, AKI_CATEGORIES } from '../services/akiService.js'
+import { parseInpatientsRows, parseLabsRows, stageForSeries, analyzeSeries, AKI_CATEGORIES } from '../services/akiService.js'
+
+import { parseFirstSheet } from '../services/spreadsheetParser.js'
 
 const router = Router()
 
@@ -57,10 +59,10 @@ function decodeBuffer(req) {
 }
 
 // ---------- 上傳：留院病人清單（覆蓋該快照日） ----------
-router.post('/upload/inpatients', (req, res) => {
+router.post('/upload/inpatients', async (req, res) => {
   try {
     const { buffer, fileName } = decodeBuffer(req)
-    const parsed = parseInpatients(buffer)
+    const parsed = parseInpatientsRows(await parseFirstSheet(buffer, { header: 1, defval: '', raw: false }))
     const snapshotDate =
       (req.body.snapshotDate && String(req.body.snapshotDate).trim()) ||
       parsed.rangeEnd ||
@@ -101,10 +103,10 @@ router.post('/upload/inpatients', (req, res) => {
 })
 
 // ---------- 上傳：檢驗明細（累積歷史，去重；8.1 報表含 eGFR） ----------
-router.post('/upload/labs', (req, res) => {
+router.post('/upload/labs', async (req, res) => {
   try {
     const { buffer, fileName } = decodeBuffer(req)
-    const parsed = parseLabs(buffer)
+    const parsed = parseLabsRows(await parseFirstSheet(buffer, { header: 1, defval: '', raw: false }))
 
     const db = getDatabase()
     const batchId = uuidv4()

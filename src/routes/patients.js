@@ -8,6 +8,7 @@ import { validate } from '../middleware/validate.js'
 import { addMovementToDailyLog, safeJsonParse, deleteFutureScheduleExceptionsForPatient, snapshotPatientScheduleChange, applyPatientModeChange } from '../services/patientOrderEffects.js'
 import { normalizeDialysisMode, normalizeDialysisOrdersMode } from '../utils/dialysisMode.js'
 import { normalizeHepatitisStatus, deriveHepatitisFromTags, syncTagsFromHepatitis, parseHepatitisStatus, upgradeHepatitisStatus } from '../utils/hepatitis.js'
+import { getEducationDialysisDatesBatch } from '../services/patientEducationDates.js'
 import { recordPatientHistory, createPatientSnapshot } from '../services/patientHistory.js'
 import {
   BASIC_FIELD_MAP,
@@ -63,11 +64,11 @@ function deleteFutureMessagesForPatient(db, patientId) {
  */
 const PATIENT_SELECT_COLUMNS = `
   p.*,
-  (
+  CASE WHEN p.is_deleted = 1 THEN (
     SELECT MAX(h.timestamp)
     FROM patient_history h
     WHERE h.patient_id = p.id AND h.event_type = 'DELETE'
-  ) AS history_deleted_at
+  ) ELSE NULL END AS history_deleted_at
 `
 
 /**
@@ -808,6 +809,14 @@ router.get('/education-list', ...isEditor, (req, res) => {
       SELECT schedule FROM base_schedules WHERE id = 'MASTER_SCHEDULE'
     `).get()
     const masterRules = masterDoc ? safeJsonParse(masterDoc.schedule) : {}
+    const educationRequests = rows.flatMap(r => {
+      let ps = {}
+      try { ps = JSON.parse(r.patient_status || '{}') } catch {}
+      return ps?.isFirstDialysis?.active
+        ? [{ patientId: r.id, firstDate: ps.isFirstDialysis.date || r.first_dialysis_date || '' }]
+        : []
+    })
+    const educationDates = getEducationDialysisDatesBatch(db, educationRequests, todayStr)
     const list = []
     for (const r of rows) {
       let firstActive = false
@@ -863,7 +872,7 @@ router.get('/education-list', ...isEditor, (req, res) => {
       let expectedInfos = []
       if (firstDate) {
         if (firstActive) {
-          expectedInfos = getEducationDialysisDates(db, r.id, firstDate, todayStr).slice(0, total)
+          expectedInfos = (educationDates.get(r.id) || []).slice(0, total)
         } else {
           expectedInfos = sessions
             .filter((s) => s?.dialysisDate)
@@ -1809,7 +1818,7 @@ router.get('/:id/problem-list', authenticate, (req, res) => {
 
     // KiDit 病史：profile 與 history 可能建在不同日期，取最新含 selectedSystemicDiseases 的事件
     let kidit = null
-    const rows = db.prepare('SELECT date, events FROM kidit_logbook ORDER BY date DESC').all()
+    const rows = db.prepare('SELECT date, events FROM kidit_logbook ORDER BY date DESC').iterate()
     for (const row of rows) {
       let events = []
       try { events = JSON.parse(row.events || '[]') } catch { continue }

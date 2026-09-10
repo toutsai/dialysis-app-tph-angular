@@ -197,12 +197,14 @@ export class LabReportsComponent implements OnInit, OnDestroy {
   });
 
   private queryParamSub: any;
+  private alertRequest = 0;
 
   ngOnInit(): void {
     this.initFromRoute();
   }
 
   ngOnDestroy(): void {
+    this.alertRequest++;
     if (this.queryParamSub) {
       this.queryParamSub.unsubscribe();
     }
@@ -339,23 +341,29 @@ export class LabReportsComponent implements OnInit, OnDestroy {
   }
 
   async generateAlertReport(): Promise<void> {
+    const request = ++this.alertRequest;
+    const range = { ...this.alertMonthRange() };
     this.isLoadingAlerts.set(true);
     this.alertList.set([]);
     try {
       await this.patientStore.fetchPatientsIfNeeded();
       const allOpdPatients = this.patientStore.opdPatients();
 
-      const range = this.alertMonthRange();
       const startDate = new Date(range.start + '-01');
       const endDate = new Date(range.end + '-01');
       endDate.setMonth(endDate.getMonth() + 1);
       const scheduleDoc: any = await this.baseSchedulesApi.fetchById('MASTER_SCHEDULE');
       const scheduleRules = scheduleDoc?.schedule || {};
 
-      // 一次取得全部檢驗報告並依病人分組，取代「每位病人各 fetchAll 一次 + 全表 filter」的 N+1
+      // API endDate is inclusive; retain the existing local half-open interval.
       const startStr = startDate.toISOString().slice(0, 10);
       const endStr = endDate.toISOString().slice(0, 10);
-      const allReports = (await this.labReportsApi.fetchAll()) as any[];
+      const inclusiveEnd = new Date(`${endStr}T00:00:00Z`);
+      inclusiveEnd.setUTCDate(inclusiveEnd.getUTCDate() - 1);
+      const allReports = (await this.labReportsApi.fetchWhere({
+        startDate: startStr, endDate: inclusiveEnd.toISOString().slice(0, 10),
+      })) as any[];
+      if (request !== this.alertRequest) return;
       const reportsByPatient = new Map<string, any[]>();
       for (const r of allReports) {
         if (r.reportDate >= startStr && r.reportDate < endStr) {
@@ -412,7 +420,7 @@ export class LabReportsComponent implements OnInit, OnDestroy {
       // Read saved analyses and fill back
       const patientIdsInList = newAlertList.map((item) => item.patient.id);
       if (patientIdsInList.length > 0) {
-        const monthRangeKey = `${this.alertMonthRange().start}_${this.alertMonthRange().end}`;
+        const monthRangeKey = `${range.start}_${range.end}`;
         const savedAnalyses: any[] = await queryWithInChunks(
           'lab_alert_analyses',
           'patientId',
@@ -429,12 +437,13 @@ export class LabReportsComponent implements OnInit, OnDestroy {
           }
         });
       }
-      this.alertList.set(newAlertList);
+      if (request === this.alertRequest) this.alertList.set(newAlertList);
     } catch (error) {
+      if (request !== this.alertRequest) return;
       console.error('\u751f\u6210\u8b66\u793a\u5831\u544a\u5931\u6557:', error);
       alert('\u751f\u6210\u8b66\u793a\u5831\u544a\u6642\u767c\u751f\u932f\u8aa4\uff0c\u8acb\u6aa2\u67e5\u4e3b\u63a7\u53f0\u3002');
     } finally {
-      this.isLoadingAlerts.set(false);
+      if (request === this.alertRequest) this.isLoadingAlerts.set(false);
     }
   }
 

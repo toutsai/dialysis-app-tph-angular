@@ -96,7 +96,10 @@ function readSheetRows(buffer) {
 // 欄位: 護理站,住院號,切帳號,留院日,科別碼,科別,醫師,床號,病歷號,姓名,年齡,性別,入院日,出院日,主診斷碼,診斷名稱,轉歸
 
 export function parseInpatients(buffer) {
-  const rows = readSheetRows(buffer)
+  return parseInpatientsRows(readSheetRows(buffer))
+}
+
+export function parseInpatientsRows(rows) {
   const { rangeStart, rangeEnd } = parseTitleRange(rows)
   const headerIdx = findHeaderRow(rows, '病歷號')
   if (headerIdx < 0) throw new Error('找不到表頭（缺「病歷號」欄），請確認是「留院病人清單明細表」')
@@ -154,7 +157,10 @@ export function parseInpatients(buffer) {
 const LONG_SOURCE_MAP = { 門: 'OPD', 急: 'ER', 住: 'IPD', 門診: 'OPD', 急診: 'ER', 住院: 'IPD' }
 
 export function parseLabs(buffer) {
-  const rows = readSheetRows(buffer)
+  return parseLabsRows(readSheetRows(buffer))
+}
+
+export function parseLabsRows(rows) {
   const { rangeStart, rangeEnd } = parseTitleRange(rows)
   const headerIdx = findHeaderRow(rows, '病歷號')
   if (headerIdx < 0) throw new Error('找不到表頭（缺「病歷號」欄），請確認是「CKD-AKI 病患明細」或「檢驗結果(住院病人)」報表')

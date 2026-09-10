@@ -2,6 +2,7 @@
 import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import XLSX from '../utils/spreadsheet.js'
+import { parseFirstSheet } from '../services/spreadsheetParser.js'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isContributor, isEditor, logAudit, requireAnyRole } from '../middleware/auth.js'
 import { getTaipeiMonthString, getTaipeiTodayString } from '../utils/dateUtils.js'
@@ -1425,10 +1426,7 @@ router.post('/lab-reports/upload', ...isDoctorRole, async (req, res) => {
     console.log(`[LabReport] 接收到檔案 ${fileName}，開始解析...`)
 
     const buffer = Buffer.from(fileContent, 'base64')
-    const workbook = XLSX.read(buffer, { type: 'buffer' })
-    const sheetName = workbook.SheetNames[0]
-    const worksheet = workbook.Sheets[sheetName]
-    const sheetAsArray = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+    const sheetAsArray = await parseFirstSheet(buffer, { header: 1 })
 
     if (sheetAsArray.length < 2) {
       return res.status(400).json({
@@ -1660,7 +1658,7 @@ router.post('/lab-reports/upload', ...isDoctorRole, async (req, res) => {
     })
   } catch (error) {
     console.error('[LabReport] 處理檔案時發生錯誤:', error)
-    res.status(500).json({
+    res.status(error.status || 500).json({
       error: true,
       message: `處理 Excel 檔案時發生錯誤: ${error.message}`,
     })
@@ -2058,10 +2056,7 @@ router.post('/medications/upload', ...isDoctorRole, async (req, res) => {
     console.log(`[ProcessOrders] 接收到檔案 ${fileName}，開始解析...`)
 
     const buffer = Buffer.from(fileContent, 'base64')
-    const workbook = XLSX.read(buffer, { type: 'buffer' })
-    const sheetName = workbook.SheetNames[0]
-    const worksheet = workbook.Sheets[sheetName]
-    const dataRows = XLSX.utils.sheet_to_json(worksheet, {
+    const dataRows = await parseFirstSheet(buffer, {
       header: 1,
       defval: '',
       raw: false,
@@ -2326,7 +2321,7 @@ router.post('/medications/upload', ...isDoctorRole, async (req, res) => {
     })
   } catch (error) {
     console.error('[ProcessOrders] 處理檔案時發生錯誤:', error)
-    res.status(500).json({
+    res.status(error.status || 500).json({
       error: true,
       message: `處理 Excel 檔案時發生錯誤: ${error.message}`,
     })
@@ -2354,9 +2349,7 @@ router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
     console.log(`[DialysisOrders] 接收到檔案 ${fileName}，開始解析...`)
 
     const buffer = Buffer.from(fileContent, 'base64')
-    const workbook = XLSX.read(buffer, { type: 'buffer' })
-    const worksheet = workbook.Sheets[workbook.SheetNames[0]]
-    const dataRows = XLSX.utils.sheet_to_json(worksheet, {
+    const dataRows = await parseFirstSheet(buffer, {
       header: 1,
       defval: '',
       raw: false,
@@ -2661,7 +2654,7 @@ router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
     })
   } catch (error) {
     console.error('[DialysisOrders] 處理檔案時發生錯誤:', error)
-    res.status(500).json({
+    res.status(error.status || 500).json({
       error: true,
       message: `處理 Excel 檔案時發生錯誤: ${error.message}`,
     })
