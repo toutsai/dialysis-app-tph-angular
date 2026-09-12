@@ -1,5 +1,5 @@
-import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+
+import { Component, OnDestroy, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ApiConfigService } from '@services/api-config.service';
 
 interface RoundsPatient {
@@ -38,8 +38,9 @@ const SHIFT_DEFS = [
 @Component({
   selector: 'app-inpatient-rounds-board',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './inpatient-rounds-board.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './inpatient-rounds-board.component.css',
 })
 export class InpatientRoundsBoardComponent implements OnInit, OnDestroy {

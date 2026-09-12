@@ -1,5 +1,5 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject, OnDestroy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '@services/auth.service';
 import { ApiConfigService } from '@services/api-config.service';
@@ -16,14 +16,14 @@ import { LabMedCorrelationViewComponent } from '../../lab-med-correlation-view/l
   selector: 'app-patient-detail-modal',
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
     ConditionRecordPanelComponent,
     MemoPanelComponent,
     PatientLabSummaryPanelComponent,
-    LabMedCorrelationViewComponent,
-  ],
+    LabMedCorrelationViewComponent
+],
   templateUrl: './patient-detail-modal.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-detail-modal.component.css'
 })
 export class PatientDetailModalComponent implements OnChanges, OnDestroy {

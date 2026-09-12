@@ -1,12 +1,13 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-user-form-modal',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './user-form-modal.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './user-form-modal.component.css'
 })
 export class UserFormModalComponent implements OnChanges {

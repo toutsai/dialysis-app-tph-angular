@@ -7,7 +7,7 @@
           class="btn btn-primary desktop-only"
           (click)="openCreateDialog()"
           [disabled]="isPageLocked()"
-        >
+          >
           <i class="fas fa-plus-circle"></i> 新增調班申請
         </button>
       </div>
@@ -35,14 +35,20 @@
         </div>
       </div>
 
-      <div *ngIf="isLoading()" class="loading-state">正在載入調班申請資料...</div>
-      <div *ngIf="!isLoading()" class="calendar-wrapper">
-        <full-calendar #fullCalendar [options]="calendarOptions()"></full-calendar>
-        <div *ngIf="!isLoading() && exceptions().length === 0" class="empty-state">
-          <i class="fas fa-check-circle"></i>
-          <p>目前沒有任何待處理或已生效的調班。</p>
+      @if (isLoading()) {
+        <div class="loading-state">正在載入調班申請資料...</div>
+      }
+      @if (!isLoading()) {
+        <div class="calendar-wrapper">
+          <full-calendar #fullCalendar [options]="calendarOptions()"></full-calendar>
+          @if (!isLoading() && exceptions().length === 0) {
+            <div class="empty-state">
+              <i class="fas fa-check-circle"></i>
+              <p>目前沒有任何待處理或已生效的調班。</p>
+            </div>
+          }
         </div>
-      </div>
+      }
     </div>
   </main>
 
@@ -66,61 +72,67 @@
     [message]="actionDialogMessage()"
     [hasCustomFooter]="true"
     (cancel)="closeActionDialog()"
-  >
+    >
     <div footer class="dialog-footer-custom">
       <button class="btn btn-secondary" (click)="closeActionDialog()">關閉</button>
       <div class="footer-actions">
         <!-- 非衝突項（或無專屬解法的衝突類型）：修改/撤銷此申請 -->
-        <button
-          *ngIf="currentActionData() && isCancellable(currentActionData()) && !hasConflictResolveButtons(currentActionData())"
-          class="btn btn-primary"
-          (click)="handleEdit()"
-          [disabled]="isPageLocked()"
-        >
-          修改
-        </button>
-        <button
-          *ngIf="currentActionData() && isCancellable(currentActionData()) && !hasConflictResolveButtons(currentActionData())"
-          class="btn btn-danger"
-          (click)="handleDelete()"
-          [disabled]="isPageLocked()"
-        >
-          撤銷此申請
-        </button>
+        @if (currentActionData() && isCancellable(currentActionData()) && !hasConflictResolveButtons(currentActionData())) {
+          <button
+            class="btn btn-primary"
+            (click)="handleEdit()"
+            [disabled]="isPageLocked()"
+            >
+            修改
+          </button>
+        }
+        @if (currentActionData() && isCancellable(currentActionData()) && !hasConflictResolveButtons(currentActionData())) {
+          <button
+            class="btn btn-danger"
+            (click)="handleDelete()"
+            [disabled]="isPageLocked()"
+            >
+            撤銷此申請
+          </button>
+        }
         <!-- 佔床型衝突：與每日排程/護理分組同款（撤銷調班+重新選床） -->
-        <button
-          *ngIf="canRetargetConflict(currentActionData())"
-          class="btn btn-secondary"
-          (click)="resolveSourceConflict('keep_base')"
-          [disabled]="isPageLocked()"
-        >
-          撤銷調班
-        </button>
-        <button
-          *ngIf="canRetargetConflict(currentActionData())"
-          class="btn btn-primary"
-          (click)="openRetargetPicker()"
-          [disabled]="isPageLocked()"
-        >
-          <i class="fas fa-bed"></i> 重新選床
-        </button>
+        @if (canRetargetConflict(currentActionData())) {
+          <button
+            class="btn btn-secondary"
+            (click)="resolveSourceConflict('keep_base')"
+            [disabled]="isPageLocked()"
+            >
+            撤銷調班
+          </button>
+        }
+        @if (canRetargetConflict(currentActionData())) {
+          <button
+            class="btn btn-primary"
+            (click)="openRetargetPicker()"
+            [disabled]="isPageLocked()"
+            >
+            <i class="fas fa-bed"></i> 重新選床
+          </button>
+        }
         <!-- 來源失效型（總表修正後）：二選一 -->
-        <button
-          *ngIf="currentActionData()?.status === 'conflict_requires_resolution' && currentActionData()?.type === 'MOVE' && !canRetargetConflict(currentActionData())"
-          class="btn btn-secondary"
-          (click)="resolveSourceConflict('keep_base')"
-          [disabled]="isPageLocked()"
-        >
-          維持新常規床位
-        </button>
-        <button
-          *ngIf="currentActionData()?.status === 'conflict_requires_resolution' && currentActionData()?.type === 'MOVE' && !canRetargetConflict(currentActionData())"
-          class="btn btn-primary"
-          (click)="resolveSourceConflict('keep_exception')"
-          [disabled]="isPageLocked()"
-        >
-          維持調班後床位
-        </button>
+        @if (currentActionData()?.status === 'conflict_requires_resolution' && currentActionData()?.type === 'MOVE' && !canRetargetConflict(currentActionData())) {
+          <button
+            class="btn btn-secondary"
+            (click)="resolveSourceConflict('keep_base')"
+            [disabled]="isPageLocked()"
+            >
+            維持新常規床位
+          </button>
+        }
+        @if (currentActionData()?.status === 'conflict_requires_resolution' && currentActionData()?.type === 'MOVE' && !canRetargetConflict(currentActionData())) {
+          <button
+            class="btn btn-primary"
+            (click)="resolveSourceConflict('keep_exception')"
+            [disabled]="isPageLocked()"
+            >
+            維持調班後床位
+          </button>
+        }
       </div>
     </div>
   </app-confirm-dialog>
@@ -133,20 +145,21 @@
   ></app-alert-dialog>
 
   <!-- 衝突重新選床 Picker（只列目標日空床） -->
-  <app-bed-assignment-dialog
-    *ngIf="retargetDate()"
-    [isVisible]="isRetargetPickerVisible()"
-    title="重新選床（解決調班衝突）"
-    [allPatients]="retargetPatientAsArray"
-    [bedLayout]="retargetBedLayout"
-    [scheduleData]="retargetScheduleData()"
-    [targetDate]="retargetDate()"
-    [shifts]="retargetShifts"
-    assignmentMode="singleDay"
-    [hidePatientList]="true"
-    (close)="isRetargetPickerVisible.set(false)"
-    (assignBed)="handleRetargetBedAssigned($event)"
-  ></app-bed-assignment-dialog>
+  @if (retargetDate()) {
+    <app-bed-assignment-dialog
+      [isVisible]="isRetargetPickerVisible()"
+      title="重新選床（解決調班衝突）"
+      [allPatients]="retargetPatientAsArray"
+      [bedLayout]="retargetBedLayout"
+      [scheduleData]="retargetScheduleData()"
+      [targetDate]="retargetDate()"
+      [shifts]="retargetShifts"
+      assignmentMode="singleDay"
+      [hidePatientList]="true"
+      (close)="isRetargetPickerVisible.set(false)"
+      (assignBed)="handleRetargetBedAssigned($event)"
+    ></app-bed-assignment-dialog>
+  }
 
   <!-- 合併確認 Dialog -->
   <app-confirm-dialog

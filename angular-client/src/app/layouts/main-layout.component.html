@@ -228,6 +228,9 @@
             }
 
             <!-- 9. [使用者管理] Admin Only -->
+            @if (canAccessPage('backup')) {
+              <li><a routerLink="/backup" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link"><div class="nav-item-content"><span class="nav-title">備份狀態</span></div></a></li>
+            }
             @if (canAccessPage('userManagement')) {
               <li>
                 <a routerLink="/user-management" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">

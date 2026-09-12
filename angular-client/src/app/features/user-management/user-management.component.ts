@@ -1,5 +1,5 @@
 // Standalone 版：已移除 Firebase，改用 REST API
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '@app/core/services/auth.service';
@@ -63,6 +63,7 @@ interface ConfirmInfo {
     NursePatientCareDialogComponent,
   ],
   templateUrl: './user-management.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './user-management.component.css',
 })
 export class UserManagementComponent implements OnInit {

@@ -1,130 +1,160 @@
-<div *ngIf="isVisible" class="npc-overlay" (click)="onOverlayClick($event)">
-  <div class="npc-modal">
-    <header class="npc-header">
-      <div class="npc-header-left">
-        <h2>主護病人照護清單</h2>
-        <span class="npc-updated" *ngIf="updatedInfo().updatedAt">
-          最後儲存：{{ updatedInfo().updatedAt }}
-          <ng-container *ngIf="updatedInfo().updatedByName">（{{ updatedInfo().updatedByName }}）</ng-container>
-        </span>
-      </div>
-      <button class="npc-close-btn" (click)="close()" title="關閉">&times;</button>
-    </header>
-
-    <div class="npc-hint" [class.exclusion]="isExclusionMode()" *ngIf="isAdmin">
-      <ng-container *ngIf="isExclusionMode()">
-        排除名單設定中：點護理師卡片切換「排除/納入」，被排除者不列入照護分配；完成後按「完成排除設定」，最後記得「儲存」。
-      </ng-container>
-      <ng-container *ngIf="!isExclusionMode()">
-        <ng-container *ngIf="selectedPatient() as selected">
-          已選取 <strong>{{ selected.name }}</strong>，點護理師卡片即可指派，或點「未分配」區移回。
-        </ng-container>
-        <ng-container *ngIf="!selectedPatient()">
-          點選病人後，再點護理師卡片完成指派；調整完按「儲存」。
-        </ng-container>
-      </ng-container>
-    </div>
-
-    <div *ngIf="isLoading()" class="npc-loading">載入中...</div>
-    <div *ngIf="!isLoading() && loadError()" class="npc-error">{{ loadError() }}</div>
-
-    <div *ngIf="!isLoading() && !loadError()" class="npc-body">
-      <!-- 未分配門診病人 -->
-      <section
-        class="npc-unassigned"
-        [class.droppable]="selectedPatientId()"
-        (click)="moveSelectedTo(null)"
-      >
-        <div class="npc-section-header" (click)="$event.stopPropagation()">
-          <h3>
-            未分配常規門診病人 <span class="npc-count">{{ unassignedTotal() }}</span>
-            <span
-              *ngIf="unassignedDeletedCount() > 0"
-              class="npc-count-note"
-              title="已刪除但仍在保留期內的病人（滑到各 chip 可看刪除日與保留到幾月底），可指派主護完成季度輸入"
-              >含已刪除保留 {{ unassignedDeletedCount() }}</span
+@if (isVisible) {
+  <div class="npc-overlay" (click)="onOverlayClick($event)">
+    <div class="npc-modal">
+      <header class="npc-header">
+        <div class="npc-header-left">
+          <h2>主護病人照護清單</h2>
+          @if (updatedInfo().updatedAt) {
+            <span class="npc-updated">
+              最後儲存：{{ updatedInfo().updatedAt }}
+              @if (updatedInfo().updatedByName) {
+                （{{ updatedInfo().updatedByName }}）
+              }
+            </span>
+          }
+        </div>
+        <button class="npc-close-btn" (click)="close()" title="關閉">&times;</button>
+      </header>
+      @if (isAdmin) {
+        <div class="npc-hint" [class.exclusion]="isExclusionMode()">
+          @if (isExclusionMode()) {
+            排除名單設定中：點護理師卡片切換「排除/納入」，被排除者不列入照護分配；完成後按「完成排除設定」，最後記得「儲存」。
+          }
+          @if (!isExclusionMode()) {
+            @if (selectedPatient(); as selected) {
+              已選取 <strong>{{ selected.name }}</strong>，點護理師卡片即可指派，或點「未分配」區移回。
+            }
+            @if (!selectedPatient()) {
+              點選病人後，再點護理師卡片完成指派；調整完按「儲存」。
+            }
+          }
+        </div>
+      }
+      @if (isLoading()) {
+        <div class="npc-loading">載入中...</div>
+      }
+      @if (!isLoading() && loadError()) {
+        <div class="npc-error">{{ loadError() }}</div>
+      }
+      @if (!isLoading() && !loadError()) {
+        <div class="npc-body">
+          <!-- 未分配門診病人 -->
+          <section
+            class="npc-unassigned"
+            [class.droppable]="selectedPatientId()"
+            (click)="moveSelectedTo(null)"
             >
-          </h3>
-          <input
-            type="text"
-            class="npc-search"
-            [ngModel]="searchTerm()"
-            (ngModelChange)="searchTerm.set($event)"
-            placeholder="搜尋姓名/病歷號..."
-            (click)="$event.stopPropagation()"
-          />
-        </div>
-        <div class="npc-chip-list">
-          <button
-            *ngFor="let p of unassignedPatients()"
-            class="npc-chip"
-            [class.selected]="selectedPatientId() === p.id"
-            [class.deleted]="p['isDeleted']"
-            [title]="'病歷號: ' + (p.medicalRecordNumber || '-') + (p['isDeleted'] ? '｜' + deletedRetentionHint(p) : '')"
-            (click)="togglePatient(p); $event.stopPropagation()"
-          >
-            {{ p.name }}<span class="npc-deleted-tag" *ngIf="p['isDeleted']">已刪除</span>
-          </button>
-          <span *ngIf="unassignedPatients().length === 0" class="npc-empty-text">
-            {{ unassignedTotal() === 0 ? '所有門診病人皆已分配' : '沒有符合搜尋的病人' }}
-          </span>
-        </div>
-      </section>
-
-      <!-- 全部護理師 -->
-      <section class="npc-nurses">
-        <div class="npc-section-header">
-          <h3>護理師 <span class="npc-count">{{ displayedCards().length }}</span></h3>
-          <button
-            *ngIf="isAdmin"
-            class="npc-exclude-toggle"
-            [class.active]="isExclusionMode()"
-            (click)="toggleExclusionMode()"
-          >
-            {{ isExclusionMode() ? '完成排除設定' : '設定排除名單' }}
-          </button>
-          <span class="npc-excluded-info" *ngIf="!isExclusionMode() && excludedCount() > 0">
-            已排除 {{ excludedCount() }} 人
-          </span>
-        </div>
-        <div class="npc-nurse-grid" [class.exclusion-mode]="isExclusionMode()">
-          <div
-            *ngFor="let card of displayedCards()"
-            class="npc-nurse-card"
-            [class.droppable]="!isExclusionMode() && selectedPatientId()"
-            [class.excluded]="card.excluded"
-            [class.selectable]="isExclusionMode()"
-            (click)="onNurseCardClick(card)"
-          >
-            <div class="npc-nurse-name">
-              {{ card.nurseName }}
-              <span class="npc-count">{{ card.patients.length }}</span>
-              <span class="npc-excluded-badge" *ngIf="card.excluded">已排除</span>
+            <div class="npc-section-header" (click)="$event.stopPropagation()">
+              <h3>
+                未分配常規門診病人 <span class="npc-count">{{ unassignedTotal() }}</span>
+                @if (unassignedDeletedCount() > 0) {
+                  <span
+                    class="npc-count-note"
+                    title="已刪除但仍在保留期內的病人（滑到各 chip 可看刪除日與保留到幾月底），可指派主護完成季度輸入"
+                    >含已刪除保留 {{ unassignedDeletedCount() }}</span
+                    >
+                  }
+                </h3>
+                <input
+                  type="text"
+                  class="npc-search"
+                  [ngModel]="searchTerm()"
+                  (ngModelChange)="searchTerm.set($event)"
+                  placeholder="搜尋姓名/病歷號..."
+                  (click)="$event.stopPropagation()"
+                  />
+                </div>
+                <div class="npc-chip-list">
+                  @for (p of unassignedPatients(); track p) {
+                    <button
+                      class="npc-chip"
+                      [class.selected]="selectedPatientId() === p.id"
+                      [class.deleted]="p['isDeleted']"
+                      [title]="'病歷號: ' + (p.medicalRecordNumber || '-') + (p['isDeleted'] ? '｜' + deletedRetentionHint(p) : '')"
+                      (click)="togglePatient(p); $event.stopPropagation()"
+                      >
+                      {{ p.name }}@if (p['isDeleted']) {
+                      <span class="npc-deleted-tag">已刪除</span>
+                    }
+                  </button>
+                }
+                @if (unassignedPatients().length === 0) {
+                  <span class="npc-empty-text">
+                    {{ unassignedTotal() === 0 ? '所有門診病人皆已分配' : '沒有符合搜尋的病人' }}
+                  </span>
+                }
+              </div>
+            </section>
+            <!-- 全部護理師 -->
+            <section class="npc-nurses">
+              <div class="npc-section-header">
+                <h3>護理師 <span class="npc-count">{{ displayedCards().length }}</span></h3>
+                @if (isAdmin) {
+                  <button
+                    class="npc-exclude-toggle"
+                    [class.active]="isExclusionMode()"
+                    (click)="toggleExclusionMode()"
+                    >
+                    {{ isExclusionMode() ? '完成排除設定' : '設定排除名單' }}
+                  </button>
+                }
+                @if (!isExclusionMode() && excludedCount() > 0) {
+                  <span class="npc-excluded-info">
+                    已排除 {{ excludedCount() }} 人
+                  </span>
+                }
+              </div>
+              <div class="npc-nurse-grid" [class.exclusion-mode]="isExclusionMode()">
+                @for (card of displayedCards(); track card) {
+                  <div
+                    class="npc-nurse-card"
+                    [class.droppable]="!isExclusionMode() && selectedPatientId()"
+                    [class.excluded]="card.excluded"
+                    [class.selectable]="isExclusionMode()"
+                    (click)="onNurseCardClick(card)"
+                    >
+                    <div class="npc-nurse-name">
+                      {{ card.nurseName }}
+                      <span class="npc-count">{{ card.patients.length }}</span>
+                      @if (card.excluded) {
+                        <span class="npc-excluded-badge">已排除</span>
+                      }
+                    </div>
+                    <div class="npc-nurse-patients">
+                      @for (p of card.patients; track p) {
+                        <button
+                          class="npc-chip small"
+                          [class.selected]="selectedPatientId() === p.id"
+                          [class.deleted]="p['isDeleted']"
+                          [title]="'病歷號: ' + (p.medicalRecordNumber || '-') + (p['isDeleted'] ? '｜' + deletedRetentionHint(p) : '')"
+                          (click)="togglePatient(p); $event.stopPropagation()"
+                          >
+                          {{ p.name }}@if (p['isDeleted']) {
+                          <span class="npc-deleted-tag">已刪除</span>
+                        }
+                      </button>
+                    }
+                    @if (card.patients.length === 0) {
+                      <span class="npc-empty-text small">尚未分配</span>
+                    }
+                  </div>
+                </div>
+              }
             </div>
-            <div class="npc-nurse-patients">
-              <button
-                *ngFor="let p of card.patients"
-                class="npc-chip small"
-                [class.selected]="selectedPatientId() === p.id"
-                [class.deleted]="p['isDeleted']"
-                [title]="'病歷號: ' + (p.medicalRecordNumber || '-') + (p['isDeleted'] ? '｜' + deletedRetentionHint(p) : '')"
-                (click)="togglePatient(p); $event.stopPropagation()"
-              >
-                {{ p.name }}<span class="npc-deleted-tag" *ngIf="p['isDeleted']">已刪除</span>
-              </button>
-              <span *ngIf="card.patients.length === 0" class="npc-empty-text small">尚未分配</span>
-            </div>
-          </div>
+          </section>
         </div>
-      </section>
+      }
+      <footer class="npc-footer">
+        @if (isDirty()) {
+          <span class="npc-dirty-hint">有未儲存的變更</span>
+        }
+        @if (isAdmin) {
+          <button class="btn btn-primary" (click)="save()" [disabled]="isSaving() || isLoading()">
+            {{ isSaving() ? '儲存中...' : '儲存' }}
+          </button>
+        }
+        <button class="btn btn-secondary" (click)="close()">關閉</button>
+      </footer>
     </div>
-
-    <footer class="npc-footer">
-      <span class="npc-dirty-hint" *ngIf="isDirty()">有未儲存的變更</span>
-      <button *ngIf="isAdmin" class="btn btn-primary" (click)="save()" [disabled]="isSaving() || isLoading()">
-        {{ isSaving() ? '儲存中...' : '儲存' }}
-      </button>
-      <button class="btn btn-secondary" (click)="close()">關閉</button>
-    </footer>
   </div>
-</div>
+}

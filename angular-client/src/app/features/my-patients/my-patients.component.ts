@@ -11,6 +11,7 @@ import {
   OnDestroy,
   ViewChild,
   ElementRef,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -176,6 +177,7 @@ interface SelectableUser {
     CrrtOrderModalComponent,
   ],
   templateUrl: './my-patients.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './my-patients.component.css',
 })
 export class MyPatientsComponent implements OnInit, OnDestroy {

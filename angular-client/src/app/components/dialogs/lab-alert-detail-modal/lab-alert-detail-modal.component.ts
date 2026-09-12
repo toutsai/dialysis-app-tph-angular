@@ -1,5 +1,5 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { ALERT_CAUSES, ALERT_SUGGESTIONS, LAB_ITEM_DISPLAY_NAMES } from '@/constants/labAlertConstants';
 import { PatientLabSummaryPanelComponent } from '../../patient-lab-summary-panel/patient-lab-summary-panel.component';
@@ -8,8 +8,9 @@ import { LabMedCorrelationViewComponent } from '../../lab-med-correlation-view/l
 @Component({
   selector: 'app-lab-alert-detail-modal',
   standalone: true,
-  imports: [CommonModule, FormsModule, PatientLabSummaryPanelComponent, LabMedCorrelationViewComponent],
+  imports: [FormsModule, PatientLabSummaryPanelComponent, LabMedCorrelationViewComponent],
   templateUrl: './lab-alert-detail-modal.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-alert-detail-modal.component.css'
 })
 export class LabAlertDetailModalComponent implements OnChanges {

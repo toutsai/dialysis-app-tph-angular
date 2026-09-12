@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -49,6 +49,7 @@ type InitialSubTab = 'pending' | 'first';
   standalone: true,
   imports: [CommonModule, FormsModule, KiditDetailModalComponent, KiditVascularQuarterlyComponent, KiditQuarterlyMovementsComponent, KiditHdrxQuarterlyComponent, KiditHospQuarterlyComponent],
   templateUrl: './kidit-report.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './kidit-report.component.css',
 })
 export class KiditReportComponent implements OnInit {

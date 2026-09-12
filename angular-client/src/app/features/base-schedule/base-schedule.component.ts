@@ -1,5 +1,5 @@
 import { loadXlsx } from '@/utils/xlsxLoader';
-import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { nameWithModeFreq } from '@/utils/patientDisplay';
 import { FormsModule } from '@angular/forms';
@@ -47,6 +47,7 @@ import { getToday } from '@/utils/dateUtils';
     ScheduleTableComponent,
   ],
   templateUrl: './base-schedule.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './base-schedule.component.css'
 })
 export class BaseScheduleComponent implements OnInit, OnDestroy {

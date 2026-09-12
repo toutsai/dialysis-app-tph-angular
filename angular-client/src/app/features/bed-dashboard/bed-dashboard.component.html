@@ -1,271 +1,308 @@
 <div class="dashboard-shell">
-  <div *ngIf="showFullscreenHint()" class="fullscreen-hint" role="status">
-    <button type="button" class="fullscreen-hint-main" (click)="toggleFullscreen()">
-      <i class="fas fa-expand"></i>
-      點一下進入全螢幕（隱藏網址列）
-    </button>
-    <button type="button" class="fullscreen-hint-close" aria-label="關閉提示" (click)="dismissFullscreenHint()">
-      <i class="fas fa-times"></i>
-    </button>
-  </div>
-
-  <div *ngIf="needsPin()" class="pin-screen">
-    <section class="pin-panel">
-      <div class="pin-title">
-        <span class="bed-chip">床位 {{ bedKey() }}</span>
-        <h1>床邊智慧儀表板</h1>
-      </div>
-
-      <form (ngSubmit)="login()" class="pin-form">
-        <label for="dashboard-pin">床位 PIN</label>
-        <input
-          id="dashboard-pin"
-          type="password"
-          inputmode="numeric"
-          autocomplete="off"
-          [ngModel]="pin()"
-          (ngModelChange)="pin.set($event)"
-          name="pin"
-          autofocus
-        />
-        <button type="submit" [disabled]="isLoggingIn()">
-          <i class="fas fa-lock-open"></i>
-          {{ isLoggingIn() ? '登入中' : '登入' }}
-        </button>
-      </form>
-
-      <p *ngIf="errorMessage()" class="error-text">{{ errorMessage() }}</p>
-
-      <button
-        *ngIf="supportsFullscreen"
-        type="button"
-        class="ghost-button pin-fullscreen-btn"
-        (click)="toggleFullscreen()"
-      >
-        <i class="fas" [class.fa-expand]="!isFullscreen()" [class.fa-compress]="isFullscreen()"></i>
-        {{ isFullscreen() ? '離開全螢幕' : '全螢幕' }}
+  @if (showFullscreenHint()) {
+    <div class="fullscreen-hint" role="status">
+      <button type="button" class="fullscreen-hint-main" (click)="toggleFullscreen()">
+        <i class="fas fa-expand"></i>
+        點一下進入全螢幕（隱藏網址列）
       </button>
-    </section>
-  </div>
+      <button type="button" class="fullscreen-hint-close" aria-label="關閉提示" (click)="dismissFullscreenHint()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+  }
 
-  <ng-container *ngIf="!needsPin()">
-    <!-- 標題列：病人資訊 + 班別導航 + 操作鈕同一列（橫向平板把班別列併進來，省下一列高度給下方清單） -->
-    <header class="dashboard-header">
-      <div class="header-patient">
-        <div class="header-meta">
-          <span>床位 {{ data()?.context?.bedLabel || bedKey() }}</span>
-          <span>{{ selectedDate() }}</span>
-          <span>{{ data()?.context?.selectedShiftLabel || '-' }}</span>
+  @if (needsPin()) {
+    <div class="pin-screen">
+      <section class="pin-panel">
+        <div class="pin-title">
+          <span class="bed-chip">床位 {{ bedKey() }}</span>
+          <h1>床邊智慧儀表板</h1>
         </div>
-        <h1>{{ headerTitle() }}</h1>
-      </div>
-
-      <nav class="shift-tabs" *ngIf="data()" aria-label="班別">
-        <button
-          type="button"
-          [class.active]="selectedShift() === 'auto'"
-          (click)="changeShift('auto')"
-        >
-          自動
-          <span>{{ data()?.context?.autoShiftLabel }}</span>
-        </button>
-        <button
-          type="button"
-          *ngFor="let candidate of data()?.shiftCandidates"
-          [class.active]="candidate.isSelected && selectedShift() !== 'auto'"
-          [class.has-patient]="candidate.hasPatient"
-          (click)="changeShift(candidate.shift)"
-        >
-          {{ candidate.label }}
-          <span>{{ maskPatientName(candidate.patientName) || '空床' }}</span>
-        </button>
-      </nav>
-
-      <div class="header-actions">
-        <input
-          type="date"
-          [ngModel]="selectedDate()"
-          (ngModelChange)="changeDate($event)"
-          aria-label="日期"
-        />
-        <button
-          *ngIf="supportsFullscreen"
-          type="button"
-          class="ghost-button"
-          (click)="toggleFullscreen()"
-          [attr.aria-pressed]="isFullscreen()"
-          [attr.title]="isFullscreen() ? '離開全螢幕' : '全螢幕'"
-        >
-          <i class="fas" [class.fa-expand]="!isFullscreen()" [class.fa-compress]="isFullscreen()"></i>
-          <span class="btn-label">{{ isFullscreen() ? '離開全螢幕' : '全螢幕' }}</span>
-        </button>
-        <button class="ghost-button" (click)="loadDashboard()" [disabled]="isLoading()" title="重新整理">
-          <i class="fas fa-sync-alt"></i>
-          <span class="btn-label">重新整理</span>
-        </button>
-        <!-- 固定床邊 PIN 裝置不顯示鎖定/返回（避免誤觸）；只有員工帳號登入時才出現 -->
-        <button *ngIf="canManage()" class="ghost-button" (click)="lockDevice()" title="鎖定">
-          <i class="fas fa-lock"></i>
-          <span class="btn-label">鎖定</span>
-        </button>
-        <button *ngIf="canManage()" class="ghost-button" (click)="goBack()" title="返回">
-          <i class="fas fa-arrow-left"></i>
-          <span class="btn-label">返回</span>
-        </button>
-      </div>
-    </header>
-
-    <div *ngIf="errorMessage()" class="banner error-banner">
-      <i class="fas fa-exclamation-triangle"></i>
-      {{ errorMessage() }}
-    </div>
-
-    <div *ngIf="isLoading()" class="loading-overlay">
-      <div class="spinner"></div>
-      <span>讀取床邊資料</span>
-    </div>
-
-    <main *ngIf="data() && !isLoading()" class="dashboard-main">
-      <section *ngIf="!hasPatient()" class="empty-bed-panel">
-        <i class="fas fa-procedures"></i>
-        <h2>{{ data()?.dashboardStatus?.message }}</h2>
-        <p>可切換上一班或下一班查看同床位候選病人。</p>
-      </section>
-
-      <ng-container *ngIf="hasPatient()">
-        <section class="top-grid">
-          <article class="order-panel">
-            <div class="panel-title">透析醫囑</div>
-            <!-- 前三格是重點（AK / 透析A液Ca / 抗凝劑）放大上色；抗凝劑一格內分 Rinse/Loading/Maintain 三小列 -->
-            <div class="clinical-grid">
-              <!-- AK 含 / 輪替時顯示後端依當天星期解析的當次那一顆，下方小字列完整輪替 -->
-              <div class="order-cell key-cell key-ak">
-                <span>AK</span>
-                <strong>{{ value(data()?.dialysisOrder?.akToday || data()?.dialysisOrder?.ak) }}</strong>
-                <small class="ak-rotation" *ngIf="data()?.dialysisOrder?.akIsRotation">
-                  輪替 {{ data()?.dialysisOrder?.ak }}
-                </small>
-              </div>
-              <div class="order-cell key-cell key-ca">
-                <span>透析A液Ca</span>
-                <strong>{{ value(data()?.dialysisOrder?.dialysateCa) }}</strong>
-              </div>
-              <div class="order-cell key-cell key-heparin">
-                <span>抗凝劑</span>
-                <ul class="heparin-lines">
-                  <li *ngFor="let line of heparinLines()" [class.single]="!line.label">
-                    <em *ngIf="line.label">{{ line.label }}</em>
-                    <b>{{ line.value }}</b>
-                  </li>
-                </ul>
-              </div>
-              <div class="order-cell">
-                <span>模式</span>
-                <strong>{{ value(data()?.dialysisOrder?.mode) }}</strong>
-              </div>
-              <div class="order-cell">
-                <span>透析時間</span>
-                <strong>{{ value(data()?.dialysisOrder?.dialysisHours) }}</strong>
-              </div>
-              <div class="order-cell">
-                <span>血管通路</span>
-                <strong>{{ value(data()?.dialysisOrder?.vascAccess) }}</strong>
-              </div>
-              <div class="order-cell">
-                <span>血液流速</span>
-                <strong>{{ value(data()?.dialysisOrder?.bloodFlow) }}</strong>
-              </div>
-              <div class="order-cell">
-                <span>透析液流速</span>
-                <strong>{{ value(data()?.dialysisOrder?.dialysateFlow) }}</strong>
-              </div>
-            </div>
-          </article>
-
-          <article class="weight-panel">
-            <div class="panel-title">體重評估</div>
-            <div class="weight-list">
-              <div>
-                <span>今日體重</span>
-                <strong>{{ value(data()?.weightAssessment?.todayWeight) }}</strong>
-              </div>
-              <div>
-                <span>乾體重</span>
-                <strong>{{ value(data()?.weightAssessment?.dryWeight) }}</strong>
-              </div>
-              <div class="target-uf">
-                <span>應脫水</span>
-                <strong>{{ value(data()?.weightAssessment?.targetUf) }}</strong>
-              </div>
-            </div>
-            <p class="panel-note" *ngIf="data()?.weightAssessment?.note">
-              {{ data()?.weightAssessment?.note }}
-            </p>
-          </article>
-        </section>
-
-        <section class="bottom-grid">
-          <!-- 清單超出面板高度時在面板內捲動；底部出現「往下滑」提示，滑到底自動消失 -->
-          <article class="handover-panel">
-            <div class="panel-title">
-              交班事項
-              <span class="panel-count" *ngIf="(data()?.handoverItems?.length || 0) > 0">{{ data()?.handoverItems?.length }}</span>
-            </div>
-            <div class="handover-list scroll-list" #handoverList (scroll)="onListScroll()">
-              <div *ngIf="(data()?.handoverItems?.length || 0) === 0" class="empty-list">
-                目前無未結案交班事項
-              </div>
-              <div *ngFor="let item of data()?.handoverItems" class="handover-item">
-                <div class="handover-item-head">
-                  <span>
-                    {{ itemSourceLabel(item.source) }}
-                    <small class="handover-date" *ngIf="formatItemDate(item)">{{ formatItemDate(item) }}</small>
-                  </span>
-                  <button
-                    *ngIf="canManage() && item.source === 'task'"
-                    type="button"
-                    class="handover-done-btn"
-                    [disabled]="completingId() === item.id"
-                    (click)="completeHandoverItem(item)"
-                  >
-                    <i class="fas fa-check"></i>
-                    {{ completingId() === item.id ? '處理中' : '已讀' }}
-                  </button>
-                </div>
-                <p>{{ item.content }}</p>
-              </div>
-            </div>
-            <button *ngIf="handoverHasMore()" type="button" class="list-more-hint" (click)="scrollListDown('handover')">
-              <i class="fas fa-chevron-down"></i> 還有更多，往下滑
+        <form (ngSubmit)="login()" class="pin-form">
+          <label for="dashboard-pin">床位 PIN</label>
+          <input
+            id="dashboard-pin"
+            type="password"
+            inputmode="numeric"
+            autocomplete="off"
+            [ngModel]="pin()"
+            (ngModelChange)="pin.set($event)"
+            name="pin"
+            autofocus
+            />
+            <button type="submit" [disabled]="isLoggingIn()">
+              <i class="fas fa-lock-open"></i>
+              {{ isLoggingIn() ? '登入中' : '登入' }}
             </button>
-          </article>
-
-          <article class="med-panel">
-            <div class="panel-title">
-              今日應施打藥物
-              <span class="panel-count" *ngIf="(data()?.medicationsToday?.length || 0) > 0">{{ data()?.medicationsToday?.length }}</span>
-            </div>
-            <div *ngIf="(data()?.medicationsToday?.length || 0) === 0" class="empty-list">
-              今日無系統判定應施打針劑
-            </div>
-            <ul class="med-list scroll-list" #medList (scroll)="onListScroll()">
-              <li *ngFor="let med of data()?.medicationsToday">
-                <i class="fas fa-syringe"></i>
-                {{ formatMedication(med) }}
-              </li>
-            </ul>
-            <button *ngIf="medHasMore()" type="button" class="list-more-hint" (click)="scrollListDown('med')">
-              <i class="fas fa-chevron-down"></i> 還有更多，往下滑
+          </form>
+          @if (errorMessage()) {
+            <p class="error-text">{{ errorMessage() }}</p>
+          }
+          @if (supportsFullscreen) {
+            <button
+              type="button"
+              class="ghost-button pin-fullscreen-btn"
+              (click)="toggleFullscreen()"
+              >
+              <i class="fas" [class.fa-expand]="!isFullscreen()" [class.fa-compress]="isFullscreen()"></i>
+              {{ isFullscreen() ? '離開全螢幕' : '全螢幕' }}
             </button>
-          </article>
+          }
         </section>
-      </ng-container>
-    </main>
+      </div>
+    }
 
-    <footer class="dashboard-footer">
-      <span>最後更新 {{ lastRefreshLabel() || '-' }}</span>
-      <span>{{ viewportLabel() }}</span>
-      <span>低血壓預測模型未啟用</span>
-    </footer>
-  </ng-container>
-</div>
+    @if (!needsPin()) {
+      <!-- 標題列：病人資訊 + 班別導航 + 操作鈕同一列（橫向平板把班別列併進來，省下一列高度給下方清單） -->
+      <header class="dashboard-header">
+        <div class="header-patient">
+          <div class="header-meta">
+            <span>床位 {{ data()?.context?.bedLabel || bedKey() }}</span>
+            <span>{{ selectedDate() }}</span>
+            <span>{{ data()?.context?.selectedShiftLabel || '-' }}</span>
+          </div>
+          <h1>{{ headerTitle() }}</h1>
+        </div>
+        @if (data()) {
+          <nav class="shift-tabs" aria-label="班別">
+            <button
+              type="button"
+              [class.active]="selectedShift() === 'auto'"
+              (click)="changeShift('auto')"
+              >
+              自動
+              <span>{{ data()?.context?.autoShiftLabel }}</span>
+            </button>
+            @for (candidate of data()?.shiftCandidates; track candidate) {
+              <button
+                type="button"
+                [class.active]="candidate.isSelected && selectedShift() !== 'auto'"
+                [class.has-patient]="candidate.hasPatient"
+                (click)="changeShift(candidate.shift)"
+                >
+                {{ candidate.label }}
+                <span>{{ maskPatientName(candidate.patientName) || '空床' }}</span>
+              </button>
+            }
+          </nav>
+        }
+        <div class="header-actions">
+          <input
+            type="date"
+            [ngModel]="selectedDate()"
+            (ngModelChange)="changeDate($event)"
+            aria-label="日期"
+            />
+            @if (supportsFullscreen) {
+              <button
+                type="button"
+                class="ghost-button"
+                (click)="toggleFullscreen()"
+                [attr.aria-pressed]="isFullscreen()"
+                [attr.title]="isFullscreen() ? '離開全螢幕' : '全螢幕'"
+                >
+                <i class="fas" [class.fa-expand]="!isFullscreen()" [class.fa-compress]="isFullscreen()"></i>
+                <span class="btn-label">{{ isFullscreen() ? '離開全螢幕' : '全螢幕' }}</span>
+              </button>
+            }
+            <button class="ghost-button" (click)="loadDashboard()" [disabled]="isLoading()" title="重新整理">
+              <i class="fas fa-sync-alt"></i>
+              <span class="btn-label">重新整理</span>
+            </button>
+            <!-- 固定床邊 PIN 裝置不顯示鎖定/返回（避免誤觸）；只有員工帳號登入時才出現 -->
+            @if (canManage()) {
+              <button class="ghost-button" (click)="lockDevice()" title="鎖定">
+                <i class="fas fa-lock"></i>
+                <span class="btn-label">鎖定</span>
+              </button>
+            }
+            @if (canManage()) {
+              <button class="ghost-button" (click)="goBack()" title="返回">
+                <i class="fas fa-arrow-left"></i>
+                <span class="btn-label">返回</span>
+              </button>
+            }
+          </div>
+        </header>
+        @if (errorMessage()) {
+          <div class="banner error-banner">
+            <i class="fas fa-exclamation-triangle"></i>
+            {{ errorMessage() }}
+          </div>
+        }
+        @if (isLoading()) {
+          <div class="loading-overlay">
+            <div class="spinner"></div>
+            <span>讀取床邊資料</span>
+          </div>
+        }
+        @if (data() && !isLoading()) {
+          <main class="dashboard-main">
+            @if (!hasPatient()) {
+              <section class="empty-bed-panel">
+                <i class="fas fa-procedures"></i>
+                <h2>{{ data()?.dashboardStatus?.message }}</h2>
+                <p>可切換上一班或下一班查看同床位候選病人。</p>
+              </section>
+            }
+            @if (hasPatient()) {
+              <section class="top-grid">
+                <article class="order-panel">
+                  <div class="panel-title">透析醫囑</div>
+                  <!-- 前三格是重點（AK / 透析A液Ca / 抗凝劑）放大上色；抗凝劑一格內分 Rinse/Loading/Maintain 三小列 -->
+                  <div class="clinical-grid">
+                    <!-- AK 含 / 輪替時顯示後端依當天星期解析的當次那一顆，下方小字列完整輪替 -->
+                    <div class="order-cell key-cell key-ak">
+                      <span>AK</span>
+                      <strong>{{ value(data()?.dialysisOrder?.akToday || data()?.dialysisOrder?.ak) }}</strong>
+                      @if (data()?.dialysisOrder?.akIsRotation) {
+                        <small class="ak-rotation">
+                          輪替 {{ data()?.dialysisOrder?.ak }}
+                        </small>
+                      }
+                    </div>
+                    <div class="order-cell key-cell key-ca">
+                      <span>透析A液Ca</span>
+                      <strong>{{ value($safeNavigationMigration(data()?.dialysisOrder?.dialysateCa)) }}</strong>
+                    </div>
+                    <div class="order-cell key-cell key-heparin">
+                      <span>抗凝劑</span>
+                      <ul class="heparin-lines">
+                        @for (line of heparinLines(); track line) {
+                          <li [class.single]="!line.label">
+                            @if (line.label) {
+                              <em>{{ line.label }}</em>
+                            }
+                            <b>{{ line.value }}</b>
+                          </li>
+                        }
+                      </ul>
+                    </div>
+                    <div class="order-cell">
+                      <span>模式</span>
+                      <strong>{{ value($safeNavigationMigration(data()?.dialysisOrder?.mode)) }}</strong>
+                    </div>
+                    <div class="order-cell">
+                      <span>透析時間</span>
+                      <strong>{{ value($safeNavigationMigration(data()?.dialysisOrder?.dialysisHours)) }}</strong>
+                    </div>
+                    <div class="order-cell">
+                      <span>血管通路</span>
+                      <strong>{{ value($safeNavigationMigration(data()?.dialysisOrder?.vascAccess)) }}</strong>
+                    </div>
+                    <div class="order-cell">
+                      <span>血液流速</span>
+                      <strong>{{ value($safeNavigationMigration(data()?.dialysisOrder?.bloodFlow)) }}</strong>
+                    </div>
+                    <div class="order-cell">
+                      <span>透析液流速</span>
+                      <strong>{{ value($safeNavigationMigration(data()?.dialysisOrder?.dialysateFlow)) }}</strong>
+                    </div>
+                  </div>
+                </article>
+                <article class="weight-panel">
+                  <div class="panel-title">體重評估</div>
+                  <div class="weight-list">
+                    <div>
+                      <span>今日體重</span>
+                      <strong>{{ value($safeNavigationMigration(data()?.weightAssessment?.todayWeight)) }}</strong>
+                    </div>
+                    <div>
+                      <span>乾體重</span>
+                      <strong>{{ value($safeNavigationMigration(data()?.weightAssessment?.dryWeight)) }}</strong>
+                    </div>
+                    <div class="target-uf">
+                      <span>應脫水</span>
+                      <strong>{{ value($safeNavigationMigration(data()?.weightAssessment?.targetUf)) }}</strong>
+                    </div>
+                  </div>
+                  @if (data()?.weightAssessment?.note) {
+                    <p class="panel-note">
+                      {{ data()?.weightAssessment?.note }}
+                    </p>
+                  }
+                </article>
+              </section>
+              <section class="bottom-grid">
+                <!-- 清單超出面板高度時在面板內捲動；底部出現「往下滑」提示，滑到底自動消失 -->
+                <article class="handover-panel">
+                  <div class="panel-title">
+                    交班事項
+                    @if ((data()?.handoverItems?.length || 0) > 0) {
+                      <span class="panel-count">{{ data()?.handoverItems?.length }}</span>
+                    }
+                  </div>
+                  <div class="handover-list scroll-list" #handoverList (scroll)="onListScroll()">
+                    @if ((data()?.handoverItems?.length || 0) === 0) {
+                      <div class="empty-list">
+                        目前無未結案交班事項
+                      </div>
+                    }
+                    @for (item of data()?.handoverItems; track item) {
+                      <div class="handover-item">
+                        <div class="handover-item-head">
+                          <span>
+                            {{ itemSourceLabel(item.source) }}
+                            @if (formatItemDate(item)) {
+                              <small class="handover-date">{{ formatItemDate(item) }}</small>
+                            }
+                          </span>
+                          @if (canManage() && item.source === 'task') {
+                            <button
+                              type="button"
+                              class="handover-done-btn"
+                              [disabled]="completingId() === item.id"
+                              (click)="completeHandoverItem(item)"
+                              >
+                              <i class="fas fa-check"></i>
+                              {{ completingId() === item.id ? '處理中' : '已讀' }}
+                            </button>
+                          }
+                        </div>
+                        <p>{{ item.content }}</p>
+                      </div>
+                    }
+                  </div>
+                  @if (handoverHasMore()) {
+                    <button type="button" class="list-more-hint" (click)="scrollListDown('handover')">
+                      <i class="fas fa-chevron-down"></i> 還有更多，往下滑
+                    </button>
+                  }
+                </article>
+                <article class="med-panel">
+                  <div class="panel-title">
+                    今日應施打藥物
+                    @if ((data()?.medicationsToday?.length || 0) > 0) {
+                      <span class="panel-count">{{ data()?.medicationsToday?.length }}</span>
+                    }
+                  </div>
+                  @if ((data()?.medicationsToday?.length || 0) === 0) {
+                    <div class="empty-list">
+                      今日無系統判定應施打針劑
+                    </div>
+                  }
+                  <ul class="med-list scroll-list" #medList (scroll)="onListScroll()">
+                    @for (med of data()?.medicationsToday; track med) {
+                      <li>
+                        <i class="fas fa-syringe"></i>
+                        {{ formatMedication(med) }}
+                      </li>
+                    }
+                  </ul>
+                  @if (medHasMore()) {
+                    <button type="button" class="list-more-hint" (click)="scrollListDown('med')">
+                      <i class="fas fa-chevron-down"></i> 還有更多，往下滑
+                    </button>
+                  }
+                </article>
+              </section>
+            }
+          </main>
+        }
+        <footer class="dashboard-footer">
+          <span>最後更新 {{ lastRefreshLabel() || '-' }}</span>
+          <span>{{ viewportLabel() }}</span>
+          <span>低血壓預測模型未啟用</span>
+        </footer>
+      }
+    </div>

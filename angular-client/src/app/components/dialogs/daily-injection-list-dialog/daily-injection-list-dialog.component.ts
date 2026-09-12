@@ -1,12 +1,13 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-daily-injection-list-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './daily-injection-list-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './daily-injection-list-dialog.component.css'
 })
 export class DailyInjectionListDialogComponent {

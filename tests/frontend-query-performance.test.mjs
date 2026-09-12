@@ -126,8 +126,10 @@ try {
   metrics.identity = { fixtureNurses:40, beforeRowAdditions:added(oldRows), afterRowAdditions:added(newRows), beforeDayAdditions:added(oldDays), afterDayAdditions:added(newDays), method:'Actual Angular DefaultIterableDiffer; stable-node reuse proxy, no browser rendering' }
   assert.equal(metrics.identity.beforeRowAdditions,40); assert.equal(metrics.identity.afterRowAdditions,0); assert.equal(metrics.identity.afterDayAdditions,0); checks++
   const html=readFileSync(new URL('../angular-client/src/app/features/nursing-schedule/nursing-schedule.component.html',import.meta.url),'utf8')
-  assert.match(html,/objectEntries\(sortedSchedule\); trackBy: trackByNurseId/)
-  assert.equal((html.match(/trackBy: trackByDay/g)||[]).length,4)
+  assert.match(html,/@for\s*\(entry of objectEntries\(sortedSchedule\); track trackByNurseId\(\$index, entry\)\)/)
+  assert.equal((html.match(/track trackByDay\((?:\$index|i|dayIdx), dayInfo\)/g)||[]).length,4)
+  assert.match(html,/@for\s*\(dayInfo of monthDays; track trackByDay\(i, dayInfo\); let i = \$index\)/)
+  assert.equal((html.match(/@for\s*\(dayInfo of weekData\.days; track trackByDay\(dayIdx, dayInfo\); let dayIdx = \$index\)/g)||[]).length,2)
   assert.ok(metrics.history.afterBytes < metrics.history.beforeBytes/100)
   assert.ok(metrics.labs.afterBytes < metrics.labs.beforeBytes/5)
   if(process.env.PERFORMANCE_OUTPUT) writeFileSync(process.env.PERFORMANCE_OUTPUT,JSON.stringify(metrics,null,2))

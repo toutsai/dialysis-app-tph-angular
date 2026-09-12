@@ -1,13 +1,14 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '@app/core/services/auth.service';
 
 @Component({
   selector: 'app-crrt-order-modal',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './crrt-order-modal.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './crrt-order-modal.component.css'
 })
 export class CrrtOrderModalComponent implements OnChanges {

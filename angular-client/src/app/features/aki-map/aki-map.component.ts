@@ -1,6 +1,6 @@
 import { loadXlsx } from '@/utils/xlsxLoader';
-import { Component, computed, inject, signal, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, computed, inject, signal, OnInit, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import {
   AkiApiService,
@@ -105,8 +105,9 @@ function compareWard(a: string, b: string): number {
 @Component({
   selector: 'app-aki-map',
   standalone: true,
-  imports: [CommonModule, FormsModule, IcuDialysisPanelComponent],
+  imports: [FormsModule, IcuDialysisPanelComponent],
   templateUrl: './aki-map.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './aki-map.component.css',
 })
 export class AkiMapComponent implements OnInit {

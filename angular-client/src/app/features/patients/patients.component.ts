@@ -7,6 +7,7 @@ import {
   effect,
   OnInit,
   OnDestroy,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -90,6 +91,7 @@ interface PatientStats {
     ProblemListDialogComponent,
   ],
   templateUrl: './patients.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patients.component.css',
 })
 export class PatientsComponent implements OnInit, OnDestroy {

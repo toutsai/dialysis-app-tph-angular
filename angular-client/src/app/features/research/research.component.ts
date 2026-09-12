@@ -1,5 +1,5 @@
-import { CommonModule } from '@angular/common';
-import { Component, HostBinding, Input, OnInit, computed, signal } from '@angular/core';
+
+import { Component, HostBinding, Input, OnInit, computed, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '@app/core/services/api.service';
@@ -159,8 +159,9 @@ type BlockTab = 'anemia' | 'mineral' | 'vafseo' | 'evidence';
 @Component({
   selector: 'app-research',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './research.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./research.component.css'],
 })
 export class ResearchComponent implements OnInit {

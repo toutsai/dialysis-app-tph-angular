@@ -1,9 +1,12 @@
 <div class="log-page-container" id="pdf-export-area">
-  <div *ngIf="isLoading()" class="loading-overlay">
-    <div class="loading-spinner"></div>
-    <p>正在載入 {{ selectedDate() }} 的日誌與排班資料...</p>
-  </div>
+  @if (isLoading()) {
+    <div class="loading-overlay">
+      <div class="loading-spinner"></div>
+      <p>正在載入 {{ selectedDate() }} 的日誌與排班資料...</p>
+    </div>
+  }
 
+  <fieldset class="daily-log-editor" [disabled]="isLoading() || historyRestoring()" [attr.inert]="isLoading() || historyRestoring() ? '' : null">
   <header class="page-header">
     <div class="header-left">
       <h1>工作日誌</h1>
@@ -17,14 +20,17 @@
         <button (click)="changeDate(1)">下一日 &#x276F;</button>
         <button (click)="goToToday()">今日</button>
       </div>
-      <div *ngIf="isHistoricalLog" class="history-lock-banner">
-        {{ canEditHistoricalLog ? '歷史工作日誌：管理員可修改，儲存後會保留修訂紀錄。' : '歷史工作日誌已鎖定，僅供檢視與匯出。' }}
-      </div>
+      @if (isHistoricalLog) {
+        <div class="history-lock-banner">
+          {{ canEditHistoricalLog ? '歷史工作日誌：管理員可修改，儲存後會保留修訂紀錄。' : '歷史工作日誌已鎖定，僅供檢視與匯出。' }}
+        </div>
+      }
       <button class="btn btn-handover" (click)="isHandoverDialogVisible = true" [disabled]="isPageLocked">
         <i class="fas fa-clipboard-list"></i> 組長交班
       </button>
     </div>
     <div class="header-right">
+      <button type="button" class="action-btn" (click)="openHistory()" [disabled]="isLoading()">歷史版本</button>
       <span class="status-indicator">{{ statusText }}</span>
       <button (click)="exportToPDF()" class="export-pdf-btn" [disabled]="isLoading()">匯出 PDF</button>
     </div>
@@ -136,7 +142,9 @@
           <section class="log-section">
             <div class="section-header">
               <h2>護理人力</h2>
-              <button *ngIf="!isPageLocked" (click)="addStaffingRow()" class="add-row-btn-header">新增計算項目</button>
+              @if (!isPageLocked) {
+                <button (click)="addStaffingRow()" class="add-row-btn-header">新增計算項目</button>
+              }
             </div>
 
             <!-- 三班總人次摘要 -->
@@ -169,16 +177,20 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr *ngFor="let item of dailyLog.stats?.staffing?.details; let i = index">
-                    <td><input type="text" [(ngModel)]="item.label" placeholder="項目" [disabled]="isPageLocked" (ngModelChange)="markDirty()" /></td>
-                    <td class="col-count"><input type="number" min="0" [(ngModel)]="item.count" [disabled]="isPageLocked" (ngModelChange)="markDirty()" /></td>
-                    <td><input type="number" min="0" step="0.01" [(ngModel)]="item.ratio1" [disabled]="isPageLocked || item.isLocked" (ngModelChange)="markDirty()" /></td>
-                    <td><input type="number" min="0" step="0.01" [(ngModel)]="item.ratio2" [disabled]="isPageLocked || item.isLocked" (ngModelChange)="markDirty()" /></td>
-                    <td><input type="number" min="0" step="0.01" [(ngModel)]="item.ratio3" [disabled]="isPageLocked || item.isLocked" (ngModelChange)="markDirty()" /></td>
-                    <td class="col-actions">
-                      <button *ngIf="!isPageLocked" (click)="deleteStaffingRow(i)" class="delete-btn mini">移除</button>
-                    </td>
-                  </tr>
+                  @for (item of dailyLog.stats?.staffing?.details; track item; let i = $index) {
+                    <tr>
+                      <td><input type="text" [(ngModel)]="item.label" placeholder="項目" [disabled]="isPageLocked" (ngModelChange)="markDirty()" /></td>
+                      <td class="col-count"><input type="number" min="0" [(ngModel)]="item.count" [disabled]="isPageLocked" (ngModelChange)="markDirty()" /></td>
+                      <td><input type="number" min="0" step="0.01" [(ngModel)]="item.ratio1" [disabled]="isPageLocked || item.isLocked" (ngModelChange)="markDirty()" /></td>
+                      <td><input type="number" min="0" step="0.01" [(ngModel)]="item.ratio2" [disabled]="isPageLocked || item.isLocked" (ngModelChange)="markDirty()" /></td>
+                      <td><input type="number" min="0" step="0.01" [(ngModel)]="item.ratio3" [disabled]="isPageLocked || item.isLocked" (ngModelChange)="markDirty()" /></td>
+                      <td class="col-actions">
+                        @if (!isPageLocked) {
+                          <button (click)="deleteStaffingRow(i)" class="delete-btn mini">移除</button>
+                        }
+                      </td>
+                    </tr>
+                  }
                   <tr class="deduction-row">
                     <td>調整時數</td>
                     <td></td>
@@ -214,457 +226,570 @@
       <section class="log-section">
         <div class="section-header">
           <h2>病人動態表</h2>
-          <button *ngIf="!isPageLocked" (click)="addRow('patientMovements')" class="add-row-btn-header">新增手動動態</button>
+          @if (!isPageLocked) {
+            <button (click)="addRow('patientMovements')" class="add-row-btn-header">新增手動動態</button>
+          }
         </div>
-        <div *ngIf="dailyLog.patientMovements.length > 0" class="dynamic-table-container">
-          <table class="dynamic-table">
-            <thead>
-              <tr>
-                <th class="col-type">類型</th>
-                <th class="col-name">姓名</th>
-                <th class="col-mrn">病歷號</th>
-                <th class="col-bed">床號</th>
-                <th class="col-date">住院日</th>
-                <th class="col-date">出院日</th>
-                <th class="col-physician">會診醫師</th>
-                <th class="col-reason-wide">住院原因</th>
-                <th class="col-remarks-wide">備註</th>
-                <th class="col-actions">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let item of dailyLog.patientMovements; let i = index"
-                  [ngClass]="{ 'is-edited-row': isRowInEditMode(item) }">
-                <td class="col-type">
-                  <select *ngIf="isRowInEditMode(item)" [(ngModel)]="item.type" class="type-select">
-                    <option value="手動">手動</option>
-                    <option value="首透">首透</option>
-                    <option value="臨時加洗">臨時加洗</option>
-                    <option value="暫停透析">暫停透析</option>
-                    <option value="刪除排程">刪除排程</option>
-                    <option value="更改模式">更改模式</option>
-                    <option value="更改頻率">更改頻率</option>
-                    <option value="轉常規門診">轉常規門診</option>
-                    <option value="其他">其他</option>
-                  </select>
-                  <span *ngIf="!isRowInEditMode(item)" class="movement-type-badge" [ngClass]="'type-' + (item.type || '手動')">
-                    {{ item.type || '手動' }}
-                  </span>
-                </td>
-                <td class="col-name">
-                  <div class="autocomplete-wrapper">
-                    <input type="text" [(ngModel)]="item.name" [disabled]="!isRowInEditMode(item)"
-                           (input)="handlePatientSearch(i, 'movements')"
-                           (focus)="showAutocomplete($event, i, 'movements')"
-                           (blur)="hideAutocomplete()" placeholder="搜尋病人..." />
-                  </div>
-                </td>
-                <td class="col-mrn">
-                  <input type="text" [(ngModel)]="item.medicalRecordNumber" [disabled]="!isRowInEditMode(item)" />
-                </td>
-                <td class="col-bed">
-                  <input *ngIf="isRowInEditMode(item)" type="text" [(ngModel)]="item.wardNumber" placeholder="床號" />
-                  <span *ngIf="!isRowInEditMode(item)">{{ item.wardNumber || patientStore.patientMap().get(item.patientId)?.wardNumber || '-' }}</span>
-                </td>
-                <td class="col-date">
-                  <input type="date" [(ngModel)]="item.admissionDate" [disabled]="!isRowInEditMode(item)" />
-                </td>
-                <td class="col-date">
-                  <input type="date" [(ngModel)]="item.dischargeDate" [disabled]="!isRowInEditMode(item)" />
-                </td>
-                <td class="col-physician">
-                  <input type="text" [(ngModel)]="item.physician" [disabled]="!isRowInEditMode(item)" />
-                </td>
-                <td class="col-reason-wide">
-                  <input type="text" [(ngModel)]="item.reason" [disabled]="!isRowInEditMode(item)" />
-                </td>
-                <td class="col-remarks-wide">
-                  <textarea
-                    *ngIf="isRowInEditMode(item)"
-                    [(ngModel)]="item.remarks"
-                    class="table-wrap-textarea"
-                    rows="2"
-                  ></textarea>
-                  <span *ngIf="!isRowInEditMode(item)" class="wrapped-cell-text">
-                    {{ item.remarks || '' }}
-                  </span>
-                </td>
-                <td class="col-actions">
-                  <button *ngIf="!isRowInEditMode(item) && !isPageLocked" (click)="unlockMovement(item)" class="edit-btn">編輯</button>
-                  <div *ngIf="isRowInEditMode(item)" class="action-buttons-group">
-                    <button (click)="saveMovement(item)" class="save-btn">儲存</button>
-                    <button (click)="deleteRow(i, 'patientMovements')" class="delete-btn">移除</button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- 血管通路阻塞 -->
-      <section class="log-section">
-        <div class="section-header">
-          <h2>血管通路阻塞</h2>
-          <!-- 新增一律走事件彈窗（與主護同一表單，存新表帶CSV代碼；組長儲存即已確認）。
-               不掛 isPageLocked：補登昨日事件是常態，事件表不受歷史日誌鎖影響。舊 JSON 列僅保留檢視/編輯。 -->
-          <button *ngIf="canManageVascularEvents" (click)="openVascularAddDialog()" class="add-row-btn-header">新增處置</button>
-        </div>
-
-        <!-- 主護填寫事件（vascular_access_events 新表）：確認/退回直接打事件 API，不經日誌整包 PUT。
-             操作鈕只看 editor 權限、刻意不掛 isPageLocked——歷史鎖只鎖下方 JSON 手動區，
-             組長常隔天才確認前一日事件（刻意設計）。 -->
-        <div *ngIf="vascularEvents().length > 0" class="vascular-events-block">
-          <div class="vascular-events-subtitle">血管通路事件（主護填寫／組長補登；列出當日填寫的事件，事件日期為實際處置日）</div>
+        @if (dailyLog.patientMovements.length > 0) {
           <div class="dynamic-table-container">
-            <table class="dynamic-table vascular-events-table">
+            <table class="dynamic-table">
               <thead>
                 <tr>
-                  <th class="col-date">事件日期</th>
+                  <th class="col-type">類型</th>
                   <th class="col-name">姓名</th>
                   <th class="col-mrn">病歷號</th>
-                  <th class="col-summary-wide">摘要</th>
-                  <th class="col-creator">填寫人</th>
-                  <th class="col-status">狀態</th>
-                  <th class="col-actions" *ngIf="canManageVascularEvents">操作</th>
+                  <th class="col-bed">床號</th>
+                  <th class="col-date">住院日</th>
+                  <th class="col-date">出院日</th>
+                  <th class="col-physician">會診醫師</th>
+                  <th class="col-reason-wide">住院原因</th>
+                  <th class="col-remarks-wide">備註</th>
+                  <th class="col-actions">操作</th>
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let ev of vascularEvents()">
-                  <td class="col-date">{{ ev.eventDate }}</td>
-                  <td class="col-name">{{ ev.patientName }}</td>
-                  <td class="col-mrn">{{ ev.medicalRecordNumber }}</td>
-                  <td class="col-summary-wide">{{ ev.summary }}</td>
-                  <td class="col-creator">{{ ev.createdBy?.name || '-' }}</td>
-                  <td class="col-status">
-                    <span class="event-status-badge" [ngClass]="'status-' + ev.status">
-                      {{ vascularEventStatusLabels[ev.status] }}<ng-container *ngIf="ev.status === 'confirmed' && ev.confirmedBy?.name"> · {{ ev.confirmedBy?.name }}</ng-container>
-                    </span>
-                    <span *ngIf="ev.status === 'rejected' && ev.rejectReason" class="event-reject-reason">{{ ev.rejectReason }}</span>
-                  </td>
-                  <td class="col-actions" *ngIf="canManageVascularEvents">
-                    <div *ngIf="ev.status === 'pending'" class="action-buttons-group">
-                      <button (click)="confirmVascularEvent(ev)" class="save-btn" [disabled]="vascularEventActionId() !== null">確認</button>
-                      <button (click)="openVascularRejectDialog(ev, false)" class="delete-btn" [disabled]="vascularEventActionId() !== null">退回</button>
-                    </div>
-                    <div *ngIf="ev.status === 'confirmed'" class="action-buttons-group">
-                      <!-- 組長補登的事件可直接修改；主護填寫的仍走撤銷→退回主護 -->
-                      <button *ngIf="isLeaderCreatedVascularEvent(ev)" (click)="editVascularEvent(ev)" class="save-btn mini" [disabled]="vascularEventActionId() !== null">修改</button>
-                      <button (click)="openVascularRejectDialog(ev, true)" class="delete-btn mini" [disabled]="vascularEventActionId() !== null">撤銷</button>
-                    </div>
-                  </td>
+                @for (item of dailyLog.patientMovements; track item; let i = $index) {
+                  <tr
+                    [ngClass]="{ 'is-edited-row': isRowInEditMode(item) }">
+                    <td class="col-type">
+                      @if (isRowInEditMode(item)) {
+                        <select [(ngModel)]="item.type" class="type-select">
+                          <option value="手動">手動</option>
+                          <option value="首透">首透</option>
+                          <option value="臨時加洗">臨時加洗</option>
+                          <option value="暫停透析">暫停透析</option>
+                          <option value="刪除排程">刪除排程</option>
+                          <option value="更改模式">更改模式</option>
+                          <option value="更改頻率">更改頻率</option>
+                          <option value="轉常規門診">轉常規門診</option>
+                          <option value="其他">其他</option>
+                        </select>
+                      }
+                      @if (!isRowInEditMode(item)) {
+                        <span class="movement-type-badge" [ngClass]="'type-' + (item.type || '手動')">
+                          {{ item.type || '手動' }}
+                        </span>
+                      }
+                    </td>
+                    <td class="col-name">
+                      <div class="autocomplete-wrapper">
+                        <input type="text" [(ngModel)]="item.name" [disabled]="!isRowInEditMode(item)"
+                          (input)="handlePatientSearch(i, 'movements')"
+                          (focus)="showAutocomplete($event, i, 'movements')"
+                          (blur)="hideAutocomplete()" placeholder="搜尋病人..." />
+                        </div>
+                      </td>
+                      <td class="col-mrn">
+                        <input type="text" [(ngModel)]="item.medicalRecordNumber" [disabled]="!isRowInEditMode(item)" />
+                      </td>
+                      <td class="col-bed">
+                        @if (isRowInEditMode(item)) {
+                          <input type="text" [(ngModel)]="item.wardNumber" placeholder="床號" />
+                        }
+                        @if (!isRowInEditMode(item)) {
+                          <span>{{ item.wardNumber || patientStore.patientMap().get(item.patientId)?.wardNumber || '-' }}</span>
+                        }
+                      </td>
+                      <td class="col-date">
+                        <input type="date" [(ngModel)]="item.admissionDate" [disabled]="!isRowInEditMode(item)" />
+                      </td>
+                      <td class="col-date">
+                        <input type="date" [(ngModel)]="item.dischargeDate" [disabled]="!isRowInEditMode(item)" />
+                      </td>
+                      <td class="col-physician">
+                        <input type="text" [(ngModel)]="item.physician" [disabled]="!isRowInEditMode(item)" />
+                      </td>
+                      <td class="col-reason-wide">
+                        <input type="text" [(ngModel)]="item.reason" [disabled]="!isRowInEditMode(item)" />
+                      </td>
+                      <td class="col-remarks-wide">
+                        @if (isRowInEditMode(item)) {
+                          <textarea
+                            [(ngModel)]="item.remarks"
+                            class="table-wrap-textarea"
+                            rows="2"
+                          ></textarea>
+                        }
+                        @if (!isRowInEditMode(item)) {
+                          <span class="wrapped-cell-text">
+                            {{ item.remarks || '' }}
+                          </span>
+                        }
+                      </td>
+                      <td class="col-actions">
+                        @if (!isRowInEditMode(item) && !isPageLocked) {
+                          <button (click)="unlockMovement(item)" class="edit-btn">編輯</button>
+                        }
+                        @if (isRowInEditMode(item)) {
+                          <div class="action-buttons-group">
+                            <button (click)="saveMovement(item)" class="save-btn">儲存</button>
+                            <button (click)="deleteRow(i, 'patientMovements')" class="delete-btn">移除</button>
+                          </div>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </section>
+
+        <!-- 血管通路阻塞 -->
+        <section class="log-section">
+          <div class="section-header">
+            <h2>血管通路阻塞</h2>
+            <!-- 新增一律走事件彈窗（與主護同一表單，存新表帶CSV代碼；組長儲存即已確認）。
+            不掛 isPageLocked：補登昨日事件是常態，事件表不受歷史日誌鎖影響。舊 JSON 列僅保留檢視/編輯。 -->
+            @if (canManageVascularEvents) {
+              <button (click)="openVascularAddDialog()" class="add-row-btn-header">新增處置</button>
+            }
+          </div>
+
+          <!-- 主護填寫事件（vascular_access_events 新表）：確認/退回直接打事件 API，不經日誌整包 PUT。
+          操作鈕只看 editor 權限、刻意不掛 isPageLocked——歷史鎖只鎖下方 JSON 手動區，
+          組長常隔天才確認前一日事件（刻意設計）。 -->
+          @if (vascularEvents().length > 0) {
+            <div class="vascular-events-block">
+              <div class="vascular-events-subtitle">血管通路事件（主護填寫／組長補登；列出當日填寫的事件，事件日期為實際處置日）</div>
+              <div class="dynamic-table-container">
+                <table class="dynamic-table vascular-events-table">
+                  <thead>
+                    <tr>
+                      <th class="col-date">事件日期</th>
+                      <th class="col-name">姓名</th>
+                      <th class="col-mrn">病歷號</th>
+                      <th class="col-summary-wide">摘要</th>
+                      <th class="col-creator">填寫人</th>
+                      <th class="col-status">狀態</th>
+                      @if (canManageVascularEvents) {
+                        <th class="col-actions">操作</th>
+                      }
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (ev of vascularEvents(); track ev) {
+                      <tr>
+                        <td class="col-date">{{ ev.eventDate }}</td>
+                        <td class="col-name">{{ ev.patientName }}</td>
+                        <td class="col-mrn">{{ ev.medicalRecordNumber }}</td>
+                        <td class="col-summary-wide">{{ ev.summary }}</td>
+                        <td class="col-creator">{{ ev.createdBy?.name || '-' }}</td>
+                        <td class="col-status">
+                          <span class="event-status-badge" [ngClass]="'status-' + ev.status">
+                            {{ vascularEventStatusLabels[ev.status] }}@if (ev.status === 'confirmed' && ev.confirmedBy?.name) {
+                            · {{ ev.confirmedBy?.name }}
+                          }
+                        </span>
+                        @if (ev.status === 'rejected' && ev.rejectReason) {
+                          <span class="event-reject-reason">{{ ev.rejectReason }}</span>
+                        }
+                      </td>
+                      @if (canManageVascularEvents) {
+                        <td class="col-actions">
+                          @if (ev.status === 'pending') {
+                            <div class="action-buttons-group">
+                              <button (click)="confirmVascularEvent(ev)" class="save-btn" [disabled]="vascularEventActionId() !== null">確認</button>
+                              <button (click)="openVascularRejectDialog(ev, false)" class="delete-btn" [disabled]="vascularEventActionId() !== null">退回</button>
+                            </div>
+                          }
+                          @if (ev.status === 'confirmed') {
+                            <div class="action-buttons-group">
+                              <!-- 組長補登的事件可直接修改；主護填寫的仍走撤銷→退回主護 -->
+                              @if (isLeaderCreatedVascularEvent(ev)) {
+                                <button (click)="editVascularEvent(ev)" class="save-btn mini" [disabled]="vascularEventActionId() !== null">修改</button>
+                              }
+                              <button (click)="openVascularRejectDialog(ev, true)" class="delete-btn mini" [disabled]="vascularEventActionId() !== null">撤銷</button>
+                            </div>
+                          }
+                        </td>
+                      }
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        }
+
+        @if (dailyLog.vascularAccessLog.length > 0) {
+          <div class="dynamic-table-container">
+            <table class="dynamic-table">
+              <thead>
+                <tr>
+                  <th class="col-name">姓名</th>
+                  <th class="col-mrn">病歷號</th>
+                  <th class="col-date">日期</th>
+                  <th class="col-interventions-wide">處置</th>
+                  <th class="col-location">處置院所</th>
+                  <th class="col-actions">操作</th>
                 </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+              </thead>
+              <tbody>
+                @for (item of dailyLog.vascularAccessLog; track item; let i = $index) {
+                  <tr>
+                    <td class="col-name">
+                      <div class="autocomplete-wrapper">
+                        <input type="text" [(ngModel)]="item.name"
+                          (input)="handlePatientSearch(i, 'vascular')"
+                          (focus)="showAutocomplete($event, i, 'vascular')"
+                          (blur)="hideAutocomplete()" placeholder="搜尋病人..." [disabled]="isPageLocked" />
+                        </div>
+                      </td>
+                      <td class="col-mrn">
+                        <input type="text" [(ngModel)]="item.medicalRecordNumber" [disabled]="isPageLocked" />
+                      </td>
+                      <td class="col-date">
+                        <input type="date" [(ngModel)]="item.date" [disabled]="isPageLocked" />
+                      </td>
+                      <td class="col-interventions-wide">
+                        <div class="checkbox-group">
+                          <label><input type="checkbox" [checked]="isInterventionChecked(item, 'PTA')" (change)="toggleIntervention(item, 'PTA')" [disabled]="isPageLocked" />PTA</label>
+                          <label><input type="checkbox" [checked]="isInterventionChecked(item, '新建')" (change)="toggleIntervention(item, '新建')" [disabled]="isPageLocked" />新建</label>
+                          <label><input type="checkbox" [checked]="isInterventionChecked(item, '重建')" (change)="toggleIntervention(item, '重建')" [disabled]="isPageLocked" />重建</label>
+                          <label><input type="checkbox" [checked]="isInterventionChecked(item, '清血塊')" (change)="toggleIntervention(item, '清血塊')" [disabled]="isPageLocked" />清血塊</label>
+                          <label><input type="checkbox" [checked]="isInterventionChecked(item, 'PERM-Cath')" (change)="toggleIntervention(item, 'PERM-Cath')" [disabled]="isPageLocked" />PERM-Cath</label>
+                          <label><input type="checkbox" [checked]="isInterventionChecked(item, '例行返診')" (change)="toggleIntervention(item, '例行返診')" [disabled]="isPageLocked" />例行返診</label>
+                        </div>
+                      </td>
+                      <td class="col-location">
+                        <select [(ngModel)]="item.location" class="table-select" [disabled]="isPageLocked">
+                          <option value="">請選擇</option>
+                          @for (location of vascularAccessLocationOptions; track location) {
+                            <option [value]="location">{{ location }}</option>
+                          }
+                        </select>
+                      </td>
+                      <td class="col-actions">
+                        @if (!isPageLocked) {
+                          <button (click)="deleteRow(i, 'vascularAccessLog')" class="delete-btn">移除</button>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </section>
 
-        <div *ngIf="dailyLog.vascularAccessLog.length > 0" class="dynamic-table-container">
-          <table class="dynamic-table">
-            <thead>
-              <tr>
-                <th class="col-name">姓名</th>
-                <th class="col-mrn">病歷號</th>
-                <th class="col-date">日期</th>
-                <th class="col-interventions-wide">處置</th>
-                <th class="col-location">處置院所</th>
-                <th class="col-actions">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let item of dailyLog.vascularAccessLog; let i = index">
-                <td class="col-name">
-                  <div class="autocomplete-wrapper">
-                    <input type="text" [(ngModel)]="item.name"
-                           (input)="handlePatientSearch(i, 'vascular')"
-                           (focus)="showAutocomplete($event, i, 'vascular')"
-                           (blur)="hideAutocomplete()" placeholder="搜尋病人..." [disabled]="isPageLocked" />
+        <!-- 其他事項 -->
+        <section class="log-section">
+          <h2>其他事項</h2>
+          <div class="autoresize-textarea-wrapper">
+            <textarea #otherNotesTextarea [(ngModel)]="dailyLog.otherNotes" class="handover-textarea" rows="1"
+            aria-label="其他事項" placeholder="請輸入其他事項..." (input)="handleTextareaInput(); markDirty()" [disabled]="isPageLocked"></textarea>
+            <div class="notes-display-for-pdf">{{ dailyLog.otherNotes }}</div>
+          </div>
+        </section>
+
+        <footer class="log-page-footer">
+          <div class="leader-signature-grid">
+            <div class="leader-title">組長簽核</div>
+            <div class="signature-slot">
+              <span class="shift-label">第一班：</span>
+              @if (dailyLog.leader?.early?.name) {
+                <div class="signature-display">
+                  <div class="signature-info">
+                    <span class="leader-name leader-stamp">{{ dailyLog.leader?.early?.name }}</span>
+                    <span class="signature-time">{{ formatSignTime($safeNavigationMigration(dailyLog.leader?.early?.signedAt)) }}</span>
                   </div>
-                </td>
-                <td class="col-mrn">
-                  <input type="text" [(ngModel)]="item.medicalRecordNumber" [disabled]="isPageLocked" />
-                </td>
-                <td class="col-date">
-                  <input type="date" [(ngModel)]="item.date" [disabled]="isPageLocked" />
-                </td>
-                <td class="col-interventions-wide">
-                  <div class="checkbox-group">
-                    <label><input type="checkbox" [checked]="isInterventionChecked(item, 'PTA')" (change)="toggleIntervention(item, 'PTA')" [disabled]="isPageLocked" />PTA</label>
-                    <label><input type="checkbox" [checked]="isInterventionChecked(item, '新建')" (change)="toggleIntervention(item, '新建')" [disabled]="isPageLocked" />新建</label>
-                    <label><input type="checkbox" [checked]="isInterventionChecked(item, '重建')" (change)="toggleIntervention(item, '重建')" [disabled]="isPageLocked" />重建</label>
-                    <label><input type="checkbox" [checked]="isInterventionChecked(item, '清血塊')" (change)="toggleIntervention(item, '清血塊')" [disabled]="isPageLocked" />清血塊</label>
-                    <label><input type="checkbox" [checked]="isInterventionChecked(item, 'PERM-Cath')" (change)="toggleIntervention(item, 'PERM-Cath')" [disabled]="isPageLocked" />PERM-Cath</label>
-                    <label><input type="checkbox" [checked]="isInterventionChecked(item, '例行返診')" (change)="toggleIntervention(item, '例行返診')" [disabled]="isPageLocked" />例行返診</label>
+                  @if (!isPageLocked) {
+                    <div class="signature-actions">
+                      <button (click)="signAsLeader('early')" class="action-text-btn edit-btn" title="修正或更新簽核">修正</button>
+                      <button (click)="unsignLeader('early')" class="action-text-btn unsign-btn" title="撤銷簽核">撤銷</button>
+                    </div>
+                  }
+                </div>
+              }
+              @if (!dailyLog.leader?.early?.name && !isPageLocked) {
+                <button (click)="signAsLeader('early')" class="sign-btn">簽核</button>
+              }
+            </div>
+            <div class="signature-slot">
+              <span class="shift-label">第二班：</span>
+              @if (dailyLog.leader?.noon?.name) {
+                <div class="signature-display">
+                  <div class="signature-info">
+                    <span class="leader-name leader-stamp">{{ dailyLog.leader?.noon?.name }}</span>
+                    <span class="signature-time">{{ formatSignTime($safeNavigationMigration(dailyLog.leader?.noon?.signedAt)) }}</span>
                   </div>
-                </td>
-                <td class="col-location">
-                  <select [(ngModel)]="item.location" class="table-select" [disabled]="isPageLocked">
-                    <option value="">請選擇</option>
-                    <option *ngFor="let location of vascularAccessLocationOptions" [value]="location">{{ location }}</option>
-                  </select>
-                </td>
-                <td class="col-actions">
-                  <button *ngIf="!isPageLocked" (click)="deleteRow(i, 'vascularAccessLog')" class="delete-btn">移除</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+                  @if (!isPageLocked) {
+                    <div class="signature-actions">
+                      <button (click)="signAsLeader('noon')" class="action-text-btn edit-btn" title="修正或更新簽核">修正</button>
+                      <button (click)="unsignLeader('noon')" class="action-text-btn unsign-btn" title="撤銷簽核">撤銷</button>
+                    </div>
+                  }
+                </div>
+              }
+              @if (!dailyLog.leader?.noon?.name && !isPageLocked) {
+                <button (click)="signAsLeader('noon')" class="sign-btn">簽核</button>
+              }
+            </div>
+            <div class="signature-slot">
+              <span class="shift-label">第三班：</span>
+              @if (dailyLog.leader?.late?.name) {
+                <div class="signature-display">
+                  <div class="signature-info">
+                    <span class="leader-name leader-stamp">{{ dailyLog.leader?.late?.name }}</span>
+                    <span class="signature-time">{{ formatSignTime($safeNavigationMigration(dailyLog.leader?.late?.signedAt)) }}</span>
+                  </div>
+                  @if (!isPageLocked) {
+                    <div class="signature-actions">
+                      <button (click)="signAsLeader('late')" class="action-text-btn edit-btn" title="修正或更新簽核">修正</button>
+                      <button (click)="unsignLeader('late')" class="action-text-btn unsign-btn" title="撤銷簽核">撤銷</button>
+                    </div>
+                  }
+                </div>
+              }
+              @if (!dailyLog.leader?.late?.name && !isPageLocked) {
+                <button (click)="signAsLeader('late')" class="sign-btn">簽核</button>
+              }
+            </div>
+          </div>
+        </footer>
+      </div>
 
-      <!-- 其他事項 -->
-      <section class="log-section">
-        <h2>其他事項</h2>
-        <div class="autoresize-textarea-wrapper">
-          <textarea #otherNotesTextarea [(ngModel)]="dailyLog.otherNotes" class="handover-textarea" rows="1"
-                    placeholder="請輸入其他事項..." (input)="handleTextareaInput(); markDirty()" [disabled]="isPageLocked"></textarea>
-          <div class="notes-display-for-pdf">{{ dailyLog.otherNotes }}</div>
+      <!-- ================================== -->
+      <!-- Mobile Layout -->
+      <!-- ================================== -->
+      <div class="mobile-only">
+        <!-- 行動版：營運統計 -->
+        <div class="mobile-section-card">
+          <h2 class="mobile-section-title">營運統計</h2>
+          <div class="mobile-stats-container">
+            <div class="stat-highlight-card">
+              <div class="stat-value">{{ totalPatients.early + totalPatients.noon + totalPatients.late }}</div>
+              <div class="stat-label">總人次</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">{{ (dailyLog.stats?.main_beds?.early?.total || 0) + (dailyLog.stats?.main_beds?.noon?.total || 0) + (dailyLog.stats?.main_beds?.late?.total || 0) }}</div>
+              <div class="stat-label">HDR開床數 (A)</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">{{ (dailyLog.stats?.peripheral_beds?.early?.ipd || 0) + (dailyLog.stats?.peripheral_beds?.noon?.ipd || 0) + (dailyLog.stats?.peripheral_beds?.late?.ipd || 0) }}</div>
+              <div class="stat-label">加護病房+RCC (B)</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">{{ (dailyLog.stats?.peripheral_beds?.early?.er || 0) + (dailyLog.stats?.peripheral_beds?.noon?.er || 0) + (dailyLog.stats?.peripheral_beds?.late?.er || 0) }}</div>
+              <div class="stat-label">急診 (C)</div>
+            </div>
+          </div>
+          <div class="mobile-text-stats">
+            <div class="text-stat-item">
+              <strong>ON D/L:</strong>
+              <span>{{ filterJoin([$safeNavigationMigration(dailyLog.stats?.patient_care?.onDL?.early), $safeNavigationMigration(dailyLog.stats?.patient_care?.onDL?.noon), $safeNavigationMigration(dailyLog.stats?.patient_care?.onDL?.late)]) }}</span>
+            </div>
+            <div class="text-stat-item">
+              <strong>AK 更換:</strong>
+              <span>{{ filterJoin([$safeNavigationMigration(dailyLog.stats?.patient_care?.akChange?.early), $safeNavigationMigration(dailyLog.stats?.patient_care?.akChange?.noon), $safeNavigationMigration(dailyLog.stats?.patient_care?.akChange?.late)]) }}</span>
+            </div>
+            <div class="text-stat-item">
+              <strong>預約未到:</strong>
+              <span>{{ filterJoin([$safeNavigationMigration(dailyLog.stats?.patient_care?.noShow?.early), $safeNavigationMigration(dailyLog.stats?.patient_care?.noShow?.noon), $safeNavigationMigration(dailyLog.stats?.patient_care?.noShow?.late)]) }}</span>
+            </div>
+          </div>
         </div>
-      </section>
 
-      <footer class="log-page-footer">
-        <div class="leader-signature-grid">
-          <div class="leader-title">組長簽核</div>
-          <div class="signature-slot">
-            <span class="shift-label">第一班：</span>
-            <div *ngIf="dailyLog.leader?.early?.name" class="signature-display">
-              <div class="signature-info">
-                <span class="leader-name leader-stamp">{{ dailyLog.leader?.early?.name }}</span>
-                <span class="signature-time">{{ formatSignTime(dailyLog.leader?.early?.signedAt) }}</span>
-              </div>
-              <div class="signature-actions" *ngIf="!isPageLocked">
-                <button (click)="signAsLeader('early')" class="action-text-btn edit-btn" title="修正或更新簽核">修正</button>
-                <button (click)="unsignLeader('early')" class="action-text-btn unsign-btn" title="撤銷簽核">撤銷</button>
-              </div>
+        <!-- 行動版：病人動態表 -->
+        <div class="mobile-section-card">
+          <h2 class="mobile-section-title">病人動態表</h2>
+          @if (dailyLog.patientMovements.length > 0) {
+            <div class="log-entry-list">
+              @for (item of dailyLog.patientMovements; track item) {
+                <div class="log-entry-card">
+                  <div class="entry-header">
+                    <strong>{{ item.name }}</strong> ({{ item.medicalRecordNumber }})
+                    @if (item.type) {
+                      <span class="movement-type-badge" [ngClass]="'type-' + item.type">{{ item.type }}</span>
+                    }
+                  </div>
+                  <div class="entry-body">
+                    <div><strong>會診醫師:</strong> {{ item.physician || 'N/A' }}</div>
+                    <div><strong>住院原因:</strong> {{ item.reason || 'N/A' }}</div>
+                    <div><strong>備註:</strong> {{ item.remarks || 'N/A' }}</div>
+                  </div>
+                </div>
+              }
             </div>
-            <button *ngIf="!dailyLog.leader?.early?.name && !isPageLocked" (click)="signAsLeader('early')" class="sign-btn">簽核</button>
-          </div>
-          <div class="signature-slot">
-            <span class="shift-label">第二班：</span>
-            <div *ngIf="dailyLog.leader?.noon?.name" class="signature-display">
-              <div class="signature-info">
-                <span class="leader-name leader-stamp">{{ dailyLog.leader?.noon?.name }}</span>
-                <span class="signature-time">{{ formatSignTime(dailyLog.leader?.noon?.signedAt) }}</span>
-              </div>
-              <div class="signature-actions" *ngIf="!isPageLocked">
-                <button (click)="signAsLeader('noon')" class="action-text-btn edit-btn" title="修正或更新簽核">修正</button>
-                <button (click)="unsignLeader('noon')" class="action-text-btn unsign-btn" title="撤銷簽核">撤銷</button>
-              </div>
+          }
+          @if (dailyLog.patientMovements.length === 0) {
+            <p class="no-data-text">本日無病人動態</p>
+          }
+        </div>
+
+        <!-- 行動版：血管通路阻塞 -->
+        <div class="mobile-section-card">
+          <h2 class="mobile-section-title">
+            血管通路阻塞
+            @if (canManageVascularEvents) {
+              <button (click)="openVascularAddDialog()" class="add-row-btn-header">新增處置</button>
+            }
+          </h2>
+          <!-- 主護填寫事件（同桌面版：只看 editor 權限、刻意不掛 isPageLocked） -->
+          @if (vascularEvents().length > 0) {
+            <div class="log-entry-list vascular-events-mobile">
+              @for (ev of vascularEvents(); track ev) {
+                <div class="log-entry-card">
+                  <div class="entry-header">
+                    <strong>{{ ev.patientName }}</strong> ({{ ev.medicalRecordNumber }})
+                    <span class="event-status-badge" [ngClass]="'status-' + ev.status">{{ vascularEventStatusLabels[ev.status] }}</span>
+                  </div>
+                  <div class="entry-body">
+                    <div><strong>日期:</strong> {{ ev.eventDate }}</div>
+                    <div><strong>摘要:</strong> {{ ev.summary }}</div>
+                    <div><strong>填寫人:</strong> {{ ev.createdBy?.name || '-' }}</div>
+                    @if (ev.status === 'confirmed' && ev.confirmedBy?.name) {
+                      <div><strong>確認人:</strong> {{ ev.confirmedBy?.name }}</div>
+                    }
+                    @if (ev.status === 'rejected' && ev.rejectReason) {
+                      <div><strong>退回原因:</strong> {{ ev.rejectReason }}</div>
+                    }
+                    @if (canManageVascularEvents) {
+                      <div class="entry-actions">
+                        @if (ev.status === 'pending') {
+                          <button (click)="confirmVascularEvent(ev)" class="save-btn" [disabled]="vascularEventActionId() !== null">確認</button>
+                          <button (click)="openVascularRejectDialog(ev, false)" class="delete-btn" [disabled]="vascularEventActionId() !== null">退回</button>
+                        }
+                        @if (ev.status === 'confirmed') {
+                          <button (click)="openVascularRejectDialog(ev, true)" class="delete-btn" [disabled]="vascularEventActionId() !== null">撤銷</button>
+                        }
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
             </div>
-            <button *ngIf="!dailyLog.leader?.noon?.name && !isPageLocked" (click)="signAsLeader('noon')" class="sign-btn">簽核</button>
-          </div>
-          <div class="signature-slot">
-            <span class="shift-label">第三班：</span>
-            <div *ngIf="dailyLog.leader?.late?.name" class="signature-display">
-              <div class="signature-info">
-                <span class="leader-name leader-stamp">{{ dailyLog.leader?.late?.name }}</span>
-                <span class="signature-time">{{ formatSignTime(dailyLog.leader?.late?.signedAt) }}</span>
-              </div>
-              <div class="signature-actions" *ngIf="!isPageLocked">
-                <button (click)="signAsLeader('late')" class="action-text-btn edit-btn" title="修正或更新簽核">修正</button>
-                <button (click)="unsignLeader('late')" class="action-text-btn unsign-btn" title="撤銷簽核">撤銷</button>
-              </div>
+          }
+          @if (dailyLog.vascularAccessLog.length > 0) {
+            <div class="log-entry-list">
+              @for (item of dailyLog.vascularAccessLog; track item) {
+                <div class="log-entry-card">
+                  <div class="entry-header">
+                    <strong>{{ item.name }}</strong> ({{ item.medicalRecordNumber }})
+                  </div>
+                  <div class="entry-body">
+                    <div><strong>處置:</strong> {{ item.interventions?.join(', ') || 'N/A' }}</div>
+                    <div><strong>院所:</strong> {{ item.location || 'N/A' }}</div>
+                  </div>
+                </div>
+              }
             </div>
-            <button *ngIf="!dailyLog.leader?.late?.name && !isPageLocked" (click)="signAsLeader('late')" class="sign-btn">簽核</button>
+          }
+          @if (dailyLog.vascularAccessLog.length === 0 && vascularEvents().length === 0) {
+            <p class="no-data-text">本日無血管通路處置記錄</p>
+          }
+        </div>
+
+        <!-- 其他事項 -->
+        <div class="mobile-section-card">
+          <h2 class="mobile-section-title">其他事項</h2>
+          @if (dailyLog.otherNotes) {
+            <p class="handover-notes-display">{{ dailyLog.otherNotes }}</p>
+          }
+          @if (!dailyLog.otherNotes) {
+            <p class="no-data-text">無其他事項</p>
+          }
+        </div>
+
+        <!-- 行動版：組長簽核 -->
+        <div class="mobile-section-card">
+          <h2 class="mobile-section-title">組長簽核</h2>
+          <div class="mobile-signatures">
+            <div class="signature-item">
+              <strong>第一班:</strong>
+              <span [ngClass]="{ 'signed': $safeNavigationMigration(dailyLog.leader?.early?.name) }">{{ dailyLog.leader?.early?.name || '未簽核' }}</span>
+            </div>
+            <div class="signature-item">
+              <strong>第二班:</strong>
+              <span [ngClass]="{ 'signed': $safeNavigationMigration(dailyLog.leader?.noon?.name) }">{{ dailyLog.leader?.noon?.name || '未簽核' }}</span>
+            </div>
+            <div class="signature-item">
+              <strong>第三班:</strong>
+              <span [ngClass]="{ 'signed': $safeNavigationMigration(dailyLog.leader?.late?.name) }">{{ dailyLog.leader?.late?.name || '未簽核' }}</span>
+            </div>
           </div>
         </div>
-      </footer>
+      </div>
+    </main>
+  </fieldset>
+
+    <div class="daily-log-mutation-overlays" [attr.inert]="isLoading() || historyRestoring() ? '' : null">
+    <!-- Global Autocomplete Dropdown -->
+    @if (isAutocompleteVisible) {
+      <ul class="global-autocomplete-results"
+        [style.top]="autocompleteStyle.top" [style.left]="autocompleteStyle.left" [style.width]="autocompleteStyle.width">
+        @for (p of patientSearchResults; track p) {
+          <li
+            (mousedown)="$event.preventDefault(); selectPatient(p, activeSearch.index, activeSearch.type || '')">
+            {{ p.name }} ({{ p.medicalRecordNumber }})
+          </li>
+        }
+        @if (patientSearchResults.length === 0) {
+          <li class="no-results">無符合結果</li>
+        }
+      </ul>
+    }
+
+    <!-- Dialogs -->
+    @if (isWardDialogVisible) {
+      <app-ward-number-dialog
+        [currentValue]="wardDialogCurrentValue"
+        (confirm)="handleWardNumberConfirm($event)"
+        (cancel)="handleWardNumberCancel()">
+      </app-ward-number-dialog>
+    }
+
+    <!-- 血管通路事件退回/撤銷原因輸入（沿用共用輸入小彈窗） -->
+    @if (isVascularRejectDialogVisible) {
+      <app-ward-number-dialog
+        [title]="vascularRejectIsRevoke ? '撤銷已確認事件' : '退回血管通路事件'"
+        [message]="'請輸入' + (vascularRejectIsRevoke ? '撤銷' : '退回') + '原因（會顯示給主護）'"
+        [placeholder]="'例如：日期填錯，請修正後重送'"
+        [maxLength]="100"
+        (confirm)="handleVascularRejectConfirm($event)"
+        (cancel)="handleVascularRejectCancel()">
+      </app-ward-number-dialog>
+    }
+
+    <!-- 組長補登血管通路事件（與主護同一元件：病人待選、日期預設當前日誌日、儲存即已確認）；
+    vascularEditTarget 有值＝「修改」直達：帶定病人並直接進入該筆編輯 -->
+    @if (isVascularAddDialogVisible) {
+      <app-vascular-access-event-dialog
+        [patientPicker]="!vascularEditTarget"
+        [patientId]="vascularEditTarget?.patientId || ''"
+        [patientName]="vascularEditTarget?.patientName || ''"
+        [initialEditEventId]="vascularEditTarget?.eventId || ''"
+        [directConfirm]="true"
+        [defaultDate]="selectedDate()"
+        (saved)="onVascularAddDialogSaved()"
+        (close)="closeVascularAddDialog()">
+      </app-vascular-access-event-dialog>
+    }
+
+    <app-confirm-dialog
+      [isVisible]="isConfirmDialogVisible"
+      [title]="confirmDialogTitle"
+      [message]="confirmDialogMessage"
+      (confirm)="handleConfirm()"
+      (cancel)="handleCancel()">
+    </app-confirm-dialog>
+
+    <app-alert-dialog
+      [isVisible]="isAlertDialogVisible"
+      [title]="alertDialogTitle"
+      [message]="alertDialogMessage"
+      (confirm)="isAlertDialogVisible = false">
+    </app-alert-dialog>
+
+    <app-handover-notes-dialog
+      [isVisible]="isHandoverDialogVisible"
+      [initialNotes]="handoverNotes"
+      [targetDate]="selectedDate()"
+      (closeEvent)="isHandoverDialogVisible = false"
+      (notesUpdated)="onNotesUpdated($event)">
+    </app-handover-notes-dialog>
     </div>
+  </div>
 
-    <!-- ================================== -->
-    <!-- Mobile Layout -->
-    <!-- ================================== -->
-    <div class="mobile-only">
-      <!-- 行動版：營運統計 -->
-      <div class="mobile-section-card">
-        <h2 class="mobile-section-title">營運統計</h2>
-        <div class="mobile-stats-container">
-          <div class="stat-highlight-card">
-            <div class="stat-value">{{ totalPatients.early + totalPatients.noon + totalPatients.late }}</div>
-            <div class="stat-label">總人次</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">{{ (dailyLog.stats?.main_beds?.early?.total || 0) + (dailyLog.stats?.main_beds?.noon?.total || 0) + (dailyLog.stats?.main_beds?.late?.total || 0) }}</div>
-            <div class="stat-label">HDR開床數 (A)</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">{{ (dailyLog.stats?.peripheral_beds?.early?.ipd || 0) + (dailyLog.stats?.peripheral_beds?.noon?.ipd || 0) + (dailyLog.stats?.peripheral_beds?.late?.ipd || 0) }}</div>
-            <div class="stat-label">加護病房+RCC (B)</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">{{ (dailyLog.stats?.peripheral_beds?.early?.er || 0) + (dailyLog.stats?.peripheral_beds?.noon?.er || 0) + (dailyLog.stats?.peripheral_beds?.late?.er || 0) }}</div>
-            <div class="stat-label">急診 (C)</div>
-          </div>
-        </div>
-        <div class="mobile-text-stats">
-          <div class="text-stat-item">
-            <strong>ON D/L:</strong>
-            <span>{{ filterJoin([dailyLog.stats?.patient_care?.onDL?.early, dailyLog.stats?.patient_care?.onDL?.noon, dailyLog.stats?.patient_care?.onDL?.late]) }}</span>
-          </div>
-          <div class="text-stat-item">
-            <strong>AK 更換:</strong>
-            <span>{{ filterJoin([dailyLog.stats?.patient_care?.akChange?.early, dailyLog.stats?.patient_care?.akChange?.noon, dailyLog.stats?.patient_care?.akChange?.late]) }}</span>
-          </div>
-          <div class="text-stat-item">
-            <strong>預約未到:</strong>
-            <span>{{ filterJoin([dailyLog.stats?.patient_care?.noShow?.early, dailyLog.stats?.patient_care?.noShow?.noon, dailyLog.stats?.patient_care?.noShow?.late]) }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 行動版：病人動態表 -->
-      <div class="mobile-section-card">
-        <h2 class="mobile-section-title">病人動態表</h2>
-        <div *ngIf="dailyLog.patientMovements.length > 0" class="log-entry-list">
-          <div *ngFor="let item of dailyLog.patientMovements" class="log-entry-card">
-            <div class="entry-header">
-              <strong>{{ item.name }}</strong> ({{ item.medicalRecordNumber }})
-              <span *ngIf="item.type" class="movement-type-badge" [ngClass]="'type-' + item.type">{{ item.type }}</span>
-            </div>
-            <div class="entry-body">
-              <div><strong>會診醫師:</strong> {{ item.physician || 'N/A' }}</div>
-              <div><strong>住院原因:</strong> {{ item.reason || 'N/A' }}</div>
-              <div><strong>備註:</strong> {{ item.remarks || 'N/A' }}</div>
-            </div>
-          </div>
-        </div>
-        <p *ngIf="dailyLog.patientMovements.length === 0" class="no-data-text">本日無病人動態</p>
-      </div>
-
-      <!-- 行動版：血管通路阻塞 -->
-      <div class="mobile-section-card">
-        <h2 class="mobile-section-title">
-          血管通路阻塞
-          <button *ngIf="canManageVascularEvents" (click)="openVascularAddDialog()" class="add-row-btn-header">新增處置</button>
-        </h2>
-        <!-- 主護填寫事件（同桌面版：只看 editor 權限、刻意不掛 isPageLocked） -->
-        <div *ngIf="vascularEvents().length > 0" class="log-entry-list vascular-events-mobile">
-          <div *ngFor="let ev of vascularEvents()" class="log-entry-card">
-            <div class="entry-header">
-              <strong>{{ ev.patientName }}</strong> ({{ ev.medicalRecordNumber }})
-              <span class="event-status-badge" [ngClass]="'status-' + ev.status">{{ vascularEventStatusLabels[ev.status] }}</span>
-            </div>
-            <div class="entry-body">
-              <div><strong>日期:</strong> {{ ev.eventDate }}</div>
-              <div><strong>摘要:</strong> {{ ev.summary }}</div>
-              <div><strong>填寫人:</strong> {{ ev.createdBy?.name || '-' }}</div>
-              <div *ngIf="ev.status === 'confirmed' && ev.confirmedBy?.name"><strong>確認人:</strong> {{ ev.confirmedBy?.name }}</div>
-              <div *ngIf="ev.status === 'rejected' && ev.rejectReason"><strong>退回原因:</strong> {{ ev.rejectReason }}</div>
-              <div *ngIf="canManageVascularEvents" class="entry-actions">
-                <ng-container *ngIf="ev.status === 'pending'">
-                  <button (click)="confirmVascularEvent(ev)" class="save-btn" [disabled]="vascularEventActionId() !== null">確認</button>
-                  <button (click)="openVascularRejectDialog(ev, false)" class="delete-btn" [disabled]="vascularEventActionId() !== null">退回</button>
-                </ng-container>
-                <button *ngIf="ev.status === 'confirmed'" (click)="openVascularRejectDialog(ev, true)" class="delete-btn" [disabled]="vascularEventActionId() !== null">撤銷</button>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div *ngIf="dailyLog.vascularAccessLog.length > 0" class="log-entry-list">
-          <div *ngFor="let item of dailyLog.vascularAccessLog" class="log-entry-card">
-            <div class="entry-header">
-              <strong>{{ item.name }}</strong> ({{ item.medicalRecordNumber }})
-            </div>
-            <div class="entry-body">
-              <div><strong>處置:</strong> {{ item.interventions?.join(', ') || 'N/A' }}</div>
-              <div><strong>院所:</strong> {{ item.location || 'N/A' }}</div>
-            </div>
-          </div>
-        </div>
-        <p *ngIf="dailyLog.vascularAccessLog.length === 0 && vascularEvents().length === 0" class="no-data-text">本日無血管通路處置記錄</p>
-      </div>
-
-      <!-- 其他事項 -->
-      <div class="mobile-section-card">
-        <h2 class="mobile-section-title">其他事項</h2>
-        <p *ngIf="dailyLog.otherNotes" class="handover-notes-display">{{ dailyLog.otherNotes }}</p>
-        <p *ngIf="!dailyLog.otherNotes" class="no-data-text">無其他事項</p>
-      </div>
-
-      <!-- 行動版：組長簽核 -->
-      <div class="mobile-section-card">
-        <h2 class="mobile-section-title">組長簽核</h2>
-        <div class="mobile-signatures">
-          <div class="signature-item">
-            <strong>第一班:</strong>
-            <span [ngClass]="{ 'signed': dailyLog.leader?.early?.name }">{{ dailyLog.leader?.early?.name || '未簽核' }}</span>
-          </div>
-          <div class="signature-item">
-            <strong>第二班:</strong>
-            <span [ngClass]="{ 'signed': dailyLog.leader?.noon?.name }">{{ dailyLog.leader?.noon?.name || '未簽核' }}</span>
-          </div>
-          <div class="signature-item">
-            <strong>第三班:</strong>
-            <span [ngClass]="{ 'signed': dailyLog.leader?.late?.name }">{{ dailyLog.leader?.late?.name || '未簽核' }}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </main>
-
-  <!-- Global Autocomplete Dropdown -->
-  <ul *ngIf="isAutocompleteVisible" class="global-autocomplete-results"
-      [style.top]="autocompleteStyle.top" [style.left]="autocompleteStyle.left" [style.width]="autocompleteStyle.width">
-    <li *ngFor="let p of patientSearchResults"
-        (mousedown)="$event.preventDefault(); selectPatient(p, activeSearch.index, activeSearch.type || '')">
-      {{ p.name }} ({{ p.medicalRecordNumber }})
-    </li>
-    <li *ngIf="patientSearchResults.length === 0" class="no-results">無符合結果</li>
-  </ul>
-
-  <!-- Dialogs -->
-  <app-ward-number-dialog
-    *ngIf="isWardDialogVisible"
-    [currentValue]="wardDialogCurrentValue"
-    (confirm)="handleWardNumberConfirm($event)"
-    (cancel)="handleWardNumberCancel()">
-  </app-ward-number-dialog>
-
-  <!-- 血管通路事件退回/撤銷原因輸入（沿用共用輸入小彈窗） -->
-  <app-ward-number-dialog
-    *ngIf="isVascularRejectDialogVisible"
-    [title]="vascularRejectIsRevoke ? '撤銷已確認事件' : '退回血管通路事件'"
-    [message]="'請輸入' + (vascularRejectIsRevoke ? '撤銷' : '退回') + '原因（會顯示給主護）'"
-    [placeholder]="'例如：日期填錯，請修正後重送'"
-    [maxLength]="100"
-    (confirm)="handleVascularRejectConfirm($event)"
-    (cancel)="handleVascularRejectCancel()">
-  </app-ward-number-dialog>
-
-  <!-- 組長補登血管通路事件（與主護同一元件：病人待選、日期預設當前日誌日、儲存即已確認）；
-       vascularEditTarget 有值＝「修改」直達：帶定病人並直接進入該筆編輯 -->
-  <app-vascular-access-event-dialog
-    *ngIf="isVascularAddDialogVisible"
-    [patientPicker]="!vascularEditTarget"
-    [patientId]="vascularEditTarget?.patientId || ''"
-    [patientName]="vascularEditTarget?.patientName || ''"
-    [initialEditEventId]="vascularEditTarget?.eventId || ''"
-    [directConfirm]="true"
-    [defaultDate]="selectedDate()"
-    (saved)="onVascularAddDialogSaved()"
-    (close)="closeVascularAddDialog()">
-  </app-vascular-access-event-dialog>
-
-  <app-confirm-dialog
-    [isVisible]="isConfirmDialogVisible"
-    [title]="confirmDialogTitle"
-    [message]="confirmDialogMessage"
-    (confirm)="handleConfirm()"
-    (cancel)="handleCancel()">
-  </app-confirm-dialog>
-
-  <app-alert-dialog
-    [isVisible]="isAlertDialogVisible"
-    [title]="alertDialogTitle"
-    [message]="alertDialogMessage"
-    (confirm)="isAlertDialogVisible = false">
-  </app-alert-dialog>
-
-  <app-handover-notes-dialog
-    [isVisible]="isHandoverDialogVisible"
-    [initialNotes]="handoverNotes"
-    [targetDate]="selectedDate()"
-    (closeEvent)="isHandoverDialogVisible = false"
-    (notesUpdated)="onNotesUpdated($event)">
-  </app-handover-notes-dialog>
-</div>
+  @if (showHistory()) { <app-daily-log-history [date]="selectedDate()" [currentVersion]="dailyLog.version ?? null" [hasDraft]="hasPendingDraft()" [busy]="isLoading()" [canRestore]="!isPageLocked" [draftMessage]="historyDraftMessage()" (closed)="showHistory.set(false)" (saveDraftRequested)="saveHistoryDraft()" (discardDraftRequested)="discardHistoryDraft()" (restored)="onHistoryRestored($event)" (restoringChange)="historyRestoring.set($event)" /> }

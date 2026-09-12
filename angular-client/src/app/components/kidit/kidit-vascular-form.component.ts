@@ -1,13 +1,14 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { kiditService } from '@/services/kiditService';
 
 @Component({
   selector: 'app-kidit-vascular-form',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './kidit-vascular-form.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './kidit-vascular-form.component.css',
 })
 export class KiditVascularFormComponent implements OnChanges {

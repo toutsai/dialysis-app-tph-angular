@@ -3,8 +3,8 @@
 // 舊路由 /physician-schedule、/orders、/med-adjustment、/catastrophic-illness、/research 保留為別名：載入本頁並帶對應頁籤（app.routes.ts data.tab）。
 // 權限：頁面 DOCTOR_VIEW_ROLES（含書記 viewer：看醫師班表與重大傷病申請）；醫囑/調藥/研究三頁籤只給 admin/contributor。
 // 重大傷病申請同時也掛在書記專用（features/inventory）頁籤，同一元件兩處內嵌。
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, OnInit, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '@services/auth.service';
 import { PhysicianScheduleComponent } from '../physician-schedule/physician-schedule.component';
@@ -35,8 +35,9 @@ const DOCTOR_ROLES = ['admin', 'contributor'];
 @Component({
   selector: 'app-physician-hub',
   standalone: true,
-  imports: [CommonModule, PhysicianScheduleComponent, OrdersComponent, MedAdjustmentComponent, CatastrophicIllnessComponent, ResearchComponent],
+  imports: [PhysicianScheduleComponent, OrdersComponent, MedAdjustmentComponent, CatastrophicIllnessComponent, ResearchComponent],
   templateUrl: './physician-hub.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./physician-hub.component.css'],
 })
 export class PhysicianHubComponent implements OnInit {

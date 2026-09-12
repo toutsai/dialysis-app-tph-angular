@@ -1,5 +1,5 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 
 export interface SelectionOption {
@@ -12,8 +12,9 @@ export interface SelectionOption {
 @Component({
   selector: 'app-selection-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './selection-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './selection-dialog.component.css'
 })
 export class SelectionDialogComponent implements OnChanges {

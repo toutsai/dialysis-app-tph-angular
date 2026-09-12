@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnInit, Output, inject, signal } from '@angular/core';
+import { Component, EventEmitter, Input, OnInit, Output, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -42,6 +42,7 @@ interface VascularEventForm {
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './vascular-access-event-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './vascular-access-event-dialog.component.css',
 })
 export class VascularAccessEventDialogComponent implements OnInit {

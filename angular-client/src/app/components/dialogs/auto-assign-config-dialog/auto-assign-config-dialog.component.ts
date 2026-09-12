@@ -1,5 +1,5 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject, ChangeDetectorRef } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import {
   AutoAssignConfigService,
@@ -11,8 +11,9 @@ import {
 @Component({
   selector: 'app-auto-assign-config-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './auto-assign-config-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './auto-assign-config-dialog.component.css',
 })
 export class AutoAssignConfigDialogComponent implements OnChanges {

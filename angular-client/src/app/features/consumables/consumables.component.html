@@ -58,72 +58,95 @@
           (click)="exportConsumablesToExcel()"
           [disabled]="isLoading() || processedData().length === 0"
           class="export-btn"
-        >
+          >
           匯出 Excel
         </button>
       </div>
 
       <div class="report-display">
-        <div *ngIf="isLoading()" class="loading-state">正在查詢耗材資料...</div>
-        <div *ngIf="!isLoading() && !searchPerformed()" class="placeholder-text">請選擇條件並點擊查詢。</div>
-        <div *ngIf="!isLoading() && searchPerformed() && processedData().length === 0" class="empty-state">
-          查無符合條件的病人或耗材資料。
-        </div>
-        <div *ngIf="!isLoading() && searchPerformed() && processedData().length > 0" style="margin: 0 0 8px; font-size: 0.9em; color: #555; line-height: 1.6;">
-          <strong>{{ groupSearchParams.month }} 已上傳區間：</strong>
-          <span *ngFor="let r of uploadedRanges()" style="display: inline-block; margin-right: 12px;">{{ r.label }}（{{ r.categories.join('、') }}，{{ r.patientCount }} 人）</span>
-          <span style="color: #888;">　共 {{ processedData().length }} 位病人；同區間重傳會覆蓋、不同區間累加；已刪除病人仍列出並計入總量。</span>
-        </div>
-        <div *ngIf="!isLoading() && searchPerformed() && processedData().length > 0" class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th rowspan="2" class="sticky-col col-freq">頻率</th>
-                <th rowspan="2" class="sticky-col col-shift">班別</th>
-                <th rowspan="2" class="sticky-col col-bed">床號</th>
-                <th rowspan="2" class="sticky-col col-mrn">病歷號</th>
-                <th rowspan="2" class="sticky-col col-name">姓名</th>
-                <th rowspan="2">狀態</th>
-                <th
-                  *ngIf="dynamicHeaders().artificialKidney.length > 0"
-                  [attr.colspan]="dynamicHeaders().artificialKidney.length"
-                >
-                  人工腎臟
-                </th>
-                <th
-                  *ngIf="dynamicHeaders().dialysateCa.length > 0"
-                  [attr.colspan]="dynamicHeaders().dialysateCa.length"
-                >
-                  透析藥水CA
-                </th>
-                <th
-                  *ngIf="dynamicHeaders().bicarbonateType.length > 0"
-                  [attr.colspan]="dynamicHeaders().bicarbonateType.length"
-                >
-                  B液種類
-                </th>
-              </tr>
-              <tr>
-                <th *ngFor="let header of flattenedHeaders()">{{ header }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let row of processedData()" [style.color]="row.isDeleted ? '#999' : null">
-                <td class="sticky-col col-freq">{{ row.freq || '-' }}</td>
-                <td class="sticky-col col-shift">{{ formatShift(row.shiftIndex) }}</td>
-                <td class="sticky-col col-bed">{{ row.bedNum || '-' }}</td>
-                <td class="sticky-col col-mrn">{{ row.medicalRecordNumber || '-' }}</td>
-                <td class="sticky-col col-name">{{ row.patientName }}</td>
-                <td style="white-space: nowrap;">
-                  <span *ngIf="row.isDeleted" style="color: #c0392b;" title="該時段有透析消耗，之後已自系統刪除；用量仍計入月總量">已刪除 {{ row.deletedAt || '(日期不明)' }}</span>
-                </td>
-                <td *ngFor="let header of flattenedHeaders()">
-                  {{ row.consumableCounts[header] || '' }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        @if (isLoading()) {
+          <div class="loading-state">正在查詢耗材資料...</div>
+        }
+        @if (!isLoading() && !searchPerformed()) {
+          <div class="placeholder-text">請選擇條件並點擊查詢。</div>
+        }
+        @if (!isLoading() && searchPerformed() && processedData().length === 0) {
+          <div class="empty-state">
+            查無符合條件的病人或耗材資料。
+          </div>
+        }
+        @if (!isLoading() && searchPerformed() && processedData().length > 0) {
+          <div style="margin: 0 0 8px; font-size: 0.9em; color: #555; line-height: 1.6;">
+            <strong>{{ groupSearchParams.month }} 已上傳區間：</strong>
+            @for (r of uploadedRanges(); track r) {
+              <span style="display: inline-block; margin-right: 12px;">{{ r.label }}（{{ r.categories.join('、') }}，{{ r.patientCount }} 人）</span>
+            }
+            <span style="color: #888;">　共 {{ processedData().length }} 位病人；同區間重傳會覆蓋、不同區間累加；已刪除病人仍列出並計入總量。</span>
+          </div>
+        }
+        @if (!isLoading() && searchPerformed() && processedData().length > 0) {
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th rowspan="2" class="sticky-col col-freq">頻率</th>
+                  <th rowspan="2" class="sticky-col col-shift">班別</th>
+                  <th rowspan="2" class="sticky-col col-bed">床號</th>
+                  <th rowspan="2" class="sticky-col col-mrn">病歷號</th>
+                  <th rowspan="2" class="sticky-col col-name">姓名</th>
+                  <th rowspan="2">狀態</th>
+                  @if (dynamicHeaders().artificialKidney.length > 0) {
+                    <th
+                      [attr.colspan]="dynamicHeaders().artificialKidney.length"
+                      >
+                      人工腎臟
+                    </th>
+                  }
+                  @if (dynamicHeaders().dialysateCa.length > 0) {
+                    <th
+                      [attr.colspan]="dynamicHeaders().dialysateCa.length"
+                      >
+                      透析藥水CA
+                    </th>
+                  }
+                  @if (dynamicHeaders().bicarbonateType.length > 0) {
+                    <th
+                      [attr.colspan]="dynamicHeaders().bicarbonateType.length"
+                      >
+                      B液種類
+                    </th>
+                  }
+                </tr>
+                <tr>
+                  @for (header of flattenedHeaders(); track header) {
+                    <th>{{ header }}</th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of processedData(); track row) {
+                  <tr [style.color]="row.isDeleted ? '#999' : null">
+                    <td class="sticky-col col-freq">{{ row.freq || '-' }}</td>
+                    <td class="sticky-col col-shift">{{ formatShift(row.shiftIndex) }}</td>
+                    <td class="sticky-col col-bed">{{ row.bedNum || '-' }}</td>
+                    <td class="sticky-col col-mrn">{{ row.medicalRecordNumber || '-' }}</td>
+                    <td class="sticky-col col-name">{{ row.patientName }}</td>
+                    <td style="white-space: nowrap;">
+                      @if (row.isDeleted) {
+                        <span style="color: #c0392b;" title="該時段有透析消耗，之後已自系統刪除；用量仍計入月總量">已刪除 {{ row.deletedAt || '(日期不明)' }}</span>
+                      }
+                    </td>
+                    @for (header of flattenedHeaders(); track header) {
+                      <td>
+                        {{ row.consumableCounts[header] || '' }}
+                      </td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
       </div>
     </div>
 
@@ -137,12 +160,16 @@
           (dragover)="onDragOver($event)"
           (dragleave)="onDragLeave($event)"
           (drop)="handleFileDrop($event)"
-        >
+          >
           <div class="upload-icon"><i class="fas fa-box-open"></i></div>
-          <h3 *ngIf="!selectedFile()">拖曳 Excel 檔案至此，或點擊按鈕選擇</h3>
-          <h3 *ngIf="selectedFile()">
-            已選擇檔案：<strong>{{ selectedFile()!.name }}</strong>
-          </h3>
+          @if (!selectedFile()) {
+            <h3>拖曳 Excel 檔案至此，或點擊按鈕選擇</h3>
+          }
+          @if (selectedFile()) {
+            <h3>
+              已選擇檔案：<strong>{{ selectedFile()!.name }}</strong>
+            </h3>
+          }
           <p class="upload-hint">
             支援 .xlsx, .xls 格式。請確保標題行包含 '人工腎臟', '透析藥水CA', 或 'B液種類'。
           </p>
@@ -152,36 +179,37 @@
             (change)="handleFileSelect($event)"
             accept=".xlsx, .xls"
             [disabled]="isUploading()"
-          />
-          <label for="consumables-file-input" class="file-input-label">{{
-            selectedFile() ? '重新選擇檔案' : '選擇檔案'
-          }}</label>
+            />
+            <label for="consumables-file-input" class="file-input-label">{{
+              selectedFile() ? '重新選擇檔案' : '選擇檔案'
+            }}</label>
+          </div>
+          <button
+            class="upload-btn-main"
+            (click)="handleUpload()"
+            [disabled]="!selectedFile() || isUploading()"
+            >
+            {{ isUploading() ? '處理中...' : '開始上傳' }}
+          </button>
+          @if (uploadResult()) {
+            <div
+              class="upload-result-toast"
+              [ngClass]="uploadResult()!.cancelled ? 'is-cancelled' : (uploadResult()!.errorCount > 0 ? 'has-error' : 'is-success')"
+              >
+              {{ uploadResult()!.message }}
+            </div>
+          }
+          <p class="upload-hint" style="margin-top: 0.75rem;">
+            上傳品名會對照「品項設定」的品項（品項設定為準）；找不到的品項會先跳出確認視窗，未確認前不會寫入。
+          </p>
         </div>
-        <button
-          class="upload-btn-main"
-          (click)="handleUpload()"
-          [disabled]="!selectedFile() || isUploading()"
-        >
-          {{ isUploading() ? '處理中...' : '開始上傳' }}
-        </button>
-        <div
-          *ngIf="uploadResult()"
-          class="upload-result-toast"
-          [ngClass]="uploadResult()!.cancelled ? 'is-cancelled' : (uploadResult()!.errorCount > 0 ? 'has-error' : 'is-success')"
-        >
-          {{ uploadResult()!.message }}
-        </div>
-        <p class="upload-hint" style="margin-top: 0.75rem;">
-          上傳品名會對照「品項設定」的品項（品項設定為準）；找不到的品項會先跳出確認視窗，未確認前不會寫入。
-        </p>
       </div>
-    </div>
-  </main>
+    </main>
 
-  <!-- 消耗紀錄上傳：品名對不上品項設定時的對照確認視窗 -->
-  <app-consumable-item-mapping-dialog
-    [request]="itemMappingRequest()"
-    (confirm)="onItemMappingConfirm($event)"
-    (cancel)="onItemMappingCancel()"
-  ></app-consumable-item-mapping-dialog>
-</div>
+    <!-- 消耗紀錄上傳：品名對不上品項設定時的對照確認視窗 -->
+    <app-consumable-item-mapping-dialog
+      [request]="itemMappingRequest()"
+      (confirm)="onItemMappingConfirm($event)"
+      (cancel)="onItemMappingCancel()"
+    ></app-consumable-item-mapping-dialog>
+  </div>

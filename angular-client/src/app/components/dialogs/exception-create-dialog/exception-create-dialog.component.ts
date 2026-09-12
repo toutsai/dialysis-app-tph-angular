@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiConfigService } from '@services/api-config.service';
@@ -12,6 +12,7 @@ import { BedAssignmentDialogComponent } from '@app/components/dialogs/bed-assign
   standalone: true,
   imports: [CommonModule, FormsModule, PatientSelectDialogComponent, BedAssignmentDialogComponent],
   templateUrl: './exception-create-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './exception-create-dialog.component.css'
 })
 export class ExceptionCreateDialogComponent implements OnChanges {

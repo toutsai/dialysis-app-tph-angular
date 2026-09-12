@@ -8,8 +8,9 @@ import {
   OnInit,
   Input,
   HostBinding,
+  ChangeDetectionStrategy
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { ApiConfigService } from '@services/api-config.service';
 import {
@@ -84,8 +85,9 @@ interface DialysisOrderRow {
 @Component({
   selector: 'app-orders',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './orders.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './orders.component.css',
 })
 export class OrdersComponent implements OnInit {

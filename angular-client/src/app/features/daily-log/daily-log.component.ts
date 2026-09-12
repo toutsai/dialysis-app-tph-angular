@@ -1,5 +1,7 @@
 // Standalone 版：已移除 Firebase，改用 REST API + polling
-import { Component, inject, signal, OnInit, ViewChild, ElementRef, HostListener } from '@angular/core';
+import { Component, inject, signal, OnInit, ViewChild, ElementRef, HostListener, ChangeDetectionStrategy } from '@angular/core';
+import { DailyLogHistoryComponent, DailyLogRestoreResult } from './daily-log-history.component';
+import { collectPdfBands, planPdfSlices } from './pdf-pagination';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -25,6 +27,7 @@ import { VascularAccessEventDialogComponent } from '@app/components/dialogs/vasc
   standalone: true,
   imports: [
     CommonModule,
+    DailyLogHistoryComponent,
     FormsModule,
     WardNumberDialogComponent,
     ConfirmDialogComponent,
@@ -33,6 +36,7 @@ import { VascularAccessEventDialogComponent } from '@app/components/dialogs/vasc
     VascularAccessEventDialogComponent,
   ],
   templateUrl: './daily-log.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './daily-log.component.css',
 })
 export class DailyLogComponent implements OnInit {
@@ -56,6 +60,26 @@ export class DailyLogComponent implements OnInit {
   isLoading = signal(false);
   selectedDate = signal(this.formatDate(new Date()));
   hasUnsavedChanges = signal(false);
+  readonly showHistory = signal(false);
+  readonly historyRestoring = signal(false);
+  readonly historyDraftMessage = signal('');
+  openHistory(): void { if (!this.isLoading()) { this.historyDraftMessage.set(''); this.showHistory.set(true); } }
+  async saveHistoryDraft(): Promise<void> {
+    this.historyDraftMessage.set('');
+    await this.saveLog({ showSuccessAlert: false });
+    if (!this.historyDraftMessage()) this.historyDraftMessage.set(this.hasPendingDraft() ? '儲存未完成，草稿已保留。' : '目前內容已儲存，請重新核對差異後選擇復原內容。');
+  }
+  async discardHistoryDraft(): Promise<void> {
+    if (this.isLoading() || this.historyRestoring()) return;
+    this.dailyLogCache.delete(this.selectedDate());
+    await this.loadDailyLog(this.selectedDate());
+    this.historyDraftMessage.set(this.hasPendingDraft() ? '重新載入未完成，草稿仍保留。' : '已取消草稿並載入已儲存內容。');
+  }
+  async onHistoryRestored(result: DailyLogRestoreResult): Promise<void> {
+    this.dailyLogCache.delete(this.selectedDate());
+    await this.loadDailyLog(this.selectedDate());
+    this.historyDraftMessage.set(this.dailyLog.version === result.version ? '' : '復原已完成；目前頁面尚未更新，請重新載入確認。');
+  }
   private loadedSnapshot: Record<string, string> = {};
   private loadRequest = 0;
   private loadedDate = '';
@@ -71,13 +95,13 @@ export class DailyLogComponent implements OnInit {
   }
 
   canLeave(): boolean {
-    if (this.isLoading()) return false;
+    if (this.isLoading() || this.historyRestoring()) return false;
     return !this.hasPendingDraft() || window.confirm('日誌有未儲存變更，確定放棄並離開？');
   }
 
   @HostListener('window:beforeunload', ['$event'])
   beforeUnload(event: BeforeUnloadEvent): void {
-    if (this.hasPendingDraft() || this.isLoading()) { event.preventDefault(); event.returnValue = ''; }
+    if (this.hasPendingDraft() || this.isLoading() || this.historyRestoring()) { event.preventDefault(); event.returnValue = ''; }
   }
 
   @HostListener('input')
@@ -535,8 +559,10 @@ export class DailyLogComponent implements OnInit {
       }
 
       const submitted = this.snapshot();
-      const result = await this.dailyLogsApi.save(this.selectedDate(), dataToSave);
-      this.dailyLog.id = this.selectedDate();
+      const submittedDate = this.selectedDate();
+      const result = await this.dailyLogsApi.save(submittedDate, dataToSave);
+      if (this.selectedDate() !== submittedDate) return;
+      this.dailyLog.id = submittedDate;
       this.dailyLog.version = (result as any).version;
       this.loadedSnapshot = submitted;
       this.hasUnsavedChanges.set(this.hasPendingDraft());
@@ -746,8 +772,7 @@ export class DailyLogComponent implements OnInit {
     if (this.hasUnsavedChanges() && !this.isPageLocked) {
       await this.saveLog({ showSuccessAlert: false });
     }
-    const originalLoadingText = document.querySelector('.loading-overlay p')?.textContent || '';
-    const loadingTextElement = document.querySelector('.loading-overlay p');
+    let printCopy: HTMLElement | null = null;
     this.isLoading.set(true);
     await new Promise(resolve => setTimeout(resolve, 0));
 
@@ -761,43 +786,57 @@ export class DailyLogComponent implements OnInit {
         this.showAlert('錯誤', '找不到要匯出的內容！');
         return;
       }
-      exportArea.classList.add('pdf-export-mode');
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      const canvas = await html2canvas(exportArea, {
+      printCopy = exportArea.cloneNode(true) as HTMLElement;
+      printCopy.removeAttribute('id');
+      printCopy.classList.add('pdf-export-mode');
+      Object.assign(printCopy.style, { position: 'absolute', left: '0', top: '0', zIndex: '-10000', width: '1100px', maxWidth: 'none', margin: '0', background: '#fff' });
+      const sourceFields = exportArea.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input, textarea, select');
+      const copyFields = printCopy.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input, textarea, select');
+      copyFields.forEach((field, index) => {
+        if (field.classList.contains('handover-textarea') || field.classList.contains('hidden-date-input')) { field.remove(); return; }
+        const source = sourceFields[index];
+        const text = document.createElement('span');
+        for (const attribute of Array.from(field.attributes)) if (attribute.name.startsWith('_ngcontent')) text.setAttribute(attribute.name, '');
+        text.className = 'pdf-field-value';
+        text.textContent = source instanceof HTMLSelectElement ? source.selectedOptions[0]?.textContent || '' : source.value;
+        field.replaceWith(text);
+      });
+      printCopy.querySelectorAll('.staffing-table .col-actions').forEach(cell => {
+        cell.classList.remove('col-actions');
+        cell.textContent = cell.tagName === 'TH' ? '合計' : '';
+      });
+      printCopy.querySelectorAll('button, .header-right, .loading-overlay, .mobile-only, .global-autocomplete-results, .history-lock-banner, .col-actions, app-alert-dialog, app-confirm-dialog, app-handover-notes-dialog').forEach(element => element.remove());
+      printCopy.querySelectorAll('[inert]').forEach(element => element.removeAttribute('inert'));
+      printCopy.querySelectorAll('fieldset').forEach(element => element.removeAttribute('disabled'));
+      document.body.appendChild(printCopy);
+      await document.fonts.ready;
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const margin = 10, contentWidth = pdf.internal.pageSize.getWidth() - margin * 2;
+      const contentHeight = pdf.internal.pageSize.getHeight() - margin * 2;
+      const scale = 2, sourceWidth = printCopy.getBoundingClientRect().width * scale;
+      const pixelsPerMm = sourceWidth / contentWidth;
+      const capacity = contentHeight * pixelsPerMm;
+      const bands = collectPdfBands(printCopy, scale, capacity);
+      const canvas = await html2canvas(printCopy, {
         scale: 2,
         useCORS: true,
         backgroundColor: '#ffffff',
-        ignoreElements: (element: Element) =>
-          element.classList.contains('header-right') || element.classList.contains('loading-overlay'),
       });
-
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const ratio = canvas.width / pdfWidth;
-      const scaledHeight = canvas.height / ratio;
-      let heightLeft = scaledHeight;
-      let position = 0;
-      const margin = 10;
-
-      pdf.addImage(imgData, 'JPEG', margin, position + margin, pdfWidth - margin * 2, scaledHeight - margin * 2);
-      heightLeft -= pdfHeight - margin * 2;
-      while (heightLeft > 0) {
-        position -= pdfHeight - margin * 2;
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', margin, position + margin, pdfWidth - margin * 2, scaledHeight - margin * 2);
-        heightLeft -= pdfHeight - margin * 2;
+      const slices = planPdfSlices(canvas.height, capacity, bands);
+      for (const [index, slice] of slices.entries()) {
+        if (index) pdf.addPage();
+        const pageCanvas = document.createElement('canvas');
+        pageCanvas.width = canvas.width; pageCanvas.height = slice.end - slice.start;
+        pageCanvas.getContext('2d')!.drawImage(canvas, 0, slice.start, canvas.width, pageCanvas.height, 0, 0, canvas.width, pageCanvas.height);
+        pdf.addImage(pageCanvas.toDataURL('image/jpeg', .95), 'JPEG', margin, margin, contentWidth, pageCanvas.height / pixelsPerMm);
       }
       pdf.save(`血液透析中心工作日誌_${this.selectedDate()}.pdf`);
     } catch (error) {
       console.error('匯出 PDF 失敗:', error);
       this.showAlert('錯誤', '匯出 PDF 時發生錯誤，請檢查主控台訊息。');
     } finally {
-      const exportArea = document.getElementById('pdf-export-area');
-      if (exportArea) exportArea.classList.remove('pdf-export-mode');
-      if (loadingTextElement) loadingTextElement.textContent = originalLoadingText;
+      printCopy?.remove();
       this.isLoading.set(false);
     }
   }
@@ -955,6 +994,7 @@ export class DailyLogComponent implements OnInit {
   }
 
   showAutocomplete(event: FocusEvent, index: number, type: string): void {
+    if (this.isLoading() || this.historyRestoring() || this.isPageLocked) return;
     this.activeSearch = { type, index };
     this.handlePatientSearch(index, type);
     const inputElement = event.target as HTMLElement;
@@ -970,7 +1010,9 @@ export class DailyLogComponent implements OnInit {
   }
 
   selectPatient(patient: any, index: number, type: string): void {
+    if (this.isLoading() || this.historyRestoring() || this.isPageLocked) return;
     const targetArray = type === 'movements' ? this.dailyLog.patientMovements : this.dailyLog.vascularAccessLog;
+    if (!targetArray[index]) return;
     targetArray[index].name = patient.name;
     targetArray[index].patientId = patient.id;
     targetArray[index].medicalRecordNumber = patient.medicalRecordNumber;
@@ -1108,6 +1150,7 @@ export class DailyLogComponent implements OnInit {
   }
 
   async handleVascularRejectConfirm(reason: string): Promise<void> {
+    if (this.isLoading() || this.historyRestoring()) return;
     const ev = this.vascularRejectTarget;
     const isRevoke = this.vascularRejectIsRevoke;
     this.handleVascularRejectCancel();
@@ -1152,6 +1195,7 @@ export class DailyLogComponent implements OnInit {
   }
 
   handleConfirm(): void {
+    if (this.isLoading() || this.historyRestoring()) return;
     if (typeof this.confirmAction === 'function') this.confirmAction();
     this.handleCancel();
   }
@@ -1170,6 +1214,7 @@ export class DailyLogComponent implements OnInit {
   }
 
   onNotesUpdated(newNotes: string): void {
+    if (this.isLoading() || this.historyRestoring()) return;
     this.handoverNotes = newNotes;
     this.isHandoverDialogVisible = false;
   }
@@ -1194,6 +1239,7 @@ export class DailyLogComponent implements OnInit {
   }
 
   async handleWardNumberConfirm(newWardNumber: string): Promise<void> {
+    if (this.isLoading() || this.historyRestoring()) return;
     if (this.isPageLocked) return;
     const index = this.currentEditingMovementIndex;
     if (index < 0) return;

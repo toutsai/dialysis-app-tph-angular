@@ -1,3 +1,4 @@
+import { assertNoQueryConstraints, cleanApiQueryParams, type ApiQueryParams } from './api-query-contract';
 // src/services/localApiClient.ts
 // Standalone 版：共用 REST API 客戶端
 // 提供與 Firebase 無關的 fetch wrapper，供 JS service 檔案使用
@@ -187,7 +188,8 @@ const COLLECTION_ROUTE_MAP: Record<string, string> = {
 const ApiManager = <T extends { id?: string;[key: string]: unknown }>(resourceType: string) => {
   const route = COLLECTION_ROUTE_MAP[resourceType] || `/${resourceType}`;
 
-  const fetchAll = async (_queryConstraints: any[] = []): Promise<T[]> => {
+  const fetchAll = async (queryConstraints: unknown[] = []): Promise<T[]> => {
+    assertNoQueryConstraints(queryConstraints);
     try {
       const data = await localApi.get(route);
       return Array.isArray(data) ? data : (data?.data || data?.items || []);
@@ -200,12 +202,9 @@ const ApiManager = <T extends { id?: string;[key: string]: unknown }>(resourceTy
   // 比照 core/services/api-manager.service.ts 的 fetchWhere$ 寫法：清掉 undefined/null/''
   // 再組 query string，供 2B 效能批次的參數化呼叫點使用（取代整表 fetchAll + 前端 filter）。
   const fetchWhere = async (
-    params: Record<string, string | number | undefined>,
+    params: ApiQueryParams,
   ): Promise<T[]> => {
-    const cleaned: Record<string, string> = {};
-    for (const [k, v] of Object.entries(params)) {
-      if (v !== undefined && v !== null && v !== '') cleaned[k] = String(v);
-    }
+    const cleaned = cleanApiQueryParams(params);
     const qs = new URLSearchParams(cleaned).toString();
     const url = qs ? `${route}?${qs}` : route;
     try {

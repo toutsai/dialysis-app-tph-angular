@@ -1,0 +1,34 @@
+﻿<dialog #historyDialog class="history-dialog" aria-labelledby="history-title" (cancel)="cancel($event)">
+  <header><div><h2 id="history-title">日誌歷史版本</h2><p>{{ date }} · 目前版本 {{ currentVersion ?? '尚未儲存' }}</p></div><button type="button" (click)="close()" [disabled]="locked" autofocus aria-label="關閉歷史版本">關閉</button></header>
+  <p class="notice">復原只修改這一天的日誌內容，不回滾病人狀態或排程；KiDit 手填欄位保留。</p>
+  @if (!canRestore) { <p class="notice">您目前可檢視歷史；此日期或帳號不允許復原。</p> }
+  @if (hasDraft) { <section class="warning"><strong>目前有未儲存內容</strong><p>下方比較的是伺服器已儲存內容。請先儲存草稿，或明確取消草稿，再復原。</p><button type="button" (click)="saveDraftRequested.emit()" [disabled]="locked || !canRestore">先儲存目前內容</button><button type="button" (click)="requestDiscard()" [disabled]="locked">取消目前草稿…</button></section> }
+  @if (draftMessage) { <p role="status" class="notice">{{ draftMessage }}</p> }
+  @if (error()) { <p role="alert" class="warning">{{ error() }}</p> }
+  @if (message()) { <p role="status" class="success">{{ message() }}</p> }
+  <div class="history-layout"><aside aria-label="版本清單"><button type="button" (click)="loadRevisions()" [disabled]="locked || loadingList()">重新整理清單</button>
+    @for (revision of revisions(); track revision.id) { <button type="button" class="revision" [class.selected]="selected()?.id === revision.id" [attr.aria-pressed]="selected()?.id === revision.id" [disabled]="locked" (click)="selectRevision(revision)"><strong>{{ revision.createdAt | date:'yyyy/MM/dd HH:mm:ss' }}</strong><span>{{ revision.createdBy?.name || '未記錄操作者' }}</span><span>{{ reasonLabel(revision.revisionReason) }}</span></button> }
+    @if (loadingList()) { <p role="status">載入版本中…</p> } @else if (!revisions().length) { <p>這一天尚無歷史版本。</p> }
+    @if (hasMore()) { <button type="button" (click)="loadRevisions(true)" [disabled]="locked || loadingList()">載入更多</button> }
+  </aside><main>
+    @if (loadingDetail()) { <p role="status">載入版本差異中…</p> }
+    @if (detail(); as version) {
+      <h3>與目前已儲存版本 {{ versionLabel(version.currentVersion) }} 比較</h3><p>勾選要換回歷史內容的區塊；未勾選內容保留目前版本。</p>
+      @if (conflict()) { <button type="button" (click)="selectRevision(selected()!)" [disabled]="locked">重新載入差異（重新選擇）</button> }
+      @for (block of version.diff.blocks; track block.key) {
+        <section class="block"><label class="block-title"><input type="checkbox" [checked]="selectedBlocks().includes(block.key)" [disabled]="locked || !canRestore || !block.changed || conflict()" (change)="toggleBlock(block.key)">{{ label(block.key) }} <span>{{ block.changed ? '有差異' : '相同' }}</span></label>
+        @if (block.key === 'patientMovements' && block.changed) {
+          <p>逐列選擇要復原的動態；未選列保留目前內容。</p>
+          @for (movement of version.diff.movements; track movement.id) { <div class="movement"><label><input type="checkbox" [checked]="selectedMovements().includes(movement.id)" [disabled]="locked || !canRestore || !selectedBlocks().includes('patientMovements') || conflict()" (change)="toggleMovement(movement.id)">{{ actionLabel(movement.action) }}</label><div class="comparison"><div><h4>目前</h4><pre>{{ formatValue(movement.current) }}</pre></div><div><h4>歷史版本</h4><pre>{{ formatValue(movement.historical) }}</pre></div></div></div> }
+        } @else { <details [open]="block.changed"><summary>查看內容</summary><div class="comparison"><div><h4>目前</h4><pre>{{ formatValue(block.current) }}</pre></div><div><h4>歷史版本</h4><pre>{{ formatValue(block.historical) }}</pre></div></div></details> }
+        </section>
+      }
+      <button type="button" class="primary" [disabled]="!canSubmit" (click)="requestRestore()">復原所選內容…</button>
+    } @else if (!loadingDetail()) { <p>選擇一個版本以查看差異。</p> }
+  </main></div>
+  @if (confirmation(); as action) { <section class="confirmation" role="alert" aria-live="assertive"><h3>{{ action === 'restore' ? '確認復原所選內容' : '確認取消草稿' }}</h3>
+    @if (action === 'restore') { <p>將 {{ date }} 的下列內容換回所選歷史版本，並保留復原前的版本：</p><ul>@for (key of selectedBlocks(); track key) { <li>{{ label(key) }}{{ key === 'patientMovements' ? '（已選 ' + selectedMovements().length + ' 列）' : '' }}</li> }</ul><button type="button" class="primary" (click)="confirmRestore()" [disabled]="!canSubmit">確認復原</button> } @else { <p>放棄 {{ date }} 尚未儲存的編輯，重新載入已儲存內容。此操作不會自動復原歷史版本。</p><button type="button" (click)="confirmDiscard()" [disabled]="locked">確認取消草稿</button> }
+    <button type="button" (click)="confirmation.set(null)" [disabled]="locked">返回檢查</button>
+  </section> }
+  @if (restoring()) { <p role="status">正在復原，請稍候…</p> }
+</dialog>

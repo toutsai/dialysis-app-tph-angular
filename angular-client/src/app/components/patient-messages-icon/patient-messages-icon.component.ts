@@ -1,10 +1,10 @@
 import { ChangeDetectionStrategy, Component, Input, Output, EventEmitter } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 
 @Component({
   selector: 'app-patient-messages-icon',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './patient-messages-icon.component.html',
   styleUrl: './patient-messages-icon.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

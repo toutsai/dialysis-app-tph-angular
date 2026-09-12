@@ -1,3 +1,4 @@
+import { assertNoQueryConstraints, cleanApiQueryParams, type ApiQueryParams } from '../../../services/api-query-contract';
 // src/app/core/services/api-manager.service.ts
 // Standalone 版：使用 HttpClient (via ApiService) 進行 REST API CRUD 操作
 import { Injectable, inject } from '@angular/core';
@@ -21,7 +22,7 @@ export type FirestoreRecord = { id?: string; [key: string]: unknown };
 /** Observable-based CRUD interface (new) */
 export interface ApiManager$<T> {
   fetchAll$: (queryConstraints?: unknown[]) => Observable<T[]>;
-  fetchWhere$: (params: Record<string, string | number | undefined>) => Observable<T[]>;
+  fetchWhere$: (params: ApiQueryParams) => Observable<T[]>;
   fetchById$: (id: string) => Observable<T | null>;
   save$: (idOrData: string | T, data?: T) => Observable<T>;
   update$: (id: string, data: Partial<T>) => Observable<T>;
@@ -32,7 +33,7 @@ export interface ApiManager$<T> {
 /** Promise-based CRUD interface (backward compatible) */
 export interface ApiManager<T extends FirestoreRecord> {
   fetchAll: (queryConstraints?: unknown[]) => Promise<T[]>;
-  fetchWhere: (params: Record<string, string | number | undefined>) => Promise<T[]>;
+  fetchWhere: (params: ApiQueryParams) => Promise<T[]>;
   fetchById: (id: string) => Promise<T | null>;
   save: (idOrData: string | T, data?: T) => Promise<T>;
   update: (id: string, data: Partial<T>) => Promise<T>;
@@ -75,7 +76,8 @@ export class ApiManagerService {
     // Observable methods ($ suffix)
     // -----------------------------------------------------------------
 
-    const fetchAll$ = (_queryConstraints: unknown[] = []): Observable<T[]> => {
+    const fetchAll$ = (queryConstraints: unknown[] = []): Observable<T[]> => {
+      try { assertNoQueryConstraints(queryConstraints); } catch (error) { return throwError(() => error); }
       return this.api.get<unknown>(route).pipe(
         this.api.unwrapList<T>(),
         catchError((error) => {
@@ -89,12 +91,10 @@ export class ApiManagerService {
     };
 
     const fetchWhere$ = (
-      params: Record<string, string | number | undefined>,
+      params: ApiQueryParams,
     ): Observable<T[]> => {
-      const cleaned: Record<string, string> = {};
-      for (const [k, v] of Object.entries(params)) {
-        if (v !== undefined && v !== null && v !== '') cleaned[k] = String(v);
-      }
+      let cleaned: Record<string, string>;
+      try { cleaned = cleanApiQueryParams(params); } catch (error) { return throwError(() => error); }
       return this.api.get<unknown>(route, cleaned).pipe(
         this.api.unwrapList<T>(),
         catchError((error) => {
@@ -212,7 +212,7 @@ export class ApiManagerService {
       firstValueFrom(fetchAll$(queryConstraints));
 
     const fetchWhere = (
-      params: Record<string, string | number | undefined>,
+      params: ApiQueryParams,
     ): Promise<T[]> => firstValueFrom(fetchWhere$(params));
 
     const fetchById = (id: string): Promise<T | null> =>

@@ -1,5 +1,5 @@
-import { Component, ElementRef, EventEmitter, Input, OnInit, Output, ViewChild, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, ElementRef, EventEmitter, Input, OnInit, Output, ViewChild, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { localApi } from '@/services/localApiClient';
 import { getToday } from '@/utils/dateUtils';
@@ -48,8 +48,9 @@ const DEFAULT_EDUCATION_TOPICS = [
 @Component({
   selector: 'app-education-record-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './education-record-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './education-record-dialog.component.css',
 })
 export class EducationRecordDialogComponent implements OnInit {

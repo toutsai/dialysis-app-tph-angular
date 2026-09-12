@@ -1,5 +1,5 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { KIDIT_OPTIONS, KiditOption } from '@/utils/kiditHelpers';
 import { kiditService } from '@/services/kiditService';
@@ -8,8 +8,9 @@ import { isoToRocDisplay, rocInputToIso } from '@/utils/rocDate';
 @Component({
   selector: 'app-kidit-patient-form',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './kidit-patient-form.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./kidit-form-official.css', './kidit-patient-form.component.css']
 })
 export class KiditPatientFormComponent implements OnChanges {

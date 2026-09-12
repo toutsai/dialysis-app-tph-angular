@@ -1,7 +1,8 @@
-import { AfterViewInit, Component, ElementRef, EventEmitter, Input, OnDestroy, Output, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, EventEmitter, Input, OnDestroy, Output, ViewChild, ChangeDetectionStrategy } from '@angular/core';
 import { addLocalDays, localDay } from './inventory-calculation';
 
-@Component({ selector: 'app-inventory-item-detail', standalone: true, templateUrl: './inventory-item-detail.component.html', styleUrl: './inventory-item-detail.component.css' })
+@Component({ selector: 'app-inventory-item-detail', standalone: true, templateUrl: './inventory-item-detail.component.html', changeDetection: ChangeDetectionStrategy.Eager,
+ styleUrl: './inventory-item-detail.component.css' })
 export class InventoryItemDetailComponent implements AfterViewInit, OnDestroy {
   @Input({ required: true }) selected!: { category: string; item: string };
   @Input() detail: any = null;

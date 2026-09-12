@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '@services/auth.service';
@@ -9,6 +9,7 @@ import { formatDateToYYYYMMDD } from '@/utils/dateUtils';
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './icu-orders-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './icu-orders-dialog.component.css'
 })
 export class IcuOrdersDialogComponent implements OnChanges {

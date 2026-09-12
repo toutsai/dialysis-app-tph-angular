@@ -187,6 +187,7 @@ export const PAGE_ACCESS = {
     roles: INVENTORY_ROLES,
     roleLabel: '管理員、查看者',
   },
+  backup: { path: '/backup', title: '備份狀態', roles: ADMIN_ROLES, roleLabel: '僅管理員' },
   userManagement: {
     path: '/user-management',
     title: '使用者管理',

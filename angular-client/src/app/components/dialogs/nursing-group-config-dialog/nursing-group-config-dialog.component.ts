@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, OnInit, inject } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '@services/auth.service';
@@ -20,6 +20,7 @@ import {
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './nursing-group-config-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nursing-group-config-dialog.component.css'
 })
 export class NursingGroupConfigDialogComponent implements OnChanges, OnInit {

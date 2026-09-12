@@ -1,7 +1,7 @@
 // 書記專用 > 醫師班表列印
 // 唯讀載入指定月份的醫師查房班表，預覽 + 匯出 Word（與醫師班表頁共用同一匯出 util）。
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, OnInit, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import {
   ApiManagerService,
@@ -19,8 +19,9 @@ type ShiftCode = 'early' | 'noon' | 'late';
 @Component({
   selector: 'app-clerk-physician-print',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './clerk-physician-print.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './clerk-physician-print.component.css',
 })
 export class ClerkPhysicianPrintComponent implements OnInit {

@@ -1,11 +1,12 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from '@angular/core';
+
 
 @Component({
   selector: 'app-preparation-popover',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './preparation-popover.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './preparation-popover.component.css',
 })
 export class PreparationPopoverComponent {

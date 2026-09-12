@@ -1,11 +1,12 @@
-import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, OnChanges, SimpleChanges, ChangeDetectionStrategy } from '@angular/core';
+
 
 @Component({
   selector: 'app-memo-panel',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './memo-panel.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './memo-panel.component.css'
 })
 export class MemoPanelComponent implements OnChanges {

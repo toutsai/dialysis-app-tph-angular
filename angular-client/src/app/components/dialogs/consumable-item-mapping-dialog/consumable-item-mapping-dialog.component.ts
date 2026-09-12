@@ -1,5 +1,5 @@
-import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 
 /** 後端 POST /consumables/process 回 needsItemMapping 時的形狀 */
@@ -49,7 +49,7 @@ function fuzzyKey(s: string): string {
 @Component({
   selector: 'app-consumable-item-mapping-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   template: `
     @if (request) {
     <div class="cim-overlay" (click)="onOverlayClick($event)">
@@ -137,6 +137,7 @@ function fuzzyKey(s: string): string {
     </div>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       .cim-overlay {

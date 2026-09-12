@@ -1,8 +1,8 @@
 // 書記專用 > Gentamycin 開立清單
 // 來源：透析醫囑的血管通路（patient.dialysisOrders.vascAccess）為 Perm 或 D/L 的未刪除病人。
 // 依 頻率 → 班別 → 床號 排序；班別/床號取自床位總表 rule，無總表 rule 者排最後（班別/床號空白）。
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, OnInit, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { PatientStoreService } from '@services/patient-store.service';
 import { ORDERED_SHIFT_CODES, getShiftDisplayName } from '@/constants/scheduleConstants';
@@ -38,8 +38,9 @@ interface GentaRow {
 @Component({
   selector: 'app-clerk-gentamycin-list',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './clerk-gentamycin-list.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './clerk-gentamycin-list.component.css',
 })
 export class ClerkGentamycinListComponent implements OnInit {

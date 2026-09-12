@@ -83,7 +83,7 @@
                     @for (labKey of anemiaGroup.labKeys; track labKey) {
                       <td class="lab-data-cell">
                         @if (processedLabs[labKey]?.[month] != null) {
-                          <span [class]="getAbnormalClass(labKey, processedLabs[labKey]?.[month])">
+                          <span [class]="getAbnormalClass(labKey, $safeNavigationMigration(processedLabs[labKey]?.[month]))">
                             {{ processedLabs[labKey]?.[month] }}
                           </span>
                         }
@@ -133,7 +133,7 @@
                     @for (labKey of mineralGroup.labKeys; track labKey) {
                       <td class="lab-data-cell">
                         @if (processedLabs[labKey]?.[month] != null) {
-                          <span [class]="getAbnormalClass(labKey, processedLabs[labKey]?.[month])">
+                          <span [class]="getAbnormalClass(labKey, $safeNavigationMigration(processedLabs[labKey]?.[month]))">
                             {{ processedLabs[labKey]?.[month] }}
                           </span>
                         }

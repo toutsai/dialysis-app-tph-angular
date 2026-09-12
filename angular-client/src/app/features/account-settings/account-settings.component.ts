@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -9,6 +9,7 @@ import { AuthService } from '@app/core/services/auth.service';
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './account-settings.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './account-settings.component.css',
 })
 export class AccountSettingsComponent {

@@ -1,5 +1,5 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import ApiManager from '@/services/api_manager';
 import { ORDERED_SHIFT_CODES } from '@/constants/scheduleConstants';
@@ -11,8 +11,9 @@ import { BedAssignmentDialogComponent } from '../bed-assignment-dialog/bed-assig
 @Component({
   selector: 'app-patient-update-scheduler-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, BedAssignmentDialogComponent],
+  imports: [FormsModule, BedAssignmentDialogComponent],
   templateUrl: './patient-update-scheduler-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-update-scheduler-dialog.component.css'
 })
 export class PatientUpdateSchedulerDialogComponent implements OnChanges {

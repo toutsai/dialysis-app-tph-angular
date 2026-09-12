@@ -3,8 +3,8 @@
 // 依住院/出院切成一列一段住院歷程，並自動串出病程備註鏈（如「5/21 首透 → 6/3 刪除：家屬拒HD」）。
 // 三區＝本院常規 HD／外院常規 HD／新透析病人（順序與名稱、歸類規則見 core/utils/kidit-patient-groups.ts）。
 // 先只做畫面查閱不做匯出（2026-07-26 使用者拍板）。
-import { Component, EventEmitter, OnInit, Output, computed, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, EventEmitter, OnInit, Output, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+
 import { localApi } from '@/services/localApiClient';
 import { PatientStoreService } from '@services/patient-store.service';
 import {
@@ -56,8 +56,9 @@ interface GroupBlock {
 @Component({
   selector: 'app-kidit-quarterly-movements',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './kidit-quarterly-movements.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './kidit-quarterly-movements.component.css',
 })
 export class KiditQuarterlyMovementsComponent implements OnInit {

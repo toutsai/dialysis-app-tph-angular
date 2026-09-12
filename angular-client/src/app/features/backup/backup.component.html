@@ -1,0 +1,13 @@
+﻿<section class="backup-page"><header><div><h1>備份狀態</h1><p>確認資料庫備份是否完成及備份檔案是否可用。</p></div><div class="actions"><button type="button" (click)="refresh()" [disabled]="busy">重新整理</button><button type="button" class="primary" (click)="createBackup()" [disabled]="busy || !auth.isAdmin()">{{ creating() ? '備份處理中…' : '立即備份' }}</button></div></header>
+@if (error()) { <p class="warning" role="alert">{{ error() }}</p> }
+@if (message()) { <p class="success" role="status">{{ message() }}</p> }
+@if (loading()) { <p role="status">讀取備份狀態中…</p> }
+@if (health(); as status) {
+<p class="muted">狀態讀取時間：{{ checkedAt() | date:'yyyy/MM/dd HH:mm:ss' }}{{ error() ? '（目前顯示上次成功讀取的資料）' : '' }}</p>
+<div class="cards"><article><h2>最後成功備份</h2>@if (status.lastSuccess; as last) { <strong>{{ last.at }}</strong><p>{{ typeLabel(last.type) }} · {{ bytes(last.sizeBytes) }}</p><p class="filename">{{ last.backupFile }}</p> } @else { <p>尚無成功紀錄</p> }</article>
+<article><h2>最近檔案驗證</h2><strong [class.bad]="status.verification && status.verification.result !== 'ok'">{{ verificationLabel($safeNavigationMigration(status.verification?.result)) }}</strong>@if (status.verification; as verification) { <p>{{ verification.checkedAt }}</p><p class="filename">{{ verification.backupFile }}</p>@if (verification.message) { <p>{{ verification.message }}</p> } }</article>
+<article><h2>最後失敗紀錄</h2>@if (status.lastFailure; as failure) { <strong>{{ failure.at }}</strong><p>{{ typeLabel(failure.type) }}</p><p>{{ failure.message }}</p> } @else { <p>尚無失敗紀錄</p> }</article></div>
+<section class="panel"><h2>容量與可用性</h2><dl><div><dt>資料庫</dt><dd>{{ bytes(status.database.sizeBytes) }}</dd></div><div><dt>待寫入記錄（WAL）</dt><dd>{{ bytes(status.database.walBytes) }}</dd></div><div><dt>備份檔案總容量</dt><dd>{{ bytes(status.backups.totalBytes) }}</dd></div><div><dt>可用檔案</dt><dd>{{ status.backups.availableCount }} / {{ status.backups.trackedCount }}</dd></div><div><dt>缺失檔案</dt><dd [class.bad]="status.backups.missingCount > 0">{{ status.backups.missingCount }}</dd></div><div><dt>路徑異常</dt><dd [class.bad]="status.backups.unsafeCount > 0">{{ status.backups.unsafeCount }}</dd></div><div><dt>備份目錄</dt><dd>{{ status.backups.directoryAvailable ? '可用' : '無法使用' }}</dd></div></dl></section>
+<section class="panel"><h2>執行狀態</h2><p>{{ status.queue.active ? '有備份正在執行' : '目前沒有執行中的備份' }} · 等候 {{ status.queue.waiting }} 筆</p>@if (status.lastAttempt; as attempt) { <p>最後嘗試：{{ attempt.at }} · {{ typeLabel(attempt.type) }}</p> }@for (warning of status.retentionWarnings || []; track warning.id) { <p class="warning">{{ warning.message }}</p> }</section>
+} @else if (!loading() && !error()) { <p>尚未取得備份狀態。</p> }
+<p class="muted">需要還原資料時，請由管理員依離線還原流程處理。</p></section>

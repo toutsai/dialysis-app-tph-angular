@@ -4,7 +4,9 @@
       <h3>
         <i class="fas fa-stream"></i>
         季度病人動態
-        <span class="qm-count" *ngIf="!isLoading()">（{{ totalRows() }} 列）</span>
+        @if (!isLoading()) {
+          <span class="qm-count">（{{ totalRows() }} 列）</span>
+        }
       </h3>
 
       <div class="qm-quarter-nav">
@@ -33,73 +35,91 @@
     </p>
 
     <div class="qm-body">
-      <div *ngIf="isLoading()" class="qm-loading">
-        <i class="fas fa-circle-notch fa-spin"></i> 彙整中…
-      </div>
-      <div *ngIf="!isLoading() && loadError()" class="qm-error">{{ loadError() }}</div>
-      <div *ngIf="!isLoading() && !loadError() && totalRows() === 0" class="qm-empty">
-        本季度尚無病人動態紀錄。
-      </div>
+      @if (isLoading()) {
+        <div class="qm-loading">
+          <i class="fas fa-circle-notch fa-spin"></i> 彙整中…
+        </div>
+      }
+      @if (!isLoading() && loadError()) {
+        <div class="qm-error">{{ loadError() }}</div>
+      }
+      @if (!isLoading() && !loadError() && totalRows() === 0) {
+        <div class="qm-empty">
+          本季度尚無病人動態紀錄。
+        </div>
+      }
 
       <!-- 三區改頁籤（2026-08-22）：一次只看一區，免往下捲 -->
-      <ng-container *ngIf="!isLoading() && !loadError() && totalRows() > 0">
-      <div class="qm-tabs" role="tablist">
-        <button
-          *ngFor="let group of groups(); trackBy: trackByGroup"
-          type="button"
-          class="qm-tab"
-          role="tab"
-          [attr.data-group]="group.key"
-          [class.active]="activeGroup() === group.key"
-          (click)="activeGroup.set(group.key)"
-        >
-          {{ group.label }}
-          <span class="qm-group-count">{{ group.rows.length }}</span>
-        </button>
-      </div>
-
-      <section *ngIf="activeBlock() as group" class="qm-group" [attr.data-group]="group.key">
-        <div *ngIf="group.rows.length === 0" class="qm-empty">本季度「{{ group.label }}」尚無病人動態。</div>
-        <div class="qm-table-wrap" *ngIf="group.rows.length > 0">
-          <table class="qm-table">
-            <thead>
-              <tr>
-                <th style="width:8%">病歷號</th>
-                <th style="width:8%">姓名</th>
-                <th style="width:6%">住院</th>
-                <th style="width:6%">出院</th>
-                <th *ngIf="group.key === 'external'" style="width:10%">院所</th>
-                <th>病程／備註</th>
-                <th style="width:14%">刪除原因</th>
-                <th style="width:7%">醫師</th>
-                <th style="width:7%" class="qm-center">登錄</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let row of group.rows; trackBy: trackByRow">
-                <td class="qm-muted">{{ row.medicalRecordNumber || '-' }}</td>
-                <td class="qm-name">{{ row.name }}</td>
-                <td>{{ row.admission || '-' }}</td>
-                <td>{{ row.discharge || '-' }}</td>
-                <td *ngIf="group.key === 'external'">{{ row.hospital || '-' }}</td>
-                <td class="qm-chain">{{ row.chain }}</td>
-                <td class="qm-delete-reason" [class.qm-muted]="!row.deleteReason">{{ row.deleteReason || '-' }}</td>
-                <td>{{ row.physician || '-' }}</td>
-                <td class="qm-center">
-                  <span
-                    class="qm-reg"
-                    [class.qm-reg-done]="row.registeredDone === row.registeredTotal"
-                    [class.qm-reg-partial]="row.registeredDone > 0 && row.registeredDone < row.registeredTotal"
-                  >
-                    {{ row.registeredDone }}/{{ row.registeredTotal }}
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+      @if (!isLoading() && !loadError() && totalRows() > 0) {
+        <div class="qm-tabs" role="tablist">
+          @for (group of groups(); track trackByGroup($index, group)) {
+            <button
+              type="button"
+              class="qm-tab"
+              role="tab"
+              [attr.data-group]="group.key"
+              [class.active]="activeGroup() === group.key"
+              (click)="activeGroup.set(group.key)"
+              >
+              {{ group.label }}
+              <span class="qm-group-count">{{ group.rows.length }}</span>
+            </button>
+          }
         </div>
-      </section>
-      </ng-container>
+        @if (activeBlock(); as group) {
+          <section class="qm-group" [attr.data-group]="group.key">
+            @if (group.rows.length === 0) {
+              <div class="qm-empty">本季度「{{ group.label }}」尚無病人動態。</div>
+            }
+            @if (group.rows.length > 0) {
+              <div class="qm-table-wrap">
+                <table class="qm-table">
+                  <thead>
+                    <tr>
+                      <th style="width:8%">病歷號</th>
+                      <th style="width:8%">姓名</th>
+                      <th style="width:6%">住院</th>
+                      <th style="width:6%">出院</th>
+                      @if (group.key === 'external') {
+                        <th style="width:10%">院所</th>
+                      }
+                      <th>病程／備註</th>
+                      <th style="width:14%">刪除原因</th>
+                      <th style="width:7%">醫師</th>
+                      <th style="width:7%" class="qm-center">登錄</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (row of group.rows; track trackByRow($index, row)) {
+                      <tr>
+                        <td class="qm-muted">{{ row.medicalRecordNumber || '-' }}</td>
+                        <td class="qm-name">{{ row.name }}</td>
+                        <td>{{ row.admission || '-' }}</td>
+                        <td>{{ row.discharge || '-' }}</td>
+                        @if (group.key === 'external') {
+                          <td>{{ row.hospital || '-' }}</td>
+                        }
+                        <td class="qm-chain">{{ row.chain }}</td>
+                        <td class="qm-delete-reason" [class.qm-muted]="!row.deleteReason">{{ row.deleteReason || '-' }}</td>
+                        <td>{{ row.physician || '-' }}</td>
+                        <td class="qm-center">
+                          <span
+                            class="qm-reg"
+                            [class.qm-reg-done]="row.registeredDone === row.registeredTotal"
+                            [class.qm-reg-partial]="row.registeredDone > 0 && row.registeredDone < row.registeredTotal"
+                            >
+                            {{ row.registeredDone }}/{{ row.registeredTotal }}
+                          </span>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          </section>
+        }
+      }
     </div>
   </div>
 </div>

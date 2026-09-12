@@ -1,5 +1,5 @@
-import { CommonModule } from '@angular/common';
-import { Component, ElementRef, OnDestroy, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
+
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DashboardData, DashboardHandoverItem, DashboardService, DashboardShift } from '@services/dashboard.service';
@@ -18,8 +18,9 @@ type NavigatorWithWakeLock = Navigator & {
 @Component({
   selector: 'app-bed-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './bed-dashboard.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './bed-dashboard.component.css',
 })
 export class BedDashboardComponent implements OnInit, OnDestroy {

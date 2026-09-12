@@ -1,13 +1,14 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject, signal, computed } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
+
 import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@services/api-manager.service';
 // Standalone 版：已移除 Firebase
 
 @Component({
   selector: 'app-daily-records-summary-dialog',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './daily-records-summary-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './daily-records-summary-dialog.component.css'
 })
 export class DailyRecordsSummaryDialogComponent implements OnChanges {

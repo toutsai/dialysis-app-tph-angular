@@ -10,6 +10,7 @@ import {
   effect,
   untracked,
   DestroyRef,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import {
@@ -88,6 +89,7 @@ interface AssignmentRecord extends FirestoreRecord {
     UpdateBannerComponent,
   ],
   templateUrl: './main-layout.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './main-layout.component.css',
 })
 export class MainLayoutComponent implements OnInit, OnDestroy {

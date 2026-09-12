@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 interface DiagnosticResult {
@@ -13,6 +13,7 @@ interface DiagnosticResult {
   standalone: true,
   imports: [CommonModule],
   templateUrl: './system-diagnostic.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './system-diagnostic.component.css'
 })
 export class SystemDiagnosticComponent {

@@ -2,7 +2,9 @@
   <div class="bp-hint">
     <i class="fas fa-info-circle"></i>
     KiDit 建檔存檔會同步更新此處；病歷號與初透日只在空白時帶入。
-    <span class="bp-source" *ngIf="sourceLabel()">（來源：{{ sourceLabel() }}）</span>
+    @if (sourceLabel()) {
+      <span class="bp-source">（來源：{{ sourceLabel() }}）</span>
+    }
   </div>
 
   <!-- 基本資料 -->
@@ -47,237 +49,249 @@
           (ngModelChange)="onRocBirthChange($event)"
           [class.roc-error]="rocBirthError()"
           [disabled]="readOnly()"
-        />
+          />
+        </div>
+        <div class="bp-field">
+          <label>性別</label>
+          <select [ngModel]="form().gender" (ngModelChange)="patch('gender', $event)" [disabled]="readOnly()">
+            <option value="">—</option>
+            <option value="男">男</option>
+            <option value="女">女</option>
+          </select>
+        </div>
+        @if (!rocBirthError()) {
+          <span class="bp-note">民國年與西元年自動換算，任填一欄即可</span>
+        }
+        @if (rocBirthError()) {
+          <span class="bp-note bad">格式無法辨識，請輸入民國年/月/日</span>
+        }
       </div>
-      <div class="bp-field">
-        <label>性別</label>
-        <select [ngModel]="form().gender" (ngModelChange)="patch('gender', $event)" [disabled]="readOnly()">
-          <option value="">—</option>
-          <option value="男">男</option>
-          <option value="女">女</option>
-        </select>
-      </div>
-      <span class="bp-note" *ngIf="!rocBirthError()">民國年與西元年自動換算，任填一欄即可</span>
-      <span class="bp-note bad" *ngIf="rocBirthError()">格式無法辨識，請輸入民國年/月/日</span>
     </div>
-  </div>
 
-  <!-- KiDit 專用 -->
-  <div class="bp-section">
-    <div class="bp-title">KiDit 專用</div>
-    <div class="bp-row">
-      <div class="bp-field">
-        <label>透析代號/病床</label>
-        <input type="text" class="w-sm" [ngModel]="form().dialysisCode" (ngModelChange)="patch('dialysisCode', $event)" placeholder="10碼" [disabled]="readOnly()" />
+    <!-- KiDit 專用 -->
+    <div class="bp-section">
+      <div class="bp-title">KiDit 專用</div>
+      <div class="bp-row">
+        <div class="bp-field">
+          <label>透析代號/病床</label>
+          <input type="text" class="w-sm" [ngModel]="form().dialysisCode" (ngModelChange)="patch('dialysisCode', $event)" placeholder="10碼" [disabled]="readOnly()" />
+        </div>
+        <div class="bp-field">
+          <label>狀態</label>
+          <select [ngModel]="form().kiditStatus" (ngModelChange)="patch('kiditStatus', $event)" [disabled]="readOnly()">
+            <option value="">請選擇</option>
+            @for (opt of opts['status']; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+        </div>
+        <div class="bp-field">
+          <label>本院開始日期</label>
+          <input type="date" [ngModel]="form().hospitalStartDate" (ngModelChange)="patch('hospitalStartDate', $event)" [disabled]="readOnly()" />
+        </div>
       </div>
-      <div class="bp-field">
-        <label>狀態</label>
-        <select [ngModel]="form().kiditStatus" (ngModelChange)="patch('kiditStatus', $event)" [disabled]="readOnly()">
-          <option value="">請選擇</option>
-          @for (opt of opts['status']; track opt.value) {
-            <option [value]="opt.value">{{ opt.label }}</option>
-          }
-        </select>
-      </div>
-      <div class="bp-field">
-        <label>本院開始日期</label>
-        <input type="date" [ngModel]="form().hospitalStartDate" (ngModelChange)="patch('hospitalStartDate', $event)" [disabled]="readOnly()" />
+      <div class="bp-row">
+        <div class="bp-field">
+          <label>原發病大類</label>
+          <select [ngModel]="form().diagnosisCategory" (ngModelChange)="onCategoryChange($event)" [disabled]="readOnly()">
+            <option value="">請選擇</option>
+            @for (opt of opts['diagnosisCategory']; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+        </div>
+        <div class="bp-field bp-grow">
+          <label>原發病細類</label>
+          <select class="w-lg" [ngModel]="form().diagnosisSubcategory" (ngModelChange)="patch('diagnosisSubcategory', $event)" [disabled]="readOnly()">
+            <option value="">請選擇</option>
+            @for (opt of filteredSubcategories(); track opt.value) {
+              <option [value]="opt.value">{{ opt.value }} - {{ opt.label }}</option>
+            }
+          </select>
+        </div>
       </div>
     </div>
-    <div class="bp-row">
-      <div class="bp-field">
-        <label>原發病大類</label>
-        <select [ngModel]="form().diagnosisCategory" (ngModelChange)="onCategoryChange($event)" [disabled]="readOnly()">
-          <option value="">請選擇</option>
-          @for (opt of opts['diagnosisCategory']; track opt.value) {
-            <option [value]="opt.value">{{ opt.label }}</option>
-          }
-        </select>
-      </div>
-      <div class="bp-field bp-grow">
-        <label>原發病細類</label>
-        <select class="w-lg" [ngModel]="form().diagnosisSubcategory" (ngModelChange)="patch('diagnosisSubcategory', $event)" [disabled]="readOnly()">
-          <option value="">請選擇</option>
-          @for (opt of filteredSubcategories(); track opt.value) {
-            <option [value]="opt.value">{{ opt.value }} - {{ opt.label }}</option>
-          }
-        </select>
-      </div>
-    </div>
-  </div>
 
-  <!-- 其他 -->
-  <div class="bp-section">
-    <div class="bp-title">其他</div>
-    <div class="bp-row">
-      <div class="bp-field">
-        <label>病患類別</label>
-        <select [ngModel]="form().kiditPatientCategory" (ngModelChange)="patch('kiditPatientCategory', $event)" [disabled]="readOnly()">
-          <option value="">—</option>
-          @for (opt of opts['patientCategory']; track opt.value) {
-            <option [value]="opt.value">{{ opt.label }}</option>
-          }
-        </select>
+    <!-- 其他 -->
+    <div class="bp-section">
+      <div class="bp-title">其他</div>
+      <div class="bp-row">
+        <div class="bp-field">
+          <label>病患類別</label>
+          <select [ngModel]="form().kiditPatientCategory" (ngModelChange)="patch('kiditPatientCategory', $event)" [disabled]="readOnly()">
+            <option value="">—</option>
+            @for (opt of opts['patientCategory']; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+        </div>
+        <div class="bp-field">
+          <label>婚姻狀況</label>
+          <select [ngModel]="form().maritalStatus" (ngModelChange)="patch('maritalStatus', $event)" [disabled]="readOnly()">
+            <option value="">—</option>
+            @for (opt of opts['maritalStatus']; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+        </div>
+        <div class="bp-field">
+          <label>血型</label>
+          <select [ngModel]="form().bloodType" (ngModelChange)="patch('bloodType', $event)" [disabled]="readOnly()">
+            <option value="">—</option>
+            @for (opt of opts['bloodType']; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+        </div>
+        <div class="bp-field">
+          <label>教育程度</label>
+          <select [ngModel]="form().education" (ngModelChange)="patch('education', $event)" [disabled]="readOnly()">
+            <option value="">—</option>
+            @for (opt of opts['education']; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+        </div>
+        <div class="bp-field">
+          <label>職業</label>
+          <select [ngModel]="form().occupation" (ngModelChange)="patch('occupation', $event)" [disabled]="readOnly()">
+            <option value="">—</option>
+            @for (opt of opts['occupation']; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+        </div>
       </div>
-      <div class="bp-field">
-        <label>婚姻狀況</label>
-        <select [ngModel]="form().maritalStatus" (ngModelChange)="patch('maritalStatus', $event)" [disabled]="readOnly()">
-          <option value="">—</option>
-          @for (opt of opts['maritalStatus']; track opt.value) {
-            <option [value]="opt.value">{{ opt.label }}</option>
-          }
-        </select>
+      <div class="bp-row">
+        <div class="bp-field">
+          <label>原住民</label>
+          <select [ngModel]="form().isIndigenous" (ngModelChange)="patch('isIndigenous', $event)" [disabled]="readOnly()">
+            <option value="">—</option>
+            @for (opt of opts['yesNo']; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+        </div>
+        <div class="bp-field">
+          <label>福保身分</label>
+          <select [ngModel]="form().isWelfare" (ngModelChange)="patch('isWelfare', $event)" [disabled]="readOnly()">
+            <option value="">—</option>
+            @for (opt of opts['yesNo']; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+        </div>
+        <div class="bp-field">
+          <label>重大傷病卡號</label>
+          <input type="text" class="w-md" [ngModel]="form().catastrophicCardNo" (ngModelChange)="patch('catastrophicCardNo', $event)" placeholder="10碼" [disabled]="readOnly()" />
+        </div>
       </div>
-      <div class="bp-field">
-        <label>血型</label>
-        <select [ngModel]="form().bloodType" (ngModelChange)="patch('bloodType', $event)" [disabled]="readOnly()">
-          <option value="">—</option>
-          @for (opt of opts['bloodType']; track opt.value) {
-            <option [value]="opt.value">{{ opt.label }}</option>
-          }
-        </select>
-      </div>
-      <div class="bp-field">
-        <label>教育程度</label>
-        <select [ngModel]="form().education" (ngModelChange)="patch('education', $event)" [disabled]="readOnly()">
-          <option value="">—</option>
-          @for (opt of opts['education']; track opt.value) {
-            <option [value]="opt.value">{{ opt.label }}</option>
-          }
-        </select>
-      </div>
-      <div class="bp-field">
-        <label>職業</label>
-        <select [ngModel]="form().occupation" (ngModelChange)="patch('occupation', $event)" [disabled]="readOnly()">
-          <option value="">—</option>
-          @for (opt of opts['occupation']; track opt.value) {
-            <option [value]="opt.value">{{ opt.label }}</option>
-          }
-        </select>
+      <div class="bp-row">
+        <div class="bp-field">
+          <label>聯絡人</label>
+          <input type="text" class="w-md" [ngModel]="form().emergencyContact" (ngModelChange)="patch('emergencyContact', $event)" placeholder="姓名" [disabled]="readOnly()" />
+        </div>
+        <div class="bp-field">
+          <label>聯絡電話</label>
+          <input type="text" class="w-md" [ngModel]="form().emergencyPhone" (ngModelChange)="patch('emergencyPhone', $event)" [disabled]="readOnly()" />
+        </div>
+        <div class="bp-field">
+          <label>關係</label>
+          <select [ngModel]="form().contactRelationship" (ngModelChange)="patch('contactRelationship', $event)" [disabled]="readOnly()">
+            <option value="">—</option>
+            @for (opt of opts['relation']; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+        </div>
       </div>
     </div>
-    <div class="bp-row">
-      <div class="bp-field">
-        <label>原住民</label>
-        <select [ngModel]="form().isIndigenous" (ngModelChange)="patch('isIndigenous', $event)" [disabled]="readOnly()">
-          <option value="">—</option>
-          @for (opt of opts['yesNo']; track opt.value) {
-            <option [value]="opt.value">{{ opt.label }}</option>
-          }
-        </select>
-      </div>
-      <div class="bp-field">
-        <label>福保身分</label>
-        <select [ngModel]="form().isWelfare" (ngModelChange)="patch('isWelfare', $event)" [disabled]="readOnly()">
-          <option value="">—</option>
-          @for (opt of opts['yesNo']; track opt.value) {
-            <option [value]="opt.value">{{ opt.label }}</option>
-          }
-        </select>
-      </div>
-      <div class="bp-field">
-        <label>重大傷病卡號</label>
-        <input type="text" class="w-md" [ngModel]="form().catastrophicCardNo" (ngModelChange)="patch('catastrophicCardNo', $event)" placeholder="10碼" [disabled]="readOnly()" />
-      </div>
-    </div>
-    <div class="bp-row">
-      <div class="bp-field">
-        <label>聯絡人</label>
-        <input type="text" class="w-md" [ngModel]="form().emergencyContact" (ngModelChange)="patch('emergencyContact', $event)" placeholder="姓名" [disabled]="readOnly()" />
-      </div>
-      <div class="bp-field">
-        <label>聯絡電話</label>
-        <input type="text" class="w-md" [ngModel]="form().emergencyPhone" (ngModelChange)="patch('emergencyPhone', $event)" [disabled]="readOnly()" />
-      </div>
-      <div class="bp-field">
-        <label>關係</label>
-        <select [ngModel]="form().contactRelationship" (ngModelChange)="patch('contactRelationship', $event)" [disabled]="readOnly()">
-          <option value="">—</option>
-          @for (opt of opts['relation']; track opt.value) {
-            <option [value]="opt.value">{{ opt.label }}</option>
-          }
-        </select>
-      </div>
-    </div>
-  </div>
 
-  <!-- 過敏史（站內欄位，2026-09-10；KiDit 匯入格式無此欄，不匯出 CSV） -->
-  <div class="bp-section">
-    <div class="bp-title">過敏史 <span class="bp-title-note">站內欄位，不匯出 KiDit</span></div>
-    <div class="bp-row">
-      <div class="bp-field">
-        <label>藥物過敏</label>
-        <select [ngModel]="form().allergyDrug" (ngModelChange)="onAllergyFlagChange('Drug', $event)" [disabled]="readOnly()">
-          <option value="">—</option>
-          <option value="N">否</option>
-          <option value="Y">是</option>
-        </select>
-      </div>
-      <div class="bp-field bp-grow">
-        <label>藥物過敏內容</label>
-        <input type="text" class="w-full" [ngModel]="form().allergyDrugDetail" (ngModelChange)="patch('allergyDrugDetail', $event)"
-               placeholder="例：Penicillin、NSAID" [disabled]="readOnly() || form().allergyDrug !== 'Y'" />
-      </div>
-      <span class="bp-note bad" *ngIf="allergyDrugMissing()">已選「是」但尚未填藥物內容</span>
-    </div>
-    <div class="bp-row">
-      <div class="bp-field">
-        <label>食物過敏</label>
-        <select [ngModel]="form().allergyFood" (ngModelChange)="onAllergyFlagChange('Food', $event)" [disabled]="readOnly()">
-          <option value="">—</option>
-          <option value="N">否</option>
-          <option value="Y">是</option>
-        </select>
-      </div>
-      <div class="bp-field bp-grow">
-        <label>食物過敏內容</label>
-        <input type="text" class="w-full" [ngModel]="form().allergyFoodDetail" (ngModelChange)="patch('allergyFoodDetail', $event)"
-               placeholder="例：海鮮、花生" [disabled]="readOnly() || form().allergyFood !== 'Y'" />
-      </div>
-      <span class="bp-note bad" *ngIf="allergyFoodMissing()">已選「是」但尚未填食物內容</span>
-    </div>
-  </div>
+    <!-- 過敏史（站內欄位，2026-09-10；KiDit 匯入格式無此欄，不匯出 CSV） -->
+    <div class="bp-section">
+      <div class="bp-title">過敏史 <span class="bp-title-note">站內欄位，不匯出 KiDit</span></div>
+      <div class="bp-row">
+        <div class="bp-field">
+          <label>藥物過敏</label>
+          <select [ngModel]="form().allergyDrug" (ngModelChange)="onAllergyFlagChange('Drug', $event)" [disabled]="readOnly()">
+            <option value="">—</option>
+            <option value="N">否</option>
+            <option value="Y">是</option>
+          </select>
+        </div>
+        <div class="bp-field bp-grow">
+          <label>藥物過敏內容</label>
+          <input type="text" class="w-full" [ngModel]="form().allergyDrugDetail" (ngModelChange)="patch('allergyDrugDetail', $event)"
+            placeholder="例：Penicillin、NSAID" [disabled]="readOnly() || form().allergyDrug !== 'Y'" />
+          </div>
+          @if (allergyDrugMissing()) {
+            <span class="bp-note bad">已選「是」但尚未填藥物內容</span>
+          }
+        </div>
+        <div class="bp-row">
+          <div class="bp-field">
+            <label>食物過敏</label>
+            <select [ngModel]="form().allergyFood" (ngModelChange)="onAllergyFlagChange('Food', $event)" [disabled]="readOnly()">
+              <option value="">—</option>
+              <option value="N">否</option>
+              <option value="Y">是</option>
+            </select>
+          </div>
+          <div class="bp-field bp-grow">
+            <label>食物過敏內容</label>
+            <input type="text" class="w-full" [ngModel]="form().allergyFoodDetail" (ngModelChange)="patch('allergyFoodDetail', $event)"
+              placeholder="例：海鮮、花生" [disabled]="readOnly() || form().allergyFood !== 'Y'" />
+            </div>
+            @if (allergyFoodMissing()) {
+              <span class="bp-note bad">已選「是」但尚未填食物內容</span>
+            }
+          </div>
+        </div>
 
-  <!-- 住址 -->
-  <div class="bp-section">
-    <div class="bp-title">住址</div>
-    <div class="bp-row">
-      <div class="bp-field">
-        <label>電話</label>
-        <input type="text" class="w-md" [ngModel]="form().phone" (ngModelChange)="patch('phone', $event)" placeholder="最多25碼" [disabled]="readOnly()" />
-      </div>
-      <div class="bp-field">
-        <label>手機</label>
-        <input type="text" class="w-md" [ngModel]="form().mobile" (ngModelChange)="patch('mobile', $event)" [disabled]="readOnly()" />
-      </div>
-      <div class="bp-field">
-        <label>郵遞區號</label>
-        <input type="text" class="w-xs" [ngModel]="form().postalCode" (ngModelChange)="patch('postalCode', $event)" [disabled]="readOnly()" />
-      </div>
-    </div>
-    <div class="bp-row">
-      <div class="bp-field bp-grow">
-        <label>地址</label>
-        <input type="text" class="w-full" [ngModel]="form().address" (ngModelChange)="patch('address', $event)" placeholder="最多80字" [disabled]="readOnly()" />
-      </div>
-      <div class="bp-field">
-        <label>戶籍地縣市</label>
-        <input type="text" class="w-sm" [ngModel]="form().registeredCity" (ngModelChange)="patch('registeredCity', $event)" [disabled]="readOnly()" />
-      </div>
-    </div>
-  </div>
+        <!-- 住址 -->
+        <div class="bp-section">
+          <div class="bp-title">住址</div>
+          <div class="bp-row">
+            <div class="bp-field">
+              <label>電話</label>
+              <input type="text" class="w-md" [ngModel]="form().phone" (ngModelChange)="patch('phone', $event)" placeholder="最多25碼" [disabled]="readOnly()" />
+            </div>
+            <div class="bp-field">
+              <label>手機</label>
+              <input type="text" class="w-md" [ngModel]="form().mobile" (ngModelChange)="patch('mobile', $event)" [disabled]="readOnly()" />
+            </div>
+            <div class="bp-field">
+              <label>郵遞區號</label>
+              <input type="text" class="w-xs" [ngModel]="form().postalCode" (ngModelChange)="patch('postalCode', $event)" [disabled]="readOnly()" />
+            </div>
+          </div>
+          <div class="bp-row">
+            <div class="bp-field bp-grow">
+              <label>地址</label>
+              <input type="text" class="w-full" [ngModel]="form().address" (ngModelChange)="patch('address', $event)" placeholder="最多80字" [disabled]="readOnly()" />
+            </div>
+            <div class="bp-field">
+              <label>戶籍地縣市</label>
+              <input type="text" class="w-sm" [ngModel]="form().registeredCity" (ngModelChange)="patch('registeredCity', $event)" [disabled]="readOnly()" />
+            </div>
+          </div>
+        </div>
 
-  <div class="bp-actions" *ngIf="!readOnly()">
-    <button type="button" class="bp-save" (click)="save()" [disabled]="saveState() === 'saving'">
-      <i class="fas fa-save"></i> {{ saveState() === 'saving' ? '儲存中…' : '儲存基本資料' }}
-    </button>
-    <span class="bp-status" [class.ok]="saveState() === 'saved'" [class.bad]="saveState() === 'error'">
-      @switch (saveState()) {
-        @case ('saving') { 儲存中… }
-        @case ('saved') { {{ saveMessage() || '已儲存' }} }
-        @case ('error') { 失敗：{{ saveMessage() }} }
-      }
-    </span>
-  </div>
-  <div class="bp-readonly-note" *ngIf="readOnly()">唯讀（僅編輯者以上可修改）</div>
-</div>
+        @if (!readOnly()) {
+          <div class="bp-actions">
+            <button type="button" class="bp-save" (click)="save()" [disabled]="saveState() === 'saving'">
+              <i class="fas fa-save"></i> {{ saveState() === 'saving' ? '儲存中…' : '儲存基本資料' }}
+            </button>
+            <span class="bp-status" [class.ok]="saveState() === 'saved'" [class.bad]="saveState() === 'error'">
+              @switch (saveState()) {
+                @case ('saving') { 儲存中… }
+                  @case ('saved') { {{ saveMessage() || '已儲存' }} }
+                    @case ('error') { 失敗：{{ saveMessage() }} }
+                    }
+                  </span>
+                </div>
+              }
+              @if (readOnly()) {
+                <div class="bp-readonly-note">唯讀（僅編輯者以上可修改）</div>
+              }
+            </div>

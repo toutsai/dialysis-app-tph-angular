@@ -1,6 +1,7 @@
 import {
   Component, Input, Output, EventEmitter,
-  ViewChild, ElementRef, AfterViewInit, OnDestroy, NgZone
+  ViewChild, ElementRef, AfterViewInit, OnDestroy, NgZone,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { infectionAbbrFromTags, isolationAbbrFromTags, CURED_TAG } from '@/utils/hepatitis';
@@ -19,6 +20,7 @@ interface PatientDetails {
   standalone: true,
   imports: [CommonModule],
   templateUrl: './schedule-table.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './schedule-table.component.css'
 })
 export class ScheduleTableComponent implements AfterViewInit, OnDestroy {

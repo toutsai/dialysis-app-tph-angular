@@ -39,6 +39,7 @@ app.use('/api', (req, _res, next) => {
   if (req.method === 'PATCH') req.method = 'PUT'
   next()
 })
+app.use('/api/nursing', (await import('../../src/routes/nursing.js')).default)
 app.use('/api/system', (await import('../../src/routes/system.js')).default)
 app.use('/api/orders', (await import('../../src/routes/orders.js')).default)
 app.use('/api/patients', (await import('../../src/routes/patients.js')).default)

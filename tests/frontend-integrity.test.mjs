@@ -378,8 +378,10 @@ test('future schedule remains readonly while empty nurse assignments can be save
 });
 
 test('XLSX loader stays lazy, shares an in-flight promise, and sets code pages before returning', async () => {
-  const codepages = { utils: { decode() {} } }; let configured = 0;
-  const xlsx = { set_cptable: (value) => { assert.equal(value, codepages); configured++; } };
+  // These imports are ESM namespaces in the browser. Mark the mocks accordingly
+  // so TypeScript's CommonJS interop does not wrap them as plain CommonJS exports.
+  const codepages = Object.defineProperty({ utils: { decode() {} } }, '__esModule', { value: true }); let configured = 0;
+  const xlsx = Object.defineProperty({ set_cptable: (value) => { assert.equal(value, codepages); configured++; } }, '__esModule', { value: true });
   const loader = loadModule('utils/xlsxLoader.ts', { xlsx, 'xlsx/dist/cpexcel.full.mjs': codepages });
   assert.equal(configured, 0);
   const first = loader.loadXlsx(), second = loader.loadXlsx();
@@ -392,7 +394,7 @@ test('XLSX loader stays lazy, shares an in-flight promise, and sets code pages b
 
 test('XLSX loader can retry after a failed code page initialization', async () => {
   let attempts = 0;
-  const xlsx = { set_cptable() { if (++attempts === 1) throw new Error('temporary load failure'); } };
+  const xlsx = Object.defineProperty({ set_cptable() { if (++attempts === 1) throw new Error('temporary load failure'); } }, '__esModule', { value: true });
   const loader = loadModule('utils/xlsxLoader.ts', { xlsx, 'xlsx/dist/cpexcel.full.mjs': {} });
   await assert.rejects(loader.loadXlsx(), /temporary load failure/);
   assert.equal(await loader.loadXlsx(), xlsx);

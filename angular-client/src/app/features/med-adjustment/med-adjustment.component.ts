@@ -2,8 +2,8 @@
 // 上半三頁籤（醫囑調整/貧血藥物/鈣磷恆定）＝「有異動的日期」軸（同月多次修改各自一欄，
 // 醫囑合併 dialysis_orders_history + dialysis_order_uploads 逐次全紀錄）；
 // 下半每月累積報告維持月份軸。供醫師依趨勢開立下個月藥物。群組篩選+上一位/下一位輪巡。
-import { Component, HostBinding, Input, inject, signal, computed, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, HostBinding, Input, inject, signal, computed, OnInit, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import {
   ApiManagerService,
@@ -37,8 +37,9 @@ interface PatientEntry {
 @Component({
   selector: 'app-med-adjustment',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './med-adjustment.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './med-adjustment.component.css',
 })
 export class MedAdjustmentComponent implements OnInit {

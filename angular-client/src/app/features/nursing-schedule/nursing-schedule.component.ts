@@ -9,6 +9,7 @@ import {
   OnInit,
   ViewChild,
   ElementRef,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -40,6 +41,7 @@ import { NursingGroupConfigDialogComponent } from '@app/components/dialogs/nursi
     NursingGroupConfigDialogComponent,
   ],
   templateUrl: './nursing-schedule.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nursing-schedule.component.css',
 })
 export class NursingScheduleComponent implements OnInit {

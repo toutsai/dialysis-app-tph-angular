@@ -147,6 +147,8 @@ tmp/
 *.db
 
 # Angular cache
+/angular-client/out-tsc/
+/output/playwright/
 .angular/cache
 /.angular/cache
 /angular-client/.angular/cache

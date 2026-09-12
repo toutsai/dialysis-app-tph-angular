@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import ApiManager from '@/services/api_manager';
 // Standalone 版：已移除 Firebase
@@ -9,6 +9,7 @@ import { escapeHtml } from '@/utils/sanitize';
   standalone: true,
   imports: [CommonModule],
   templateUrl: './patient-history-modal.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-history-modal.component.css'
 })
 export class PatientHistoryModalComponent implements OnInit, OnDestroy {

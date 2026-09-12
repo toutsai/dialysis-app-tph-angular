@@ -4,8 +4,9 @@ import {
   signal,
   computed,
   OnInit,
+  ChangeDetectionStrategy
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { ApiConfigService } from '@services/api-config.service';
 import {
   ApiManagerService,
@@ -41,8 +42,9 @@ interface DraftGroup {
 @Component({
   selector: 'app-draft-orders',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './draft-orders.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './draft-orders.component.css',
 })
 export class DraftOrdersComponent implements OnInit {

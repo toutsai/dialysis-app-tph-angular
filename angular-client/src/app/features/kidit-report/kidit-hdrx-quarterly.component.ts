@@ -1,6 +1,6 @@
 import { quarterSaveQueue } from '@/services/quarterSaveQueue';
-import { Component, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, HostListener, OnDestroy, OnInit, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { PatientStoreService } from '@services/patient-store.service';
@@ -46,8 +46,9 @@ interface HdrxRow {
 @Component({
   selector: 'app-kidit-hdrx-quarterly',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './kidit-hdrx-quarterly.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './kidit-hdrx-quarterly.component.css',
 })
 export class KiditHdrxQuarterlyComponent implements OnInit, OnDestroy {

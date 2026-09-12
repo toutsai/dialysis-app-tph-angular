@@ -1,5 +1,5 @@
 import { loadXlsx } from '@/utils/xlsxLoader';
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiConfigService } from '@services/api-config.service';
@@ -32,6 +32,7 @@ const SHIFT_INDEX_MAP: Record<number, string> = { 0: '早班', 1: '午班', 2: '
   standalone: true,
   imports: [CommonModule, FormsModule, ConsumableItemMappingDialogComponent],
   templateUrl: './consumables.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './consumables.component.css',
 })
 export class ConsumablesComponent implements OnInit {

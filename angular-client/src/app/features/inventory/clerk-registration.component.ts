@@ -3,7 +3,7 @@ import { loadXlsx } from '@/utils/xlsxLoader';
 // 呈現比照每日排程「臨床查閱」簡表：列=床位、欄=班別，格內病歷號可點擊複製，
 // 身分（門診/住院/急診/兩班頻率）用與每日排程相同的格子底色，住院/急診另帶病房號徽章。
 // 資料源＝床位總表 (MASTER_SCHEDULE) 依頻率展開至星期；頻率認定與病人清單一致（patient.freq 合併欄位）。
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PatientStoreService } from '@services/patient-store.service';
@@ -52,6 +52,7 @@ interface BedRow {
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './clerk-registration.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './clerk-registration.component.css',
 })
 export class ClerkRegistrationComponent implements OnInit {

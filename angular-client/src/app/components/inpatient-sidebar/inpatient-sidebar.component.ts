@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
@@ -7,6 +7,7 @@ import { FormsModule } from '@angular/forms';
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './inpatient-sidebar.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './inpatient-sidebar.component.css'
 })
 export class InpatientSidebarComponent implements OnInit {

@@ -1,5 +1,5 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, OnInit, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { localApi } from '@/services/localApiClient';
 import { AuthService } from '@app/core/services/auth.service';
@@ -58,8 +58,9 @@ const SHIFT_LABELS: Record<string, string> = {
 @Component({
   selector: 'app-education-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule, EducationRecordDialogComponent],
+  imports: [FormsModule, EducationRecordDialogComponent],
   templateUrl: './education-dashboard.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './education-dashboard.component.css',
 })
 export class EducationDashboardComponent implements OnInit {

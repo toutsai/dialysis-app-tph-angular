@@ -1,7 +1,7 @@
 @if (formData) {
   <div class="kidit-form-container">
     <!-- 版面比照 KiDit 官方「基本資料」頁（2026-08-15，截圖：D:\KiDit匯入\kidit基本資料版面.jpg），
-         欄位編號＝匯入格式說明.xls 欄序，供 CSV 對照 -->
+    欄位編號＝匯入格式說明.xls 欄序，供 CSV 對照 -->
     <div class="form-section">
       <h4 class="section-title">基本資料</h4>
 
@@ -24,8 +24,8 @@
           <div class="kd-choice-group">
             @for (opt of opts.yesNo; track opt.value) {
               <button type="button" class="kd-choice"
-                      [class.active]="formData.isForeign === opt.value"
-                      (click)="formData.isForeign = opt.value">{{ opt.label }}</button>
+                [class.active]="formData.isForeign === opt.value"
+              (click)="formData.isForeign = opt.value">{{ opt.label }}</button>
             }
           </div>
         </div>
@@ -33,253 +33,261 @@
         <div class="kd-field">
           <label>主治醫師</label>
           <input type="text" class="w-sm" [ngModel]="masterPatient?.physician || ''" disabled
-                 title="來源＝病人清單主治醫師（站內參考欄，不匯出）" />
-        </div>
-      </div>
-
-      <div class="kd-row">
-        <div class="kd-field">
-          <label><span class="fnum">03</span>出生西元年</label>
-          <input type="date" [ngModel]="formData.birthDate" (ngModelChange)="onIsoBirthChange($event)" />
-        </div>
-        <div class="kd-field">
-          <label>出生民國年</label>
-          <input
-            type="text"
-            class="w-sm"
-            placeholder="例：45/08/15"
-            [ngModel]="rocBirthInput"
-            (ngModelChange)="onRocBirthChange($event)"
-            [class.roc-error]="rocBirthError"
-          />
-        </div>
-        <span class="kd-note" *ngIf="!rocBirthError">民國年與西元年會自動換算，任填一欄位即可</span>
-        <span class="kd-note kd-note-bad" *ngIf="rocBirthError">格式無法辨識，請輸入民國年/月/日</span>
-      </div>
-
-      <div class="kd-row">
-        <div class="kd-field">
-          <label><span class="fnum">21</span>本院開始日期</label>
-          <input type="date" [(ngModel)]="formData.hospitalStartDate" />
-        </div>
-        <div class="kd-field">
-          <label><span class="fnum">20</span>首次治療日期</label>
-          <input type="date" [(ngModel)]="formData.firstDialysisDate" />
-        </div>
-        <div class="kd-field">
-          <label><span class="fnum">09</span>透析代號</label>
-          <input type="text" class="w-sm" [(ngModel)]="formData.dialysisCode" placeholder="10碼" />
-        </div>
-      </div>
-
-      <div class="kd-row">
-        <div class="kd-field">
-          <label><span class="fnum">19</span>狀態</label>
-          <select [(ngModel)]="formData.status">
-            @for (opt of opts.status; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
-            }
-          </select>
-        </div>
-        <div class="kd-field">
-          <label><span class="fnum">22</span>原發病大類</label>
-          <select [(ngModel)]="formData.diagnosisCategory" (ngModelChange)="handleCategoryChange()">
-            <option value="">請選擇</option>
-            @for (opt of opts.diagnosisCategory; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
-            }
-          </select>
-        </div>
-        <div class="kd-field">
-          <label><span class="fnum">23</span>原發病細類</label>
-          <select class="w-lg" [(ngModel)]="formData.diagnosisSubcategory">
-            <option value="">請選擇</option>
-            @for (opt of filteredSubcategories; track opt.value) {
-              <option [value]="opt.value">{{ opt.value }} - {{ opt.label }}</option>
-            }
-          </select>
-        </div>
-      </div>
-    </div>
-
-    <div class="form-section">
-      <h4 class="section-title">其他</h4>
-
-      <div class="kd-row">
-        <div class="kd-field">
-          <label><span class="fnum">02</span>病患類別</label>
-          <div class="kd-choice-group">
-            @for (opt of opts.patientCategory; track opt.value) {
-              <button type="button" class="kd-choice"
-                      [class.active]="formData.patientCategory === opt.value"
-                      (click)="formData.patientCategory = opt.value">{{ opt.label }}</button>
-            }
+            title="來源＝病人清單主治醫師（站內參考欄，不匯出）" />
           </div>
         </div>
-        <div class="kd-field">
-          <label><span class="fnum">05</span>性別</label>
-          <div class="kd-choice-group">
-            @for (opt of opts.gender; track opt.value) {
-              <button type="button" class="kd-choice"
-                      [class.active]="formData.gender === opt.value"
-                      (click)="formData.gender = opt.value">{{ opt.label }}</button>
-            }
-          </div>
-        </div>
-        <div class="kd-field">
-          <label><span class="fnum">06</span>婚姻狀況</label>
-          <div class="kd-choice-group">
-            @for (opt of opts.maritalStatus; track opt.value) {
-              <button type="button" class="kd-choice"
-                      [class.active]="formData.maritalStatus === opt.value"
-                      (click)="formData.maritalStatus = opt.value">{{ opt.label }}</button>
-            }
-          </div>
-        </div>
-        <div class="kd-field">
-          <label><span class="fnum">15</span>血型</label>
-          <div class="kd-choice-group">
-            @for (opt of opts.bloodType; track opt.value) {
-              <button type="button" class="kd-choice"
-                      [class.active]="formData.bloodType === opt.value"
-                      (click)="formData.bloodType = opt.value">{{ opt.label }}</button>
-            }
-          </div>
-        </div>
-      </div>
 
-      <div class="kd-row">
-        <div class="kd-field">
-          <label><span class="fnum">11</span>教育程度</label>
-          <div class="kd-choice-group">
-            @for (opt of opts.education; track opt.value) {
-              <button type="button" class="kd-choice"
-                      [class.active]="formData.education === opt.value"
-                      (click)="formData.education = opt.value">{{ opt.label }}</button>
+        <div class="kd-row">
+          <div class="kd-field">
+            <label><span class="fnum">03</span>出生西元年</label>
+            <input type="date" [ngModel]="formData.birthDate" (ngModelChange)="onIsoBirthChange($event)" />
+          </div>
+          <div class="kd-field">
+            <label>出生民國年</label>
+            <input
+              type="text"
+              class="w-sm"
+              placeholder="例：45/08/15"
+              [ngModel]="rocBirthInput"
+              (ngModelChange)="onRocBirthChange($event)"
+              [class.roc-error]="rocBirthError"
+              />
+            </div>
+            @if (!rocBirthError) {
+              <span class="kd-note">民國年與西元年會自動換算，任填一欄位即可</span>
+            }
+            @if (rocBirthError) {
+              <span class="kd-note kd-note-bad">格式無法辨識，請輸入民國年/月/日</span>
             }
           </div>
-        </div>
-        <div class="kd-field">
-          <label><span class="fnum">12</span>職業</label>
-          <div class="kd-choice-group">
-            @for (opt of opts.occupation; track opt.value) {
-              <button type="button" class="kd-choice"
-                      [class.active]="formData.occupation === opt.value"
-                      (click)="formData.occupation = opt.value">{{ opt.label }}</button>
-            }
-          </div>
-        </div>
-        <div class="kd-field">
-          <label><span class="fnum">17</span>原住民</label>
-          <div class="kd-choice-group">
-            @for (opt of opts.yesNo; track opt.value) {
-              <button type="button" class="kd-choice"
-                      [class.active]="formData.isIndigenous === opt.value"
-                      (click)="formData.isIndigenous = opt.value">{{ opt.label }}</button>
-            }
-          </div>
-        </div>
-        <div class="kd-field">
-          <label><span class="fnum">18</span>福保身分</label>
-          <div class="kd-choice-group">
-            @for (opt of opts.yesNo; track opt.value) {
-              <button type="button" class="kd-choice"
-                      [class.active]="formData.isWelfare === opt.value"
-                      (click)="formData.isWelfare = opt.value">{{ opt.label }}</button>
-            }
-          </div>
-        </div>
-      </div>
 
-      <div class="kd-row">
-        <div class="kd-field">
-          <label><span class="fnum">16</span>重大傷病卡</label>
-          <input type="text" class="w-md" [(ngModel)]="formData.catastrophicCardNo" placeholder="10碼" />
-        </div>
-        <div class="kd-field">
-          <label><span class="fnum">13</span>聯絡人</label>
-          <input type="text" class="w-md" [(ngModel)]="formData.contactPerson" placeholder="姓名" />
-        </div>
-        <div class="kd-field">
-          <label><span class="fnum">14</span>關係</label>
-          <div class="kd-choice-group">
-            @for (opt of opts.relation; track opt.value) {
-              <button type="button" class="kd-choice"
-                      [class.active]="formData.relationship === opt.value"
-                      (click)="formData.relationship = opt.value">{{ opt.label }}</button>
-            }
+          <div class="kd-row">
+            <div class="kd-field">
+              <label><span class="fnum">21</span>本院開始日期</label>
+              <input type="date" [(ngModel)]="formData.hospitalStartDate" />
+            </div>
+            <div class="kd-field">
+              <label><span class="fnum">20</span>首次治療日期</label>
+              <input type="date" [(ngModel)]="formData.firstDialysisDate" />
+            </div>
+            <div class="kd-field">
+              <label><span class="fnum">09</span>透析代號</label>
+              <input type="text" class="w-sm" [(ngModel)]="formData.dialysisCode" placeholder="10碼" />
+            </div>
+          </div>
+
+          <div class="kd-row">
+            <div class="kd-field">
+              <label><span class="fnum">19</span>狀態</label>
+              <select [(ngModel)]="formData.status">
+                @for (opt of opts.status; track opt.value) {
+                  <option [value]="opt.value">{{ opt.label }}</option>
+                }
+              </select>
+            </div>
+            <div class="kd-field">
+              <label><span class="fnum">22</span>原發病大類</label>
+              <select [(ngModel)]="formData.diagnosisCategory" (ngModelChange)="handleCategoryChange()">
+                <option value="">請選擇</option>
+                @for (opt of opts.diagnosisCategory; track opt.value) {
+                  <option [value]="opt.value">{{ opt.label }}</option>
+                }
+              </select>
+            </div>
+            <div class="kd-field">
+              <label><span class="fnum">23</span>原發病細類</label>
+              <select class="w-lg" [(ngModel)]="formData.diagnosisSubcategory">
+                <option value="">請選擇</option>
+                @for (opt of filteredSubcategories; track opt.value) {
+                  <option [value]="opt.value">{{ opt.value }} - {{ opt.label }}</option>
+                }
+              </select>
+            </div>
           </div>
         </div>
-      </div>
-    </div>
 
-    <!-- 站內欄：過敏史（2026-09-10；匯入格式無此欄，不匯出 CSV）；存檔回寫病人基本資料 -->
-    <div class="form-section">
-      <h4 class="section-title">過敏史 <span class="kd-note">站內欄位，不匯出 KiDit</span></h4>
+        <div class="form-section">
+          <h4 class="section-title">其他</h4>
 
-      <div class="kd-row">
-        <div class="kd-field">
-          <label>藥物過敏</label>
-          <div class="kd-choice-group">
-            @for (opt of opts.yesNo; track opt.value) {
-              <button type="button" class="kd-choice"
-                      [class.active]="formData.allergyDrug === opt.value"
-                      (click)="setAllergyFlag('Drug', opt.value)">{{ opt.label }}</button>
-            }
+          <div class="kd-row">
+            <div class="kd-field">
+              <label><span class="fnum">02</span>病患類別</label>
+              <div class="kd-choice-group">
+                @for (opt of opts.patientCategory; track opt.value) {
+                  <button type="button" class="kd-choice"
+                    [class.active]="formData.patientCategory === opt.value"
+                  (click)="formData.patientCategory = opt.value">{{ opt.label }}</button>
+                }
+              </div>
+            </div>
+            <div class="kd-field">
+              <label><span class="fnum">05</span>性別</label>
+              <div class="kd-choice-group">
+                @for (opt of opts.gender; track opt.value) {
+                  <button type="button" class="kd-choice"
+                    [class.active]="formData.gender === opt.value"
+                  (click)="formData.gender = opt.value">{{ opt.label }}</button>
+                }
+              </div>
+            </div>
+            <div class="kd-field">
+              <label><span class="fnum">06</span>婚姻狀況</label>
+              <div class="kd-choice-group">
+                @for (opt of opts.maritalStatus; track opt.value) {
+                  <button type="button" class="kd-choice"
+                    [class.active]="formData.maritalStatus === opt.value"
+                  (click)="formData.maritalStatus = opt.value">{{ opt.label }}</button>
+                }
+              </div>
+            </div>
+            <div class="kd-field">
+              <label><span class="fnum">15</span>血型</label>
+              <div class="kd-choice-group">
+                @for (opt of opts.bloodType; track opt.value) {
+                  <button type="button" class="kd-choice"
+                    [class.active]="formData.bloodType === opt.value"
+                  (click)="formData.bloodType = opt.value">{{ opt.label }}</button>
+                }
+              </div>
+            </div>
+          </div>
+
+          <div class="kd-row">
+            <div class="kd-field">
+              <label><span class="fnum">11</span>教育程度</label>
+              <div class="kd-choice-group">
+                @for (opt of opts.education; track opt.value) {
+                  <button type="button" class="kd-choice"
+                    [class.active]="formData.education === opt.value"
+                  (click)="formData.education = opt.value">{{ opt.label }}</button>
+                }
+              </div>
+            </div>
+            <div class="kd-field">
+              <label><span class="fnum">12</span>職業</label>
+              <div class="kd-choice-group">
+                @for (opt of opts.occupation; track opt.value) {
+                  <button type="button" class="kd-choice"
+                    [class.active]="formData.occupation === opt.value"
+                  (click)="formData.occupation = opt.value">{{ opt.label }}</button>
+                }
+              </div>
+            </div>
+            <div class="kd-field">
+              <label><span class="fnum">17</span>原住民</label>
+              <div class="kd-choice-group">
+                @for (opt of opts.yesNo; track opt.value) {
+                  <button type="button" class="kd-choice"
+                    [class.active]="formData.isIndigenous === opt.value"
+                  (click)="formData.isIndigenous = opt.value">{{ opt.label }}</button>
+                }
+              </div>
+            </div>
+            <div class="kd-field">
+              <label><span class="fnum">18</span>福保身分</label>
+              <div class="kd-choice-group">
+                @for (opt of opts.yesNo; track opt.value) {
+                  <button type="button" class="kd-choice"
+                    [class.active]="formData.isWelfare === opt.value"
+                  (click)="formData.isWelfare = opt.value">{{ opt.label }}</button>
+                }
+              </div>
+            </div>
+          </div>
+
+          <div class="kd-row">
+            <div class="kd-field">
+              <label><span class="fnum">16</span>重大傷病卡</label>
+              <input type="text" class="w-md" [(ngModel)]="formData.catastrophicCardNo" placeholder="10碼" />
+            </div>
+            <div class="kd-field">
+              <label><span class="fnum">13</span>聯絡人</label>
+              <input type="text" class="w-md" [(ngModel)]="formData.contactPerson" placeholder="姓名" />
+            </div>
+            <div class="kd-field">
+              <label><span class="fnum">14</span>關係</label>
+              <div class="kd-choice-group">
+                @for (opt of opts.relation; track opt.value) {
+                  <button type="button" class="kd-choice"
+                    [class.active]="formData.relationship === opt.value"
+                  (click)="formData.relationship = opt.value">{{ opt.label }}</button>
+                }
+              </div>
+            </div>
           </div>
         </div>
-        <div class="kd-field kd-field-grow">
-          <label>藥物過敏內容</label>
-          <input type="text" class="w-full" [(ngModel)]="formData.allergyDrugDetail"
-                 placeholder="例：Penicillin、NSAID" [disabled]="formData.allergyDrug !== 'Y'" />
-        </div>
-        <span class="kd-note kd-note-bad" *ngIf="allergyMissing('Drug')">已選「是」但尚未填藥物內容</span>
-      </div>
 
-      <div class="kd-row">
-        <div class="kd-field">
-          <label>食物過敏</label>
-          <div class="kd-choice-group">
-            @for (opt of opts.yesNo; track opt.value) {
-              <button type="button" class="kd-choice"
+        <!-- 站內欄：過敏史（2026-09-10；匯入格式無此欄，不匯出 CSV）；存檔回寫病人基本資料 -->
+        <div class="form-section">
+          <h4 class="section-title">過敏史 <span class="kd-note">站內欄位，不匯出 KiDit</span></h4>
+
+          <div class="kd-row">
+            <div class="kd-field">
+              <label>藥物過敏</label>
+              <div class="kd-choice-group">
+                @for (opt of opts.yesNo; track opt.value) {
+                  <button type="button" class="kd-choice"
+                    [class.active]="formData.allergyDrug === opt.value"
+                  (click)="setAllergyFlag('Drug', opt.value)">{{ opt.label }}</button>
+                }
+              </div>
+            </div>
+            <div class="kd-field kd-field-grow">
+              <label>藥物過敏內容</label>
+              <input type="text" class="w-full" [(ngModel)]="formData.allergyDrugDetail"
+                placeholder="例：Penicillin、NSAID" [disabled]="formData.allergyDrug !== 'Y'" />
+              </div>
+              @if (allergyMissing('Drug')) {
+                <span class="kd-note kd-note-bad">已選「是」但尚未填藥物內容</span>
+              }
+            </div>
+
+            <div class="kd-row">
+              <div class="kd-field">
+                <label>食物過敏</label>
+                <div class="kd-choice-group">
+                  @for (opt of opts.yesNo; track opt.value) {
+                    <button type="button" class="kd-choice"
                       [class.active]="formData.allergyFood === opt.value"
-                      (click)="setAllergyFlag('Food', opt.value)">{{ opt.label }}</button>
+                    (click)="setAllergyFlag('Food', opt.value)">{{ opt.label }}</button>
+                  }
+                </div>
+              </div>
+              <div class="kd-field kd-field-grow">
+                <label>食物過敏內容</label>
+                <input type="text" class="w-full" [(ngModel)]="formData.allergyFoodDetail"
+                  placeholder="例：海鮮、花生" [disabled]="formData.allergyFood !== 'Y'" />
+                </div>
+                @if (allergyMissing('Food')) {
+                  <span class="kd-note kd-note-bad">已選「是」但尚未填食物內容</span>
+                }
+              </div>
+            </div>
+
+            <div class="form-section">
+              <h4 class="section-title">住址</h4>
+
+              <div class="kd-row">
+                <div class="kd-field">
+                  <label><span class="fnum">07</span>電話</label>
+                  <input type="text" class="w-md" [(ngModel)]="formData.phone" placeholder="最多25碼" />
+                </div>
+              </div>
+
+              <div class="kd-row">
+                <div class="kd-field kd-field-grow">
+                  <label><span class="fnum">10</span>地址</label>
+                  <input type="text" class="w-full" [(ngModel)]="formData.address" placeholder="最多80字" />
+                </div>
+              </div>
+            </div>
+
+            @if (!hideSave) {
+              <div class="actions">
+                <button class="save-btn" (click)="saveData()" [disabled]="isSaving">
+                  <i class="fas fa-save"></i> {{ isSaving ? '儲存中...' : '儲存 KiDit 資料' }}
+                </button>
+              </div>
             }
           </div>
-        </div>
-        <div class="kd-field kd-field-grow">
-          <label>食物過敏內容</label>
-          <input type="text" class="w-full" [(ngModel)]="formData.allergyFoodDetail"
-                 placeholder="例：海鮮、花生" [disabled]="formData.allergyFood !== 'Y'" />
-        </div>
-        <span class="kd-note kd-note-bad" *ngIf="allergyMissing('Food')">已選「是」但尚未填食物內容</span>
-      </div>
-    </div>
-
-    <div class="form-section">
-      <h4 class="section-title">住址</h4>
-
-      <div class="kd-row">
-        <div class="kd-field">
-          <label><span class="fnum">07</span>電話</label>
-          <input type="text" class="w-md" [(ngModel)]="formData.phone" placeholder="最多25碼" />
-        </div>
-      </div>
-
-      <div class="kd-row">
-        <div class="kd-field kd-field-grow">
-          <label><span class="fnum">10</span>地址</label>
-          <input type="text" class="w-full" [(ngModel)]="formData.address" placeholder="最多80字" />
-        </div>
-      </div>
-    </div>
-
-    @if (!hideSave) {
-      <div class="actions">
-        <button class="save-btn" (click)="saveData()" [disabled]="isSaving">
-          <i class="fas fa-save"></i> {{ isSaving ? '儲存中...' : '儲存 KiDit 資料' }}
-        </button>
-      </div>
-    }
-  </div>
-}
+        }

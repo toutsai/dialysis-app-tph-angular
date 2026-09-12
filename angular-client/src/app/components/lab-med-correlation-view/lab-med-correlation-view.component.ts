@@ -1,5 +1,5 @@
-import { Component, Input, OnChanges, SimpleChanges, inject, ChangeDetectorRef } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, OnChanges, SimpleChanges, inject, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 // Standalone 版：已移除 Firebase
 import { AuthService } from '@services/auth.service';
@@ -22,8 +22,9 @@ interface CorrelationGroup {
 @Component({
   selector: 'app-lab-med-correlation-view',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './lab-med-correlation-view.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-med-correlation-view.component.css'
 })
 export class LabMedCorrelationViewComponent implements OnChanges {

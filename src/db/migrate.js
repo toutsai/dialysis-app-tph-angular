@@ -1089,6 +1089,15 @@ export function runMigrations() {
     // inventory_item_aliases：消耗紀錄品名別名（2026-09-04）
     // 消耗上傳時 HIS 品名對不上 inventory_items，使用者在確認視窗對應既有品項後記住，下次自動對應。
     // ========================================
+    db.exec("CREATE TABLE IF NOT EXISTS backup_status (id TEXT PRIMARY KEY, status_data TEXT NOT NULL DEFAULT '{}', updated_at TEXT DEFAULT (datetime('now','localtime')))")
+    if (addColumnIfNotExists(db, 'daily_logs', 'revision', 'INTEGER NOT NULL DEFAULT 0')) migrationsApplied++
+    db.exec(`CREATE TRIGGER IF NOT EXISTS daily_logs_content_revision
+      AFTER UPDATE OF patient_movements,vascular_access_log,announcements,stats,leader,notes,other_notes ON daily_logs
+      WHEN NEW.patient_movements IS NOT OLD.patient_movements OR NEW.vascular_access_log IS NOT OLD.vascular_access_log
+        OR NEW.announcements IS NOT OLD.announcements OR NEW.stats IS NOT OLD.stats OR NEW.leader IS NOT OLD.leader
+        OR NEW.notes IS NOT OLD.notes OR NEW.other_notes IS NOT OLD.other_notes
+      BEGIN UPDATE daily_logs SET revision=OLD.revision+1 WHERE id=NEW.id; END`)
+
     initializeInventoryLedger(db)
 
     const itemAliasesExists = db

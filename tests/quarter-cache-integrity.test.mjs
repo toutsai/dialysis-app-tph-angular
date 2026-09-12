@@ -8,10 +8,14 @@ const ts = require('typescript');
 const signal = (value) => Object.assign(() => value, { set: v => value = v, update: fn => value = fn(value) });
 const deferred = () => { let resolve, reject; const promise = new Promise((a,b) => {resolve=a;reject=b;});return {promise,resolve,reject}; };
 function storage() { const map = new Map([['auth_token','session-a'],['auth_user','{"id":"user-a"}']]);return {getItem:k=>map.get(k)??null,setItem:(k,v)=>map.set(k,v),removeItem:k=>map.delete(k),clear:()=>map.clear()}; }
-function execute(source, globals = {}) {
+function execute(code, globals = {}) {
  const module = {exports:{}};
- vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,experimentalDecorators:true}}).outputText,
- {module,exports:module.exports,console:{log(){},error(){}},structuredClone,setTimeout:()=>1,clearTimeout(){},...globals});return module.exports;
+ const loadDependency = name => {
+   assert.equal(name, './api-query-contract', 'Unexpected dependency in isolated client fixture');
+   return execute(source('services/api-query-contract.ts'), { URLSearchParams });
+ };
+ vm.runInNewContext(ts.transpileModule(code,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,experimentalDecorators:true}}).outputText,
+ {module,exports:module.exports,require:loadDependency,console:{log(){},error(){}},structuredClone,setTimeout:()=>1,clearTimeout(){},...globals});return module.exports;
 }
 function source(rel) {return readFileSync(new URL('../angular-client/src/'+rel, import.meta.url),'utf8');}
 function methods(rel,names,globals={}) {

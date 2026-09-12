@@ -4,7 +4,9 @@
       <h3>
         <i class="fas fa-file-csv"></i>
         季度造管 CSV
-        <span class="qv-count" *ngIf="!isLoading()">（{{ visibleRows().length }} 人{{ showAll() ? '' : '，全部 ' + rows().length + ' 人' }}）</span>
+        @if (!isLoading()) {
+          <span class="qv-count">（{{ visibleRows().length }} 人{{ showAll() ? '' : '，全部 ' + rows().length + ' 人' }}）</span>
+        }
       </h3>
 
       <div class="qv-filter">
@@ -26,10 +28,18 @@
       </div>
 
       <div class="qv-actions">
-        <span class="qv-save-state" [ngSwitch]="saveState()">
-          <span *ngSwitchCase="'saving'" class="qv-saving"><i class="fas fa-circle-notch fa-spin"></i> 儲存中…</span>
-          <span *ngSwitchCase="'saved'" class="qv-saved"><i class="fas fa-check"></i> 已儲存</span>
-          <span *ngSwitchCase="'error'" class="qv-save-error"><i class="fas fa-exclamation-triangle"></i> 儲存失敗</span>
+        <span class="qv-save-state">
+          @switch (saveState()) {
+            @case ('saving') {
+              <span class="qv-saving"><i class="fas fa-circle-notch fa-spin"></i> 儲存中…</span>
+            }
+            @case ('saved') {
+              <span class="qv-saved"><i class="fas fa-check"></i> 已儲存</span>
+            }
+            @case ('error') {
+              <span class="qv-save-error"><i class="fas fa-exclamation-triangle"></i> 儲存失敗</span>
+            }
+          }
         </span>
         <button class="qv-btn qv-export-btn" (click)="exportCsv()" [disabled]="isLoading() || rows().length === 0">
           <i class="fas fa-file-export"></i> 匯出 CSV
@@ -48,103 +58,131 @@
     </p>
 
     <div class="qv-tabs">
-      <button
-        *ngFor="let t of fieldTabs"
-        class="qv-tab-btn"
-        [class.active]="activeFieldTab().key === t.key"
-        (click)="activeTabKey.set(t.key)"
-      >
-        {{ t.label }}
-        <span
-          class="qv-tab-badge"
-          *ngIf="t.key === 'flow' && missingFlowCount() > 0"
-          title="尚未填寫必填血流量的病人數（未排除者，匯出前需補齊）"
-        >{{ missingFlowCount() }}</span>
-      </button>
+      @for (t of fieldTabs; track t) {
+        <button
+          class="qv-tab-btn"
+          [class.active]="activeFieldTab().key === t.key"
+          (click)="activeTabKey.set(t.key)"
+          >
+          {{ t.label }}
+          @if (t.key === 'flow' && missingFlowCount() > 0) {
+            <span
+              class="qv-tab-badge"
+              title="尚未填寫必填血流量的病人數（未排除者，匯出前需補齊）"
+            >{{ missingFlowCount() }}</span>
+          }
+        </button>
+      }
     </div>
 
     <div class="qv-body">
-      <div *ngIf="isLoading()" class="qv-loading">
-        <div class="qv-spinner"></div>
-        <p>正在彙整本季造管資料...</p>
+      @if (isLoading()) {
+        <div class="qv-loading">
+          <div class="qv-spinner"></div>
+          <p>正在彙整本季造管資料...</p>
+        </div>
+      }
+
+      @if (!isLoading() && visibleRows().length === 0) {
+        <div class="qv-empty">
+          {{ showAll() ? '本季無符合條件的病人。' : '本季尚無已確認的血管通路事件，點「全部」可檢視完整名單。' }}
+        </div>
+      }
+
+      @if (!isLoading() && visibleRows().length > 0) {
+        <div class="qv-table-scroll">
+          <table class="qv-table">
+            <thead>
+              <tr class="qv-group-row">
+                @for (g of activeFieldTab().groups; track g) {
+                  <th [attr.colspan]="g.cols">{{ g.label }}</th>
+                }
+              </tr>
+              <tr class="qv-field-row">
+                <th class="qv-sticky qv-sticky-1">姓名</th>
+                <th class="qv-sticky qv-sticky-2">現況</th>
+                <th class="qv-sticky qv-sticky-3">排除</th>
+                <th>警告</th>
+                @for (c of activeFieldTab().cols; track trackByKey($index, c)) {
+                  <th [class.qv-required-th]="c.required">
+                    {{ c.label }}
+                  </th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of visibleRows(); track trackByPatientId($index, r)) {
+                <tr
+                  [class.qv-row-excluded]="r.excluded"
+                  [class.qv-row-flagged]="r.statusNote">
+                  <td class="qv-sticky qv-sticky-1 qv-name">{{ r.name || '—' }}</td>
+                  <td class="qv-sticky qv-sticky-2 qv-status">
+                    @if (r.statusNote) {
+                      <span class="qv-status-tag">{{ r.statusNote }}</span>
+                    }
+                  </td>
+                  <td class="qv-sticky qv-sticky-3 qv-exclude">
+                    <input type="checkbox" [checked]="r.excluded" (change)="toggleExcluded(r)" title="排除本列不匯出">
+                  </td>
+                  <td class="qv-warn">
+                    @if (r.warnings.length) {
+                      <span [title]="r.warnings.join('；')">
+                        <i class="fas fa-exclamation-triangle"></i> {{ r.warnings.join('；') }}
+                      </span>
+                    }
+                  </td>
+                  @for (c of activeFieldTab().cols; track trackByKey($index, c)) {
+                    <td>
+                      <input class="qv-input"
+                        [class.qv-kind-id]="c.kind === 'id'"
+                        [class.qv-kind-mrn]="c.kind === 'mrn'"
+                        [class.qv-kind-date]="c.kind === 'date'"
+                        [class.qv-kind-code]="c.kind === 'code'"
+                        [class.qv-kind-num]="c.kind === 'num'"
+                        [class.qv-kind-text]="c.kind === 'text'"
+                        [class.qv-overridden]="r.overrideValues[c.key] !== undefined"
+                        [class.qv-required-empty]="c.required && !r.values[c.key]"
+                        [attr.list]="c.list"
+                        [ngModel]="r.values[c.key]"
+                        (ngModelChange)="onFieldChange(r, c.key, $event)">
+                      </td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
       </div>
 
-      <div *ngIf="!isLoading() && visibleRows().length === 0" class="qv-empty">
-        {{ showAll() ? '本季無符合條件的病人。' : '本季尚無已確認的血管通路事件，點「全部」可檢視完整名單。' }}
-      </div>
-
-      <div class="qv-table-scroll" *ngIf="!isLoading() && visibleRows().length > 0">
-        <table class="qv-table">
-          <thead>
-            <tr class="qv-group-row">
-              <th *ngFor="let g of activeFieldTab().groups" [attr.colspan]="g.cols">{{ g.label }}</th>
-            </tr>
-            <tr class="qv-field-row">
-              <th class="qv-sticky qv-sticky-1">姓名</th>
-              <th class="qv-sticky qv-sticky-2">現況</th>
-              <th class="qv-sticky qv-sticky-3">排除</th>
-              <th>警告</th>
-              <th *ngFor="let c of activeFieldTab().cols; trackBy: trackByKey" [class.qv-required-th]="c.required">
-                {{ c.label }}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let r of visibleRows(); trackBy: trackByPatientId"
-                [class.qv-row-excluded]="r.excluded"
-                [class.qv-row-flagged]="r.statusNote">
-              <td class="qv-sticky qv-sticky-1 qv-name">{{ r.name || '—' }}</td>
-              <td class="qv-sticky qv-sticky-2 qv-status">
-                <span class="qv-status-tag" *ngIf="r.statusNote">{{ r.statusNote }}</span>
-              </td>
-              <td class="qv-sticky qv-sticky-3 qv-exclude">
-                <input type="checkbox" [checked]="r.excluded" (change)="toggleExcluded(r)" title="排除本列不匯出">
-              </td>
-              <td class="qv-warn">
-                <span *ngIf="r.warnings.length" [title]="r.warnings.join('；')">
-                  <i class="fas fa-exclamation-triangle"></i> {{ r.warnings.join('；') }}
-                </span>
-              </td>
-              <td *ngFor="let c of activeFieldTab().cols; trackBy: trackByKey">
-                <input class="qv-input"
-                       [class.qv-kind-id]="c.kind === 'id'"
-                       [class.qv-kind-mrn]="c.kind === 'mrn'"
-                       [class.qv-kind-date]="c.kind === 'date'"
-                       [class.qv-kind-code]="c.kind === 'code'"
-                       [class.qv-kind-num]="c.kind === 'num'"
-                       [class.qv-kind-text]="c.kind === 'text'"
-                       [class.qv-overridden]="r.overrideValues[c.key] !== undefined"
-                       [class.qv-required-empty]="c.required && !r.values[c.key]"
-                       [attr.list]="c.list"
-                       [ngModel]="r.values[c.key]"
-                       (ngModelChange)="onFieldChange(r, c.key, $event)">
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <!-- 代碼提示（datalist：可自由輸入，下拉顯示官方代碼） -->
+      <datalist id="qv-dl-yn">
+        <option value="Y">是</option>
+        <option value="N">否</option>
+      </datalist>
+      <datalist id="qv-dl-side">
+        <option value="L">左</option>
+        <option value="R">右</option>
+      </datalist>
+      <datalist id="qv-dl-fsite">
+        @for (s of fistulaSites; track s) {
+          <option [value]="s.code">{{ s.label }}</option>
+        }
+      </datalist>
+      <datalist id="qv-dl-csite">
+        @for (s of catheterSites; track s) {
+          <option [value]="s.code">{{ s.label }}</option>
+        }
+      </datalist>
+      <datalist id="qv-dl-reason">
+        @for (s of failureReasons; track s) {
+          <option [value]="s.code">{{ s.label }}</option>
+        }
+      </datalist>
+      <datalist id="qv-dl-method">
+        @for (s of repairMethods; track s) {
+          <option [value]="s.code">{{ s.label }}</option>
+        }
+      </datalist>
     </div>
-
-    <!-- 代碼提示（datalist：可自由輸入，下拉顯示官方代碼） -->
-    <datalist id="qv-dl-yn">
-      <option value="Y">是</option>
-      <option value="N">否</option>
-    </datalist>
-    <datalist id="qv-dl-side">
-      <option value="L">左</option>
-      <option value="R">右</option>
-    </datalist>
-    <datalist id="qv-dl-fsite">
-      <option *ngFor="let s of fistulaSites" [value]="s.code">{{ s.label }}</option>
-    </datalist>
-    <datalist id="qv-dl-csite">
-      <option *ngFor="let s of catheterSites" [value]="s.code">{{ s.label }}</option>
-    </datalist>
-    <datalist id="qv-dl-reason">
-      <option *ngFor="let s of failureReasons" [value]="s.code">{{ s.label }}</option>
-    </datalist>
-    <datalist id="qv-dl-method">
-      <option *ngFor="let s of repairMethods" [value]="s.code">{{ s.label }}</option>
-    </datalist>
   </div>
-</div>

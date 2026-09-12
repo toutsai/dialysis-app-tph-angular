@@ -1,7 +1,7 @@
 import { loadXlsx } from '@/utils/xlsxLoader';
 // Standalone 版：已移除 Firebase
-import { Component, inject, signal, computed, OnInit, OnDestroy, DestroyRef } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, inject, signal, computed, OnInit, OnDestroy, DestroyRef, ChangeDetectionStrategy } from '@angular/core';
+
 import { nameWithModeFreq } from '@/utils/patientDisplay';
 import { FormsModule } from '@angular/forms';
 import { ApiConfigService } from '@services/api-config.service';
@@ -38,7 +38,6 @@ import { extractVersionConflict, formatVersionConflictMessage } from '@/utils/ve
   selector: 'app-weekly',
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
     AlertDialogComponent,
     ConfirmDialogComponent,
@@ -48,9 +47,10 @@ import { extractVersionConflict, formatVersionConflictMessage } from '@/utils/ve
     MemoDisplayDialogComponent,
     StatsToolbarComponent,
     ScheduleTableComponent,
-    InpatientSidebarComponent,
-  ],
+    InpatientSidebarComponent
+],
   templateUrl: './weekly.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './weekly.component.css'
 })
 export class WeeklyComponent implements OnInit, OnDestroy {

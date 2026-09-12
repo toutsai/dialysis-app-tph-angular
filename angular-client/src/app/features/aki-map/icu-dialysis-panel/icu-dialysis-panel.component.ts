@@ -1,5 +1,5 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, OnInit, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import {
   AkiApiService,
@@ -60,8 +60,9 @@ interface FilteredUnit extends IcuDialysisUnit {
 @Component({
   selector: 'app-icu-dialysis-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './icu-dialysis-panel.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './icu-dialysis-panel.component.css',
 })
 export class IcuDialysisPanelComponent implements OnInit {

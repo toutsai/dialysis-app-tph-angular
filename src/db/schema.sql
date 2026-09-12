@@ -397,6 +397,8 @@ CREATE TABLE IF NOT EXISTS daily_logs (
     leader TEXT DEFAULT '{}',  -- JSON: 簽核資訊 (early, noon, late)
     created_at TEXT DEFAULT (datetime('now', 'localtime')),
     updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+,
+  revision INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_daily_logs_date ON daily_logs(date);
@@ -1059,3 +1061,11 @@ INSERT OR IGNORE INTO base_schedules (id, schedule) VALUES ('MASTER_SCHEDULE', '
 
 -- 確保 nursing_duties main 文件存在
 INSERT OR IGNORE INTO nursing_duties (id, duties) VALUES ('main', '{}');
+
+CREATE TRIGGER IF NOT EXISTS daily_logs_content_revision
+AFTER UPDATE OF patient_movements,vascular_access_log,announcements,stats,leader,notes,other_notes ON daily_logs
+WHEN NEW.patient_movements IS NOT OLD.patient_movements OR NEW.vascular_access_log IS NOT OLD.vascular_access_log
+ OR NEW.announcements IS NOT OLD.announcements OR NEW.stats IS NOT OLD.stats OR NEW.leader IS NOT OLD.leader
+ OR NEW.notes IS NOT OLD.notes OR NEW.other_notes IS NOT OLD.other_notes
+BEGIN UPDATE daily_logs SET revision=OLD.revision+1 WHERE id=NEW.id; END;
+CREATE TABLE IF NOT EXISTS backup_status (id TEXT PRIMARY KEY, status_data TEXT NOT NULL DEFAULT '{}', updated_at TEXT DEFAULT (datetime('now','localtime')));

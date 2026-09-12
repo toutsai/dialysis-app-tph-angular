@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, OnInit, OnDestroy, ViewChild, ElementRef, inject } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, OnInit, OnDestroy, ViewChild, ElementRef, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TaskStoreService } from '@services/task-store.service';
 
@@ -7,6 +7,7 @@ import { TaskStoreService } from '@services/task-store.service';
   standalone: true,
   imports: [CommonModule],
   templateUrl: './memo-display-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './memo-display-dialog.component.css'
 })
 export class MemoDisplayDialogComponent implements OnChanges, OnInit, OnDestroy {

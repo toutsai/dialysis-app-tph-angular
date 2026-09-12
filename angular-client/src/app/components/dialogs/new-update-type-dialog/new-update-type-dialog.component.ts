@@ -1,13 +1,14 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { PatientSelectDialogComponent } from '../patient-select-dialog/patient-select-dialog.component';
 
 @Component({
   selector: 'app-new-update-type-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, PatientSelectDialogComponent],
+  imports: [FormsModule, PatientSelectDialogComponent],
   templateUrl: './new-update-type-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './new-update-type-dialog.component.css'
 })
 export class NewUpdateTypeDialogComponent implements OnChanges {

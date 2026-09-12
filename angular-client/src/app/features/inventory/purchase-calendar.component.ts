@@ -1,8 +1,8 @@
 // 叫貨/到貨行事曆（庫存管理 > 叫貨/到貨紀錄）
 // 資料 = inventory_purchases：status 'ordered'（已叫貨待到貨，顯示在預計到貨日）/ 'arrived'（已到貨=入庫，顯示在到貨日）
 // 庫存計算只算 arrived（後端 monthly/calculation 與父元件盤點皆已過濾）
-import { Component, EventEmitter, Input, OnInit, OnChanges, SimpleChanges, Output, computed, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, EventEmitter, Input, OnInit, OnChanges, SimpleChanges, Output, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '@services/api.service';
@@ -64,8 +64,9 @@ export function toLocalYmd(value: string | null | undefined): string {
 @Component({
   selector: 'app-purchase-calendar',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './purchase-calendar.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './purchase-calendar.component.css',
 })
 export class PurchaseCalendarComponent implements OnInit, OnChanges {

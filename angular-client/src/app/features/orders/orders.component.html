@@ -33,332 +33,394 @@
         </div>
 
         <!-- 群組搜尋條件 -->
-        <div *ngIf="searchType() === 'group'" class="group-filters">
-          <select [(ngModel)]="groupSearchParams.freq">
-            <option value="一三五">一三五</option>
-            <option value="二四六">二四六</option>
-            <option value="other">其他</option>
-          </select>
-          <select [(ngModel)]="groupSearchParams.shift">
-            <option value="early">早班</option>
-            <option value="noon">午班</option>
-            <option value="late">晚班</option>
-          </select>
-          <input type="month" [(ngModel)]="groupSearchParams.month" />
-        </div>
+        @if (searchType() === 'group') {
+          <div class="group-filters">
+            <select [(ngModel)]="groupSearchParams.freq">
+              <option value="一三五">一三五</option>
+              <option value="二四六">二四六</option>
+              <option value="other">其他</option>
+            </select>
+            <select [(ngModel)]="groupSearchParams.shift">
+              <option value="early">早班</option>
+              <option value="noon">午班</option>
+              <option value="late">晚班</option>
+            </select>
+            <input type="month" [(ngModel)]="groupSearchParams.month" />
+          </div>
+        }
 
         <!-- 個人搜尋條件 -->
-        <div *ngIf="searchType() === 'individual'" class="individual-filters">
-          <input
-            type="text"
-            [ngModel]="individualSearchTerm()"
-            (ngModelChange)="individualSearchTerm.set($event)"
-            placeholder="輸入姓名或病歷號..."
-            (keyup.enter)="handleSearch()"
-          />
-          <div class="year-selector">
-            <button (click)="changeYear(-1)">&lt; 上一年</button>
-            <span>{{ individualSearchYear() }} 年</span>
-            <button (click)="changeYear(1)">下一年 ></button>
-          </div>
-        </div>
-
-        <button (click)="handleSearch()" [disabled]="isLoading()" class="search-btn">
-          <i class="fas fa-search"></i> {{ isLoading() ? '查詢中...' : '查詢' }}
-        </button>
-
-        <button
-          (click)="exportOrdersToExcel()"
-          [disabled]="isLoading() || searchResult().length === 0"
-          class="export-btn"
-        >
-          <i class="fas fa-file-excel"></i> 匯出 Excel
-        </button>
-      </div>
-
-      <!-- 2. 查詢結果顯示區 -->
-      <div class="results-display">
-        <div *ngIf="isLoading()" class="loading-state">
-          <div class="loading-spinner"></div>
-          正在查詢藥囑資料...
-        </div>
-        <div *ngIf="!isLoading() && !searchPerformed()" class="placeholder-text">請選擇條件並點擊查詢。</div>
-        <div *ngIf="!isLoading() && searchPerformed() && searchResult().length === 0" class="empty-state">
-          查無符合條件的藥囑資料。
-        </div>
-        <div *ngIf="!isLoading() && searchPerformed() && searchResult().length > 0" class="table-container">
-          <!-- 群組搜尋結果表格 -->
-          <table *ngIf="searchType() === 'group'">
-            <thead>
-              <tr>
-                <th class="sticky-col col-freq">頻率</th>
-                <th class="sticky-col col-shift">班別</th>
-                <th class="sticky-col col-bed">床號</th>
-                <th class="sticky-col col-name">姓名</th>
-                <th *ngFor="let med of allMedications()">{{ med.tradeName }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let patientRow of searchResult()">
-                <td class="sticky-col col-freq">{{ $any(patientRow).freq }}</td>
-                <td class="sticky-col col-shift">{{ formatShift($any(patientRow).shiftIndex) }}</td>
-                <td class="sticky-col col-bed">{{ $any(patientRow).bedNum }}</td>
-                <td class="sticky-col col-name">{{ $any(patientRow).patientName }}</td>
-                <td *ngFor="let med of allMedications()">
-                  {{ formatOrderCell($any(patientRow).orders[med.code], groupSearchParams.month) }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          <!-- 個人搜尋結果表格 -->
-          <table *ngIf="searchType() === 'individual'">
-            <thead>
-              <tr>
-                <th class="sticky-col col-month">月份</th>
-                <th *ngFor="let med of allMedications()">{{ med.tradeName }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let monthRow of searchResult()">
-                <td class="sticky-col col-month">{{ $any(monthRow).month }}</td>
-                <td *ngFor="let med of allMedications()">
-                  {{ formatOrderCell($any(monthRow).orders[med.code], $any(monthRow).month) }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- (B) 醫囑檢視頁籤（透析醫囑，每人最新一筆） -->
-    <div class="tab-panel query-panel" [style.display]="activeTab() === 'dialysis' ? 'flex' : 'none'">
-      <div class="search-controls">
-        <div class="search-type-toggle">
-          <button [class.active]="dialysisViewMode() === 'group'" (click)="dialysisViewMode.set('group')">
-            群組搜尋
-          </button>
-          <button [class.active]="dialysisViewMode() === 'all'" (click)="dialysisViewMode.set('all')">
-            全部清單
-          </button>
-        </div>
-
-        <div *ngIf="dialysisViewMode() === 'group'" class="group-filters">
-          <select [ngModel]="dialysisGroupFreq()" (ngModelChange)="dialysisGroupFreq.set($event)">
-            <option value="一三五">一三五</option>
-            <option value="二四六">二四六</option>
-            <option value="other">其他</option>
-          </select>
-          <select [ngModel]="dialysisGroupShift()" (ngModelChange)="dialysisGroupShift.set($event)">
-            <option value="early">早班</option>
-            <option value="noon">午班</option>
-            <option value="late">晚班</option>
-          </select>
-        </div>
-
-        <div *ngIf="dialysisViewMode() === 'all'" class="individual-filters">
-          <input
-            type="text"
-            [ngModel]="dialysisSearchTerm()"
-            (ngModelChange)="dialysisSearchTerm.set($event)"
-            placeholder="搜尋姓名 / 病歷號 / 模式..."
-          />
-          <label style="display: flex; align-items: center; gap: 4px; white-space: nowrap;">
+        @if (searchType() === 'individual') {
+          <div class="individual-filters">
             <input
-              type="checkbox"
-              [ngModel]="showDeletedDialysis()"
-              (ngModelChange)="showDeletedDialysis.set($event)"
-            />
-            含已離開病人
-          </label>
-        </div>
-        <button (click)="loadDialysisOrders()" [disabled]="isDialysisLoading()" class="search-btn">
-          <i class="fas fa-rotate"></i> {{ isDialysisLoading() ? '載入中...' : '重新整理' }}
-        </button>
-        <button
-          (click)="exportDialysisOrdersToExcel()"
-          [disabled]="isDialysisLoading() || displayedDialysisRows().length === 0"
-          class="export-btn"
-        >
-          <i class="fas fa-file-excel"></i> 匯出 Excel
-        </button>
-      </div>
+              type="text"
+              [ngModel]="individualSearchTerm()"
+              (ngModelChange)="individualSearchTerm.set($event)"
+              placeholder="輸入姓名或病歷號..."
+              (keyup.enter)="handleSearch()"
+              />
+              <div class="year-selector">
+                <button (click)="changeYear(-1)">&lt; 上一年</button>
+                <span>{{ individualSearchYear() }} 年</span>
+                <button (click)="changeYear(1)">下一年 ></button>
+              </div>
+            </div>
+          }
 
-      <div class="results-display">
-        <div *ngIf="isDialysisLoading()" class="loading-state">
-          <div class="loading-spinner"></div>
-          正在載入透析醫囑資料...
-        </div>
-        <div *ngIf="!isDialysisLoading() && dialysisLoaded() && dialysisRows().length === 0" class="empty-state">
-          尚無透析醫囑資料，請先到「資料上傳」頁籤上傳 E1. 備藥前置作業 Excel。
-        </div>
-        <div
-          *ngIf="!isDialysisLoading() && dialysisRows().length > 0 && displayedDialysisRows().length === 0"
-          class="empty-state"
-        >
-          查無符合條件的透析醫囑資料。
-        </div>
-        <div *ngIf="!isDialysisLoading() && displayedDialysisRows().length > 0" class="table-container">
-          <table class="dialysis-table" [class.mode-group]="dialysisViewMode() === 'group'">
-            <thead>
-              <tr>
-                <th *ngIf="dialysisViewMode() === 'group'" class="sticky-col col-dbednum">床號</th>
-                <th class="sticky-col col-dmrn">病歷號</th>
-                <th class="sticky-col col-dname">姓名</th>
-                <th>血管通路</th>
-                <th>模式</th>
-                <th>透析時間</th>
-                <th>乾體重</th>
-                <th>AK</th>
-                <th>藥水Ca</th>
-                <th>血液流速</th>
-                <th>透析液流速</th>
-                <th>外循沖洗</th>
-                <th>初劑量</th>
-                <th>維持劑</th>
-                <th>醫囑日期</th>
-                <th>歷次</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let row of displayedDialysisRows()">
-                <td *ngIf="dialysisViewMode() === 'group'" class="sticky-col col-dbednum">{{ row.rule?.bedNum ?? '-' }}</td>
-                <td class="sticky-col col-dmrn">{{ row.medicalRecordNumber }}</td>
-                <td class="sticky-col col-dname">{{ row.patientName }}</td>
-                <td>{{ row.vascAccess || '-' }}</td>
-                <td>{{ row.orders['mode'] || '-' }}</td>
-                <td>{{ formatDialysisTime(row.orders) }}</td>
-                <td>{{ row.orders['dryWeight'] || '-' }}</td>
-                <td [title]="akWeeklyTitle(row.orders)">{{ row.orders['ak'] || '-' }}</td>
-                <td>{{ row.orders['dialysateCa'] || '-' }}</td>
-                <td>{{ row.orders['bloodFlow'] || '-' }}</td>
-                <td>{{ row.orders['dialysateFlow'] || '-' }}</td>
-                <td>{{ row.orders['heparinRinse'] || '-' }}</td>
-                <td>{{ row.orders['heparinInitial'] || '-' }}</td>
-                <td>{{ row.orders['heparinMaintenance'] || '-' }}</td>
-                <td>{{ row.effectiveDate }}</td>
-                <td>{{ row.recordCount }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+          <button (click)="handleSearch()" [disabled]="isLoading()" class="search-btn">
+            <i class="fas fa-search"></i> {{ isLoading() ? '查詢中...' : '查詢' }}
+          </button>
 
-    <!-- (C) 資料上傳頁籤 -->
-    <div class="tab-panel upload-panel" [style.display]="activeTab() === 'upload' ? 'flex' : 'none'">
-      <div class="upload-core-panel">
-        <h4>藥囑上傳（D1.1 洗腎醫囑）</h4>
-        <div class="upload-month-selector">
-          <label>目標月份</label>
-          <input type="month" [ngModel]="uploadTargetMonth()" (ngModelChange)="uploadTargetMonth.set($event)" />
-          <span class="upload-month-hint">系統也會從檔名自動解析月份（如 202603）</span>
+          <button
+            (click)="exportOrdersToExcel()"
+            [disabled]="isLoading() || searchResult().length === 0"
+            class="export-btn"
+            >
+            <i class="fas fa-file-excel"></i> 匯出 Excel
+          </button>
         </div>
-        <div
-          class="upload-drop-zone"
-          [class.is-dragover]="isDragOver()"
-          (dragover)="onDragOver($event)"
-          (dragleave)="onDragLeave($event)"
-          (drop)="handleFileDrop($event)"
-        >
-          <div class="upload-icon"><i class="fas fa-pills"></i></div>
-          <h3 *ngIf="!selectedFile()">拖曳藥囑 Excel 檔案至此，或點擊按鈕選擇</h3>
-          <h3 *ngIf="selectedFile()">
-            已選擇檔案：<strong>{{ selectedFile()!.name }}</strong>
-          </h3>
-          <p class="upload-hint">
-            支援 .xlsx, .xls 格式。請確保檔案包含 '病歷號', '醫令碼', '名稱', '異動日期' 等欄位。
-          </p>
-          <p class="upload-hint upload-warning">
-            ⚠️ 上傳後會覆蓋該月份的所有舊藥囑資料。
-          </p>
-          <input
-            id="file-input"
-            type="file"
-            (change)="handleFileSelect($event)"
-            accept=".xlsx, .xls"
-            [disabled]="isUploading()"
-          />
-          <label for="file-input" class="file-input-label">{{
-            selectedFile() ? '重新選擇檔案' : '選擇檔案'
-          }}</label>
-        </div>
-        <button
-          class="upload-btn-main"
-          (click)="handleUpload()"
-          [disabled]="!selectedFile() || isUploading()"
-        >
-          {{ isUploading() ? '處理中...' : '開始上傳' }}
-        </button>
-        <div
-          *ngIf="uploadResult()"
-          class="upload-result-toast"
-          [class.has-error]="uploadResult()!.errorCount > 0"
-          [class.is-success]="uploadResult()!.errorCount === 0"
-        >
-          <p>{{ uploadResult()!.message }}</p>
-          <ul *ngIf="uploadResult()!.errors && uploadResult()!.errors!.length > 0">
-            <li *ngFor="let error of uploadResult()!.errors">
-              第 {{ error.rowNumber }} 行: {{ error.reason }}
-            </li>
-          </ul>
+
+        <!-- 2. 查詢結果顯示區 -->
+        <div class="results-display">
+          @if (isLoading()) {
+            <div class="loading-state">
+              <div class="loading-spinner"></div>
+              正在查詢藥囑資料...
+            </div>
+          }
+          @if (!isLoading() && !searchPerformed()) {
+            <div class="placeholder-text">請選擇條件並點擊查詢。</div>
+          }
+          @if (!isLoading() && searchPerformed() && searchResult().length === 0) {
+            <div class="empty-state">
+              查無符合條件的藥囑資料。
+            </div>
+          }
+          @if (!isLoading() && searchPerformed() && searchResult().length > 0) {
+            <div class="table-container">
+              <!-- 群組搜尋結果表格 -->
+              @if (searchType() === 'group') {
+                <table>
+                  <thead>
+                    <tr>
+                      <th class="sticky-col col-freq">頻率</th>
+                      <th class="sticky-col col-shift">班別</th>
+                      <th class="sticky-col col-bed">床號</th>
+                      <th class="sticky-col col-name">姓名</th>
+                      @for (med of allMedications(); track med) {
+                        <th>{{ med.tradeName }}</th>
+                      }
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (patientRow of searchResult(); track patientRow) {
+                      <tr>
+                        <td class="sticky-col col-freq">{{ $any(patientRow).freq }}</td>
+                        <td class="sticky-col col-shift">{{ formatShift($any(patientRow).shiftIndex) }}</td>
+                        <td class="sticky-col col-bed">{{ $any(patientRow).bedNum }}</td>
+                        <td class="sticky-col col-name">{{ $any(patientRow).patientName }}</td>
+                        @for (med of allMedications(); track med) {
+                          <td>
+                            {{ formatOrderCell($any(patientRow).orders[med.code], groupSearchParams.month) }}
+                          </td>
+                        }
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
+              <!-- 個人搜尋結果表格 -->
+              @if (searchType() === 'individual') {
+                <table>
+                  <thead>
+                    <tr>
+                      <th class="sticky-col col-month">月份</th>
+                      @for (med of allMedications(); track med) {
+                        <th>{{ med.tradeName }}</th>
+                      }
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (monthRow of searchResult(); track monthRow) {
+                      <tr>
+                        <td class="sticky-col col-month">{{ $any(monthRow).month }}</td>
+                        @for (med of allMedications(); track med) {
+                          <td>
+                            {{ formatOrderCell($any(monthRow).orders[med.code], $any(monthRow).month) }}
+                          </td>
+                        }
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
+            </div>
+          }
         </div>
       </div>
 
-      <div class="upload-core-panel">
-        <h4>醫囑上傳（E1. 備藥前置作業）</h4>
-        <div
-          class="upload-drop-zone"
-          [class.is-dragover]="isDialysisDragOver()"
-          (dragover)="onDialysisDragOver($event)"
-          (dragleave)="onDialysisDragLeave($event)"
-          (drop)="handleDialysisFileDrop($event)"
-        >
-          <div class="upload-icon"><i class="fas fa-notes-medical"></i></div>
-          <h3 *ngIf="!dialysisSelectedFile()">拖曳透析醫囑 Excel 檔案至此，或點擊按鈕選擇</h3>
-          <h3 *ngIf="dialysisSelectedFile()">
-            已選擇檔案：<strong>{{ dialysisSelectedFile()!.name }}</strong>
-          </h3>
-          <p class="upload-hint">
-            支援 .xlsx, .xls 格式。請確保檔案包含 '病歷號', '透析模式', '醫囑日期' 等欄位（E1. 備藥前置作業）。
-          </p>
-          <p class="upload-hint upload-warning">
-            ⚠️ 歷次醫囑全數保留（同病人同醫囑日期重傳會更新）；上傳後每人最新一筆會回寫病人清單的現行醫囑，
-            但若病人現行醫囑日期較新（月中手動修改過）則不覆蓋。
-          </p>
-          <input
-            id="dialysis-file-input"
-            type="file"
-            (change)="handleDialysisFileSelect($event)"
-            accept=".xlsx, .xls"
-            [disabled]="isDialysisUploading()"
-          />
-          <label for="dialysis-file-input" class="file-input-label">{{
-            dialysisSelectedFile() ? '重新選擇檔案' : '選擇檔案'
-          }}</label>
-        </div>
-        <button
-          class="upload-btn-main"
-          (click)="handleDialysisUpload()"
-          [disabled]="!dialysisSelectedFile() || isDialysisUploading()"
-        >
-          {{ isDialysisUploading() ? '處理中...' : '開始上傳' }}
-        </button>
-        <div
-          *ngIf="dialysisUploadResult()"
-          class="upload-result-toast"
-          [class.has-error]="dialysisUploadResult()!.errorCount > 0"
-          [class.is-success]="dialysisUploadResult()!.errorCount === 0"
-        >
-          <p>{{ dialysisUploadResult()!.message }}</p>
-          <ul *ngIf="dialysisUploadResult()!.errors && dialysisUploadResult()!.errors!.length > 0">
-            <li *ngFor="let error of dialysisUploadResult()!.errors">
-              第 {{ error.rowNumber }} 行: {{ error.reason }}
-            </li>
-          </ul>
-        </div>
-      </div>
-    </div>
-  </main>
-</div>
+      <!-- (B) 醫囑檢視頁籤（透析醫囑，每人最新一筆） -->
+      <div class="tab-panel query-panel" [style.display]="activeTab() === 'dialysis' ? 'flex' : 'none'">
+        <div class="search-controls">
+          <div class="search-type-toggle">
+            <button [class.active]="dialysisViewMode() === 'group'" (click)="dialysisViewMode.set('group')">
+              群組搜尋
+            </button>
+            <button [class.active]="dialysisViewMode() === 'all'" (click)="dialysisViewMode.set('all')">
+              全部清單
+            </button>
+          </div>
+
+          @if (dialysisViewMode() === 'group') {
+            <div class="group-filters">
+              <select [ngModel]="dialysisGroupFreq()" (ngModelChange)="dialysisGroupFreq.set($event)">
+                <option value="一三五">一三五</option>
+                <option value="二四六">二四六</option>
+                <option value="other">其他</option>
+              </select>
+              <select [ngModel]="dialysisGroupShift()" (ngModelChange)="dialysisGroupShift.set($event)">
+                <option value="early">早班</option>
+                <option value="noon">午班</option>
+                <option value="late">晚班</option>
+              </select>
+            </div>
+          }
+
+          @if (dialysisViewMode() === 'all') {
+            <div class="individual-filters">
+              <input
+                type="text"
+                [ngModel]="dialysisSearchTerm()"
+                (ngModelChange)="dialysisSearchTerm.set($event)"
+                placeholder="搜尋姓名 / 病歷號 / 模式..."
+                />
+                <label style="display: flex; align-items: center; gap: 4px; white-space: nowrap;">
+                  <input
+                    type="checkbox"
+                    [ngModel]="showDeletedDialysis()"
+                    (ngModelChange)="showDeletedDialysis.set($event)"
+                    />
+                    含已離開病人
+                  </label>
+                </div>
+              }
+              <button (click)="loadDialysisOrders()" [disabled]="isDialysisLoading()" class="search-btn">
+                <i class="fas fa-rotate"></i> {{ isDialysisLoading() ? '載入中...' : '重新整理' }}
+              </button>
+              <button
+                (click)="exportDialysisOrdersToExcel()"
+                [disabled]="isDialysisLoading() || displayedDialysisRows().length === 0"
+                class="export-btn"
+                >
+                <i class="fas fa-file-excel"></i> 匯出 Excel
+              </button>
+            </div>
+
+            <div class="results-display">
+              @if (isDialysisLoading()) {
+                <div class="loading-state">
+                  <div class="loading-spinner"></div>
+                  正在載入透析醫囑資料...
+                </div>
+              }
+              @if (!isDialysisLoading() && dialysisLoaded() && dialysisRows().length === 0) {
+                <div class="empty-state">
+                  尚無透析醫囑資料，請先到「資料上傳」頁籤上傳 E1. 備藥前置作業 Excel。
+                </div>
+              }
+              @if (!isDialysisLoading() && dialysisRows().length > 0 && displayedDialysisRows().length === 0) {
+                <div
+                  class="empty-state"
+                  >
+                  查無符合條件的透析醫囑資料。
+                </div>
+              }
+              @if (!isDialysisLoading() && displayedDialysisRows().length > 0) {
+                <div class="table-container">
+                  <table class="dialysis-table" [class.mode-group]="dialysisViewMode() === 'group'">
+                    <thead>
+                      <tr>
+                        @if (dialysisViewMode() === 'group') {
+                          <th class="sticky-col col-dbednum">床號</th>
+                        }
+                        <th class="sticky-col col-dmrn">病歷號</th>
+                        <th class="sticky-col col-dname">姓名</th>
+                        <th>血管通路</th>
+                        <th>模式</th>
+                        <th>透析時間</th>
+                        <th>乾體重</th>
+                        <th>AK</th>
+                        <th>藥水Ca</th>
+                        <th>血液流速</th>
+                        <th>透析液流速</th>
+                        <th>外循沖洗</th>
+                        <th>初劑量</th>
+                        <th>維持劑</th>
+                        <th>醫囑日期</th>
+                        <th>歷次</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (row of displayedDialysisRows(); track row) {
+                        <tr>
+                          @if (dialysisViewMode() === 'group') {
+                            <td class="sticky-col col-dbednum">{{ row.rule?.bedNum ?? '-' }}</td>
+                          }
+                          <td class="sticky-col col-dmrn">{{ row.medicalRecordNumber }}</td>
+                          <td class="sticky-col col-dname">{{ row.patientName }}</td>
+                          <td>{{ row.vascAccess || '-' }}</td>
+                          <td>{{ row.orders['mode'] || '-' }}</td>
+                          <td>{{ formatDialysisTime(row.orders) }}</td>
+                          <td>{{ row.orders['dryWeight'] || '-' }}</td>
+                          <td [title]="akWeeklyTitle(row.orders)">{{ row.orders['ak'] || '-' }}</td>
+                          <td>{{ row.orders['dialysateCa'] || '-' }}</td>
+                          <td>{{ row.orders['bloodFlow'] || '-' }}</td>
+                          <td>{{ row.orders['dialysateFlow'] || '-' }}</td>
+                          <td>{{ row.orders['heparinRinse'] || '-' }}</td>
+                          <td>{{ row.orders['heparinInitial'] || '-' }}</td>
+                          <td>{{ row.orders['heparinMaintenance'] || '-' }}</td>
+                          <td>{{ row.effectiveDate }}</td>
+                          <td>{{ row.recordCount }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- (C) 資料上傳頁籤 -->
+          <div class="tab-panel upload-panel" [style.display]="activeTab() === 'upload' ? 'flex' : 'none'">
+            <div class="upload-core-panel">
+              <h4>藥囑上傳（D1.1 洗腎醫囑）</h4>
+              <div class="upload-month-selector">
+                <label>目標月份</label>
+                <input type="month" [ngModel]="uploadTargetMonth()" (ngModelChange)="uploadTargetMonth.set($event)" />
+                <span class="upload-month-hint">系統也會從檔名自動解析月份（如 202603）</span>
+              </div>
+              <div
+                class="upload-drop-zone"
+                [class.is-dragover]="isDragOver()"
+                (dragover)="onDragOver($event)"
+                (dragleave)="onDragLeave($event)"
+                (drop)="handleFileDrop($event)"
+                >
+                <div class="upload-icon"><i class="fas fa-pills"></i></div>
+                @if (!selectedFile()) {
+                  <h3>拖曳藥囑 Excel 檔案至此，或點擊按鈕選擇</h3>
+                }
+                @if (selectedFile()) {
+                  <h3>
+                    已選擇檔案：<strong>{{ selectedFile()!.name }}</strong>
+                  </h3>
+                }
+                <p class="upload-hint">
+                  支援 .xlsx, .xls 格式。請確保檔案包含 '病歷號', '醫令碼', '名稱', '異動日期' 等欄位。
+                </p>
+                <p class="upload-hint upload-warning">
+                  ⚠️ 上傳後會覆蓋該月份的所有舊藥囑資料。
+                </p>
+                <input
+                  id="file-input"
+                  type="file"
+                  (change)="handleFileSelect($event)"
+                  accept=".xlsx, .xls"
+                  [disabled]="isUploading()"
+                  />
+                  <label for="file-input" class="file-input-label">{{
+                    selectedFile() ? '重新選擇檔案' : '選擇檔案'
+                  }}</label>
+                </div>
+                <button
+                  class="upload-btn-main"
+                  (click)="handleUpload()"
+                  [disabled]="!selectedFile() || isUploading()"
+                  >
+                  {{ isUploading() ? '處理中...' : '開始上傳' }}
+                </button>
+                @if (uploadResult()) {
+                  <div
+                    class="upload-result-toast"
+                    [class.has-error]="uploadResult()!.errorCount > 0"
+                    [class.is-success]="uploadResult()!.errorCount === 0"
+                    >
+                    <p>{{ uploadResult()!.message }}</p>
+                    @if (uploadResult()!.errors && uploadResult()!.errors!.length > 0) {
+                      <ul>
+                        @for (error of uploadResult()!.errors; track error) {
+                          <li>
+                            第 {{ error.rowNumber }} 行: {{ error.reason }}
+                          </li>
+                        }
+                      </ul>
+                    }
+                  </div>
+                }
+              </div>
+
+              <div class="upload-core-panel">
+                <h4>醫囑上傳（E1. 備藥前置作業）</h4>
+                <div
+                  class="upload-drop-zone"
+                  [class.is-dragover]="isDialysisDragOver()"
+                  (dragover)="onDialysisDragOver($event)"
+                  (dragleave)="onDialysisDragLeave($event)"
+                  (drop)="handleDialysisFileDrop($event)"
+                  >
+                  <div class="upload-icon"><i class="fas fa-notes-medical"></i></div>
+                  @if (!dialysisSelectedFile()) {
+                    <h3>拖曳透析醫囑 Excel 檔案至此，或點擊按鈕選擇</h3>
+                  }
+                  @if (dialysisSelectedFile()) {
+                    <h3>
+                      已選擇檔案：<strong>{{ dialysisSelectedFile()!.name }}</strong>
+                    </h3>
+                  }
+                  <p class="upload-hint">
+                    支援 .xlsx, .xls 格式。請確保檔案包含 '病歷號', '透析模式', '醫囑日期' 等欄位（E1. 備藥前置作業）。
+                  </p>
+                  <p class="upload-hint upload-warning">
+                    ⚠️ 歷次醫囑全數保留（同病人同醫囑日期重傳會更新）；上傳後每人最新一筆會回寫病人清單的現行醫囑，
+                    但若病人現行醫囑日期較新（月中手動修改過）則不覆蓋。
+                  </p>
+                  <input
+                    id="dialysis-file-input"
+                    type="file"
+                    (change)="handleDialysisFileSelect($event)"
+                    accept=".xlsx, .xls"
+                    [disabled]="isDialysisUploading()"
+                    />
+                    <label for="dialysis-file-input" class="file-input-label">{{
+                      dialysisSelectedFile() ? '重新選擇檔案' : '選擇檔案'
+                    }}</label>
+                  </div>
+                  <button
+                    class="upload-btn-main"
+                    (click)="handleDialysisUpload()"
+                    [disabled]="!dialysisSelectedFile() || isDialysisUploading()"
+                    >
+                    {{ isDialysisUploading() ? '處理中...' : '開始上傳' }}
+                  </button>
+                  @if (dialysisUploadResult()) {
+                    <div
+                      class="upload-result-toast"
+                      [class.has-error]="dialysisUploadResult()!.errorCount > 0"
+                      [class.is-success]="dialysisUploadResult()!.errorCount === 0"
+                      >
+                      <p>{{ dialysisUploadResult()!.message }}</p>
+                      @if (dialysisUploadResult()!.errors && dialysisUploadResult()!.errors!.length > 0) {
+                        <ul>
+                          @for (error of dialysisUploadResult()!.errors; track error) {
+                            <li>
+                              第 {{ error.rowNumber }} 行: {{ error.reason }}
+                            </li>
+                          }
+                        </ul>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+            </main>
+          </div>

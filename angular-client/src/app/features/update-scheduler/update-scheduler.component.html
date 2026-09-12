@@ -29,18 +29,24 @@
         </div>
       </div>
 
-      <div *ngIf="isLoading()" class="loading-state">
-        <div class="spinner"></div>
-        正在載入預約變更資料...
-      </div>
-
-      <div *ngIf="!isLoading()" class="calendar-wrapper">
-        <full-calendar #fullCalendar [options]="calendarOptions()"></full-calendar>
-        <div *ngIf="!isLoading() && scheduledUpdates().length === 0" class="empty-state">
-          <i class="fas fa-calendar-check"></i>
-          <p>目前沒有任何預約變更記錄。</p>
+      @if (isLoading()) {
+        <div class="loading-state">
+          <div class="spinner"></div>
+          正在載入預約變更資料...
         </div>
-      </div>
+      }
+
+      @if (!isLoading()) {
+        <div class="calendar-wrapper">
+          <full-calendar #fullCalendar [options]="calendarOptions()"></full-calendar>
+          @if (!isLoading() && scheduledUpdates().length === 0) {
+            <div class="empty-state">
+              <i class="fas fa-calendar-check"></i>
+              <p>目前沒有任何預約變更記錄。</p>
+            </div>
+          }
+        </div>
+      }
     </div>
   </main>
 
@@ -68,26 +74,28 @@
     [message]="confirmDialogMessage()"
     [hasCustomFooter]="true"
     (cancel)="closeConfirmDialog()"
-  >
+    >
     <div footer class="dialog-footer-custom">
       <button class="btn btn-secondary" (click)="closeConfirmDialog()">關閉</button>
       <div>
-        <button
-          *ngIf="currentUpdateForAction() && currentUpdateForAction().status === 'pending'"
-          class="btn btn-primary"
-          (click)="handleEdit()"
-          [disabled]="isPageLocked()"
-        >
-          修改
-        </button>
-        <button
-          *ngIf="currentUpdateForAction() && canDeleteUpdate(currentUpdateForAction())"
-          class="btn btn-danger"
-          (click)="handleDelete()"
-          [disabled]="isPageLocked()"
-        >
-          撤銷此預約
-        </button>
+        @if (currentUpdateForAction() && currentUpdateForAction().status === 'pending') {
+          <button
+            class="btn btn-primary"
+            (click)="handleEdit()"
+            [disabled]="isPageLocked()"
+            >
+            修改
+          </button>
+        }
+        @if (currentUpdateForAction() && canDeleteUpdate(currentUpdateForAction())) {
+          <button
+            class="btn btn-danger"
+            (click)="handleDelete()"
+            [disabled]="isPageLocked()"
+            >
+            撤銷此預約
+          </button>
+        }
       </div>
     </div>
   </app-confirm-dialog>

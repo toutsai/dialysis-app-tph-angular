@@ -1,12 +1,13 @@
-import { Component, Input, Output, EventEmitter, OnInit, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnInit, ViewChild, ElementRef, AfterViewChecked, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-ward-number-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './ward-number-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './ward-number-dialog.component.css'
 })
 export class WardNumberDialogComponent implements OnInit, AfterViewChecked {

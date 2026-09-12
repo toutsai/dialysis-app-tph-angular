@@ -1,7 +1,7 @@
 import { loadXlsx } from '@/utils/xlsxLoader';
 // Standalone 版：已移除 Firebase
-import { Component, inject, signal, computed, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, inject, signal, computed, ViewChild, ElementRef, AfterViewInit, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@services/api-manager.service';
 import { SHIFT_CODES, getShiftDisplayName } from '@/constants/scheduleConstants';
@@ -59,8 +59,9 @@ Chart.register(...registerables);
 @Component({
   selector: 'app-reporting',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './reporting.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './reporting.component.css'
 })
 export class ReportingComponent implements AfterViewInit {

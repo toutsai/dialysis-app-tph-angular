@@ -4,198 +4,256 @@
       <h3>
         <i class="fas fa-chalkboard-teacher"></i>
         初透病人衛教紀錄
-        <span class="edu-sub" *ngIf="patientName">— {{ patientName }}<ng-container *ngIf="medicalRecordNumber">（{{ medicalRecordNumber }}）</ng-container></span>
+        @if (patientName) {
+          <span class="edu-sub">— {{ patientName }}@if (medicalRecordNumber) {
+            （{{ medicalRecordNumber }}）
+          }</span>
+        }
       </h3>
       <div class="edu-header-actions">
-        <span class="edu-progress" *ngIf="!isLoading()">已完成 {{ completedCount }}/12</span>
+        @if (!isLoading()) {
+          <span class="edu-progress">已完成 {{ completedCount }}/12</span>
+        }
         <button class="edu-btn edu-btn-light" (click)="print()" [disabled]="isLoading()">
           <i class="fas fa-print"></i> 列印
         </button>
-        <button class="edu-btn edu-btn-primary" *ngIf="canEdit" (click)="save()" [disabled]="isLoading() || isSaving()">
-          <i class="fas fa-save"></i> {{ isSaving() ? '儲存中...' : '儲存' }}
-        </button>
+        @if (canEdit) {
+          <button class="edu-btn edu-btn-primary" (click)="save()" [disabled]="isLoading() || isSaving()">
+            <i class="fas fa-save"></i> {{ isSaving() ? '儲存中...' : '儲存' }}
+          </button>
+        }
         <button class="edu-close" (click)="onClose()" title="關閉"><i class="fas fa-times"></i></button>
       </div>
     </div>
 
-    <div class="edu-meta" *ngIf="!isLoading()">
-      <span class="edu-meta-field">
-        入院日期：
-        <input type="date" class="edu-meta-input" [(ngModel)]="admissionDate" [disabled]="!canEdit" />
-      </span>
-      <span *ngIf="firstDialysisDate">首透日期：{{ firstDialysisDate }}</span>
-      <span class="edu-nurse" [class.edu-nurse-none]="!primaryNurse()"
-            title="來源：使用者管理的主護病人照護清單">
-        <i class="fas fa-user-nurse"></i>
-        主護：{{ primaryNurse()?.nurseName || '未分配' }}
-      </span>
-      <label class="edu-paper-chk"
-             title="此病人的衛教以紙本進行：不列入電子未衛教判定，改列「未衛教整合」的紙本頁籤">
-        <input type="checkbox" [ngModel]="paperEducation()" (ngModelChange)="onPaperEducationChange($event)"
-               [disabled]="!canEdit" />
-        已紙本衛教
-      </label>
-      <label class="edu-paper-chk" [class.edu-paper-dim]="!paperEducation()"
-             title="紙本衛教全部完成（視為全數通過）；需先勾選「已紙本衛教」">
-        <input type="checkbox" [ngModel]="paperCompleted()" (ngModelChange)="paperCompleted.set($event)"
-               [disabled]="!canEdit || !paperEducation()" />
-        紙本衛教已完成
-      </label>
-    </div>
-
-    <div class="edu-body">
-      <div *ngIf="isLoading()" class="edu-loading">
-        <div class="spinner"></div><p>載入中...</p>
-      </div>
-
-      <table *ngIf="!isLoading()" class="edu-table">
-        <thead>
-          <tr>
-            <th class="col-idx">次數</th>
-            <th class="col-date">透析日期</th>
-            <th>主題</th>
-            <th class="col-sign-cell">衛教者/日期</th>
-            <th class="col-sign">被衛教者簽名</th>
-            <th class="col-sign-cell">回示教日期/護理師</th>
-            <th class="col-sign-cell" [title]="primaryNurse() ? '主護：' + primaryNurse()!.nurseName : '尚未在照護清單分配主護'">
-              回示教通過日/主護簽章
-              <span class="th-nurse" *ngIf="primaryNurse()">（{{ primaryNurse()!.nurseName }}）</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let s of sessions()" [class.row-alert]="needsAttention(s)">
-            <td class="col-idx">{{ s.index }}</td>
-            <td class="col-date">
-              <input type="date" [(ngModel)]="s.dialysisDate" [disabled]="!canEdit" />
-            </td>
-            <td>
-              <div class="topic-cell">
-                <select class="topic-select" [(ngModel)]="s.topic" [disabled]="!canEdit">
-                  <option value="">（請選擇主題）</option>
-                  <option *ngFor="let t of topicOptions(s)" [value]="t">{{ t }}</option>
-                  <option *ngIf="s.topic && !topics().includes(s.topic)" [value]="s.topic">{{ s.topic }}</option>
-                </select>
-                <button *ngIf="canSkip(s)" type="button" class="skip-btn"
-                        (click)="skipTopic(s)"
-                        title="主題不合適（如尚未做動靜脈瘻管）：此主題排到最後，帶入下一個">
-                  跳過
-                </button>
-              </div>
-            </td>
-            <td class="col-sign-cell">
-              <button type="button" class="sign-cell" [class.signed]="s.educatorSign" [disabled]="!canEdit"
-                      (click)="toggleSign(s, 'educatorSign')"
-                      [title]="s.educatorSign ? '點選取消簽核' : '點選簽核（蓋章＝您的姓名＋今日）'">
-                {{ s.educatorSign ? signLabel(s.educatorSign) : '點選簽核' }}
-              </button>
-            </td>
-            <td class="col-sign">
-              <button type="button" class="sig-btn" [class.has-sig]="!!s.signature" [disabled]="!canEdit"
-                      (click)="openSignPad(s)"
-                      [title]="canEdit ? '點選開啟簽名板讓病人簽名' : ''">
-                <img *ngIf="isImageSig(s.signature)" [src]="s.signature" class="sig-thumb" alt="簽名" />
-                <span *ngIf="!isImageSig(s.signature) && s.signature" class="sig-text">{{ s.signature }}</span>
-                <span *ngIf="!s.signature" class="sig-placeholder"><i class="fas fa-pen-nib"></i> 點選簽名</span>
-              </button>
-            </td>
-            <td class="col-sign-cell">
-              <button type="button" class="sign-cell" [class.signed]="s.returnDemoSign" [disabled]="!canEdit"
-                      (click)="toggleSign(s, 'returnDemoSign')"
-                      [title]="s.returnDemoSign ? '點選取消簽核' : '點選簽核（蓋章＝您的姓名＋今日）'">
-                {{ s.returnDemoSign ? signLabel(s.returnDemoSign) : '點選簽核' }}
-              </button>
-            </td>
-            <td class="col-sign-cell">
-              <button type="button" class="sign-cell" [class.signed]="s.passSign" [disabled]="!canEdit"
-                      (click)="toggleSign(s, 'passSign')"
-                      [title]="passSignTitle(s)">
-                {{ s.passSign ? signLabel(s.passSign) : '點選簽核' }}
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <!-- 窄螢幕（直式平板）：分次卡片，觸控友善 -->
-      <div class="edu-scards" *ngIf="!isLoading()">
-        <div class="sc" *ngFor="let s of sessions()" [class.row-alert]="needsAttention(s)">
-          <div class="sc-head">
-            <span class="sc-idx">第 {{ s.index }} 次</span>
-            <label class="sc-date-field">透析日期
-              <input type="date" [(ngModel)]="s.dialysisDate" [disabled]="!canEdit" />
+    @if (!isLoading()) {
+      <div class="edu-meta">
+        <span class="edu-meta-field">
+          入院日期：
+          <input type="date" class="edu-meta-input" [(ngModel)]="admissionDate" [disabled]="!canEdit" />
+        </span>
+        @if (firstDialysisDate) {
+          <span>首透日期：{{ firstDialysisDate }}</span>
+        }
+        <span class="edu-nurse" [class.edu-nurse-none]="!primaryNurse()"
+          title="來源：使用者管理的主護病人照護清單">
+          <i class="fas fa-user-nurse"></i>
+          主護：{{ primaryNurse()?.nurseName || '未分配' }}
+        </span>
+        <label class="edu-paper-chk"
+          title="此病人的衛教以紙本進行：不列入電子未衛教判定，改列「未衛教整合」的紙本頁籤">
+          <input type="checkbox" [ngModel]="paperEducation()" (ngModelChange)="onPaperEducationChange($event)"
+            [disabled]="!canEdit" />
+            已紙本衛教
+          </label>
+          <label class="edu-paper-chk" [class.edu-paper-dim]="!paperEducation()"
+            title="紙本衛教全部完成（視為全數通過）；需先勾選「已紙本衛教」">
+            <input type="checkbox" [ngModel]="paperCompleted()" (ngModelChange)="paperCompleted.set($event)"
+              [disabled]="!canEdit || !paperEducation()" />
+              紙本衛教已完成
             </label>
           </div>
-          <div class="topic-cell">
-            <select class="topic-select sc-topic" [(ngModel)]="s.topic" [disabled]="!canEdit">
-              <option value="">（請選擇主題）</option>
-              <option *ngFor="let t of topicOptions(s)" [value]="t">{{ t }}</option>
-              <option *ngIf="s.topic && !topics().includes(s.topic)" [value]="s.topic">{{ s.topic }}</option>
-            </select>
-            <button *ngIf="canSkip(s)" type="button" class="skip-btn"
-                    (click)="skipTopic(s)"
-                    title="主題不合適：此主題排到最後，帶入下一個">
-              跳過
-            </button>
-          </div>
-          <div class="sc-signs">
-            <button type="button" class="sc-tile" [class.signed]="s.educatorSign" [disabled]="!canEdit"
-                    (click)="toggleSign(s, 'educatorSign')">
-              <span class="sc-tile-label">衛教者簽核</span>
-              <span class="sc-tile-val">{{ s.educatorSign ? signLabel(s.educatorSign) : '點選簽核' }}</span>
-            </button>
-            <button type="button" class="sc-tile sc-sig" [class.signed]="!!s.signature" [disabled]="!canEdit"
-                    (click)="openSignPad(s)">
-              <span class="sc-tile-label">被衛教者簽名</span>
-              <img *ngIf="isImageSig(s.signature)" [src]="s.signature" class="sig-thumb" alt="簽名" />
-              <span *ngIf="!isImageSig(s.signature) && s.signature" class="sc-tile-val">{{ s.signature }}</span>
-              <span *ngIf="!s.signature" class="sc-tile-val ph"><i class="fas fa-pen-nib"></i> 點選簽名</span>
-            </button>
-            <button type="button" class="sc-tile" [class.signed]="s.returnDemoSign" [disabled]="!canEdit"
-                    (click)="toggleSign(s, 'returnDemoSign')">
-              <span class="sc-tile-label">回示教日期/護理師</span>
-              <span class="sc-tile-val">{{ s.returnDemoSign ? signLabel(s.returnDemoSign) : '點選簽核' }}</span>
-            </button>
-            <button type="button" class="sc-tile" [class.signed]="s.passSign" [disabled]="!canEdit"
-                    (click)="toggleSign(s, 'passSign')" [title]="passSignTitle(s)">
-              <span class="sc-tile-label">回示教通過/主護簽章<ng-container *ngIf="primaryNurse()">（{{ primaryNurse()!.nurseName }}）</ng-container></span>
-              <span class="sc-tile-val">{{ s.passSign ? signLabel(s.passSign) : '點選簽核' }}</span>
-            </button>
-          </div>
+        }
+
+        <div class="edu-body">
+          @if (isLoading()) {
+            <div class="edu-loading">
+              <div class="spinner"></div><p>載入中...</p>
+            </div>
+          }
+
+          @if (!isLoading()) {
+            <table class="edu-table">
+              <thead>
+                <tr>
+                  <th class="col-idx">次數</th>
+                  <th class="col-date">透析日期</th>
+                  <th>主題</th>
+                  <th class="col-sign-cell">衛教者/日期</th>
+                  <th class="col-sign">被衛教者簽名</th>
+                  <th class="col-sign-cell">回示教日期/護理師</th>
+                  <th class="col-sign-cell" [title]="primaryNurse() ? '主護：' + primaryNurse()!.nurseName : '尚未在照護清單分配主護'">
+                    回示教通過日/主護簽章
+                    @if (primaryNurse()) {
+                      <span class="th-nurse">（{{ primaryNurse()!.nurseName }}）</span>
+                    }
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (s of sessions(); track s) {
+                  <tr [class.row-alert]="needsAttention(s)">
+                    <td class="col-idx">{{ s.index }}</td>
+                    <td class="col-date">
+                      <input type="date" [(ngModel)]="s.dialysisDate" [disabled]="!canEdit" />
+                    </td>
+                    <td>
+                      <div class="topic-cell">
+                        <select class="topic-select" [(ngModel)]="s.topic" [disabled]="!canEdit">
+                          <option value="">（請選擇主題）</option>
+                          @for (t of topicOptions(s); track t) {
+                            <option [value]="t">{{ t }}</option>
+                          }
+                          @if (s.topic && !topics().includes(s.topic)) {
+                            <option [value]="s.topic">{{ s.topic }}</option>
+                          }
+                        </select>
+                        @if (canSkip(s)) {
+                          <button type="button" class="skip-btn"
+                            (click)="skipTopic(s)"
+                            title="主題不合適（如尚未做動靜脈瘻管）：此主題排到最後，帶入下一個">
+                            跳過
+                          </button>
+                        }
+                      </div>
+                    </td>
+                    <td class="col-sign-cell">
+                      <button type="button" class="sign-cell" [class.signed]="s.educatorSign" [disabled]="!canEdit"
+                        (click)="toggleSign(s, 'educatorSign')"
+                        [title]="s.educatorSign ? '點選取消簽核' : '點選簽核（蓋章＝您的姓名＋今日）'">
+                        {{ s.educatorSign ? signLabel(s.educatorSign) : '點選簽核' }}
+                      </button>
+                    </td>
+                    <td class="col-sign">
+                      <button type="button" class="sig-btn" [class.has-sig]="!!s.signature" [disabled]="!canEdit"
+                        (click)="openSignPad(s)"
+                        [title]="canEdit ? '點選開啟簽名板讓病人簽名' : ''">
+                        @if (isImageSig(s.signature)) {
+                          <img [src]="s.signature" class="sig-thumb" alt="簽名" />
+                        }
+                        @if (!isImageSig(s.signature) && s.signature) {
+                          <span class="sig-text">{{ s.signature }}</span>
+                        }
+                        @if (!s.signature) {
+                          <span class="sig-placeholder"><i class="fas fa-pen-nib"></i> 點選簽名</span>
+                        }
+                      </button>
+                    </td>
+                    <td class="col-sign-cell">
+                      <button type="button" class="sign-cell" [class.signed]="s.returnDemoSign" [disabled]="!canEdit"
+                        (click)="toggleSign(s, 'returnDemoSign')"
+                        [title]="s.returnDemoSign ? '點選取消簽核' : '點選簽核（蓋章＝您的姓名＋今日）'">
+                        {{ s.returnDemoSign ? signLabel(s.returnDemoSign) : '點選簽核' }}
+                      </button>
+                    </td>
+                    <td class="col-sign-cell">
+                      <button type="button" class="sign-cell" [class.signed]="s.passSign" [disabled]="!canEdit"
+                        (click)="toggleSign(s, 'passSign')"
+                        [title]="passSignTitle(s)">
+                        {{ s.passSign ? signLabel(s.passSign) : '點選簽核' }}
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+
+          <!-- 窄螢幕（直式平板）：分次卡片，觸控友善 -->
+          @if (!isLoading()) {
+            <div class="edu-scards">
+              @for (s of sessions(); track s) {
+                <div class="sc" [class.row-alert]="needsAttention(s)">
+                  <div class="sc-head">
+                    <span class="sc-idx">第 {{ s.index }} 次</span>
+                    <label class="sc-date-field">透析日期
+                      <input type="date" [(ngModel)]="s.dialysisDate" [disabled]="!canEdit" />
+                    </label>
+                  </div>
+                  <div class="topic-cell">
+                    <select class="topic-select sc-topic" [(ngModel)]="s.topic" [disabled]="!canEdit">
+                      <option value="">（請選擇主題）</option>
+                      @for (t of topicOptions(s); track t) {
+                        <option [value]="t">{{ t }}</option>
+                      }
+                      @if (s.topic && !topics().includes(s.topic)) {
+                        <option [value]="s.topic">{{ s.topic }}</option>
+                      }
+                    </select>
+                    @if (canSkip(s)) {
+                      <button type="button" class="skip-btn"
+                        (click)="skipTopic(s)"
+                        title="主題不合適：此主題排到最後，帶入下一個">
+                        跳過
+                      </button>
+                    }
+                  </div>
+                  <div class="sc-signs">
+                    <button type="button" class="sc-tile" [class.signed]="s.educatorSign" [disabled]="!canEdit"
+                      (click)="toggleSign(s, 'educatorSign')">
+                      <span class="sc-tile-label">衛教者簽核</span>
+                      <span class="sc-tile-val">{{ s.educatorSign ? signLabel(s.educatorSign) : '點選簽核' }}</span>
+                    </button>
+                    <button type="button" class="sc-tile sc-sig" [class.signed]="!!s.signature" [disabled]="!canEdit"
+                      (click)="openSignPad(s)">
+                      <span class="sc-tile-label">被衛教者簽名</span>
+                      @if (isImageSig(s.signature)) {
+                        <img [src]="s.signature" class="sig-thumb" alt="簽名" />
+                      }
+                      @if (!isImageSig(s.signature) && s.signature) {
+                        <span class="sc-tile-val">{{ s.signature }}</span>
+                      }
+                      @if (!s.signature) {
+                        <span class="sc-tile-val ph"><i class="fas fa-pen-nib"></i> 點選簽名</span>
+                      }
+                    </button>
+                    <button type="button" class="sc-tile" [class.signed]="s.returnDemoSign" [disabled]="!canEdit"
+                      (click)="toggleSign(s, 'returnDemoSign')">
+                      <span class="sc-tile-label">回示教日期/護理師</span>
+                      <span class="sc-tile-val">{{ s.returnDemoSign ? signLabel(s.returnDemoSign) : '點選簽核' }}</span>
+                    </button>
+                    <button type="button" class="sc-tile" [class.signed]="s.passSign" [disabled]="!canEdit"
+                      (click)="toggleSign(s, 'passSign')" [title]="passSignTitle(s)">
+                      <span class="sc-tile-label">回示教通過/主護簽章@if (primaryNurse()) {
+                        （{{ primaryNurse()!.nurseName }}）
+                      }</span>
+                      <span class="sc-tile-val">{{ s.passSign ? signLabel(s.passSign) : '點選簽核' }}</span>
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+
+          <!-- 待衛教主題順序（跳過的主題會排到最後；已衛教的不再出現） -->
+          @if (!isLoading() && pendingTopics.length) {
+            <div class="edu-pending">
+              <span class="edu-pending-label">待衛教順序：</span>
+              @for (t of pendingTopics; track t; let i = $index) {
+                <span class="edu-pending-item">
+                  {{ i + 1 }}. {{ t }}
+                </span>
+              }
+            </div>
+          }
         </div>
       </div>
 
-      <!-- 待衛教主題順序（跳過的主題會排到最後；已衛教的不再出現） -->
-      <div class="edu-pending" *ngIf="!isLoading() && pendingTopics.length">
-        <span class="edu-pending-label">待衛教順序：</span>
-        <span class="edu-pending-item" *ngFor="let t of pendingTopics; let i = index">
-          {{ i + 1 }}. {{ t }}
-        </span>
+      <!-- 被衛教者手寫簽名板（平板觸控） -->
+      @if (signPadVisible()) {
+        <div class="sig-overlay" (click)="closeSignPad()">
+          <div class="sig-pad" (click)="$event.stopPropagation()">
+            <div class="sig-pad-header">
+              <span><i class="fas fa-pen-nib"></i> 被衛教者簽名@if (patientName) {
+              — {{ patientName }}
+            }</span>
+            <button class="edu-close" (click)="closeSignPad()" title="關閉"><i class="fas fa-times"></i></button>
+          </div>
+          <div class="sig-canvas-wrap">
+            <canvas #sigCanvas class="sig-canvas"
+              (pointerdown)="onSigDown($event)"
+              (pointermove)="onSigMove($event)"
+              (pointerup)="onSigUp()"
+              (pointercancel)="onSigUp()"
+            (pointerleave)="onSigUp()"></canvas>
+          </div>
+          <p class="sig-hint">請用觸控筆或手指於上方白色區域簽名，完成後按「確認」。</p>
+          <div class="sig-pad-actions">
+            <button class="edu-btn edu-btn-light" (click)="clearSig()"><i class="fas fa-eraser"></i> 清除</button>
+            <button class="edu-btn edu-btn-light" (click)="closeSignPad()">取消</button>
+            <button class="edu-btn edu-btn-primary" (click)="confirmSig()"><i class="fas fa-check"></i> 確認</button>
+          </div>
+        </div>
       </div>
-    </div>
+    }
   </div>
-
-  <!-- 被衛教者手寫簽名板（平板觸控） -->
-  <div class="sig-overlay" *ngIf="signPadVisible()" (click)="closeSignPad()">
-    <div class="sig-pad" (click)="$event.stopPropagation()">
-      <div class="sig-pad-header">
-        <span><i class="fas fa-pen-nib"></i> 被衛教者簽名<ng-container *ngIf="patientName"> — {{ patientName }}</ng-container></span>
-        <button class="edu-close" (click)="closeSignPad()" title="關閉"><i class="fas fa-times"></i></button>
-      </div>
-      <div class="sig-canvas-wrap">
-        <canvas #sigCanvas class="sig-canvas"
-                (pointerdown)="onSigDown($event)"
-                (pointermove)="onSigMove($event)"
-                (pointerup)="onSigUp()"
-                (pointercancel)="onSigUp()"
-                (pointerleave)="onSigUp()"></canvas>
-      </div>
-      <p class="sig-hint">請用觸控筆或手指於上方白色區域簽名，完成後按「確認」。</p>
-      <div class="sig-pad-actions">
-        <button class="edu-btn edu-btn-light" (click)="clearSig()"><i class="fas fa-eraser"></i> 清除</button>
-        <button class="edu-btn edu-btn-light" (click)="closeSignPad()">取消</button>
-        <button class="edu-btn edu-btn-primary" (click)="confirmSig()"><i class="fas fa-check"></i> 確認</button>
-      </div>
-    </div>
-  </div>
-</div>

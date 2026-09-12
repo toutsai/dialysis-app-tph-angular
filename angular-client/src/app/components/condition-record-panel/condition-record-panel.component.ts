@@ -1,5 +1,5 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '@app/core/services/auth.service';
 import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@services/api-manager.service';
@@ -9,8 +9,9 @@ import { getToday } from '@/utils/dateUtils';
 @Component({
   selector: 'app-condition-record-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './condition-record-panel.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './condition-record-panel.component.css'
 })
 export class ConditionRecordPanelComponent implements OnChanges {

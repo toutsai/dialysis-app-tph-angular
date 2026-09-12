@@ -1,5 +1,5 @@
-import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
+
+import { Component, EventEmitter, Input, OnInit, Output, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '@app/core/services/api.service';
@@ -39,8 +39,9 @@ const DM_TYPE_LABELS: Record<string, string> = {
 @Component({
   selector: 'app-problem-list-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './problem-list-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './problem-list-dialog.component.css',
 })
 export class ProblemListDialogComponent implements OnInit {

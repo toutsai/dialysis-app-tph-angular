@@ -1,5 +1,5 @@
-import { Component, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
+
 import changelogData from '@/data/changelog.json';
 import { PAGE_ACCESS } from '@app/core/config/page-access';
 
@@ -21,8 +21,9 @@ interface Section {
 @Component({
   selector: 'app-usage-guide',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './usage-guide.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './usage-guide.component.css',
 })
 export class UsageGuideComponent {

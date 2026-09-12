@@ -1,8 +1,8 @@
 // src/app/features/patients/patient-summary/patient-summary.component.ts
 // 病歷查詢頁籤：選一位病人，彙整顯示初透日期、感染標記(HBV/HCV)、通路、
 // 目前/歷史透析醫囑，以及近一年本院實際透析日期(次數+清單)。
-import { Component, computed, inject, signal, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, computed, inject, signal, Input, Output, EventEmitter, OnInit, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '@services/api.service';
@@ -30,8 +30,9 @@ interface OrderHistoryEntry {
 @Component({
   selector: 'app-patient-summary',
   standalone: true,
-  imports: [CommonModule, FormsModule, PatientHistoryModalComponent, PatientBasicProfileComponent],
+  imports: [FormsModule, PatientHistoryModalComponent, PatientBasicProfileComponent],
   templateUrl: './patient-summary.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-summary.component.css',
 })
 export class PatientSummaryComponent implements OnInit {

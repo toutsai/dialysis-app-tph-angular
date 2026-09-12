@@ -1,6 +1,6 @@
 import { quarterSaveQueue } from '@/services/quarterSaveQueue';
-import { Component, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, HostListener, OnDestroy, OnInit, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '@services/auth.service';
@@ -38,8 +38,9 @@ interface NurseAssignment {
 @Component({
   selector: 'app-kidit-quarterly-input',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './kidit-quarterly-input.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './kidit-quarterly-input.component.css',
 })
 export class KiditQuarterlyInputComponent implements OnInit, OnDestroy {

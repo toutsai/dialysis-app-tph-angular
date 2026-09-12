@@ -1,6 +1,6 @@
 import { loadXlsx } from '@/utils/xlsxLoader';
 // Standalone 版：已移除 Firebase
-import { Component, inject, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
+import { Component, inject, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -119,6 +119,7 @@ const dutyAssignments: Record<string, Record<string, string | string[]>> = {
     StatsToolbarComponent,
   ],
   templateUrl: './stats.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './stats.component.css'
 })
 export class StatsComponent implements OnInit, OnDestroy {

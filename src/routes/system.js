@@ -2303,6 +2303,11 @@ router.delete('/scheduled-updates/:id', ...isEditor, async (req, res) => {
  * POST /api/system/backup
  * 手動備份資料庫
  */
+router.get('/backup-health', ...isAdmin, async (req,res) => {
+  try { const {getBackupHealth}=await import('../utils/backup.js'); res.json(await getBackupHealth()) }
+  catch(error){res.status(500).json({error:true,message:'讀取備份健康狀態失敗'})}
+})
+
 router.post('/backup', ...isAdmin, async (req, res) => {
   try {
     const { createBackup } = await import('../utils/backup.js')
@@ -2320,9 +2325,9 @@ router.post('/backup', ...isAdmin, async (req, res) => {
     })
   } catch (error) {
     console.error('備份錯誤:', error)
-    res.status(500).json({
+    res.status(error.status || 500).json({
       error: true,
-      message: '備份失敗',
+      message: error.status ? error.message : '備份失敗',
     })
   }
 })
@@ -2331,22 +2336,16 @@ router.post('/backup', ...isAdmin, async (req, res) => {
  * GET /api/system/backups
  * 取得備份列表
  */
-router.get('/backups', ...isAdmin, (req, res) => {
+router.get('/backups', ...isAdmin, async (req, res) => {
   try {
-    const db = getDatabase()
-
-    const backups = db
-      .prepare(
-        `
-      SELECT * FROM backup_history ORDER BY created_at DESC LIMIT 50
-    `,
-      )
-      .all()
-
+    const {listBackups}=await import('../utils/backup.js')
+    const backups=listBackups().slice(0,50)
 
     res.json(
       backups.map((b) => ({
         id: b.id,
+        fileExists:b.fileExists,
+        pathSafe:b.pathSafe,
         backupFile: b.backup_file,
         backupType: b.backup_type,
         fileSize: b.file_size,

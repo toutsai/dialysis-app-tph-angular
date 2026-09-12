@@ -7,8 +7,9 @@ import {
   inject,
   signal,
   computed,
+  ChangeDetectionStrategy
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FullCalendarComponent, FullCalendarModule } from '@fullcalendar/angular';
 import { CalendarOptions, CalendarApi } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -27,13 +28,13 @@ import { PatientUpdateSchedulerDialogComponent } from '@app/components/dialogs/p
   selector: 'app-update-scheduler',
   standalone: true,
   imports: [
-    CommonModule,
     FullCalendarModule,
     ConfirmDialogComponent,
     NewUpdateTypeDialogComponent,
-    PatientUpdateSchedulerDialogComponent,
-  ],
+    PatientUpdateSchedulerDialogComponent
+],
   templateUrl: './update-scheduler.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './update-scheduler.component.css',
 })
 export class UpdateSchedulerComponent implements OnInit, OnDestroy {

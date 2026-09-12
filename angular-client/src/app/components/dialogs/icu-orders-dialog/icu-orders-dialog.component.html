@@ -165,7 +165,7 @@
                               <label class="checkbox-label">
                                 <input
                                   type="radio"
-                                  [ngModel]="crrtEmergencyData[p.id]?.withdraw"
+                                  [ngModel]="$safeNavigationMigration(crrtEmergencyData[p.id]?.withdraw)"
                                   (ngModelChange)="updateEmergencyWithdraw(p.id, $event)"
                                   value="yes"
                                   [disabled]="!canEdit"
@@ -175,7 +175,7 @@
                               <label class="checkbox-label">
                                 <input
                                   type="radio"
-                                  [ngModel]="crrtEmergencyData[p.id]?.withdraw"
+                                  [ngModel]="$safeNavigationMigration(crrtEmergencyData[p.id]?.withdraw)"
                                   (ngModelChange)="updateEmergencyWithdraw(p.id, $event)"
                                   value="no"
                                   [disabled]="!canEdit"
@@ -280,7 +280,7 @@
                         <label class="radio-option">
                           <input
                             type="radio"
-                            [ngModel]="crrtEmergencyData[p.id]?.withdraw"
+                            [ngModel]="$safeNavigationMigration(crrtEmergencyData[p.id]?.withdraw)"
                             (ngModelChange)="updateEmergencyWithdraw(p.id, $event)"
                             value="yes"
                             [disabled]="!canEdit"
@@ -291,7 +291,7 @@
                         <label class="radio-option">
                           <input
                             type="radio"
-                            [ngModel]="crrtEmergencyData[p.id]?.withdraw"
+                            [ngModel]="$safeNavigationMigration(crrtEmergencyData[p.id]?.withdraw)"
                             (ngModelChange)="updateEmergencyWithdraw(p.id, $event)"
                             value="no"
                             [disabled]="!canEdit"

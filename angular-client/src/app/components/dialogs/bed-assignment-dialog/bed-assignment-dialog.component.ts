@@ -1,5 +1,5 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, OnDestroy, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { AlertDialogComponent } from '../alert-dialog/alert-dialog.component';
 
@@ -14,8 +14,9 @@ interface PendingAssignment {
 @Component({
   selector: 'app-bed-assignment-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, AlertDialogComponent],
+  imports: [FormsModule, AlertDialogComponent],
   templateUrl: './bed-assignment-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './bed-assignment-dialog.component.css'
 })
 export class BedAssignmentDialogComponent implements OnChanges, OnInit, OnDestroy {

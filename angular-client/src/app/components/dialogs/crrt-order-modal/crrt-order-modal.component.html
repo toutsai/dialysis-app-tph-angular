@@ -18,7 +18,7 @@
               ><strong>床號：</strong>{{ patientData?.wardNumber || 'N/A' }}</span
             >
             <span class="info-item"
-              ><strong>年齡：</strong>{{ calculateAge(patientData?.dateOfBirth) }} 歲</span
+              ><strong>年齡：</strong>{{ calculateAge($safeNavigationMigration(patientData?.dateOfBirth)) }} 歲</span
             >
           </div>
         </section>

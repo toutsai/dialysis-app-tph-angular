@@ -1,11 +1,12 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from '@angular/core';
+
 
 @Component({
   selector: 'app-patient-action-modal',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './patient-action-modal.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-action-modal.component.css'
 })
 export class PatientActionModalComponent {

@@ -1,5 +1,5 @@
-import { Component, Input, Output, EventEmitter, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@app/core/services/api-manager.service';
 import { UserDirectoryService } from '@app/core/services/user-directory.service';
@@ -24,8 +24,9 @@ import {
 @Component({
   selector: 'app-patient-form-modal',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './patient-form-modal.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-form-modal.component.css'
 })
 export class PatientFormModalComponent implements OnInit {

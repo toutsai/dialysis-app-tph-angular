@@ -159,6 +159,13 @@ export const routes: Routes = [
         data: { title: '腎臟病地圖' },
       },
       {
+        path: 'backup',
+        loadComponent: () => import('./features/backup/backup.component').then(m => m.BackupComponent),
+        canActivate: [roleGuard],
+        canDeactivate: [manualEditorGuard],
+        data: { title: PAGE_ACCESS.backup.title, roles: PAGE_ACCESS.backup.roles },
+      },
+      {
         path: 'user-management',
         loadComponent: () =>
           import(

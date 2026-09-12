@@ -8,7 +8,7 @@ import {
   computed,
   effect,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 // Standalone 版：已移除 Firebase
@@ -75,7 +75,7 @@ interface PatientOption {
 @Component({
   selector: 'app-collaboration',
   standalone: true,
-  imports: [CommonModule, FormsModule, TaskCreateDialogComponent, EducationRecordDialogComponent],
+  imports: [FormsModule, TaskCreateDialogComponent, EducationRecordDialogComponent],
   templateUrl: './collaboration.component.html',
   styleUrl: './collaboration.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

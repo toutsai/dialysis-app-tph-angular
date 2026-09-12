@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto'
 export function dailyLogVersion(row) {
   if (!row) return 'new'
   return createHash('sha256').update(JSON.stringify([
-    row.patient_movements, row.vascular_access_log, row.announcements,
+    row.revision || 0, row.patient_movements, row.vascular_access_log, row.announcements,
     row.stats, row.leader, row.other_notes, row.notes,
   ])).digest('hex')
 }

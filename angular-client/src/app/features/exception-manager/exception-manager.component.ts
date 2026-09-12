@@ -7,8 +7,9 @@ import {
   signal,
   computed,
   effect,
+  ChangeDetectionStrategy
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { Router, ActivatedRoute } from '@angular/router';
 import { FullCalendarComponent, FullCalendarModule } from '@fullcalendar/angular';
 import { CalendarOptions, CalendarApi } from '@fullcalendar/core';
@@ -37,15 +38,15 @@ import { formatDateTimeToLocal, parseFirestoreTimestamp } from '@/utils/dateUtil
   selector: 'app-exception-manager',
   standalone: true,
   imports: [
-    CommonModule,
     FullCalendarModule,
     AlertDialogComponent,
     ConfirmDialogComponent,
     ExceptionCreateDialogComponent,
     BedAssignmentDialogComponent,
-    MonthYearPickerComponent,
-  ],
+    MonthYearPickerComponent
+],
   templateUrl: './exception-manager.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './exception-manager.component.css',
 })
 export class ExceptionManagerComponent implements OnInit, OnDestroy {

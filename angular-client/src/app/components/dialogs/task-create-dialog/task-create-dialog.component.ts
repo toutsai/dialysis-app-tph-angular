@@ -1,5 +1,5 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 // Standalone 版：已移除 Firebase
 import { AuthService } from '@services/auth.service';
@@ -19,8 +19,9 @@ interface SupplyItem {
 @Component({
   selector: 'app-task-create-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, PatientSelectDialogComponent],
+  imports: [FormsModule, PatientSelectDialogComponent],
   templateUrl: './task-create-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './task-create-dialog.component.css'
 })
 export class TaskCreateDialogComponent implements OnChanges, OnInit {

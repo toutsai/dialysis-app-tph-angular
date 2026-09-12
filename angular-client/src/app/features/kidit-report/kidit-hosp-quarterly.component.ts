@@ -1,6 +1,6 @@
 import { quarterSaveQueue } from '@/services/quarterSaveQueue';
-import { Component, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, HostListener, OnDestroy, OnInit, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { PatientStoreService } from '@services/patient-store.service';
 import { localApi } from '@/services/localApiClient';
@@ -51,8 +51,9 @@ interface HospRow {
 @Component({
   selector: 'app-kidit-hosp-quarterly',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './kidit-hosp-quarterly.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './kidit-hosp-quarterly.component.css',
 })
 export class KiditHospQuarterlyComponent implements OnInit, OnDestroy {

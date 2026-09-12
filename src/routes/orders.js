@@ -1738,10 +1738,7 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
     console.log(`[Consumables] 接收到檔案 ${fileName}，開始解析...`)
 
     const buffer = Buffer.from(fileContent, 'base64')
-    const workbook = XLSX.read(buffer, { type: 'buffer' })
-    const sheetName = workbook.SheetNames[0]
-    const worksheet = workbook.Sheets[sheetName]
-    const sheetAsArray = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+    const sheetAsArray = await parseFirstSheet(buffer, { header: 1 })
 
     if (sheetAsArray.length < 3) {
       return res.status(400).json({

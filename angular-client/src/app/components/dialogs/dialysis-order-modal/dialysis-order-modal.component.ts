@@ -1,5 +1,5 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, inject, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@services/api-manager.service';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
@@ -9,8 +9,9 @@ import { getToday, formatDateToYYYYMMDD } from '@/utils/dateUtils';
 @Component({
   selector: 'app-dialysis-order-modal',
   standalone: true,
-  imports: [CommonModule, FormsModule, ConfirmDialogComponent],
+  imports: [FormsModule, ConfirmDialogComponent],
   templateUrl: './dialysis-order-modal.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './dialysis-order-modal.component.css'
 })
 export class DialysisOrderModalComponent implements OnInit, OnDestroy {

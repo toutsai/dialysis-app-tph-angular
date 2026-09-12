@@ -3,8 +3,8 @@
 // 資料源：當日排程（今天/未來走 live、過去走歸檔）＋ 當日護理分組（nurse_assignments）
 //        ＋ 每日應施打針劑（POST /medications/daily-injections，與臨床查閱/護理分組同一支）。
 // 依組別 A~K/外圍/未分組 分段列出 負責護理師、床號、姓名、藥名、劑量，可列印單班或整天（三班三頁）。
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, OnInit, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { ApiManagerService, type FirestoreRecord } from '@services/api-manager.service';
 import { ArchiveStoreService } from '@services/archive-store.service';
@@ -47,8 +47,9 @@ interface ShiftView {
 @Component({
   selector: 'app-clerk-injection-print',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './clerk-injection-print.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './clerk-injection-print.component.css',
 })
 export class ClerkInjectionPrintComponent implements OnInit {

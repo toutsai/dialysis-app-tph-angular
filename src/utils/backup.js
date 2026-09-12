@@ -1,165 +1,84 @@
-// 資料庫備份工具
-import { copyFileSync, mkdirSync, existsSync, statSync, readdirSync, unlinkSync } from 'fs'
-import { fileURLToPath, pathToFileURL } from 'url'
-import { dirname, join } from 'path'
-import { v4 as uuidv4 } from 'uuid'
+// Online backup uses the application's singleton; isolated verification owns only a read-only copy.
+import { mkdirSync, existsSync, statSync, lstatSync, realpathSync, unlinkSync, openSync, closeSync } from 'node:fs'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { dirname, join, resolve, basename } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { getDatabase, initDatabase } from '../db/init.js'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
-
-// 優先使用環境變數（Electron 打包後會傳入）
-const DB_PATH = process.env.DB_PATH || join(__dirname, '../../data/dialysis.db')
-// 備份目錄放在資料庫同目錄下的 backups 子目錄
-const BACKUP_DIR = process.env.BACKUP_DIR || join(dirname(DB_PATH), 'backups')
-
-// 備份保留數量
-const MAX_AUTO_BACKUPS = 30  // 自動備份保留 30 份
-const MAX_MANUAL_BACKUPS = 10 // 手動備份保留 10 份
-
-/**
- * 建立資料庫備份
- * @param {string} type - 備份類型: 'auto' 或 'manual'
- * @returns {Promise<string>} - 備份檔案名稱
- */
-export async function createBackup(type = 'auto') {
-  // 確保備份目錄存在
-  if (!existsSync(BACKUP_DIR)) {
-    mkdirSync(BACKUP_DIR, { recursive: true })
+import { verifyBackupFile } from '../services/backupVerification.js'
+const moduleDir=dirname(fileURLToPath(import.meta.url))
+const DB_PATH=resolve(process.env.DB_PATH || join(moduleDir,'../../data/dialysis.db'))
+const BACKUP_DIR=resolve(process.env.BACKUP_DIR || join(dirname(DB_PATH),'backups'))
+let active=false,waiting=0,tail=Promise.resolve()
+const at=()=>new Date().toLocaleString('sv-SE')
+function readStatus(){const row=getDatabase().prepare("SELECT status_data FROM backup_status WHERE id='latest'").get();return row?JSON.parse(row.status_data):{}}
+function updateStatus(patch){const db=getDatabase();db.prepare("INSERT INTO backup_status (id,status_data,updated_at) VALUES ('latest',?,datetime('now','localtime')) ON CONFLICT(id) DO UPDATE SET status_data=excluded.status_data,updated_at=excluded.updated_at").run(JSON.stringify({...readStatus(),...patch}))}
+function directorySafe(){return existsSync(BACKUP_DIR) && lstatSync(BACKUP_DIR).isDirectory() && !lstatSync(BACKUP_DIR).isSymbolicLink()}
+export function backupFileState(file){
+  if(typeof file!=='string'||!file||basename(file)!==file||file.includes('\\')||file.includes('/')||file==='.'||file==='..'||!directorySafe())return {pathSafe:false,fileExists:false,path:null}
+  const path=resolve(BACKUP_DIR,file)
+  if(dirname(path)!==BACKUP_DIR)return {pathSafe:false,fileExists:false,path:null}
+  try {
+    const stat=lstatSync(path)
+    if(stat.isSymbolicLink()||!stat.isFile()||dirname(realpathSync(path))!==realpathSync(BACKUP_DIR))return {pathSafe:false,fileExists:false,path:null}
+    return {pathSafe:true,fileExists:true,path,sizeBytes:stat.size}
+  }catch(error){if(error.code==='ENOENT')return {pathSafe:true,fileExists:false,path};throw error}
+}
+export function listBackups(){return getDatabase().prepare('SELECT * FROM backup_history ORDER BY created_at DESC,rowid DESC').all().map(row=>{const state=backupFileState(row.backup_file);return {...row,fileExists:state.fileExists,pathSafe:state.pathSafe}})}
+export function cleanupOldBackups(type){
+  const db=getDatabase();const limit=type==='auto'?30:10
+  const rows=db.prepare('SELECT * FROM backup_history WHERE backup_type=? ORDER BY created_at DESC,rowid DESC').all(type)
+  const warnings=[]
+  let validCopies=0
+  for(const row of rows){
+    const state=backupFileState(row.backup_file)
+    if(!state.pathSafe||!state.fileExists){warnings.push({id:row.id,message:'備份路徑異常或檔案不存在，保留紀錄'});continue}
+    validCopies++
+    if(validCopies<=limit)continue
+    try {unlinkSync(state.path);db.prepare('DELETE FROM backup_history WHERE id=?').run(row.id)}
+    catch(error){warnings.push({id:row.id,message:error.message})}
   }
-
-  // 產生備份檔名（本地時間，與 DB 時間戳慣例一致）
-  const timestamp = new Date().toLocaleString('sv-SE').replace(/[:]/g, '-').replace(' ', 'T')
-  const backupFileName = `dialysis_${type}_${timestamp}.db`
-  const backupPath = join(BACKUP_DIR, backupFileName)
-
-  // 用 SQLite 線上備份 API 產生一致性快照（含 WAL 未併回主檔的資料）。
-  // ⚠️ 勿改回 copyFileSync：對運行中的 DB 做檔案複製會漏掉 WAL 資料、且可能拿到不一致快照
-  //（舊版即此問題，2026-07-20 修復）。
-  const db = getDatabase()
-  await db.backup(backupPath)
-
-  // 取得檔案大小
-  const stats = statSync(backupPath)
-
-  // 記錄備份歷史
-  db.prepare(`
-    INSERT INTO backup_history (id, backup_file, backup_type, file_size, created_at)
-    VALUES (?, ?, ?, ?, datetime('now', 'localtime'))
-  `).run(uuidv4(), backupFileName, type, stats.size)
-
-  // 清理舊備份
-  await cleanupOldBackups(type)
-
-  console.log(`✅ 備份完成: ${backupFileName}`)
-  return backupFileName
+  return warnings
 }
-
-/**
- * 清理舊備份
- * @param {string} type - 備份類型
- */
-async function cleanupOldBackups(type) {
-  const maxBackups = type === 'auto' ? MAX_AUTO_BACKUPS : MAX_MANUAL_BACKUPS
-
-  const db = getDatabase()
-
-  // 取得此類型的所有備份，按時間排序
-  const backups = db.prepare(`
-    SELECT * FROM backup_history
-    WHERE backup_type = ?
-    ORDER BY created_at DESC
-  `).all(type)
-
-  // 刪除超過限制的舊備份
-  if (backups.length > maxBackups) {
-    const toDelete = backups.slice(maxBackups)
-
-    for (const backup of toDelete) {
-      const backupPath = join(BACKUP_DIR, backup.backup_file)
-
-      // 刪除檔案
-      if (existsSync(backupPath)) {
-        unlinkSync(backupPath)
-      }
-
-      // 刪除記錄
-      db.prepare(`DELETE FROM backup_history WHERE id = ?`).run(backup.id)
-
-      console.log(`🗑️ 已刪除舊備份: ${backup.backup_file}`)
-    }
-  }
+async function performBackup(type){
+  const attempt={at:at(),type};updateStatus({lastAttempt:attempt})
+  let backupFileName
+  try {
+    if(!existsSync(BACKUP_DIR))mkdirSync(BACKUP_DIR,{recursive:true})
+    if(!directorySafe())throw new Error('備份目錄不可為連結或非目錄')
+    backupFileName='dialysis_'+type+'_'+at().replaceAll(':','-').replace(' ','T')+'_'+randomUUID()+'.db'
+    const backupPath=join(BACKUP_DIR,backupFileName)
+    // Exclusive reservation ensures even an unexpected name collision cannot overwrite a file.
+    const descriptor=openSync(backupPath,'wx');closeSync(descriptor)
+    await getDatabase().backup(backupPath)
+    const verification=await verifyBackupFile(backupPath)
+    const sizeBytes=statSync(backupPath).size
+    getDatabase().transaction(()=>{
+      getDatabase().prepare("INSERT INTO backup_history (id,backup_file,backup_type,file_size,created_at) VALUES (?,?,?,?,datetime('now','localtime'))").run(randomUUID(),backupFileName,type,sizeBytes)
+      updateStatus({lastSuccess:{...attempt,backupFile:backupFileName,sizeBytes,verifiedAt:verification.checkedAt},verification:{...verification,backupFile:backupFileName}})
+    })()
+    updateStatus({retentionWarnings:cleanupOldBackups(type)})
+    return backupFileName
+  }catch(error){updateStatus({lastFailure:{...attempt,backupFile:backupFileName||null,message:error.message},verification:{checkedAt:at(),result:'failed',backupFile:backupFileName||null}});throw error}
 }
-
-/**
- * 還原備份
- * @param {string} backupFileName - 備份檔案名稱
- * ⚠️ 已知限制（2026-07-20 註記）：在 server 運行中直接覆蓋 DB 檔會與既有連線/WAL 衝突，
- * 正確流程是停 server → 覆蓋 → 刪除舊 -wal/-shm → 重啟。此函式僅供停機維護時使用。
- */
-export async function restoreBackup(backupFileName) {
-  const backupPath = join(BACKUP_DIR, backupFileName)
-
-  if (!existsSync(backupPath)) {
-    throw new Error(`備份檔案不存在: ${backupFileName}`)
-  }
-
-  // 先建立當前資料庫的備份
-  await createBackup('auto')
-
-  // 還原備份
-  copyFileSync(backupPath, DB_PATH)
-
-  console.log(`✅ 已還原備份: ${backupFileName}`)
+export function createBackup(type='auto'){
+  if(!['auto','manual'].includes(type))return Promise.reject(Object.assign(new Error('備份類型不正確'),{status:400}))
+  if(waiting+(active?1:0)>=3){const error=Object.assign(new Error('備份忙碌中，請稍後重試'),{status:503});updateStatus({lastAttempt:{at:at(),type},lastFailure:{at:at(),type,message:error.message}});return Promise.reject(error)}
+  waiting++
+  const request=tail.then(async()=>{waiting--;active=true;try{return await performBackup(type)}finally{active=false}})
+  tail=request.catch(()=>{})
+  return request
 }
-
-/**
- * 取得備份列表
- */
-export function listBackups() {
-  const db = getDatabase()
-
-  const backups = db.prepare(`
-    SELECT * FROM backup_history
-    ORDER BY created_at DESC
-  `).all()
-
-  return backups
+export async function getBackupHealth(){
+  const status=readStatus();const rows=listBackups();const latest=status.lastSuccess?.backupFile || rows[0]?.backup_file
+  let verification=status.verification||null
+  if(latest){const state=backupFileState(latest);if(!state.pathSafe||!state.fileExists)verification={checkedAt:at(),result:state.pathSafe?'missing':'unsafe',backupFile:latest};else{try{verification={...await verifyBackupFile(state.path),backupFile:latest}}catch(error){verification={checkedAt:at(),result:'failed',backupFile:latest,message:error.message}}}updateStatus({verification})}
+  const size=path=>{try{return statSync(path).size}catch{return null}}
+  return {lastAttempt:status.lastAttempt||null,lastSuccess:status.lastSuccess||null,lastFailure:status.lastFailure||null,database:{sizeBytes:size(DB_PATH),walBytes:size(DB_PATH+'-wal')||0},backups:{directoryAvailable:directorySafe(),trackedCount:rows.length,availableCount:rows.filter(row=>row.fileExists).length,missingCount:rows.filter(row=>row.pathSafe&&!row.fileExists).length,unsafeCount:rows.filter(row=>!row.pathSafe).length,totalBytes:rows.filter(row=>row.fileExists).reduce((sum,row)=>sum+(backupFileState(row.backup_file).sizeBytes||0),0)},verification,queue:{active,waiting},retentionWarnings:status.retentionWarnings||[]}
 }
-
-/**
- * 定時備份排程 (每日自動備份)
- */
-export function scheduleAutoBackup() {
-  // 計算到午夜的時間
-  const now = new Date()
-  const night = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate() + 1,
-    0, 0, 0 // 午夜 00:00:00
-  )
-  const msToMidnight = night.getTime() - now.getTime()
-
-  // 設定午夜執行備份
-  setTimeout(async () => {
-    await createBackup('auto')
-    // 設定每 24 小時執行一次
-    setInterval(() => createBackup('auto'), 24 * 60 * 60 * 1000)
-  }, msToMidnight)
-
-  console.log(`📅 自動備份排程已設定，下次備份時間: ${night.toLocaleString()}`)
+export async function restoreBackup(){throw new Error('禁止覆蓋運行中的資料庫；請執行 node scripts/restore-backup.mjs --source <SQLite檔案> --target-dir <全新目錄>')}
+export function scheduleAutoBackup(){
+  const now=new Date();const night=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1)
+  const run=()=>createBackup('auto').catch(error=>console.error('自動備份失敗:',error.message))
+  setTimeout(()=>{void run();setInterval(()=>{void run()},86400000)},night.getTime()-now.getTime())
 }
-
-// 如果直接執行此檔案，執行手動備份
-//（用 pathToFileURL 比對：舊版字串比對在 Windows 反斜線路徑下永遠不成立，npm run backup 曾因此靜默無作用）
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  initDatabase()
-  createBackup('manual').then(() => {
-    console.log('手動備份完成')
-    process.exit(0)
-  }).catch(err => {
-    console.error('備份失敗:', err)
-    process.exit(1)
-  })
-}
+if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){initDatabase();createBackup('manual').then(()=>{console.log('手動備份完成');process.exit(0)}).catch(error=>{console.error('備份失敗:',error.message);process.exit(1)})}

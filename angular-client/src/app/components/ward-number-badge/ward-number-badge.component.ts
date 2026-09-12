@@ -1,11 +1,11 @@
 import { ChangeDetectionStrategy, Component, Input, Output, EventEmitter, ViewChild, ElementRef, OnChanges, SimpleChanges } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-ward-number-badge',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './ward-number-badge.component.html',
   styleUrl: './ward-number-badge.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

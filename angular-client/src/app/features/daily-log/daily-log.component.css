@@ -376,6 +376,7 @@ h1 { font-size: 2rem; margin: 0; color: #343a40; }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
 /* PDF Export Mode */
+.daily-log-editor { min-width: 0; margin: 0; padding: 0; border: 0; }
 .notes-display-for-pdf { display: none; white-space: pre-wrap; font-family: inherit; font-size: 1.1rem; line-height: 1.6; padding: 1rem; border: 1px solid #dee2e6; border-radius: 6px; min-height: 50px; word-break: break-word; }
 .pdf-export-mode .handover-textarea { display: none; }
 .pdf-export-mode .notes-display-for-pdf { display: block; }
@@ -389,6 +390,21 @@ h1 { font-size: 2rem; margin: 0; color: #343a40; }
 .pdf-export-mode .add-row-btn-header { display: none; }
 .pdf-export-mode .leader-signature-grid { gap: 1rem; }
 .pdf-export-mode .sign-btn, .pdf-export-mode .unsign-btn, .pdf-export-mode .edit-btn { box-shadow: none; border-width: 1px; }
+.pdf-export-mode { padding: 20px !important; color: #17212b; }
+.pdf-export-mode .desktop-only { display: flex !important; gap: 18px; }
+.pdf-export-mode .mobile-only { display: none !important; }
+.pdf-export-mode button, .pdf-export-mode .col-actions { display: none !important; }
+.pdf-export-mode .content-split { grid-template-columns: 1fr !important; gap: 16px; }
+.pdf-export-mode .split-left, .pdf-export-mode .dynamic-table-container { overflow: visible !important; }
+.pdf-export-mode table { width: 100% !important; min-width: 0 !important; table-layout: fixed; }
+.pdf-export-mode th, .pdf-export-mode td { white-space: normal !important; overflow-wrap: anywhere; }
+.pdf-export-mode .pdf-field-value { display: block; min-height: 1em; font: inherit; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; color: #17212b; }
+.pdf-export-mode .dynamic-table .pdf-field-value { font-size: 14px; }
+.pdf-export-mode .cell-input { overflow: visible; }
+.pdf-export-mode .log-section { margin-bottom: 12px !important; }
+.pdf-export-mode .notes-display-for-pdf { font-size: 16px; line-height: 1.6; }
+.pdf-export-mode .signature-info { min-width: 0; }
+.pdf-export-mode .signature-time { white-space: normal; }
 
 /* Desktop / Mobile Toggle */
 .mobile-only { display: none; }

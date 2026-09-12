@@ -1,5 +1,5 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { KIDIT_HISTORY_OPTIONS } from '@/utils/kiditHelpers';
 import { kiditService } from '@/services/kiditService';
@@ -22,8 +22,9 @@ function deriveFirstDialysisMode(startHDDate?: string, startPDDate?: string): 'H
 @Component({
   selector: 'app-kidit-history-form',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './kidit-history-form.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./kidit-form-official.css', './kidit-history-form.component.css']
 })
 export class KiditHistoryFormComponent implements OnChanges {

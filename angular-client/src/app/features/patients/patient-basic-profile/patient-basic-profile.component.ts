@@ -12,8 +12,9 @@ import {
   computed,
   inject,
   signal,
+  ChangeDetectionStrategy
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '@services/api.service';
@@ -65,8 +66,9 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 @Component({
   selector: 'app-patient-basic-profile',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './patient-basic-profile.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-basic-profile.component.css',
 })
 export class PatientBasicProfileComponent implements OnChanges {

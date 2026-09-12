@@ -1,5 +1,5 @@
-import { Component, EventEmitter, OnDestroy, OnInit, Output, computed, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, EventEmitter, OnDestroy, OnInit, Output, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { PatientStoreService } from '@services/patient-store.service';
 import { localApi } from '@/services/localApiClient';
@@ -75,8 +75,9 @@ interface FieldTab {
 @Component({
   selector: 'app-kidit-vascular-quarterly',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './kidit-vascular-quarterly.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './kidit-vascular-quarterly.component.css',
 })
 export class KiditVascularQuarterlyComponent implements OnInit, OnDestroy {

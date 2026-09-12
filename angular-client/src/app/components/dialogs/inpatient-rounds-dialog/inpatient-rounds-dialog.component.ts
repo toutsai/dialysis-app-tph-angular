@@ -1,12 +1,13 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-inpatient-rounds-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './inpatient-rounds-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './inpatient-rounds-dialog.component.css'
 })
 export class InpatientRoundsDialogComponent implements OnChanges {

@@ -112,7 +112,7 @@
                   @for (itemKey of prioritizedLabItems; track itemKey) {
                     <td>
                       @if (processedReports[itemKey]?.[month] != null) {
-                        <span [class]="getAbnormalClass(itemKey, processedReports[itemKey]?.[month])">
+                        <span [class]="getAbnormalClass(itemKey, $safeNavigationMigration(processedReports[itemKey]?.[month]))">
                           {{ processedReports[itemKey]?.[month] }}
                           <span [class]="getTrendArrow(itemKey, month).class">{{ getTrendArrow(itemKey, month).arrow }}</span>
                         </span>

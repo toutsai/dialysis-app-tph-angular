@@ -13,671 +13,772 @@
             class="date-picker-hidden"
             [value]="selectedDate()"
             (change)="onDatePicked($event)"
-          />
-          <button class="btn" (click)="shiftDate(1)" [disabled]="isLoading()"><span class="btn-label">後一天 </span>&raquo;</button>
-          <button class="btn btn-today-ghost" (click)="goToToday()">今天</button>
+            />
+            <button class="btn" (click)="shiftDate(1)" [disabled]="isLoading()"><span class="btn-label">後一天 </span>&raquo;</button>
+            <button class="btn btn-today-ghost" (click)="goToToday()">今天</button>
+          </div>
+        </div>
+        <div class="header-controls">
+          @if (isDoctorView()) {
+            @if (isLabLoading()) {
+              <span class="lab-loading-hint"><i class="fas fa-spinner fa-spin"></i> 載入當月檢驗…</span>
+            }
+            <button class="btn-clinical-tool" (click)="openIcuOrders()" [disabled]="isLoading()">
+              <i class="fas fa-clipboard-list"></i> ICU醫囑單
+            </button>
+            <button class="btn-clinical-tool" (click)="exportClinicalExcel()" [disabled]="isLoading() || !hasClinicalPatients()">
+              <i class="fas fa-file-excel"></i> 匯出 Excel
+            </button>
+            <button class="btn-clinical-tool" (click)="printClinicalTable()" [disabled]="isLoading() || !hasClinicalPatients()">
+              <i class="fas fa-print"></i> 列印
+            </button>
+          }
+          @if (canSwitchUser() && selectableUsers().length > 0) {
+            <select
+              [ngModel]="selectedUserId()"
+              (ngModelChange)="selectedUserId.set($event); reloadData()"
+              class="user-select"
+              >
+              @for (user of selectableUsers(); track user) {
+                <option [ngValue]="user.uid">
+                  {{ user.name }}
+                </option>
+              }
+            </select>
+          }
+          <button (click)="reloadData()" class="btn-reload" [disabled]="isLoading()">
+            <i class="fas fa-sync-alt"></i> 重新整理
+          </button>
         </div>
       </div>
-      <div class="header-controls">
-        @if (isDoctorView()) {
-          @if (isLabLoading()) {
-            <span class="lab-loading-hint"><i class="fas fa-spinner fa-spin"></i> 載入當月檢驗…</span>
-          }
-          <button class="btn-clinical-tool" (click)="openIcuOrders()" [disabled]="isLoading()">
-            <i class="fas fa-clipboard-list"></i> ICU醫囑單
-          </button>
-          <button class="btn-clinical-tool" (click)="exportClinicalExcel()" [disabled]="isLoading() || !hasClinicalPatients()">
-            <i class="fas fa-file-excel"></i> 匯出 Excel
-          </button>
-          <button class="btn-clinical-tool" (click)="printClinicalTable()" [disabled]="isLoading() || !hasClinicalPatients()">
-            <i class="fas fa-print"></i> 列印
-          </button>
-        }
-        <select
-          *ngIf="canSwitchUser() && selectableUsers().length > 0"
-          [ngModel]="selectedUserId()"
-          (ngModelChange)="selectedUserId.set($event); reloadData()"
-          class="user-select"
-        >
-          <option *ngFor="let user of selectableUsers()" [ngValue]="user.uid">
-            {{ user.name }}
-          </option>
-        </select>
-        <button (click)="reloadData()" class="btn-reload" [disabled]="isLoading()">
-          <i class="fas fa-sync-alt"></i> 重新整理
+    </header>
+
+    <!-- 照護工作按鈕列（護理師檢視專用） -->
+    @if (!isLoading() && !isDoctorView()) {
+      <div class="care-tools-bar">
+        <button class="care-tool-btn edu" (click)="openEduModal()">
+          <i class="fas fa-chalkboard-teacher"></i> 初透衛教
+        </button>
+        <button class="care-tool-btn firstdia" (click)="openFirstDiaModal()">
+          <i class="fas fa-user-plus"></i> 基本資料表
+        </button>
+        <button class="care-tool-btn va" (click)="openVaModal()">
+          <i class="fas fa-band-aid"></i> 血管通路事件
+        </button>
+        <button class="care-tool-btn kidit" (click)="openKiditQuarterlyInput()" title="為照護清單分配病人填寫每季 KiDit 申報表單">
+          <i class="fas fa-file-medical"></i> 季度病人 KiDit 輸入
+        </button>
+        <button class="care-tool-btn hdrx" (click)="openKiditHdrx()" title="HD處方季度工作檯：依照護護理師篩選，補自己病人的處方缺漏">
+          <i class="fas fa-prescription"></i> HD處方
         </button>
       </div>
-    </div>
-  </header>
+    }
 
-  <!-- 照護工作按鈕列（護理師檢視專用） -->
-  <div *ngIf="!isLoading() && !isDoctorView()" class="care-tools-bar">
-    <button class="care-tool-btn edu" (click)="openEduModal()">
-      <i class="fas fa-chalkboard-teacher"></i> 初透衛教
-    </button>
-    <button class="care-tool-btn firstdia" (click)="openFirstDiaModal()">
-      <i class="fas fa-user-plus"></i> 基本資料表
-    </button>
-    <button class="care-tool-btn va" (click)="openVaModal()">
-      <i class="fas fa-band-aid"></i> 血管通路事件
-    </button>
-    <button class="care-tool-btn kidit" (click)="openKiditQuarterlyInput()" title="為照護清單分配病人填寫每季 KiDit 申報表單">
-      <i class="fas fa-file-medical"></i> 季度病人 KiDit 輸入
-    </button>
-    <button class="care-tool-btn hdrx" (click)="openKiditHdrx()" title="HD處方季度工作檯：依照護護理師篩選，補自己病人的處方缺漏">
-      <i class="fas fa-prescription"></i> HD處方
-    </button>
-  </div>
-
-  <div *ngIf="isLoading()" class="loading-state">
-    <div class="spinner"></div>
-    <span>{{ isDoctorView() ? '正在載入今日排程...' : '正在載入您的病人...' }}</span>
-  </div>
-
-  <!-- 醫師/專師檢視：臨床查閱簡表（列＝床位、欄＝班別，點格子開病人總覽） -->
-  @if (!isLoading() && isDoctorView()) {
-    @if (!hasClinicalPatients()) {
-      <div class="empty-state">
-        <i class="fas fa-calendar-times"></i>
-        <p>{{ selectedDate() }} 沒有排程資料。</p>
+    @if (isLoading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <span>{{ isDoctorView() ? '正在載入今日排程...' : '正在載入您的病人...' }}</span>
       </div>
-    } @else {
-      <div class="clinical-view-wrapper">
-        <!-- 列印專用頁首：取代表頭列，只印日期＋欄序說明（螢幕不顯示） -->
-        <div class="print-date-header">
-          {{ selectedDate() }}（{{ weekdayDisplay() }}）　欄序：{{ clinicalShiftHeaders.join('／') }}
+    }
+
+    <!-- 醫師/專師檢視：臨床查閱簡表（列＝床位、欄＝班別，點格子開病人總覽） -->
+    @if (!isLoading() && isDoctorView()) {
+      @if (!hasClinicalPatients()) {
+        <div class="empty-state">
+          <i class="fas fa-calendar-times"></i>
+          <p>{{ selectedDate() }} 沒有排程資料。</p>
         </div>
-        <table class="simplified-table">
-          <thead>
-            <tr>
-              <th class="col-bed">床號</th>
-              @for (shiftCode of ORDERED_SHIFT_CODES; track shiftCode; let i = $index) {
-                <th>
-                  <div class="shift-header-content">
-                    <span>{{ clinicalShiftHeaders[i] }}</span>
-                    <button
-                      class="summary-icon-btn-table no-print"
-                      (click)="showShiftRecordsSummary(shiftCode)"
-                      title="班次總覽"
-                    >📋</button>
-                    <button
-                      class="summary-icon-btn-table no-print"
-                      (click)="showShiftInjections(shiftCode)"
-                      title="應打針劑"
-                    >💉</button>
-                  </div>
-                </th>
-              }
-            </tr>
-          </thead>
-          <tbody>
-            @for (row of clinicalRows(); track row.bedLabel) {
+      } @else {
+        <div class="clinical-view-wrapper">
+          <!-- 列印專用頁首：取代表頭列，只印日期＋欄序說明（螢幕不顯示） -->
+          <div class="print-date-header">
+            {{ selectedDate() }}（{{ weekdayDisplay() }}）　欄序：{{ clinicalShiftHeaders.join('／') }}
+          </div>
+          <table class="simplified-table">
+            <thead>
               <tr>
-                <td class="col-bed">{{ row.bedLabel }}</td>
-                @for (cell of row.cells; track $index) {
-                  <td [ngClass]="cell?.cellStyle || {}" (click)="openClinicalDetail(cell)">
-                    @if (cell) {
-                      <div class="patient-info-cell">
-                        <div class="patient-mrn-name">
-                          <span
-                            class="medical-record-number"
-                            title="點擊以複製病歷號"
-                            (click)="$event.stopPropagation(); copyMedicalRecordNumber(cell.medicalRecordNumber)"
-                          >{{ cell.medicalRecordNumber }}</span>
-                          <span class="patient-name-wrapper">
-                            {{ cell.name }}
-                            @if (cell.mode) {
-                              <span class="stats-special-mode">{{ cell.mode }}</span>
-                            }
-                          </span>
-                          @if (cell.hepatitisTags) {
-                            <span class="print-hepatitis">{{ cell.hepatitisTags }}</span>
-                          }
-                          @if (cell.isDoNotMove) {
-                            <i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + cell.doNotMoveReason"></i>
-                          }
-                          <app-patient-messages-icon
-                            [patientId]="cell.patientId"
-                            [messageTypes]="cell.messageTypes"
-                            context="dialog"
-                            (click)="$event.stopPropagation()"
-                          ></app-patient-messages-icon>
-                        </div>
-                        <div class="patient-ward-note">
-                          @if (cell.wardNumber) {
-                            <a
-                              class="ward-number ward-number-badge ward-number-mvas"
-                              [href]="MVAS_URL"
-                              target="_blank"
-                              rel="noopener"
-                              title="開啟 MVAS 病歷系統並複製病歷號（於歷次住院貼上查詢）"
+                <th class="col-bed">床號</th>
+                @for (shiftCode of ORDERED_SHIFT_CODES; track shiftCode; let i = $index) {
+                  <th>
+                    <div class="shift-header-content">
+                      <span>{{ clinicalShiftHeaders[i] }}</span>
+                      <button
+                        class="summary-icon-btn-table no-print"
+                        (click)="showShiftRecordsSummary(shiftCode)"
+                        title="班次總覽"
+                      >📋</button>
+                      <button
+                        class="summary-icon-btn-table no-print"
+                        (click)="showShiftInjections(shiftCode)"
+                        title="應打針劑"
+                      >💉</button>
+                    </div>
+                  </th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of clinicalRows(); track row.bedLabel) {
+                <tr>
+                  <td class="col-bed">{{ row.bedLabel }}</td>
+                  @for (cell of row.cells; track $index) {
+                    <td [ngClass]="cell?.cellStyle || {}" (click)="openClinicalDetail(cell)">
+                      @if (cell) {
+                        <div class="patient-info-cell">
+                          <div class="patient-mrn-name">
+                            <span
+                              class="medical-record-number"
+                              title="點擊以複製病歷號"
                               (click)="$event.stopPropagation(); copyMedicalRecordNumber(cell.medicalRecordNumber)"
-                            >{{ cell.wardNumber }}</a>
-                          }
-                          @if (cell.note) {
-                            <span class="patient-note">{{ cell.note }}</span>
-                          }
-                        </div>
-                        @if (cell.labAbnormals.length > 0) {
-                          <div class="lab-abnormal-row" title="本月檢驗異常（點格子看完整報告）">
-                            @for (lab of cell.labAbnormals; track lab.key) {
-                              <span class="lab-badge" [class.high]="lab.direction === 'high'">
-                                {{ lab.key }} {{ lab.value }}{{ lab.direction === 'high' ? '↑' : '↓' }}
-                              </span>
+                            >{{ cell.medicalRecordNumber }}</span>
+                            <span class="patient-name-wrapper">
+                              {{ cell.name }}
+                              @if (cell.mode) {
+                                <span class="stats-special-mode">{{ cell.mode }}</span>
+                              }
+                            </span>
+                            @if (cell.hepatitisTags) {
+                              <span class="print-hepatitis">{{ cell.hepatitisTags }}</span>
+                            }
+                            @if (cell.isDoNotMove) {
+                              <i class="fas fa-lock do-not-move-icon" [title]="'勿動：' + cell.doNotMoveReason"></i>
+                            }
+                            <app-patient-messages-icon
+                              [patientId]="cell.patientId"
+                              [messageTypes]="cell.messageTypes"
+                              context="dialog"
+                              (click)="$event.stopPropagation()"
+                            ></app-patient-messages-icon>
+                          </div>
+                          <div class="patient-ward-note">
+                            @if (cell.wardNumber) {
+                              <a
+                                class="ward-number ward-number-badge ward-number-mvas"
+                                [href]="MVAS_URL"
+                                target="_blank"
+                                rel="noopener"
+                                title="開啟 MVAS 病歷系統並複製病歷號（於歷次住院貼上查詢）"
+                                (click)="$event.stopPropagation(); copyMedicalRecordNumber(cell.medicalRecordNumber)"
+                              >{{ cell.wardNumber }}</a>
+                            }
+                            @if (cell.note) {
+                              <span class="patient-note">{{ cell.note }}</span>
                             }
                           </div>
+                          @if (cell.labAbnormals.length > 0) {
+                            <div class="lab-abnormal-row" title="本月檢驗異常（點格子看完整報告）">
+                              @for (lab of cell.labAbnormals; track lab.key) {
+                                <span class="lab-badge" [class.high]="lab.direction === 'high'">
+                                  {{ lab.key }} {{ lab.value }}{{ lab.direction === 'high' ? '↑' : '↓' }}
+                                </span>
+                              }
+                            </div>
+                          }
+                          @for (handover of cell.handovers; track $index) {
+                            <div class="handover-line" [title]="handover">
+                              <i class="fas fa-thumbtack"></i> {{ handover }}
+                            </div>
+                          }
+                        </div>
+                      }
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+          @if (copiedMrn()) {
+            <div class="copied-toast">已複製病歷號 {{ copiedMrn() }}</div>
+          }
+        </div>
+      }
+    }
+
+    @if (!isLoading() && !isDoctorView() && !hasAnyPatients()) {
+      <div class="empty-state">
+        <i class="fas fa-user-nurse"></i>
+        <p>{{ statusMessage() }}</p>
+      </div>
+    }
+
+    @if (!isLoading() && !isDoctorView() && hasAnyPatients()) {
+      <div class="shifts-container">
+        <!-- Nurse Group Info Banner -->
+        @if (nurseGroupLabel()) {
+          <div class="group-info-banner">
+            <div class="group-badge-row">
+              <span class="group-badge">上班組別: {{ nurseGroupLabel() }}</span>
+            </div>
+            @if (nurseGroupDuties().length > 0) {
+              <div class="group-duties">
+                <div class="duties-title">負責事務</div>
+                @for (duty of nurseGroupDuties(); track duty) {
+                  <div class="duty-item">{{ duty }}</div>
+                }
+              </div>
+            }
+          </div>
+        }
+        @for (shiftCode of getShiftKeys(); track shiftCode) {
+          <div class="shift-section">
+            @if (getShiftPatients(shiftCode).length > 0) {
+              <h3
+                class="shift-title"
+                >
+                {{ getShiftTitle(shiftCode) }}
+                <span class="patient-count">{{ getShiftPatients(shiftCode).length }} 位</span>
+                @if (getShiftSupplySummary(shiftCode).supplies) {
+                  <span class="supply-summary">
+                    <span class="supply-tag supply-tag-stock">📦 備物: {{ getShiftSupplySummary(shiftCode).supplies }}</span>
+                    @if (getShiftSupplySummary(shiftCode).medications) {
+                      <span class="supply-tag supply-tag-med">💉 藥物: {{ getShiftSupplySummary(shiftCode).medications }}</span>
+                    }
+                  </span>
+                }
+              </h3>
+            }
+            @if (getShiftPatients(shiftCode).length > 0) {
+              <div class="patient-cards">
+                @for (patient of getShiftPatients(shiftCode); track patient) {
+                  <div
+                    class="patient-card"
+                    [class.card-needs-reg]="pendingRegPatientIds().has(patient.patientId)"
+                    [class.card-needs-edu]="patient.isEduTarget"
+                    [class.card-needs-blood]="patient.bloodMemos.length > 0"
+                    >
+                    <!-- 卡片書籤列：絕對定位凸出卡片上緣外側，不佔卡片內版面 -->
+                    @if (pendingRegPatientIds().has(patient.patientId) || patient.isEduTarget || patient.bloodMemos.length > 0) {
+                      <div
+                        class="card-bookmarks"
+                        >
+                        <!-- 本院初透待建檔：點擊直達 KiDit 建檔頁籤 -->
+                        @if (pendingRegPatientIds().has(patient.patientId)) {
+                          <button
+                            class="bookmark-tab reg-badge"
+                            title="本院初透待建檔，點擊前往 KiDit 工作站填寫基本資料表"
+                            (click)="openCardRegistration(patient.patientId)"
+                            >
+                            基本資料+
+                          </button>
                         }
-                        @for (handover of cell.handovers; track $index) {
-                          <div class="handover-line" [title]="handover">
-                            <i class="fas fa-thumbtack"></i> {{ handover }}
+                        <!-- 初透衛教對象：點擊直開該病人衛教紀錄視窗（與表頭紫圖示同一動作） -->
+                        @if (patient.isEduTarget) {
+                          <button
+                            class="bookmark-tab edu-badge"
+                            title="初透衛教紀錄，點擊直接開啟填寫"
+                            (click)="openCardEduRecord(patient.patientId)"
+                            >
+                            初透衛教+
+                          </button>
+                        }
+                        <!-- 抽血留言：僅目標日當天顯示（書籤+留言區並列）；點擊確認完成抽血=留言標記已讀 -->
+                        @if (patient.bloodMemos.length > 0) {
+                          <button
+                            class="bookmark-tab blood-badge"
+                            [title]="bloodBookmarkTitle(patient)"
+                            (click)="openBloodDrawConfirm(patient)"
+                            >
+                            需抽血
+                          </button>
+                        }
+                      </div>
+                    }
+                    <!-- Card Header -->
+                    <div class="card-header">
+                      <div class="patient-info">
+                        <span class="bed-badge">{{ patient.bedNum }}</span>
+                        <span class="patient-name">{{ patient.name }}</span>
+                      </div>
+                      <div class="card-header-actions">
+                        <a
+                          class="btn-icon btn-dashboard-icon"
+                          title="床邊智慧儀表板"
+                          [href]="bedDashboardUrl(patient, shiftCode)"
+                          target="_blank"
+                          rel="noopener"
+                          >
+                          <i class="fas fa-desktop"></i>
+                        </a>
+                        <button
+                          class="btn-icon btn-order-icon"
+                          title="編輯醫囑"
+                          (click)="openOrderModal(patient)"
+                          >
+                          <i class="fas fa-notes-medical"></i>
+                        </button>
+                        <button
+                          class="btn-icon btn-memo-icon"
+                          title="新增留言/交辦"
+                          (click)="openCreateModal({ patientId: patient.patientId, patientName: patient.name })"
+                          >
+                          <i class="fas fa-comment-medical"></i>
+                        </button>
+                        @if (patient.isEduTarget) {
+                          <button
+                            class="btn-icon btn-edu-icon"
+                            title="初透衛教紀錄"
+                            (click)="openCardEduRecord(patient.patientId)"
+                            >
+                            <i class="fas fa-chalkboard-teacher"></i>
+                          </button>
+                        }
+                        <!-- 血管通路事件：不分身分都顯示（衛教圖示只屬門診）；有被退回事件時亮紅點 -->
+                        <button
+                          class="btn-icon btn-va-icon"
+                          title="血管通路事件"
+                          (click)="openCardVaRecord(patient)"
+                          >
+                          <i class="fas fa-band-aid"></i>
+                          @if (vaRejectedIds().has(patient.patientId)) {
+                            <span
+                              class="va-reject-dot"
+                              title="有被退回的血管通路事件，請點入修正"
+                            ></span>
+                          }
+                        </button>
+                      </div>
+                    </div>
+                    <!-- 透析處方 -->
+                    @if (patient.preparation) {
+                      <div class="card-section preparation-section">
+                        <div class="prep-grid">
+                          <div class="prep-item">
+                            <span class="prep-label">AK</span>
+                            <span
+                              class="prep-value"
+                              [title]="patient.preparation.akToday && patient.preparation.akToday !== patient.preparation.ak ? '今日備物: ' + patient.preparation.akToday : ''"
+                            >{{ patient.preparation.ak || '-' }}</span>
+                          </div>
+                          <div class="prep-item">
+                            <span class="prep-label">Ca</span>
+                            <span class="prep-value">{{ patient.preparation.dialysateCa || '-' }}</span>
+                          </div>
+                          <div class="prep-item">
+                            <span class="prep-label">Heparin</span>
+                            <span class="prep-value">{{ patient.preparation.heparin || '-' }}</span>
+                          </div>
+                          <div class="prep-item">
+                            <span class="prep-label">血流</span>
+                            <span class="prep-value">{{ patient.preparation.bloodFlow || '-' }}</span>
+                          </div>
+                          <div class="prep-item">
+                            <span class="prep-label">通路</span>
+                            <span class="prep-value">{{ patient.preparation.vascAccess || '-' }}</span>
+                          </div>
+                        </div>
+                      </div>
+                    }
+                    <!-- 當日針劑 -->
+                    @if (patient.injections && patient.injections.length > 0) {
+                      <div
+                        class="card-section injection-section"
+                        >
+                        <h4 class="section-title">
+                          <i class="fas fa-syringe"></i> 當日針劑
+                        </h4>
+                        <ul>
+                          @for (injection of patient.injections; track injection) {
+                            <li>
+                              {{ formatInjection(injection) }}
+                            </li>
+                          }
+                        </ul>
+                      </div>
+                    }
+                    <!-- 留言/交辦區 -->
+                    @if (patient.memos && patient.memos.length > 0) {
+                      <div
+                        class="card-section memos-section"
+                        >
+                        <h4 class="section-title">
+                          <i class="fas fa-clipboard-list"></i> 留言/交辦
+                        </h4>
+                        @for (memo of patient.memos; track memo) {
+                          <div class="memo-item">
+                            <div class="memo-header">
+                              <span class="memo-type-icon">{{ getMessageTypeIcon(memo.type) }}</span>
+                              <span class="memo-content">{{ memo.content }}</span>
+                            </div>
+                            @if (hasPermission('viewer')) {
+                              <div class="memo-actions">
+                                @if (memo['status'] === 'pending') {
+                                  <button
+                                    class="btn-mini btn-resolve"
+                                    (click)="updateTaskStatus(memo, 'completed')"
+                                    title="標記已讀"
+                                    >
+                                    <i class="fas fa-check"></i>
+                                  </button>
+                                }
+                                @if (memo['status'] === 'completed') {
+                                  <button
+                                    class="btn-mini btn-unresolve"
+                                    (click)="updateTaskStatus(memo, 'pending')"
+                                    title="退回待辦"
+                                    >
+                                    <i class="fas fa-undo"></i>
+                                  </button>
+                                }
+                                <button
+                                  class="btn-mini btn-edit-memo"
+                                  (click)="openEditModal(memo)"
+                                  title="編輯"
+                                  >
+                                  <i class="fas fa-pencil-alt"></i>
+                                </button>
+                                <button
+                                  class="btn-mini btn-delete-memo"
+                                  (click)="confirmDeleteTask(memo)"
+                                  title="刪除"
+                                  >
+                                  <i class="fas fa-trash"></i>
+                                </button>
+                              </div>
+                            }
                           </div>
                         }
                       </div>
                     }
-                  </td>
+                  </div>
                 }
-              </tr>
+              </div>
             }
-          </tbody>
-        </table>
-        @if (copiedMrn()) {
-          <div class="copied-toast">已複製病歷號 {{ copiedMrn() }}</div>
+          </div>
         }
       </div>
     }
-  }
 
-  <div *ngIf="!isLoading() && !isDoctorView() && !hasAnyPatients()" class="empty-state">
-    <i class="fas fa-user-nurse"></i>
-    <p>{{ statusMessage() }}</p>
-  </div>
+    <!-- Task Create Dialog -->
+    @if (isCreateModalVisible()) {
+      <app-task-create-dialog
+        [isVisible]="true"
+        [initialData]="editingItem()"
+        (submit)="handleTaskSubmit($event)"
+        (close)="closeCreateModal()"
+      ></app-task-create-dialog>
+    }
 
-  <div *ngIf="!isLoading() && !isDoctorView() && hasAnyPatients()" class="shifts-container">
-    <!-- Nurse Group Info Banner -->
-    <div class="group-info-banner" *ngIf="nurseGroupLabel()">
-      <div class="group-badge-row">
-        <span class="group-badge">上班組別: {{ nurseGroupLabel() }}</span>
+    <!-- Confirm Delete Dialog -->
+    @if (isConfirmDeleteVisible()) {
+      <app-confirm-dialog
+        title="確認刪除"
+        message="確定要刪除這則留言/交辦嗎？此操作無法復原。"
+        (confirm)="executeDeleteTask()"
+        (cancel)="onCancelConfirmDelete()"
+      ></app-confirm-dialog>
+    }
+
+    <!-- 需抽血書籤：確認完成抽血（留言標記已讀） -->
+    @if (bloodConfirmPatient()) {
+      <app-confirm-dialog
+        title="完成抽血"
+        [message]="bloodConfirmMessage()"
+        (confirm)="executeBloodDrawComplete()"
+        (cancel)="bloodConfirmPatient.set(null)"
+      ></app-confirm-dialog>
+    }
+
+    <!-- Dialysis Order Modal -->
+    @if (isOrderModalVisible()) {
+      <app-dialysis-order-modal
+        [patient]="selectedPatientForOrder()"
+        (save)="handleOrderSave($event)"
+        (close)="closeOrderModal()"
+      ></app-dialysis-order-modal>
+    }
+
+    <!-- 照護病人初透衛教紀錄彈窗 -->
+    @if (showEduModal()) {
+      <div class="ct-modal-overlay" (click)="closeEduModal()">
+        <div class="ct-modal" (click)="$event.stopPropagation()">
+          <div class="ct-modal-header">
+            <h3>
+              <i class="fas fa-chalkboard-teacher"></i> 照護病人初透衛教紀錄
+              @if (!isLoadingEdu()) {
+                <span class="ct-count">（{{ eduRows().length }} 位）</span>
+              }
+            </h3>
+            <button class="ct-close-btn" (click)="closeEduModal()" title="關閉"><i class="fas fa-times"></i></button>
+          </div>
+          <div class="ct-modal-body">
+            <p class="ct-hint">
+              <i class="fas fa-info-circle"></i>
+              名單＝我的照護病人（使用者管理・照護清單）＋今日我負責班別的衛教中病人；點擊病人可開啟衛教紀錄檢視/填寫。
+              主護簽核全數完成的病人自動收藏，不再列入（可至「初透衛教進度」頁的「主護確認完成」查閱）。
+            </p>
+            @if (isLoadingEdu()) {
+              <div class="ct-loading"><div class="spinner"></div><p>正在彙整衛教進度...</p></div>
+            }
+            @if (!isLoadingEdu() && eduError()) {
+              <div class="ct-empty">{{ eduError() }}</div>
+            }
+            @if (!isLoadingEdu() && !eduError() && eduRows().length === 0) {
+              <div class="ct-empty">
+                目前沒有照護中或今日負責的衛教病人。
+              </div>
+            }
+            @if (!isLoadingEdu() && eduRows().length > 0) {
+              <table class="ct-table">
+                <thead>
+                  <tr>
+                    <th>病人</th><th>病歷號</th><th>初透日</th><th>該次負責</th>
+                    <th>已衛教</th><th>主護簽章(通過)</th><th>狀態</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (r of eduRows(); track r) {
+                    <tr class="ct-row" (click)="openEduRecord(r)">
+                      <td>{{ r.patientName }}</td>
+                      <td>{{ r.medicalRecordNumber || '—' }}</td>
+                      <td>{{ r.firstDialysisDate || '—' }}</td>
+                      <td>@if (r.todayMine) {
+                        <span class="ct-badge today">今日負責</span>
+                      }</td>
+                      <td>{{ r.paperEducation ? '紙本衛教' : (r.educatedCount + ' / ' + r.total) }}</td>
+                      <td>{{ r.paperEducation ? (r.paperCompleted ? '紙本完成' : '進行中') : (r.passedCount + ' / ' + r.total) }}</td>
+                      <td>
+                        <span class="ct-badge"
+                          [class.pending]="!r.paperEducation && r.educatedCount >= r.total"
+                          [class.undone]="r.paperEducation || r.educatedCount < r.total">
+                          {{ r.paperEducation ? '紙本進行中' : (r.educatedCount >= r.total ? '待主護確認' : '衛教中') }}
+                        </span>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          </div>
+        </div>
       </div>
-      <div class="group-duties" *ngIf="nurseGroupDuties().length > 0">
-        <div class="duties-title">負責事務</div>
-        <div *ngFor="let duty of nurseGroupDuties()" class="duty-item">{{ duty }}</div>
-      </div>
-    </div>
+    }
 
-    <div *ngFor="let shiftCode of getShiftKeys()" class="shift-section">
-      <h3
-        class="shift-title"
-        *ngIf="getShiftPatients(shiftCode).length > 0"
-      >
-        {{ getShiftTitle(shiftCode) }}
-        <span class="patient-count">{{ getShiftPatients(shiftCode).length }} 位</span>
-        <span class="supply-summary" *ngIf="getShiftSupplySummary(shiftCode).supplies">
-          <span class="supply-tag supply-tag-stock">📦 備物: {{ getShiftSupplySummary(shiftCode).supplies }}</span>
-          <span class="supply-tag supply-tag-med" *ngIf="getShiftSupplySummary(shiftCode).medications">💉 藥物: {{ getShiftSupplySummary(shiftCode).medications }}</span>
-        </span>
-      </h3>
-      <div class="patient-cards" *ngIf="getShiftPatients(shiftCode).length > 0">
-        <div
-          *ngFor="let patient of getShiftPatients(shiftCode)"
-          class="patient-card"
-          [class.card-needs-reg]="pendingRegPatientIds().has(patient.patientId)"
-          [class.card-needs-edu]="patient.isEduTarget"
-          [class.card-needs-blood]="patient.bloodMemos.length > 0"
-        >
-          <!-- 卡片書籤列：絕對定位凸出卡片上緣外側，不佔卡片內版面 -->
-          <div
-            class="card-bookmarks"
-            *ngIf="pendingRegPatientIds().has(patient.patientId) || patient.isEduTarget || patient.bloodMemos.length > 0"
-          >
-            <!-- 本院初透待建檔：點擊直達 KiDit 建檔頁籤 -->
-            <button
-              *ngIf="pendingRegPatientIds().has(patient.patientId)"
-              class="bookmark-tab reg-badge"
-              title="本院初透待建檔，點擊前往 KiDit 工作站填寫基本資料表"
-              (click)="openCardRegistration(patient.patientId)"
-            >
-              基本資料+
-            </button>
-            <!-- 初透衛教對象：點擊直開該病人衛教紀錄視窗（與表頭紫圖示同一動作） -->
-            <button
-              *ngIf="patient.isEduTarget"
-              class="bookmark-tab edu-badge"
-              title="初透衛教紀錄，點擊直接開啟填寫"
-              (click)="openCardEduRecord(patient.patientId)"
-            >
-              初透衛教+
-            </button>
-            <!-- 抽血留言：僅目標日當天顯示（書籤+留言區並列）；點擊確認完成抽血=留言標記已讀 -->
-            <button
-              *ngIf="patient.bloodMemos.length > 0"
-              class="bookmark-tab blood-badge"
-              [title]="bloodBookmarkTitle(patient)"
-              (click)="openBloodDrawConfirm(patient)"
-            >
-              需抽血
-            </button>
-          </div>
-          <!-- Card Header -->
-          <div class="card-header">
-            <div class="patient-info">
-              <span class="bed-badge">{{ patient.bedNum }}</span>
-              <span class="patient-name">{{ patient.name }}</span>
-            </div>
-            <div class="card-header-actions">
-              <a
-                class="btn-icon btn-dashboard-icon"
-                title="床邊智慧儀表板"
-                [href]="bedDashboardUrl(patient, shiftCode)"
-                target="_blank"
-                rel="noopener"
-              >
-                <i class="fas fa-desktop"></i>
-              </a>
-              <button
-                class="btn-icon btn-order-icon"
-                title="編輯醫囑"
-                (click)="openOrderModal(patient)"
-              >
-                <i class="fas fa-notes-medical"></i>
-              </button>
-              <button
-                class="btn-icon btn-memo-icon"
-                title="新增留言/交辦"
-                (click)="openCreateModal({ patientId: patient.patientId, patientName: patient.name })"
-              >
-                <i class="fas fa-comment-medical"></i>
-              </button>
-              <button
-                *ngIf="patient.isEduTarget"
-                class="btn-icon btn-edu-icon"
-                title="初透衛教紀錄"
-                (click)="openCardEduRecord(patient.patientId)"
-              >
-                <i class="fas fa-chalkboard-teacher"></i>
-              </button>
-              <!-- 血管通路事件：不分身分都顯示（衛教圖示只屬門診）；有被退回事件時亮紅點 -->
-              <button
-                class="btn-icon btn-va-icon"
-                title="血管通路事件"
-                (click)="openCardVaRecord(patient)"
-              >
-                <i class="fas fa-band-aid"></i>
-                <span
-                  *ngIf="vaRejectedIds().has(patient.patientId)"
-                  class="va-reject-dot"
-                  title="有被退回的血管通路事件，請點入修正"
-                ></span>
-              </button>
-            </div>
-          </div>
-
-          <!-- 透析處方 -->
-          <div class="card-section preparation-section" *ngIf="patient.preparation">
-            <div class="prep-grid">
-              <div class="prep-item">
-                <span class="prep-label">AK</span>
-                <span
-                  class="prep-value"
-                  [title]="patient.preparation.akToday && patient.preparation.akToday !== patient.preparation.ak ? '今日備物: ' + patient.preparation.akToday : ''"
-                >{{ patient.preparation.ak || '-' }}</span>
-              </div>
-              <div class="prep-item">
-                <span class="prep-label">Ca</span>
-                <span class="prep-value">{{ patient.preparation.dialysateCa || '-' }}</span>
-              </div>
-              <div class="prep-item">
-                <span class="prep-label">Heparin</span>
-                <span class="prep-value">{{ patient.preparation.heparin || '-' }}</span>
-              </div>
-              <div class="prep-item">
-                <span class="prep-label">血流</span>
-                <span class="prep-value">{{ patient.preparation.bloodFlow || '-' }}</span>
-              </div>
-              <div class="prep-item">
-                <span class="prep-label">通路</span>
-                <span class="prep-value">{{ patient.preparation.vascAccess || '-' }}</span>
+    <!-- 負責本院初透基本資料建立彈窗 -->
+    @if (showFirstDiaModal()) {
+      <div class="ct-modal-overlay" (click)="closeFirstDiaModal()">
+        <div class="ct-modal" (click)="$event.stopPropagation()">
+          <div class="ct-modal-header">
+            <h3>
+              <i class="fas fa-user-plus"></i> 本院初透基本資料建立
+              @if (!isLoadingFirstDia()) {
+                <span class="ct-count">（{{ firstDiaVisibleRows().length }} 位）</span>
+              }
+            </h3>
+            <div class="ct-modal-actions">
+              <label class="ct-filter-toggle">
+                <input
+                  type="checkbox"
+                  [ngModel]="firstDiaOnlyMine()"
+                  (ngModelChange)="firstDiaOnlyMine.set($event)"
+                  />
+                  只顯示我需要填寫的
+                </label>
+                <button class="care-tool-btn firstdia sm" (click)="goToKiditStation()">
+                  <i class="fas fa-arrow-right"></i> 前往 KiDit 申報工作站補建檔
+                </button>
+                <button class="ct-close-btn" (click)="closeFirstDiaModal()" title="關閉"><i class="fas fa-times"></i></button>
               </div>
             </div>
-          </div>
-
-          <!-- 當日針劑 -->
-          <div
-            class="card-section injection-section"
-            *ngIf="patient.injections && patient.injections.length > 0"
-          >
-            <h4 class="section-title">
-              <i class="fas fa-syringe"></i> 當日針劑
-            </h4>
-            <ul>
-              <li *ngFor="let injection of patient.injections">
-                {{ formatInjection(injection) }}
-              </li>
-            </ul>
-          </div>
-
-          <!-- 留言/交辦區 -->
-          <div
-            class="card-section memos-section"
-            *ngIf="patient.memos && patient.memos.length > 0"
-          >
-            <h4 class="section-title">
-              <i class="fas fa-clipboard-list"></i> 留言/交辦
-            </h4>
-            <div *ngFor="let memo of patient.memos" class="memo-item">
-              <div class="memo-header">
-                <span class="memo-type-icon">{{ getMessageTypeIcon(memo.type) }}</span>
-                <span class="memo-content">{{ memo.content }}</span>
-              </div>
-              <div class="memo-actions" *ngIf="hasPermission('viewer')">
-                <button
-                  *ngIf="memo['status'] === 'pending'"
-                  class="btn-mini btn-resolve"
-                  (click)="updateTaskStatus(memo, 'completed')"
-                  title="標記已讀"
-                >
-                  <i class="fas fa-check"></i>
-                </button>
-                <button
-                  *ngIf="memo['status'] === 'completed'"
-                  class="btn-mini btn-unresolve"
-                  (click)="updateTaskStatus(memo, 'pending')"
-                  title="退回待辦"
-                >
-                  <i class="fas fa-undo"></i>
-                </button>
-                <button
-                  class="btn-mini btn-edit-memo"
-                  (click)="openEditModal(memo)"
-                  title="編輯"
-                >
-                  <i class="fas fa-pencil-alt"></i>
-                </button>
-                <button
-                  class="btn-mini btn-delete-memo"
-                  (click)="confirmDeleteTask(memo)"
-                  title="刪除"
-                >
-                  <i class="fas fa-trash"></i>
-                </button>
-              </div>
+            <div class="ct-modal-body">
+              <p class="ct-hint">
+                <i class="fas fa-info-circle"></i>
+                名單＝組長已標記「本院初透」且 KiDit 病患資料/病史尚未建檔完成的病人（未標記或資料庫還原者不需建檔）。
+                負責人＝本院初透當天的照顧護理師；標「待完成」者為您負責。
+              </p>
+              @if (isLoadingFirstDia()) {
+                <div class="ct-loading"><div class="spinner"></div><p>正在彙整待建檔名單...</p></div>
+              }
+              @if (!isLoadingFirstDia() && firstDiaError()) {
+                <div class="ct-empty">{{ firstDiaError() }}</div>
+              }
+              @if (!isLoadingFirstDia() && !firstDiaError() && firstDiaVisibleRows().length === 0) {
+                <div class="ct-empty">
+                  {{ firstDiaOnlyMine() ? '目前沒有您需要建檔的本院初透病人。' : '目前沒有待建檔的本院初透病人。' }}
+                </div>
+              }
+              @if (!isLoadingFirstDia() && firstDiaVisibleRows().length > 0) {
+                <table class="ct-table">
+                  <thead>
+                    <tr>
+                      <th>病人</th><th>病歷號</th><th>本院初透日</th><th>透析模式</th>
+                      <th>負責護理師</th><th>缺項</th><th>最近事件日</th><th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (r of firstDiaVisibleRows(); track r) {
+                      <tr class="ct-row" [class.ct-row-mine]="r.mine"
+                        (click)="openFirstDiaTarget(r)" title="點擊開啟 KiDit 建檔視窗">
+                        <td>{{ r.name }}</td>
+                        <td>{{ r.medicalRecordNumber || '—' }}</td>
+                        <td>{{ r.hospitalFirstDialysisDate || '—' }}</td>
+                        <td>{{ r.dialysisMode || '—' }}</td>
+                        <td>{{ firstNurseLabel(r) }}</td>
+                        <td class="ct-missing">{{ firstDiaMissingLabel(r) }}</td>
+                        <td>{{ r.lastEventDate || '尚無事件' }}</td>
+                        <td>@if (r.mine) {
+                          <span class="ct-badge undone">待完成</span>
+                        }</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  </div>
+      }
 
-  <!-- Task Create Dialog -->
-  <app-task-create-dialog
-    *ngIf="isCreateModalVisible()"
-    [isVisible]="true"
-    [initialData]="editingItem()"
-    (submit)="handleTaskSubmit($event)"
-    (close)="closeCreateModal()"
-  ></app-task-create-dialog>
-
-  <!-- Confirm Delete Dialog -->
-  <app-confirm-dialog
-    *ngIf="isConfirmDeleteVisible()"
-    title="確認刪除"
-    message="確定要刪除這則留言/交辦嗎？此操作無法復原。"
-    (confirm)="executeDeleteTask()"
-    (cancel)="onCancelConfirmDelete()"
-  ></app-confirm-dialog>
-
-  <!-- 需抽血書籤：確認完成抽血（留言標記已讀） -->
-  <app-confirm-dialog
-    *ngIf="bloodConfirmPatient()"
-    title="完成抽血"
-    [message]="bloodConfirmMessage()"
-    (confirm)="executeBloodDrawComplete()"
-    (cancel)="bloodConfirmPatient.set(null)"
-  ></app-confirm-dialog>
-
-  <!-- Dialysis Order Modal -->
-  <app-dialysis-order-modal
-    *ngIf="isOrderModalVisible()"
-    [patient]="selectedPatientForOrder()"
-    (save)="handleOrderSave($event)"
-    (close)="closeOrderModal()"
-  ></app-dialysis-order-modal>
-
-  <!-- 照護病人初透衛教紀錄彈窗 -->
-  <div class="ct-modal-overlay" *ngIf="showEduModal()" (click)="closeEduModal()">
-    <div class="ct-modal" (click)="$event.stopPropagation()">
-      <div class="ct-modal-header">
-        <h3>
-          <i class="fas fa-chalkboard-teacher"></i> 照護病人初透衛教紀錄
-          <span class="ct-count" *ngIf="!isLoadingEdu()">（{{ eduRows().length }} 位）</span>
-        </h3>
-        <button class="ct-close-btn" (click)="closeEduModal()" title="關閉"><i class="fas fa-times"></i></button>
-      </div>
-      <div class="ct-modal-body">
-        <p class="ct-hint">
-          <i class="fas fa-info-circle"></i>
-          名單＝我的照護病人（使用者管理・照護清單）＋今日我負責班別的衛教中病人；點擊病人可開啟衛教紀錄檢視/填寫。
-          主護簽核全數完成的病人自動收藏，不再列入（可至「初透衛教進度」頁的「主護確認完成」查閱）。
-        </p>
-        <div *ngIf="isLoadingEdu()" class="ct-loading"><div class="spinner"></div><p>正在彙整衛教進度...</p></div>
-        <div *ngIf="!isLoadingEdu() && eduError()" class="ct-empty">{{ eduError() }}</div>
-        <div *ngIf="!isLoadingEdu() && !eduError() && eduRows().length === 0" class="ct-empty">
-          目前沒有照護中或今日負責的衛教病人。
+      <!-- 血管通路事件填寫清單彈窗 -->
+      @if (showVaModal()) {
+        <div class="ct-modal-overlay" (click)="closeVaModal()">
+          <div class="ct-modal" (click)="$event.stopPropagation()">
+            <div class="ct-modal-header">
+              <h3>
+                <i class="fas fa-band-aid"></i> 血管通路事件填寫
+                @if (!isLoadingVa()) {
+                  <span class="ct-count">（{{ vaRows().length }} 位）</span>
+                }
+              </h3>
+              <button class="ct-close-btn" (click)="closeVaModal()" title="關閉"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="ct-modal-body">
+              <p class="ct-hint">
+                <i class="fas fa-info-circle"></i>
+                名單＝我的照護病人（使用者管理・照護清單）＋今日我負責班別的病人；點擊病人可檢視/填寫血管通路事件。
+                儲存後將送組長於工作日誌確認；「已退回」者請點入修正後重新送出。
+              </p>
+              @if (isLoadingVa()) {
+                <div class="ct-loading"><div class="spinner"></div><p>正在彙整事件狀態...</p></div>
+              }
+              @if (!isLoadingVa() && vaError()) {
+                <div class="ct-empty">{{ vaError() }}</div>
+              }
+              @if (!isLoadingVa() && !vaError() && vaRows().length === 0) {
+                <div class="ct-empty">
+                  目前沒有照護中或今日負責的病人。
+                </div>
+              }
+              @if (!isLoadingVa() && vaRows().length > 0) {
+                <table class="ct-table">
+                  <thead>
+                    <tr>
+                      <th>病人</th><th>病歷號</th><th>該次負責</th><th>事件狀態</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (r of vaRows(); track r) {
+                      <tr class="ct-row" (click)="openVaRecord(r)">
+                        <td>{{ r.patientName }}</td>
+                        <td>{{ r.medicalRecordNumber || '—' }}</td>
+                        <td>@if (r.todayMine) {
+                          <span class="ct-badge today">今日負責</span>
+                        }</td>
+                        <td>
+                          @if (r.pendingCount > 0) {
+                            <span class="ct-badge pending">待確認 {{ r.pendingCount }}</span>
+                          }
+                          @if (r.rejectedCount > 0) {
+                            <span class="ct-badge undone">已退回 {{ r.rejectedCount }}</span>
+                          }
+                          @if (r.pendingCount === 0 && r.rejectedCount === 0) {
+                            <span class="ct-none">—</span>
+                          }
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
+            </div>
+          </div>
         </div>
-        <table *ngIf="!isLoadingEdu() && eduRows().length > 0" class="ct-table">
-          <thead>
-            <tr>
-              <th>病人</th><th>病歷號</th><th>初透日</th><th>該次負責</th>
-              <th>已衛教</th><th>主護簽章(通過)</th><th>狀態</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let r of eduRows()" class="ct-row" (click)="openEduRecord(r)">
-              <td>{{ r.patientName }}</td>
-              <td>{{ r.medicalRecordNumber || '—' }}</td>
-              <td>{{ r.firstDialysisDate || '—' }}</td>
-              <td><span *ngIf="r.todayMine" class="ct-badge today">今日負責</span></td>
-              <td>{{ r.paperEducation ? '紙本衛教' : (r.educatedCount + ' / ' + r.total) }}</td>
-              <td>{{ r.paperEducation ? (r.paperCompleted ? '紙本完成' : '進行中') : (r.passedCount + ' / ' + r.total) }}</td>
-              <td>
-                <span class="ct-badge"
-                      [class.pending]="!r.paperEducation && r.educatedCount >= r.total"
-                      [class.undone]="r.paperEducation || r.educatedCount < r.total">
-                  {{ r.paperEducation ? '紙本進行中' : (r.educatedCount >= r.total ? '待主護確認' : '衛教中') }}
-                </span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      }
+
+      <!-- 初透衛教紀錄視窗 -->
+      @if (eduDialogPatient(); as p) {
+        <app-education-record-dialog
+          [patientId]="p.patientId"
+          [patientName]="p.patientName"
+          [medicalRecordNumber]="p.medicalRecordNumber"
+          [admissionDate]="p.admissionDate"
+          [firstDialysisDate]="p.firstDialysisDate"
+          [canEdit]="canEditEducation()"
+          (close)="closeEduRecord()"
+        ></app-education-record-dialog>
+      }
+
+      <!-- 血管通路事件視窗（單一病人） -->
+      @if (vaDialogPatient(); as vp) {
+        <app-vascular-access-event-dialog
+          [patientId]="vp.patientId"
+          [patientName]="vp.patientName"
+          (close)="closeVaRecord()"
+        ></app-vascular-access-event-dialog>
+      }
+
+      <!-- 臨床查閱：班次總覽（📋） -->
+      @if (isRecordsSummaryDialogVisible()) {
+        <app-daily-records-summary-dialog
+          [isVisible]="isRecordsSummaryDialogVisible()"
+          [targetDate]="selectedDate()"
+          [shiftCode]="shiftCodeForDialog()"
+          [patientIds]="patientIdsForDialog()"
+          [patientInfoMap]="patientInfoMapForDialog()"
+          (closeEvent)="closeRecordsSummaryDialog()"
+        ></app-daily-records-summary-dialog>
+      }
+
+      <!-- 臨床查閱：應打針劑（💉） -->
+      @if (isInjectionDialogVisible()) {
+        <app-daily-injection-list-dialog
+          [isVisible]="isInjectionDialogVisible()"
+          [injections]="filteredDailyInjections()"
+          [isLoading]="isInjectionLoading()"
+          [targetDate]="injectionDialogDate()"
+          [filterActive]="filterSpecificInjections()"
+          [showFilter]="true"
+          (closeEvent)="isInjectionDialogVisible.set(false)"
+          (filterActiveChange)="filterSpecificInjections.set($event)"
+          (refreshEvent)="refreshInjections()"
+        ></app-daily-injection-list-dialog>
+      }
+
+      <!-- 臨床查閱：ICU 醫囑單（與每日排程頁同一彈窗；過去日期唯讀） -->
+      <app-icu-orders-dialog
+        [isVisible]="isIcuOrdersDialogVisible()"
+        [targetDate]="selectedDate()"
+        [schedule]="rawSchedule()"
+        [patientMap]="patientMapForIcu()"
+        [effectiveOrders]="icuEffectiveOrders()"
+        [isEditable]="!isClinicalPastDate()"
+        [isSaving]="isIcuSaving()"
+        (closeEvent)="isIcuOrdersDialogVisible.set(false)"
+        (saveAndPrint)="handleIcuOrdersSave($event)"
+        (changeDateEvent)="handleIcuDateChange($event)"
+        (openOrderModal)="openOrderModalFromIcu($event)"
+        (openCrrtOrderModal)="openCrrtOrderModalFromIcu($event)"
+      ></app-icu-orders-dialog>
+
+      @if (isCRRTOrderModalVisible() && editingPatientForCRRT()) {
+        <app-crrt-order-modal
+          [isVisible]="isCRRTOrderModalVisible()"
+          [patientData]="editingPatientForCRRT()"
+          (closeEvent)="isCRRTOrderModalVisible.set(false)"
+          (saveEvent)="handleSaveCrrtOrder($event)"
+        ></app-crrt-order-modal>
+      }
+
+      <!-- 臨床查閱：病人總覽（醫師檢視點格子開啟） -->
+      @if (isDetailModalVisible() && selectedPatientForDetail()) {
+        <app-patient-detail-modal
+          [isVisible]="isDetailModalVisible()"
+          [patient]="selectedPatientForDetail()"
+          [slotList]="sortedSlotsForModal()"
+          [currentIndex]="currentPatientIndexForModal()"
+          [currentDate]="selectedDate()"
+          (closeEvent)="isDetailModalVisible.set(false)"
+          (switchPatientEvent)="switchClinicalPatient($event)"
+          (recordUpdated)="reloadData()"
+        ></app-patient-detail-modal>
+      }
     </div>
-  </div>
-
-  <!-- 負責本院初透基本資料建立彈窗 -->
-  <div class="ct-modal-overlay" *ngIf="showFirstDiaModal()" (click)="closeFirstDiaModal()">
-    <div class="ct-modal" (click)="$event.stopPropagation()">
-      <div class="ct-modal-header">
-        <h3>
-          <i class="fas fa-user-plus"></i> 本院初透基本資料建立
-          <span class="ct-count" *ngIf="!isLoadingFirstDia()">（{{ firstDiaVisibleRows().length }} 位）</span>
-        </h3>
-        <div class="ct-modal-actions">
-          <label class="ct-filter-toggle">
-            <input
-              type="checkbox"
-              [ngModel]="firstDiaOnlyMine()"
-              (ngModelChange)="firstDiaOnlyMine.set($event)"
-            />
-            只顯示我需要填寫的
-          </label>
-          <button class="care-tool-btn firstdia sm" (click)="goToKiditStation()">
-            <i class="fas fa-arrow-right"></i> 前往 KiDit 申報工作站補建檔
-          </button>
-          <button class="ct-close-btn" (click)="closeFirstDiaModal()" title="關閉"><i class="fas fa-times"></i></button>
-        </div>
-      </div>
-      <div class="ct-modal-body">
-        <p class="ct-hint">
-          <i class="fas fa-info-circle"></i>
-          名單＝組長已標記「本院初透」且 KiDit 病患資料/病史尚未建檔完成的病人（未標記或資料庫還原者不需建檔）。
-          負責人＝本院初透當天的照顧護理師；標「待完成」者為您負責。
-        </p>
-        <div *ngIf="isLoadingFirstDia()" class="ct-loading"><div class="spinner"></div><p>正在彙整待建檔名單...</p></div>
-        <div *ngIf="!isLoadingFirstDia() && firstDiaError()" class="ct-empty">{{ firstDiaError() }}</div>
-        <div *ngIf="!isLoadingFirstDia() && !firstDiaError() && firstDiaVisibleRows().length === 0" class="ct-empty">
-          {{ firstDiaOnlyMine() ? '目前沒有您需要建檔的本院初透病人。' : '目前沒有待建檔的本院初透病人。' }}
-        </div>
-        <table *ngIf="!isLoadingFirstDia() && firstDiaVisibleRows().length > 0" class="ct-table">
-          <thead>
-            <tr>
-              <th>病人</th><th>病歷號</th><th>本院初透日</th><th>透析模式</th>
-              <th>負責護理師</th><th>缺項</th><th>最近事件日</th><th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let r of firstDiaVisibleRows()" class="ct-row" [class.ct-row-mine]="r.mine"
-                (click)="openFirstDiaTarget(r)" title="點擊開啟 KiDit 建檔視窗">
-              <td>{{ r.name }}</td>
-              <td>{{ r.medicalRecordNumber || '—' }}</td>
-              <td>{{ r.hospitalFirstDialysisDate || '—' }}</td>
-              <td>{{ r.dialysisMode || '—' }}</td>
-              <td>{{ firstNurseLabel(r) }}</td>
-              <td class="ct-missing">{{ firstDiaMissingLabel(r) }}</td>
-              <td>{{ r.lastEventDate || '尚無事件' }}</td>
-              <td><span *ngIf="r.mine" class="ct-badge undone">待完成</span></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- 血管通路事件填寫清單彈窗 -->
-  <div class="ct-modal-overlay" *ngIf="showVaModal()" (click)="closeVaModal()">
-    <div class="ct-modal" (click)="$event.stopPropagation()">
-      <div class="ct-modal-header">
-        <h3>
-          <i class="fas fa-band-aid"></i> 血管通路事件填寫
-          <span class="ct-count" *ngIf="!isLoadingVa()">（{{ vaRows().length }} 位）</span>
-        </h3>
-        <button class="ct-close-btn" (click)="closeVaModal()" title="關閉"><i class="fas fa-times"></i></button>
-      </div>
-      <div class="ct-modal-body">
-        <p class="ct-hint">
-          <i class="fas fa-info-circle"></i>
-          名單＝我的照護病人（使用者管理・照護清單）＋今日我負責班別的病人；點擊病人可檢視/填寫血管通路事件。
-          儲存後將送組長於工作日誌確認；「已退回」者請點入修正後重新送出。
-        </p>
-        <div *ngIf="isLoadingVa()" class="ct-loading"><div class="spinner"></div><p>正在彙整事件狀態...</p></div>
-        <div *ngIf="!isLoadingVa() && vaError()" class="ct-empty">{{ vaError() }}</div>
-        <div *ngIf="!isLoadingVa() && !vaError() && vaRows().length === 0" class="ct-empty">
-          目前沒有照護中或今日負責的病人。
-        </div>
-        <table *ngIf="!isLoadingVa() && vaRows().length > 0" class="ct-table">
-          <thead>
-            <tr>
-              <th>病人</th><th>病歷號</th><th>該次負責</th><th>事件狀態</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let r of vaRows()" class="ct-row" (click)="openVaRecord(r)">
-              <td>{{ r.patientName }}</td>
-              <td>{{ r.medicalRecordNumber || '—' }}</td>
-              <td><span *ngIf="r.todayMine" class="ct-badge today">今日負責</span></td>
-              <td>
-                <span *ngIf="r.pendingCount > 0" class="ct-badge pending">待確認 {{ r.pendingCount }}</span>
-                <span *ngIf="r.rejectedCount > 0" class="ct-badge undone">已退回 {{ r.rejectedCount }}</span>
-                <span *ngIf="r.pendingCount === 0 && r.rejectedCount === 0" class="ct-none">—</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- 初透衛教紀錄視窗 -->
-  <app-education-record-dialog
-    *ngIf="eduDialogPatient() as p"
-    [patientId]="p.patientId"
-    [patientName]="p.patientName"
-    [medicalRecordNumber]="p.medicalRecordNumber"
-    [admissionDate]="p.admissionDate"
-    [firstDialysisDate]="p.firstDialysisDate"
-    [canEdit]="canEditEducation()"
-    (close)="closeEduRecord()"
-  ></app-education-record-dialog>
-
-  <!-- 血管通路事件視窗（單一病人） -->
-  <app-vascular-access-event-dialog
-    *ngIf="vaDialogPatient() as vp"
-    [patientId]="vp.patientId"
-    [patientName]="vp.patientName"
-    (close)="closeVaRecord()"
-  ></app-vascular-access-event-dialog>
-
-  <!-- 臨床查閱：班次總覽（📋） -->
-  @if (isRecordsSummaryDialogVisible()) {
-    <app-daily-records-summary-dialog
-      [isVisible]="isRecordsSummaryDialogVisible()"
-      [targetDate]="selectedDate()"
-      [shiftCode]="shiftCodeForDialog()"
-      [patientIds]="patientIdsForDialog()"
-      [patientInfoMap]="patientInfoMapForDialog()"
-      (closeEvent)="closeRecordsSummaryDialog()"
-    ></app-daily-records-summary-dialog>
-  }
-
-  <!-- 臨床查閱：應打針劑（💉） -->
-  @if (isInjectionDialogVisible()) {
-    <app-daily-injection-list-dialog
-      [isVisible]="isInjectionDialogVisible()"
-      [injections]="filteredDailyInjections()"
-      [isLoading]="isInjectionLoading()"
-      [targetDate]="injectionDialogDate()"
-      [filterActive]="filterSpecificInjections()"
-      [showFilter]="true"
-      (closeEvent)="isInjectionDialogVisible.set(false)"
-      (filterActiveChange)="filterSpecificInjections.set($event)"
-      (refreshEvent)="refreshInjections()"
-    ></app-daily-injection-list-dialog>
-  }
-
-  <!-- 臨床查閱：ICU 醫囑單（與每日排程頁同一彈窗；過去日期唯讀） -->
-  <app-icu-orders-dialog
-    [isVisible]="isIcuOrdersDialogVisible()"
-    [targetDate]="selectedDate()"
-    [schedule]="rawSchedule()"
-    [patientMap]="patientMapForIcu()"
-    [effectiveOrders]="icuEffectiveOrders()"
-    [isEditable]="!isClinicalPastDate()"
-    [isSaving]="isIcuSaving()"
-    (closeEvent)="isIcuOrdersDialogVisible.set(false)"
-    (saveAndPrint)="handleIcuOrdersSave($event)"
-    (changeDateEvent)="handleIcuDateChange($event)"
-    (openOrderModal)="openOrderModalFromIcu($event)"
-    (openCrrtOrderModal)="openCrrtOrderModalFromIcu($event)"
-  ></app-icu-orders-dialog>
-
-  @if (isCRRTOrderModalVisible() && editingPatientForCRRT()) {
-    <app-crrt-order-modal
-      [isVisible]="isCRRTOrderModalVisible()"
-      [patientData]="editingPatientForCRRT()"
-      (closeEvent)="isCRRTOrderModalVisible.set(false)"
-      (saveEvent)="handleSaveCrrtOrder($event)"
-    ></app-crrt-order-modal>
-  }
-
-  <!-- 臨床查閱：病人總覽（醫師檢視點格子開啟） -->
-  @if (isDetailModalVisible() && selectedPatientForDetail()) {
-    <app-patient-detail-modal
-      [isVisible]="isDetailModalVisible()"
-      [patient]="selectedPatientForDetail()"
-      [slotList]="sortedSlotsForModal()"
-      [currentIndex]="currentPatientIndexForModal()"
-      [currentDate]="selectedDate()"
-      (closeEvent)="isDetailModalVisible.set(false)"
-      (switchPatientEvent)="switchClinicalPatient($event)"
-      (recordUpdated)="reloadData()"
-    ></app-patient-detail-modal>
-  }
-</div>

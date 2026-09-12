@@ -1,6 +1,6 @@
 import { loadXlsx } from '@/utils/xlsxLoader';
 // Standalone 版：已移除 Firebase
-import { Component, HostBinding, Input, inject, signal, computed, OnInit, OnDestroy, effect } from '@angular/core';
+import { Component, HostBinding, Input, inject, signal, computed, OnInit, OnDestroy, effect, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -24,6 +24,7 @@ import { exportRoundingWordDoc } from '@app/core/utils/physician-rounding-word';
     ConfirmDialogComponent,
   ],
   templateUrl: './physician-schedule.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './physician-schedule.component.css'
 })
 export class PhysicianScheduleComponent implements OnInit, OnDestroy {

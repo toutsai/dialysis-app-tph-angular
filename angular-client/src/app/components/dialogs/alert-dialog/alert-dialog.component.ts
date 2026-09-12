@@ -1,11 +1,12 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from '@angular/core';
+
 
 @Component({
   selector: 'app-alert-dialog',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './alert-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './alert-dialog.component.css'
 })
 export class AlertDialogComponent {

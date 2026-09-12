@@ -1,6 +1,6 @@
 import { loadXlsx } from '@/utils/xlsxLoader';
 // Standalone 版：已移除 Firebase
-import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -18,6 +18,7 @@ import { escapeHtml } from '@/utils/sanitize';
   standalone: true,
   imports: [CommonModule, FormsModule, LabAlertDetailModalComponent],
   templateUrl: './lab-reports.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-reports.component.css'
 })
 export class LabReportsComponent implements OnInit, OnDestroy {

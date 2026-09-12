@@ -1,5 +1,5 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '@app/core/services/auth.service';
 import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@services/api-manager.service';
@@ -8,8 +8,9 @@ import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@servi
 @Component({
   selector: 'app-handover-notes-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './handover-notes-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './handover-notes-dialog.component.css'
 })
 export class HandoverNotesDialogComponent implements OnChanges {

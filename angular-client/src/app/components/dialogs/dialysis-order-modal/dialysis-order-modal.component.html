@@ -201,7 +201,7 @@
                     </td>
                     <td><span class="status-tag active">最新</span></td>
                     <td>{{ formatDate(activeOrder.updatedAt) }}</td>
-                    <td>{{ formatDate(activeOrder.orders?.effectiveDate) }}</td>
+                    <td>{{ formatDate($safeNavigationMigration(activeOrder.orders?.effectiveDate)) }}</td>
                     <td>
                       {{ activeOrder.orders?.vascAccess || '–' }}
                       @if (activeOrder.orders?.arterialNeedle || activeOrder.orders?.venousNeedle) {
@@ -226,7 +226,7 @@
                     </td>
                     <td><span class="status-tag pending">未生效</span></td>
                     <td>{{ formatDate(record.updatedAt) }}</td>
-                    <td>{{ formatDate(record.orders?.effectiveDate) }}</td>
+                    <td>{{ formatDate($safeNavigationMigration(record.orders?.effectiveDate)) }}</td>
                     <td>
                       {{ record.orders?.vascAccess || '–' }}
                       @if (record.orders?.arterialNeedle || record.orders?.venousNeedle) {
@@ -249,7 +249,7 @@
                     </td>
                     <td><span class="status-tag history">歷史</span></td>
                     <td>{{ formatDate(record.updatedAt) }}</td>
-                    <td>{{ formatDate(record.orders?.effectiveDate) }}</td>
+                    <td>{{ formatDate($safeNavigationMigration(record.orders?.effectiveDate)) }}</td>
                     <td>
                       {{ record.orders?.vascAccess || '–' }}
                       @if (record.orders?.arterialNeedle || record.orders?.venousNeedle) {

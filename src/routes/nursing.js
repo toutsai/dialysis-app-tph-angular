@@ -1,3 +1,4 @@
+import { archiveDailyLogRevision, dailyLogNoOp, revisionMetadata, revisionDetail, restoreDailyLogRevision } from '../services/dailyLogHistory.js'
 // 護理相關路由
 import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
@@ -51,30 +52,6 @@ function formatDailyLog(log, user = null) {
     createdAt: log.created_at,
     updatedAt: log.updated_at,
   }
-}
-
-function archiveDailyLogRevision(db, log, user, revisionReason = 'before_update') {
-  const id = `dlr_${log.date}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-  db.prepare(`
-    INSERT INTO daily_log_revisions (
-      id, daily_log_id, date, patient_movements, vascular_access_log,
-      announcements, notes, other_notes, stats, leader, revision_reason, created_by
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    id,
-    log.id,
-    log.date,
-    log.patient_movements || '[]',
-    log.vascular_access_log || '[]',
-    log.announcements || '[]',
-    log.notes,
-    log.other_notes,
-    log.stats || '{}',
-    log.leader || '{}',
-    revisionReason,
-    JSON.stringify({ uid: user.id, name: user.name }),
-  )
 }
 
 // ========================================
@@ -1362,43 +1339,26 @@ router.get('/daily-logs/:date', authenticate, (req, res) => {
  * GET /api/nursing/daily-logs/:date/revisions
  * 取得工作日誌修改快照
  */
-router.get('/daily-logs/:date/revisions', authenticate, (req, res) => {
-  try {
-    const { date } = req.params
-    const db = getDatabase()
+router.get('/daily-logs/:date/revisions', authenticate, (req,res) => {
+  const limit = req.query.limit === undefined ? 20 : Number(req.query.limit)
+  const offset = req.query.offset === undefined ? 0 : Number(req.query.offset)
+  if (!Number.isInteger(limit) || limit<1 || limit>100 || !Number.isInteger(offset) || offset<0) return res.status(400).json({error:true,message:'limit須1至100、offset須非負整數'})
+  const rows=getDatabase().prepare('SELECT id,daily_log_id,date,revision_reason,created_by,created_at FROM daily_log_revisions WHERE date=? ORDER BY created_at DESC,rowid DESC LIMIT ? OFFSET ?').all(req.params.date,limit,offset)
+  res.json(rows.map(revisionMetadata))
+})
 
-    const revisions = db
-      .prepare(`
-        SELECT * FROM daily_log_revisions
-        WHERE date = ?
-        ORDER BY created_at DESC
-      `)
-      .all(date)
+router.get('/daily-logs/:date/revisions/:revisionId', authenticate, (req,res) => {
+  const db=getDatabase()
+  const row=db.prepare('SELECT * FROM daily_log_revisions WHERE date=? AND id=?').get(req.params.date,req.params.revisionId)
+  if (!row) return res.status(404).json({error:true,message:'找不到指定版本'})
+  const current=db.prepare('SELECT * FROM daily_logs WHERE date=?').get(req.params.date)
+  res.json(revisionDetail(row,current))
+})
 
-    res.json(
-      revisions.map((revision) => ({
-        id: revision.id,
-        dailyLogId: revision.daily_log_id,
-        date: revision.date,
-        patientMovements: JSON.parse(revision.patient_movements || '[]'),
-        vascularAccessLog: JSON.parse(revision.vascular_access_log || '[]'),
-        announcements: JSON.parse(revision.announcements || '[]'),
-        stats: JSON.parse(revision.stats || '{}'),
-        leader: JSON.parse(revision.leader || '{}'),
-        otherNotes: revision.other_notes,
-        notes: revision.notes,
-        revisionReason: revision.revision_reason,
-        createdBy: JSON.parse(revision.created_by || '{}'),
-        createdAt: revision.created_at,
-      })),
-    )
-  } catch (error) {
-    console.error('取得工作日誌快照錯誤:', error)
-    res.status(500).json({
-      error: true,
-      message: '取得工作日誌快照失敗',
-    })
-  }
+router.post('/daily-logs/:date/revisions/:revisionId/restore', ...isEditor, (req,res) => {
+  if (isDailyLogLockedForUser(req.params.date,req.user)) return res.status(423).json({error:true,code:'DAILY_LOG_LOCKED',message:'歷史工作日誌已鎖定，無法修改'})
+  try { res.json(restoreDailyLogRevision(getDatabase(),req.params.date,req.params.revisionId,req.body,req.user)) }
+  catch(error) { res.status(error.status||500).json({error:true,message:error.status?error.message:'復原失敗，資料未變更',code:error.status===409?'DAILY_LOG_CONFLICT':undefined}) }
 })
 
 /**
@@ -1452,6 +1412,8 @@ router.put('/daily-logs/:date', ...isEditor, async (req, res) => {
       }
       patientMovements = preserveMovementMetadata(patientMovements, JSON.parse(existing?.patient_movements || '[]'))
     }
+
+    if (dailyLogNoOp(existing,{patientMovements,announcements,notes,vascularAccessLog,stats,leader,otherNotes})) return res.json({success:true,noOp:true,message:'內容未變更',version:dailyLogVersion(existing)})
 
     if (existing) {
       // 已有紀錄：只更新前端有傳送的欄位，未傳送的保留原值

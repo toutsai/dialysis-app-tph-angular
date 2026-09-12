@@ -12,8 +12,9 @@ import {
   computed,
   inject,
   signal,
+  ChangeDetectionStrategy
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '@app/core/services/auth.service';
 import { Patient, PatientStoreService } from '@app/core/services/patient-store.service';
@@ -33,8 +34,9 @@ interface NurseCard {
 @Component({
   selector: 'app-nurse-patient-care-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './nurse-patient-care-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nurse-patient-care-dialog.component.css',
 })
 export class NursePatientCareDialogComponent implements OnChanges {

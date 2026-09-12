@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { kiditService } from '@/services/kiditService';
@@ -33,6 +33,7 @@ interface Tab {
   standalone: true,
   imports: [CommonModule, FormsModule, KiditPatientFormComponent, KiditHistoryFormComponent, KiditVascularFormComponent],
   templateUrl: './kidit-detail-modal.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './kidit-detail-modal.component.css',
 })
 export class KiditDetailModalComponent implements OnChanges {

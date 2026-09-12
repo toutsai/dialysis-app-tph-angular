@@ -1,5 +1,5 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import ApiManager from '@/services/api_manager';
 // Standalone 版：已移除 Firebase
@@ -14,8 +14,9 @@ interface LabReport {
 @Component({
   selector: 'app-patient-lab-summary-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './patient-lab-summary-panel.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-lab-summary-panel.component.css'
 })
 export class PatientLabSummaryPanelComponent implements OnChanges {

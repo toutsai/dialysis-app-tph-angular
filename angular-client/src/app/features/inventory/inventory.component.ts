@@ -1,5 +1,5 @@
 import { loadXlsx } from '@/utils/xlsxLoader';
-import { Component, OnInit, ViewChild, HostListener, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, ViewChild, HostListener, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -86,6 +86,7 @@ const DEFAULT_ITEMS: Record<string, string[]> = {
     InventoryItemDetailComponent,
   ],
   templateUrl: './inventory.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './inventory.component.css',
 })
 export class InventoryComponent implements OnInit {

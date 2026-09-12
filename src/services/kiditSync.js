@@ -84,6 +84,11 @@ function buildPatientModeMap(db, patientIds) {
  * @param {Object} dailyLogData - 每日日誌資料
  */
 export async function syncEventsToKiditLogbook(dateStr, dailyLogData) {
+  return syncEventsToKiditLogbookSync(dateStr, dailyLogData)
+}
+
+// Synchronous core allows restore + source + KiDit to share one SQLite transaction.
+export function syncEventsToKiditLogbookSync(dateStr, dailyLogData) {
   console.log(`🚀 [KIDIT Sync] 開始同步 ${dateStr} 的事件...`)
 
   const db = getDatabase()

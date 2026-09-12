@@ -1,12 +1,13 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-holiday-manager',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './holiday-manager.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './holiday-manager.component.css'
 })
 export class HolidayManagerComponent {

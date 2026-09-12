@@ -1,13 +1,14 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject, ChangeDetectionStrategy } from '@angular/core';
+
 import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@services/api-manager.service';
 // Standalone 版：已移除 Firebase
 
 @Component({
   selector: 'app-condition-record-display-dialog',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './condition-record-display-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './condition-record-display-dialog.component.css'
 })
 export class ConditionRecordDisplayDialogComponent implements OnChanges {

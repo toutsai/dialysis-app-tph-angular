@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 @Component({
@@ -6,6 +6,7 @@ import { CommonModule } from '@angular/common';
   standalone: true,
   imports: [CommonModule],
   templateUrl: './daily-staff-display.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './daily-staff-display.component.css'
 })
 export class DailyStaffDisplayComponent implements OnInit, OnDestroy {

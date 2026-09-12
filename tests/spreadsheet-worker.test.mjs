@@ -103,7 +103,7 @@ try {
     const large=makeBook(Array.from({length:50000},(_,i)=>[i,'Synthetic','x'.repeat(30),'2026-09-01',12.3,'A']))
     const blockers=[parseFirstSheet(large),parseFirstSheet(large),parseFirstSheet(large)]
     const data=makeBook([['synthetic']]).toString('base64')
-    const routes=['/orders/lab-reports/upload','/orders/medications/upload','/orders/dialysis-orders/upload','/nursing/schedules/upload','/aki/upload/inpatients','/aki/upload/labs']
+    const routes=['/orders/lab-reports/upload','/orders/medications/upload','/orders/dialysis-orders/upload','/nursing/schedules/upload','/aki/upload/inpatients','/aki/upload/labs','/orders/consumables/upload']
     const before=db.prepare('SELECT COUNT(*) n FROM patients').get().n
     const start=performance.now()
     const responses=await Promise.all(routes.map(route=>fetch(url+'/api'+route,{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({fileName:'synthetic.xlsx',fileContent:data,fileContentBase64:data})})))
