@@ -117,6 +117,7 @@ export class InventoryComponent implements OnInit {
   inventoryView = signal('overview');
   private readonly route = inject(ActivatedRoute);
   @ViewChild(PurchaseCalendarComponent) calendar?:PurchaseCalendarComponent;
+  @ViewChild(CatastrophicIllnessComponent) applicationEditor?: CatastrophicIllnessComponent;
   calendarCategory = '';
   calendarDate = '';
   summarySources=signal<any[]>([]);
@@ -159,6 +160,7 @@ export class InventoryComponent implements OnInit {
   private draftSnapshot():string { return JSON.stringify([this.countBoxes,this.countLoose,this.countNotes,this.countCutoff,this.countType]); }
   hasUnsavedChanges():boolean { return !!this.countOwnerDate && this.countSnapshot!==this.draftSnapshot(); }
   canLeave():boolean {
+    if(this.applicationEditor && !this.applicationEditor.canLeave())return false;
     if(this.calendar && !this.calendar.canLeave())return false;
     if(this.countsSaving() || this.isUploading() || this.orderCreating()) { this.showAlert('作業進行中','請等待儲存或上傳完成。'); return false; }
     if(this.showOrderPreview()&&!this.orderCreated()&&!confirm('補貨安排尚未建立，確定離開？'))return false;

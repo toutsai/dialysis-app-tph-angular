@@ -54,6 +54,9 @@ app.use('/api/medications', (await import('../../src/routes/medications.js')).de
 app.use('/api/vascular-access', (await import('../../src/routes/vascularAccess.js')).default)
 app.use('/api/events', (await import('../../src/routes/events.js')).default)
 app.use('/api/dashboard', (await import('../../src/routes/dashboard.js')).default)
+app.use('/api/catastrophic-illness', (await import('../../src/routes/catastrophicIllness.js')).default)
+app.use('/api/research', (await import('../../src/routes/research.js')).default)
+app.use('/api/reservations', (await import('../../src/routes/reservations.js')).default)
 
 const staticRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../dist/browser')
 assert(existsSync(resolve(staticRoot, 'index.html')), 'Build Angular before browser tests')

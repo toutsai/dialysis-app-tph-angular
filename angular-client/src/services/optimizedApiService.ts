@@ -190,7 +190,23 @@ export async function saveDialysisOrderHistory(historyData: any): Promise<any> {
   return api.save(completeData);
 }
 
+const pendingDialysisPatients = new Set<string>();
+
 export async function createDialysisOrderAndUpdatePatient(
+  patientId: string,
+  patientName: string,
+  orderData: any,
+): Promise<void> {
+  if (pendingDialysisPatients.has(patientId)) {
+    throw new Error('此病人的醫囑正在儲存，請等待完成後重試；本次內容尚未提交。');
+  }
+  const submitted = JSON.parse(JSON.stringify(orderData));
+  pendingDialysisPatients.add(patientId);
+  try { await saveDialysisOrderAndUpdatePatient(patientId, patientName, submitted); }
+  finally { pendingDialysisPatients.delete(patientId); }
+}
+
+async function saveDialysisOrderAndUpdatePatient(
   patientId: string,
   patientName: string,
   orderData: any,

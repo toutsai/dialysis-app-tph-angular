@@ -598,10 +598,11 @@
     <div class="dialog-overlay" (click)="cancelDelete()">
       <div class="dialog-box" (click)="$event.stopPropagation()">
         <h3>確認刪除</h3>
+        @if (deleteError()) { <p role="alert">{{ deleteError() }}</p> }
         <p>您確定要永久刪除此項目嗎？此操作無法復原。</p>
         <div class="dialog-actions">
           <button class="btn" (click)="cancelDelete()">取消</button>
-          <button class="btn btn-danger" (click)="executeDeleteTask()">刪除</button>
+          <button class="btn btn-danger" [disabled]="deleteBusy()" (click)="executeDeleteTask()">{{ deleteBusy() ? '刪除中…' : '刪除' }}</button>
         </div>
       </div>
     </div>
@@ -616,6 +617,8 @@
     [preselectedPatient]="selectedPatient()"
     [allPatients]="allPatientsFromStore()"
     [initialData]="editingItem()"
+    [externalBusy]="editBusy()"
+    [externalError]="editError()"
     (close)="closeCreateModal()"
     (submit)="handleTaskSubmit($event)"
   ></app-task-create-dialog>

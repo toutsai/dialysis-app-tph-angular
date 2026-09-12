@@ -1,3 +1,4 @@
+@if (usersError()) { <p role="alert">{{ usersError() }} <button type="button" (click)="fetchUsers()" [disabled]="isLoading()">重試</button></p> }
 <div class="user-management-container">
   <header class="page-header">
     <div class="header-top">
@@ -260,7 +261,7 @@
       @if (!isLoading() && filteredUsers().length === 0) {
         <div class="empty-state">
           <div class="empty-icon">👥</div>
-          <h3>{{ (searchTerm() || selectedRole() !== 'all') ? '沒有符合條件的使用者' : '尚無使用者' }}</h3>
+          <h3>{{ (searchTerm() || selectedRole() !== 'all') ? '沒有符合條件的使用者' : (usersError() ? '暫時無法取得使用者' : '尚無使用者') }}</h3>
           @if (searchTerm() || selectedRole() !== 'all') {
             <p>嘗試調整搜尋條件或篩選器</p>
           }

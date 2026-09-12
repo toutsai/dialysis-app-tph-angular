@@ -80,10 +80,11 @@
         </div>
         <!-- 子頁籤：基本資料 / 本院履歷（樣式沿用病人清單 stat-tag） -->
         <div class="sub-tabs">
-          <button type="button" class="stat-tag" [class.active]="subTab() === 'basic'" (click)="subTab.set('basic')">基本資料</button>
-          <button type="button" class="stat-tag" [class.active]="subTab() === 'history'" (click)="subTab.set('history')">本院履歷</button>
+          <button type="button" class="stat-tag" [class.active]="subTab() === 'basic'" (click)="setSubTab('basic')">基本資料</button>
+          <button type="button" class="stat-tag" [class.active]="subTab() === 'history'" (click)="setSubTab('history')">本院履歷</button>
         </div>
-        @if (subTab() === 'basic') {
+        @if (loadError()) { <p role="alert">{{ loadError() }}</p> }
+        @if (subTab() === 'basic' && !loading() && !loadError()) {
           <app-patient-basic-profile [patient]="$any(p)" (saved)="onBasicProfileSaved($any($event))"></app-patient-basic-profile>
         }
         @if (subTab() === 'history') {

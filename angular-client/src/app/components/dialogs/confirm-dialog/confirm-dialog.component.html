@@ -1,6 +1,6 @@
 @if (isVisible) {
   <div class="dialog-backdrop">
-    <dialog [open]="true" class="confirm-dialog">
+    <dialog [open]="true" class="confirm-dialog" [appModalFocus]="title || '確認操作'" (modalEscape)="onCancel()">
       @if (title) {
         <header class="dialog-header">
           <h3>{{ title }}</h3>
@@ -15,7 +15,7 @@
       } @else {
         <footer class="dialog-footer">
           <button [ngClass]="confirmClass" (click)="onConfirm()">{{ confirmText }}</button>
-          <button [ngClass]="cancelClass" (click)="onCancel()">{{ cancelText }}</button>
+          <button autofocus [ngClass]="cancelClass" (click)="onCancel()">{{ cancelText }}</button>
         </footer>
       }
     </dialog>

@@ -258,12 +258,16 @@ export class UserManagementComponent implements OnInit {
     this.selectedRole.set('all');
   }
 
+  usersError = signal('');
+
   async fetchUsers(): Promise<void> {
+    this.usersError.set('');
     this.isLoading.set(true);
     try {
       const result = await this.usersApi.fetchAll();
       this.users.set(result);
     } catch (error) {
+      this.usersError.set('使用者清單讀取失敗，請重試。');
       console.error('載入用戶失敗:', error);
     } finally {
       this.isLoading.set(false);

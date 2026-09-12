@@ -481,6 +481,7 @@
     <!-- Dialysis Order Modal -->
     @if (isOrderModalVisible()) {
       <app-dialysis-order-modal
+        [saving]="orderSaving()"
         [patient]="selectedPatientForOrder()"
         (save)="handleOrderSave($event)"
         (close)="closeOrderModal()"

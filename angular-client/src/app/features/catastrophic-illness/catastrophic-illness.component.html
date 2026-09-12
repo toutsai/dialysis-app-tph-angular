@@ -1,3 +1,4 @@
+<fieldset [disabled]="saving || loading || pdSaving || addingExpiry" [attr.inert]="saving || loading || pdSaving || addingExpiry ? '' : null" style="border:0;padding:0;margin:0;min-width:0">
 <div class="ci-page">
   @if (!embedded) {
     <div class="page-header">
@@ -531,3 +532,5 @@
     </div>
   }
 </div>
+
+</fieldset>

@@ -1,4 +1,6 @@
-<div class="nursing-schedule-container">
+<div class="nursing-schedule-container" [attr.inert]="isUploading() || isSavingDuties() ? '' : null" [attr.aria-busy]="isUploading() || isSavingDuties()">
+@if (scheduleLoadError()) { <p role="alert">{{ scheduleLoadError() }} <button (click)="reloadMonthlySchedule()">重試載入</button></p> }
+        @if (adjacentLoadError()) { <p role="alert">{{ adjacentLoadError() }}</p> }
   <header class="page-header">
     <div class="header-main-content">
       <h1 class="page-title">護理班表與職責</h1>
@@ -114,7 +116,7 @@
                   <span>正在載入班表資料...</span>
                 </div>
               }
-              @if (!isLoadingSchedule() && (!monthlySchedule || !monthlySchedule.scheduleByNurse)) {
+              @if (!isLoadingSchedule() && !scheduleLoadError() && (!monthlySchedule || !monthlySchedule.scheduleByNurse)) {
                 <div class="no-schedule">
                   <i class="fas fa-calendar-times"></i>
                   <p>本月尚無班表資料</p>

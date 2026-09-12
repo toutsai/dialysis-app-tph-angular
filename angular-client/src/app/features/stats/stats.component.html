@@ -1,4 +1,4 @@
-<div class="page-container">
+<div [attr.inert]="isSavingUi ? '' : null" [attr.aria-busy]="isSavingUi" class="page-container">
   <!-- 1. Fixed header -->
   <header class="page-header">
     <!-- Row 1: Header toolbar -->
@@ -892,9 +892,9 @@
 ></app-daily-injection-list-dialog>
 
 @if (isOrderModalVisible) {
-  <app-dialysis-order-modal
+  <app-dialysis-order-modal [saving]="orderSaving"
     [patientData]="editingPatientForOrder"
-    (close)="isOrderModalVisible = false"
+    (close)="closeOrderModal()"
     (save)="handleSaveOrder($event)"
   ></app-dialysis-order-modal>
 }

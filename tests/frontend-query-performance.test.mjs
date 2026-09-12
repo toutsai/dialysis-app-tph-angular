@@ -82,7 +82,7 @@ try {
   metrics.labs = { totalRows: allLabs.rows.length, scopedRows: scopedLabs.rows.length, beforeBytes: allLabs.bytes, afterBytes: scopedLabs.bytes }; checks++
   const makeLab = query => {
     const p = methods('features/lab-reports/lab-reports.component.ts', ['generateAlertReport','processReports','findAbnormalities','CONSECUTIVE_ABNORMAL_CRITERIA'], { queryWithInChunks: async () => [], alert: () => {} })
-    Object.assign(p, { alertRequest: 0, isLoadingAlerts: signal(false), alertList: signal([]), alertMonthRange: () => ({start:'2024-12',end:'2025-02'}), patientStore: {fetchPatientsIfNeeded:async()=>{},opdPatients:()=>patients}, baseSchedulesApi:{fetchById:async()=>({schedule:{}})}, labReportsApi:{fetchWhere:query} })
+    Object.assign(p, { alertSaving: signal(false), alertDetailError: signal(''), isAlertDetailModalVisible: signal(false), alertResultMonthRange: '', failedAlertSaves: signal([]), savedAlertSignatures: new Map(), alertRequest: 0, isLoadingAlerts: signal(false), alertList: signal([]), alertMonthRange: () => ({start:'2024-12',end:'2025-02'}), patientStore: {fetchPatientsIfNeeded:async()=>{},opdPatients:()=>patients}, baseSchedulesApi:{fetchById:async()=>({schedule:{}})}, labReportsApi:{fetchWhere:query} })
     return p
   }
   const beforeLab = makeLab(async () => allLabs.rows)

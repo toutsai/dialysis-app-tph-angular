@@ -10,6 +10,7 @@ import {
   OnInit,
   OnDestroy,
   ViewChild,
+  HostListener,
   ElementRef,
   ChangeDetectionStrategy
 } from '@angular/core';
@@ -670,7 +671,7 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
   }
 
   openOrderModalFromIcu(patient: any): void {
-    if (!patient?.id) return;
+    if (!patient?.id || !this.canLeave()) return;
     // 以 store 內最新資料為準（ICU 彈窗傳來的物件混入了生效醫囑快照）
     const fresh = this.patientStore.allPatients().find((p) => p.id === patient.id);
     this.selectedPatientForOrder.set(fresh ? JSON.parse(JSON.stringify(fresh)) : patient);
@@ -1762,6 +1763,7 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
   }
 
   openOrderModal(patientFromList: MyPatientItem): void {
+    if (!this.canLeave()) return;
     const allPatients = this.patientStore.allPatients();
     const fullPatientData = allPatients.find(
       (p) => p.id === patientFromList.patientId
@@ -1794,26 +1796,40 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
     );
   }
 
+  readonly orderSaving = signal(false);
+  @ViewChild(DialysisOrderModalComponent) orderModal?: DialysisOrderModalComponent;
+  canLeave(): boolean {
+    return !this.orderSaving() && (!this.isOrderModalVisible() || (this.orderModal?.canLeave() ?? true));
+  }
+  @HostListener('window:beforeunload', ['$event']) beforeUnload(event: BeforeUnloadEvent): void {
+    if (this.orderSaving() || (this.isOrderModalVisible() && this.orderModal?.hasUnsavedChanges())) {
+      event.preventDefault(); event.returnValue = '';
+    }
+  }
   closeOrderModal(): void {
+    if (this.orderSaving()) return;
     this.isOrderModalVisible.set(false);
     this.selectedPatientForOrder.set(null);
   }
 
   async handleOrderSave(updatedOrders: any): Promise<void> {
     const patient = this.selectedPatientForOrder();
-    if (!patient) return;
+    if (!patient || this.orderSaving()) return;
+    this.orderSaving.set(true);
+    const submitted = JSON.parse(JSON.stringify(updatedOrders));
 
     try {
-      await createDialysisOrderAndUpdatePatient(patient.id, patient.name, updatedOrders);
+      await createDialysisOrderAndUpdatePatient(patient.id, patient.name, submitted);
+      this.isOrderModalVisible.set(false);
+      this.selectedPatientForOrder.set(null);
 
       this.notificationService.createNotification(
         `${patient.name} 的醫囑已更新`,
         'success'
       );
       this.patientStore.updatePatientInStore(patient.id, {
-        dialysisOrders: updatedOrders,
+        dialysisOrders: submitted,
       });
-      this.closeOrderModal();
       // Refresh cards and supply summary with updated orders
       this.reloadData();
     } catch (error) {
@@ -1822,7 +1838,7 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
         '醫囑儲存失敗，請檢查網路連線',
         'error'
       );
-    }
+    } finally { this.orderSaving.set(false); }
   }
 
   onCancelConfirmDelete(): void {

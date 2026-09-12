@@ -1,4 +1,5 @@
 <div class="page-container">
+  @if (loadError()) { <p role="alert">{{ loadError() }} <button (click)="initializePageData()">重試載入</button></p> }
   <div class="page-header">
     <div class="header-toolbar">
       <div class="toolbar-left">
@@ -38,7 +39,7 @@
       @if (isLoading()) {
         <div class="loading-state">正在載入調班申請資料...</div>
       }
-      @if (!isLoading()) {
+      @if (!isLoading() && !loadError()) {
         <div class="calendar-wrapper">
           <full-calendar #fullCalendar [options]="calendarOptions()"></full-calendar>
           @if (!isLoading() && exceptions().length === 0) {

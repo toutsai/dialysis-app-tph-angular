@@ -36,11 +36,13 @@
       </div>
       <div class="toolbar-right">
         <span class="status-text">{{ statusText() }}</span>
+        @if (partialSuccessDate()) { <button class="btn btn-warning" (click)="reviewNursingGroups()">核對護理分組（{{ partialSuccessDate() }}）</button> }
         <button class="btn btn-secondary" (click)="exportBaseScheduleToExcel()">匯出總表</button>
       </div>
     </div>
   </header>
 
+  @if (loadError()) { <p role="alert">{{ loadError() }} <button (click)="loadAllData()">重試載入</button></p> }
   <main class="page-main-content">
     <div class="schedule-area">
       <div class="stats-toolbar-wrapper" [style.paddingLeft.px]="leftOffset()">
@@ -52,7 +54,7 @@
           [showPatientNumbers]="true"
         ></app-stats-toolbar>
       </div>
-      @if (masterRecord()) {
+      @if (masterRecord() && !loadError()) {
         <app-schedule-table
           class="schedule-table-component"
           [layout]="bedLayout"
@@ -74,7 +76,7 @@
           (leftOffsetChange)="updateLeftOffset($event)"
         ></app-schedule-table>
       } @else {
-        <div class="loading-state">正在載入總床位表資料...</div>
+        @if (!loadError()) { <div class="loading-state">正在載入總床位表資料...</div> }
       }
     </div>
   </main>

@@ -1,6 +1,6 @@
 import { loadXlsx } from '@/utils/xlsxLoader';
 // Standalone 版：已移除 Firebase
-import { Component, HostBinding, Input, inject, signal, computed, OnInit, OnDestroy, effect, ChangeDetectionStrategy } from '@angular/core';
+import { Component, HostBinding, HostListener, Input, inject, signal, computed, OnInit, OnDestroy, effect, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -43,6 +43,12 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
 
   // Page state
   isLoading = signal(true);
+  isSaving = signal(false);
+  failedSaveJobs = signal<{ kind: 'schedule' | 'clinic'; id: string; label: string; payload: any }[]>([]);
+  saveResults = signal<{ key: string; label: string; success: boolean }[]>([]);
+  saveError = signal('');
+  private saveSnapshot = '';
+
   isSidebarLoading = signal(true);
   selectedDate = signal(new Date());
   availablePhysicians = signal<any[]>([]);
@@ -291,6 +297,7 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   }
 
   markUnsaved(): void {
+    if (this.isSaving()) return;
     if (!this.isLoading()) {
       this.hasUnsavedChanges.set(true);
       this.scheduleDataRevision.update(v => v + 1);
@@ -298,6 +305,7 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   }
 
   onYearMonthChange(): void {
+    if (this.isSaving()) return;
     const current = this.selectedYearMonth();
     if (current !== this.previousYearMonth && this.previousYearMonth) {
       this.loadScheduleForDate(this.selectedDate());
@@ -308,6 +316,7 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
 
   // 下拉 value 是「日期」不是名稱：政府清單的補假名稱全叫「補假」，用名稱比對永遠抓到第一筆
   onHolidayNameChange(): void {
+    if (this.isSaving()) return;
     if (this.holidayForm.name && this.holidayForm.name !== 'custom') {
       const found = this.currentYearHolidays().find((h: any) => h.date === this.holidayForm.name);
       if (found) this.holidayForm.date = found.date;
@@ -315,6 +324,7 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   }
 
   handlePatientSearch(index: number, type: string): void {
+    if (this.isSaving()) return;
     if (type !== 'emergency') return;
     const query = this.emergencyRecords[index].patientName.toLowerCase();
     if (!query) { this.patientSearchResults.set([]); return; }
@@ -326,6 +336,7 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   }
 
   showAutocomplete(event: Event, index: number, type: string): void {
+    if (this.isSaving()) return;
     this.activeSearch.set({ type, index });
     this.handlePatientSearch(index, type);
     const inputElement = event.target as HTMLElement;
@@ -343,6 +354,7 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   }
 
   selectPatient(patient: any, index: number, type: string): void {
+    if (this.isSaving()) return;
     if (type === 'emergency') {
       const record = this.emergencyRecords[index];
       record.patientId = patient.id;
@@ -353,6 +365,10 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   }
 
   async loadScheduleForDate(date: Date): Promise<void> {
+    if (this.isSaving()) return;
+    this.failedSaveJobs.set([]);
+    this.saveResults.set([]);
+    this.saveError.set('');
     this.isLoading.set(true);
     this.hasUnsavedChanges.set(false);
     const year = date.getFullYear();
@@ -429,6 +445,7 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   }
 
   addEmergencyRecord(): void {
+    if (this.isSaving()) return;
     const today = new Date();
     const year = this.selectedYear();
     const month = this.selectedMonth() - 1;
@@ -442,10 +459,11 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   }
 
   removeEmergencyRecord(index: number): void {
+    if (this.isSaving()) return;
     this.emergencyRecords.splice(index, 1);
   }
 
-  saveScheduleOnly(): Promise<any> {
+  private buildSchedulePayload(): any {
     const physicianMap = new Map(this.availablePhysicians().map((p: any) => [p.id, p.name]));
     const dataToSave: any = {
       year: this.selectedYear(), month: this.selectedMonth(),
@@ -475,7 +493,7 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
         dataToSave.consultationSchedule[day][shift] = { physicianId, name: physicianMap.get(physicianId) || null };
       }
     }
-    return this.physicianSchedulesApi.save(this.selectedYearMonth(), dataToSave);
+    return structuredClone(dataToSave);
   }
 
   async fetchPhysicians(): Promise<void> {
@@ -554,33 +572,70 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
     return blankSchedule;
   }
 
+  private currentSaveSnapshot(): string {
+    return JSON.stringify([this.selectedYearMonth(), this.buildSchedulePayload(), this.physicianClinicSelections]);
+  }
+
+  @HostListener('window:beforeunload', ['$event']) beforeUnload(event: BeforeUnloadEvent): void {
+    if (this.isSaving() || this.hasUnsavedChanges()) { event.preventDefault(); event.returnValue = ''; }
+  }
+
+  canLeave(): boolean {
+    if (this.isSaving()) { this.showAlert('儲存中', '請等待所有儲存作業完成。'); return false; }
+    return !this.hasUnsavedChanges() || confirm('醫師班表尚有未儲存或失敗的變更，確定離開並捨棄？');
+  }
+
   async saveAllChanges(): Promise<void> {
-    this.isLoading.set(true);
-    const schedulePromise = this.saveScheduleOnly();
-    const clinicUpdatePromises = this.availablePhysicians().map((doc: any) => {
-      const selectedHours = this.physicianClinicSelections[doc.id] || [];
-      const newClinicHours = selectedHours.filter((hour: string) => hour);
-      if ((doc.clinicHours || []).sort().join(',') !== [...newClinicHours].sort().join(',')) {
-        return this.usersApi.update(doc.id, { clinicHours: newClinicHours }).then(() => {
-          // ✅ 儲存成功後直接更新本地資料，不需重新讀取
-          doc.clinicHours = newClinicHours;
-        });
-      }
-      return Promise.resolve();
-    });
-    try {
-      await Promise.all([...clinicUpdatePromises, schedulePromise]);
-      this.hasUnsavedChanges.set(false);
-      this.showAlert('儲存成功', '所有變更已成功儲存！');
-    } catch (error) {
-      console.error('儲存所有變更失敗:', error);
-      this.showAlert('儲存失敗', '儲存時發生錯誤。');
-    } finally {
-      this.isLoading.set(false);
+    if (!this.canManagePhysicianSchedule || this.isSaving() || this.isLoading() || this.isSyncingHolidays() || this.isImportingHolidayCsv()) return;
+    if (this.failedSaveJobs().length) { await this.retryFailedSaves(); return; }
+    this.saveSnapshot = this.currentSaveSnapshot();
+    const jobs: { kind: 'schedule' | 'clinic'; id: string; label: string; payload: any }[] = [
+      { kind: 'schedule', id: this.selectedYearMonth(), label: this.selectedYearMonth() + ' 月班表', payload: this.buildSchedulePayload() },
+    ];
+    for (const doc of this.availablePhysicians()) {
+      const hours = (this.physicianClinicSelections[doc.id] || []).filter(Boolean);
+      if ([...(doc.clinicHours || [])].sort().join(',') !== [...hours].sort().join(','))
+        jobs.push({ kind: 'clinic', id: doc.id, label: doc.name + ' 門診時間', payload: { clinicHours: [...hours] } });
     }
+    this.saveResults.set([]);
+    await this.persistSaveJobs(jobs);
+  }
+
+  async retryFailedSaves(): Promise<void> {
+    if (!this.canManagePhysicianSchedule || this.isSaving() || !this.failedSaveJobs().length) return;
+    await this.persistSaveJobs(this.failedSaveJobs());
+  }
+
+  private async persistSaveJobs(jobs: { kind: 'schedule' | 'clinic'; id: string; label: string; payload: any }[]): Promise<void> {
+    const snapshots = structuredClone(jobs);
+    this.isSaving.set(true);
+    this.isAutocompleteVisible.set(false);
+    this.saveError.set('');
+    const results = await Promise.allSettled(snapshots.map(job => Promise.resolve().then(() =>
+      job.kind === 'schedule' ? this.physicianSchedulesApi.save(job.id, job.payload) : this.usersApi.update(job.id, job.payload))));
+    const failed: typeof snapshots = [];
+    const outcomes = new Map(this.saveResults().map(result => [result.key, result]));
+    results.forEach((result, index) => {
+      const job = snapshots[index];
+      const key = job.kind + ':' + job.id;
+      outcomes.set(key, { key, label: job.label, success: result.status === 'fulfilled' });
+      if (result.status === 'rejected') failed.push(job);
+      else if (job.kind === 'clinic') {
+        const doc = this.availablePhysicians().find(physician => physician.id === job.id);
+        if (doc) doc.clinicHours = [...job.payload.clinicHours];
+      }
+    });
+    this.saveResults.set([...outcomes.values()]);
+    this.failedSaveJobs.set(failed);
+    const unchanged = this.saveSnapshot === this.currentSaveSnapshot();
+    this.hasUnsavedChanges.set(failed.length > 0 || !unchanged);
+    this.saveError.set(failed.length ? '部分儲存失敗。已成功項目會保留；重試只送出本次失敗項目的原送出內容。' : '');
+    this.isSaving.set(false);
+    if (!failed.length && !unchanged) this.showAlert('已儲存送出內容', '畫面仍有後續修改尚未儲存，請再次儲存。');
   }
 
   addHoliday(): void {
+    if (this.isSaving()) return;
     // holidayForm.name：'custom'=自訂（取 customName）、否則是主檔假日的「日期」，反查顯示名稱
     const name = this.holidayForm.name === 'custom'
       ? this.holidayForm.customName
@@ -594,6 +649,7 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   }
 
   removeHoliday(index: number): void {
+    if (this.isSaving()) return;
     this.managedHolidays.splice(index, 1);
   }
 
@@ -629,6 +685,7 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   }
 
   async syncGovernmentHolidays(): Promise<void> {
+    if (this.isSaving()) return;
     if (this.isSyncingHolidays()) return;
     const year = this.selectedYear();
     this.isSyncingHolidays.set(true);
@@ -645,6 +702,7 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   }
 
   async onHolidayCsvSelected(event: Event): Promise<void> {
+    if (this.isSaving()) return;
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
@@ -671,6 +729,7 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   // 帶入＝只加不刪（2026-08-14 使用者裁定）：醫院放假與政府行事曆有時不同，
   // 各月既有假日設定（含手動自訂）一律不動，主檔只是供手動挑選/帶入的參考清單。
   addCurrentMonthHolidays(): void {
+    if (this.isSaving()) return;
     const monthPrefix = `${this.selectedYearMonth()}-`;
     const candidates = this.currentYearHolidays().filter((h: any) => (h.date || '').startsWith(monthPrefix));
     if (candidates.length === 0) {
@@ -694,6 +753,7 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   }
 
   checkClinicConflict(event: Event, day: any, shift: string): void {
+    if (this.isSaving()) return;
     const newPhysicianId = (event.target as HTMLSelectElement).value;
     if (!newPhysicianId) return;
     const physician = this.availablePhysicians().find((p: any) => p.id === newPhysicianId);
@@ -801,6 +861,7 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   }
 
   goToPreviousMonth(): void {
+    if (this.isSaving()) return;
     const performNavigation = () => {
       const d = new Date(this.selectedDate());
       d.setMonth(d.getMonth() - 1);
@@ -820,6 +881,7 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   }
 
   goToNextMonth(): void {
+    if (this.isSaving()) return;
     const performNavigation = () => {
       const d = new Date(this.selectedDate());
       d.setMonth(d.getMonth() + 1);
@@ -839,18 +901,21 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   }
 
   handleConfirm(): void {
+    if (this.isSaving()) return;
     const action = this.confirmAction();
     if (typeof action === 'function') action();
     this.resetConfirmDialog();
   }
 
   handleCancel(): void {
+    if (this.isSaving()) return;
     const action = this.cancelAction();
     if (typeof action === 'function') action();
     this.resetConfirmDialog();
   }
 
   resetConfirmDialog(): void {
+    if (this.isSaving()) return;
     this.isConfirmDialogVisible.set(false);
     this.confirmDialogTitle.set('');
     this.confirmDialogMessage.set('');

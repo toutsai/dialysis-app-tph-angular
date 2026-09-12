@@ -1,3 +1,4 @@
+@if (loadError()) { <p role="alert">{{ loadError() }} <button type="button" (click)="load()" [disabled]="isLoading()">重試讀取</button></p> }
 <div class="hx-container">
   <div class="hx-toolbar">
     <div class="hx-quarter-nav">
@@ -162,7 +163,7 @@
       </div>
     }
 
-    @if (!isLoading() && rows().length === 0) {
+    @if (!isLoading() && !loadError() && rows().length === 0) {
       <div class="hx-empty">
         目前沒有常規門診病人。
       </div>

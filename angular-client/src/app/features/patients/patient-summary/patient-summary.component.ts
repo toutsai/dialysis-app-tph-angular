@@ -1,7 +1,7 @@
 // src/app/features/patients/patient-summary/patient-summary.component.ts
 // 病歷查詢頁籤：選一位病人，彙整顯示初透日期、感染標記(HBV/HCV)、通路、
 // 目前/歷史透析醫囑，以及近一年本院實際透析日期(次數+清單)。
-import { Component, computed, inject, signal, Input, Output, EventEmitter, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, inject, signal, Input, Output, EventEmitter, OnInit, ChangeDetectionStrategy, ViewChild } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -36,6 +36,14 @@ interface OrderHistoryEntry {
   styleUrl: './patient-summary.component.css',
 })
 export class PatientSummaryComponent implements OnInit {
+  @ViewChild(PatientBasicProfileComponent) basicProfile?: PatientBasicProfileComponent;
+  private requestId = 0;
+  readonly loadError = signal('');
+  canLeave(): boolean { return this.basicProfile?.canLeave() ?? true; }
+  setSubTab(tab: 'basic' | 'history'): void {
+    if (tab !== this.subTab() && this.canLeave()) this.subTab.set(tab);
+  }
+  ngOnDestroy(): void { ++this.requestId; }
   private readonly api = inject(ApiService);
   private readonly patientStore = inject(PatientStoreService);
 
@@ -85,7 +93,7 @@ export class PatientSummaryComponent implements OnInit {
       .filter(
         (p) =>
           (p.name && p.name.toLowerCase().includes(term)) ||
-          (p.medicalRecordNumber && p.medicalRecordNumber.includes(term)),
+          (p.medicalRecordNumber && p.medicalRecordNumber.toLowerCase().includes(term)),
       )
       .slice(0, 20);
   });
@@ -183,7 +191,9 @@ export class PatientSummaryComponent implements OnInit {
   });
 
   async selectPatient(p: Patient): Promise<void> {
-    if (!p.id) return;
+    if (!p.id || !this.canLeave()) return;
+    const request = ++this.requestId;
+    this.loadError.set('');
     this.selectedId.set(p.id);
     this.searchTerm.set('');
     this.loading.set(true);
@@ -200,17 +210,24 @@ export class PatientSummaryComponent implements OnInit {
           this.api.get<OrderHistoryEntry[]>('/orders/history', { patientId: p.id }),
         ),
       ]);
+      if (request !== this.requestId) return;
       if (full) this.patient.set(full);
       this.dialysisDates.set(dates || null);
       this.orderHistory.set(Array.isArray(history) ? history : []);
     } catch (err) {
+      if (request !== this.requestId) return;
+      this.loadError.set('病人摘要載入失敗，請重新選取重試。');
       console.error('載入病人摘要失敗:', err);
     } finally {
-      this.loading.set(false);
+      if (request === this.requestId) this.loading.set(false);
     }
   }
 
   clearSelection(): void {
+    if (!this.canLeave()) return;
+    ++this.requestId;
+    this.loading.set(false);
+    this.loadError.set('');
     this.selectedId.set(null);
     this.patient.set(null);
     this.dialysisDates.set(null);

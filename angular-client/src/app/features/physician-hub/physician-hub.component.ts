@@ -3,7 +3,7 @@
 // 舊路由 /physician-schedule、/orders、/med-adjustment、/catastrophic-illness、/research 保留為別名：載入本頁並帶對應頁籤（app.routes.ts data.tab）。
 // 權限：頁面 DOCTOR_VIEW_ROLES（含書記 viewer：看醫師班表與重大傷病申請）；醫囑/調藥/研究三頁籤只給 admin/contributor。
 // 重大傷病申請同時也掛在書記專用（features/inventory）頁籤，同一元件兩處內嵌。
-import { Component, OnInit, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ViewChild, HostListener, OnInit, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '@services/auth.service';
@@ -45,6 +45,23 @@ export class PhysicianHubComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
 
+  @ViewChild(MedAdjustmentComponent) med?: MedAdjustmentComponent;
+  @ViewChild(CatastrophicIllnessComponent) ci?: CatastrophicIllnessComponent;
+  @ViewChild(PhysicianScheduleComponent) schedule?: PhysicianScheduleComponent;
+  canLeave(): boolean {
+    if (this.mainTab() === 'med') return this.med?.canLeave() ?? true;
+    if (this.mainTab() === 'ci') return this.ci?.canLeave() ?? true;
+    if (this.mainTab() === 'schedule' && this.schedule) {
+      const child = this.schedule as PhysicianScheduleComponent & { canLeave?: () => boolean };
+      if (typeof child.canLeave === 'function') return child.canLeave();
+      if (this.schedule.isLoading()) return false;
+      return !this.schedule.hasUnsavedChanges() || confirm('醫師班表尚未儲存。確定放棄變更並離開？');
+    }
+    return true;
+  }
+  @HostListener('window:beforeunload', ['$event']) beforeUnload(event: BeforeUnloadEvent): void {
+    if (this.mainTab() === 'schedule' && (this.schedule?.isLoading() || this.schedule?.hasUnsavedChanges())) { event.preventDefault(); event.returnValue = ''; }
+  }
   readonly isDoctor = computed(() => DOCTOR_ROLES.includes(this.auth.currentUser()?.role || ''));
   readonly tabs = computed(() => TABS.filter((t) => !t.doctorOnly || this.isDoctor()));
   readonly mainTab = signal<PhysicianHubTab>('schedule');
@@ -58,7 +75,7 @@ export class PhysicianHubComponent implements OnInit {
   }
 
   setTab(tab: PhysicianHubTab): void {
-    if (this.mainTab() === tab) return;
+    if (this.mainTab() === tab || !this.tabs().some(t => t.key === tab) || !this.canLeave()) return;
     this.mainTab.set(tab);
     // 網址同步為 /physician?tab=…（可加書籤；別名路由切換頁籤後也收斂到同一網址）
     void this.router.navigate(['/physician'], { queryParams: { tab }, replaceUrl: true });

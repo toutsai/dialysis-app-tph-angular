@@ -1,3 +1,4 @@
+import { Router } from '@angular/router';
 import { loadXlsx } from '@/utils/xlsxLoader';
 import { Component, inject, signal, computed, OnInit, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -94,6 +95,14 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
   }
 
   masterRecord = signal<any>(null);
+  readonly loadError = signal('');
+  readonly loadingBase = signal(true);
+  private readonly router = inject(Router);
+  partialSuccessDate = signal<string | null>(null);
+  reviewNursingGroups(): void {
+    const date = this.partialSuccessDate();
+    if (date) void this.router.navigate(['/stats'], { queryParams: { date } });
+  }
   statusText = signal('');
   draggedItem = signal<any>(null);
   columnWidths = signal<number[]>([]);
@@ -121,7 +130,7 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
   assignmentContext = signal<any>({ mode: 'base', patient: null });
   tableKey = signal(Date.now());
 
-  isPageLocked = computed(() => !this.authService.canEditSchedules());
+  isPageLocked = computed(() => !this.authService.canEditSchedules() || this.loadingBase() || !!this.loadError());
 
   weekScheduleMap = computed(() => {
     const combinedSchedule: Record<string, any> = {};
@@ -721,6 +730,10 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
           }
         } catch (teamErr) {
           console.warn('今日護理分組 key 搬移失敗（排程已換床）:', teamErr);
+          this.statusText.set('總表與今日換床已完成，護理分組尚未同步');
+          this.partialSuccessDate.set(dateStr);
+          this.showAlert('部分完成，需核對分組', `${name} 的總表與今日排程已換床；護理分組同步失敗。請至護理分組核對 ${dateStr}，勿重複換床。`);
+          return;
         }
       }
       this.statusText.set(`總表已更新，${name} 今日${getShiftDisplayName(currentShift)}已同步換床`);
@@ -859,7 +872,8 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
     return validationResult;
   }
 
-  private async loadAllData(): Promise<void> {
+  async loadAllData(): Promise<void> {
+    this.loadingBase.set(true); this.loadError.set('');
     this.statusText.set('讀取中...');
     try {
       await this.patientStore.fetchPatientsIfNeeded();
@@ -874,8 +888,8 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
     } catch (error) {
       console.error('[BaseScheduleView] 載入資料失敗:', error);
       this.statusText.set('讀取失敗');
-      this.masterRecord.set({ id: 'MASTER_SCHEDULE', schedule: {} });
-    }
+      this.loadError.set('總床位表載入失敗，請重試；目前不能編輯空表。');
+    } finally { this.loadingBase.set(false); }
   }
 
   private async handlePatientDataUpdate(): Promise<void> {

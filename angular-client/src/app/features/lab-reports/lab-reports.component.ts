@@ -71,6 +71,13 @@ export class LabReportsComponent implements OnInit, OnDestroy {
   alertSaveToast = signal<string>('');
   private alertSaveToastTimer: any = null;
 
+  private alertResultMonthRange = '';
+  alertSaving = signal(false);
+  alertSaveError = signal('');
+  alertDetailError = signal('');
+  failedAlertSaves = signal<{ id: string; data: any }[]>([]);
+  private savedAlertSignatures = new Map<string, string>();
+
   // Alert detail modal
   isAlertDetailModalVisible = signal(false);
   selectedAlertItem = signal<any>(null);
@@ -335,6 +342,7 @@ export class LabReportsComponent implements OnInit, OnDestroy {
   // ---- Alert Report ----
 
   changeAlertMonth(monthOffset: number): void {
+    if (this.alertSaving()) return;
     const current = this.alertCurrentMonth();
     current.setMonth(current.getMonth() + monthOffset);
     this.alertCurrentMonth.set(new Date(current));
@@ -342,6 +350,10 @@ export class LabReportsComponent implements OnInit, OnDestroy {
   }
 
   async generateAlertReport(): Promise<void> {
+    if (this.alertSaving()) return;
+    this.alertResultMonthRange = '';
+    this.alertDetailError.set('');
+    this.isAlertDetailModalVisible.set(false);
     const request = ++this.alertRequest;
     const range = { ...this.alertMonthRange() };
     this.isLoadingAlerts.set(true);
@@ -438,7 +450,19 @@ export class LabReportsComponent implements OnInit, OnDestroy {
           }
         });
       }
-      if (request === this.alertRequest) this.alertList.set(newAlertList);
+      if (request === this.alertRequest) {
+        this.alertResultMonthRange = range.start + '_' + range.end;
+        for (const item of newAlertList) for (const abnormality of item.abnormalities) {
+          const key = abnormality.key;
+          const id = item.patient.id + '_' + key + '_' + this.alertResultMonthRange;
+          const failed = this.failedAlertSaves().find(job => job.id === id);
+          if (failed) {
+            item.analysisTexts[key] = failed.data.analysis;
+            item.suggestionTexts[key] = failed.data.suggestion;
+          } else this.savedAlertSignatures.set(id, JSON.stringify([item.analysisTexts[key] || '', item.suggestionTexts[key] || '']));
+        }
+        this.alertList.set(newAlertList);
+      }
     } catch (error) {
       if (request !== this.alertRequest) return;
       console.error('\u751f\u6210\u8b66\u793a\u5831\u544a\u5931\u6557:', error);
@@ -513,27 +537,32 @@ export class LabReportsComponent implements OnInit, OnDestroy {
   }
 
   openAlertDetailModal(item: any, key: string): void {
+    if (this.alertSaving()) return;
+    this.alertDetailError.set('');
     this.selectedAlertItem.set({ ...item, key });
     this.isAlertDetailModalVisible.set(true);
   }
 
   async handleAlertUpdate(event: { analysisText: string; suggestionText: string }): Promise<void> {
     const selectedItem = this.selectedAlertItem();
-    if (!selectedItem) return;
+    if (!selectedItem || this.alertSaving() || !this.alertResultMonthRange) return;
 
     const { patient, key } = selectedItem;
     const list = this.alertList();
     const targetItem = list.find((item: any) => item.patient.id === patient.id);
     if (!targetItem) return;
 
+    this.alertSaving.set(true);
+    this.alertDetailError.set('');
     // 1) 回填本地狀態（即時反映在表格）
     targetItem.analysisTexts[key] = event.analysisText;
     targetItem.suggestionTexts[key] = event.suggestionText;
     this.alertList.set([...list]);
 
+    let pendingJob: { id: string; data: any } | null = null;
     // 2) 立即存檔該筆分析到資料庫（確認＝存檔，免再按工具列「儲存分析」）
     try {
-      const monthRangeKey = `${this.alertMonthRange().start}_${this.alertMonthRange().end}`;
+      const monthRangeKey = this.alertResultMonthRange;
       const docId = `${patient.id}_${key}_${monthRangeKey}`;
       const dataToSave: any = {
         patientId: patient.id,
@@ -544,11 +573,23 @@ export class LabReportsComponent implements OnInit, OnDestroy {
         suggestion: event.suggestionText,
         updatedAt: new Date(),
       };
+      pendingJob = { id: docId, data: structuredClone(dataToSave) };
       await this.labAnalysesApi.save(docId, dataToSave);
+      this.savedAlertSignatures.set(docId, JSON.stringify([dataToSave.analysis, dataToSave.suggestion]));
+      this.failedAlertSaves.update(jobs => jobs.filter(job => job.id !== docId));
+      this.alertSaveError.set(this.failedAlertSaves().length ? '仍有分析未儲存，可重試失敗項目。' : '');
+      this.isAlertDetailModalVisible.set(false);
       this.showAlertSaveToast(`已儲存 ${patient.name} 的分析`);
     } catch (error: any) {
       console.error('儲存檢驗警示分析失敗:', error);
-      alert(`儲存失敗: ${error?.message || error}`);
+      if (pendingJob) {
+        const failed = pendingJob;
+        this.failedAlertSaves.update(jobs => [...jobs.filter(job => job.id !== failed.id), failed]);
+      }
+      this.alertSaveError.set('分析未儲存，內容已保留；可重試失敗項目。');
+      this.alertDetailError.set('儲存失敗，內容已保留；請按「重試存檔」。');
+    } finally {
+      this.alertSaving.set(false);
     }
   }
 
@@ -561,49 +602,53 @@ export class LabReportsComponent implements OnInit, OnDestroy {
   }
 
   async saveAlertAnalyses(): Promise<void> {
-    if (!confirm('\u60a8\u78ba\u5b9a\u8981\u5132\u5b58\u76ee\u524d\u6240\u6709\u7684\u75c5\u56e0\u5206\u6790\u8207\u5efa\u8b70\u8655\u7f6e\u55ce\uff1f\u6b64\u64cd\u4f5c\u5c07\u6703\u8986\u84cb\u5148\u524d\u7684\u5132\u5b58\u3002')) {
-      return;
+    if (this.alertSaving() || this.isLoadingAlerts()) return;
+    const monthRange = this.alertResultMonthRange;
+    if (!monthRange) return;
+    const jobs: { id: string; data: any }[] = [];
+    for (const item of this.alertList()) {
+      for (const abnormality of item.abnormalities) {
+        const key = abnormality.key;
+        const analysis = item.analysisTexts[key] || '';
+        const suggestion = item.suggestionTexts[key] || '';
+        const id = item.patient.id + '_' + key + '_' + monthRange;
+        if ((!analysis && !suggestion) || this.savedAlertSignatures.get(id) === JSON.stringify([analysis, suggestion])) continue;
+        jobs.push({ id, data: { patientId: item.patient.id, patientName: item.patient.name,
+          abnormalityKey: key, monthRange, analysis, suggestion, updatedAt: new Date() } });
+      }
     }
+    if (!jobs.length) { this.showAlertSaveToast('目前沒有尚待儲存的分析'); return; }
+    await this.persistAlertJobs(jobs);
+  }
 
-    this.isLoadingAlerts.set(true);
-    try {
-      const promises: Promise<any>[] = [];
-      const monthRangeKey = `${this.alertMonthRange().start}_${this.alertMonthRange().end}`;
+  async retryFailedAlertSaves(): Promise<void> {
+    if (this.alertSaving()) return;
+    await this.persistAlertJobs(this.failedAlertSaves());
+  }
 
-      this.alertList().forEach((item: any) => {
-        const patientId = item.patient.id;
-        item.abnormalities.forEach((abnormality: any) => {
-          const key = abnormality.key;
-          const analysis = item.analysisTexts[key] || '';
-          const suggestion = item.suggestionTexts[key] || '';
-
-          if (analysis || suggestion) {
-            const docId = `${patientId}_${key}_${monthRangeKey}`;
-            const dataToSave: any = {
-              patientId,
-              patientName: item.patient.name,
-              abnormalityKey: key,
-              monthRange: monthRangeKey,
-              analysis,
-              suggestion,
-              updatedAt: new Date(),
-            };
-            promises.push(this.labAnalysesApi.save(docId, dataToSave));
-          }
-        });
-      });
-
-      await Promise.all(promises);
-      alert('\u5206\u6790\u5132\u5b58\u6210\u529f\uff01');
-    } catch (error: any) {
-      console.error('\u5132\u5b58\u5206\u6790\u5931\u6557:', error);
-      alert(`\u5132\u5b58\u5931\u6557: ${error.message}`);
-    } finally {
-      this.isLoadingAlerts.set(false);
-    }
+  private async persistAlertJobs(jobs: { id: string; data: any }[]): Promise<void> {
+    if (!jobs.length) return;
+    this.alertSaving.set(true);
+    this.alertSaveError.set('');
+    const snapshots = structuredClone(jobs);
+    const results = await Promise.allSettled(snapshots.map(job =>
+      Promise.resolve().then(() => this.labAnalysesApi.save(job.id, job.data))));
+    const failed: typeof snapshots = [];
+    results.forEach((result, index) => {
+      const job = snapshots[index];
+      if (result.status === 'rejected') failed.push(job);
+      else this.savedAlertSignatures.set(job.id, JSON.stringify([job.data.analysis, job.data.suggestion]));
+    });
+    const attempted = new Set(snapshots.map(job => job.id));
+    this.failedAlertSaves.set([...this.failedAlertSaves().filter(job => !attempted.has(job.id)), ...failed]);
+    this.alertSaveError.set(this.failedAlertSaves().length ? '部分分析未儲存，內容已保留；可只重試失敗項目。' : '');
+    this.showAlertSaveToast('本次已儲存 ' + (snapshots.length - failed.length) + ' 筆；失敗 ' + failed.length + ' 筆');
+    this.alertSaving.set(false);
   }
 
   async exportAlertToExcel(): Promise<void> {
+    if (this.alertSaving()) return;
+    if (this.failedAlertSaves().length && !confirm('部分分析尚未儲存，匯出會包含目前畫面的草稿。仍要匯出？')) return;
     const XLSX = await loadXlsx();
     if (this.groupedAlerts().length === 0) {
       alert('\u76ee\u524d\u6c92\u6709\u53ef\u532f\u51fa\u7684\u8b66\u793a\u5831\u544a\u8cc7\u6599\u3002');

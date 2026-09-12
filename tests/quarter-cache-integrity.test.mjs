@@ -112,6 +112,6 @@ for(const kind of ['hdrx','hosp'])test(`${kind}: superseded quarter load cannot 
  const gates=new Map(), rel=`app/features/kidit-report/kidit-${kind}-quarterly.component.ts`;
  const p=methods(rel,['load'],{quarterRange:()=>({startDate:'2026-07-01',endDate:'2026-09-30'}),fetchQuarterRecords:q=>{const g=deferred();gates.set(q,g);return g.promise;},localApi:{get:async()=>[]}});
  let rowWrites=0;
- Object.assign(p,{loadGeneration:0,q:signal(3),year:()=>2026,quarter:()=>`2026Q${p.q()}`,isLoading:signal(false),rows:{set(){rowWrites++;}},saveQueue:{flush:async()=>{}},patientStore:{fetchPatientsIfNeeded:async()=>{},allPatients:()=>[],patientMap:()=>new Map()},nurseNames:signal([]),nurseFilter:signal('existing')});
+ Object.assign(p,{loadError:signal(''),loadGeneration:0,q:signal(3),year:()=>2026,quarter:()=>`2026Q${p.q()}`,isLoading:signal(false),rows:{set(){rowWrites++;}},saveQueue:{flush:async()=>{}},patientStore:{fetchPatientsIfNeeded:async()=>{},allPatients:()=>[],patientMap:()=>new Map()},nurseNames:signal([]),nurseFilter:signal('existing')});
  const first=p.load();await new Promise(r=>setImmediate(r));p.q.set(4);const second=p.load();await new Promise(r=>setImmediate(r));const before=rowWrites;gates.get('2026Q3').resolve([]);await first;assert.equal(rowWrites,before);assert.equal(p.isLoading(),true);gates.get('2026Q4').resolve([]);await second;assert.equal(rowWrites,before+1);assert.equal(p.isLoading(),false);
 });

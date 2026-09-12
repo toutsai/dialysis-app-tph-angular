@@ -17,6 +17,8 @@ export class LabAlertDetailModalComponent implements OnChanges {
   @Input() isVisible = true;
   @Input() patient: any = null;
   @Input() abnormalityKey = '';
+  @Input() saving = false;
+  @Input() saveError = '';
   @Input() initialAnalysis = '';
   @Input() initialSuggestion = '';
   @Output() close = new EventEmitter<void>();
@@ -106,6 +108,7 @@ export class LabAlertDetailModalComponent implements OnChanges {
   }
 
   handleConfirm(): void {
+    if (this.saving) return;
     const finalAnalysisText = [...this.selectedCauses, this.otherCauseText.trim()]
       .filter(Boolean)
       .join('; ');
@@ -117,10 +120,11 @@ export class LabAlertDetailModalComponent implements OnChanges {
       analysisText: finalAnalysisText,
       suggestionText: finalSuggestionText,
     });
-    this.handleClose();
+    // Parent closes only after the save succeeds.
   }
 
   handleClose(): void {
+    if (this.saving) return;
     this.close.emit();
   }
 }

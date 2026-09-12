@@ -342,35 +342,46 @@ export class CollaborationComponent implements OnInit, OnDestroy {
   }
 
   openCreateModal(itemToEdit: TaskItem | null = null): void {
+    if (this.editBusy()) return;
     const user = this.auth.currentUser();
     if (!user) return;
     if (!this.auth.hasPermission('viewer')) {
       console.warn('Permission denied.');
       return;
     }
+    this.editError.set('');
     this.editingItem.set(itemToEdit);
     this.isCreateModalVisible.set(true);
   }
 
+  readonly editBusy = signal(false);
+  readonly editError = signal('');
+  private readonly pendingStatus = new Set<string>();
   closeCreateModal(): void {
+    if (this.editBusy()) return;
     this.isCreateModalVisible.set(false);
     this.editingItem.set(null);
   }
 
   async handleTaskSubmit(data: TaskItem): Promise<void> {
-    if (this.editingItem()) {
-      // Edit mode: dialog emitted update data, we need to save it
-      await this.updateTask(data);
-    } else {
-      // New creation: dialog already saved to Firestore
-      this.handleTaskCreated();
-    }
-    this.closeCreateModal();
+    if (this.editBusy()) return;
+    this.editBusy.set(true); this.editError.set('');
+    let saved = false;
+    try {
+      if (this.editingItem()) await this.updateTask(data);
+      else this.handleTaskCreated();
+      saved = true;
+    } catch (error: any) {
+      this.editError.set(error?.message || '更新失敗，內容已保留，請重試。');
+    } finally { this.editBusy.set(false); }
+    if (saved) this.closeCreateModal();
   }
 
   async updateTaskStatus(taskId: string, newStatus: string): Promise<void> {
     const user = this.auth.currentUser();
     if (!user) return;
+    if (this.pendingStatus.has(taskId)) return;
+    this.pendingStatus.add(taskId);
     const localUpdates = {
       status: newStatus,
       resolvedBy: {
@@ -380,8 +391,8 @@ export class CollaborationComponent implements OnInit, OnDestroy {
       resolvedAt: new Date().toISOString(),
     };
     try {
-      this.taskStore.updateItemLocally(taskId, localUpdates);
       await this.tasksApi.update(taskId, localUpdates as any);
+      this.taskStore.updateItemLocally(taskId, localUpdates);
       this.notificationService.show(
         newStatus === 'completed' ? '\u72C0\u614B\u5DF2\u66F4\u65B0\u70BA\u5DF2\u8B80' : '\u72C0\u614B\u5DF2\u79FB\u56DE\u5F85\u8FA6',
         'success',
@@ -389,23 +400,34 @@ export class CollaborationComponent implements OnInit, OnDestroy {
     } catch (error: unknown) {
       console.error('\u66F4\u65B0\u4EFB\u52D9\u72C0\u614B\u5931\u6557:', error);
       alert('\u66F4\u65B0\u5931\u6557\uFF0C\u8ACB\u7A0D\u5F8C\u518D\u8A66\u3002');
-    }
+    } finally { this.pendingStatus.delete(taskId); }
   }
 
   confirmDeleteTask(item: TaskItem): void {
+    if (this.deleteBusy()) return;
+    this.deleteError.set('');
     this.itemToDelete.set(item);
     this.isConfirmDeleteVisible.set(true);
   }
 
+  readonly deleteBusy = signal(false);
+  readonly deleteError = signal('');
   async executeDeleteTask(): Promise<void> {
     const toDelete = this.itemToDelete();
-    if (!toDelete) return;
-    await this.deleteTask(toDelete.id);
-    this.isConfirmDeleteVisible.set(false);
-    this.itemToDelete.set(null);
+    if (!toDelete || this.deleteBusy()) return;
+    this.deleteBusy.set(true); this.deleteError.set('');
+    try {
+      await this.tasksApi.delete(toDelete.id);
+      this.notificationService.show('訊息已刪除', 'info');
+      this.isConfirmDeleteVisible.set(false);
+      this.itemToDelete.set(null);
+    } catch {
+      this.deleteError.set('刪除失敗，原訊息仍保留，請重試。');
+    } finally { this.deleteBusy.set(false); }
   }
 
   cancelDelete(): void {
+    if (this.deleteBusy()) return;
     this.isConfirmDeleteVisible.set(false);
     this.itemToDelete.set(null);
   }
@@ -462,26 +484,8 @@ export class CollaborationComponent implements OnInit, OnDestroy {
   }
 
   private async updateTask(data: TaskItem): Promise<void> {
-    const editItem = this.editingItem();
     const { id, ...updateData } = data;
-    try {
-      await this.tasksApi.update(id, updateData as any);
-      console.log(`[CollaborationView] Task/Memo ${id} updated.`);
-    } catch (error: unknown) {
-      console.error('\u66F4\u65B0\u9805\u76EE\u5931\u6557:', error);
-      alert('\u66F4\u65B0\u5931\u6557\uFF0C\u8ACB\u7A0D\u5F8C\u518D\u8A66\u3002');
-    }
-  }
-
-  private async deleteTask(taskId: string): Promise<void> {
-    const toDelete = this.itemToDelete();
-    try {
-      await this.tasksApi.delete(taskId);
-      this.notificationService.show('\u8A0A\u606F\u5DF2\u522A\u9664', 'info');
-    } catch (error: unknown) {
-      console.error('\u522A\u9664\u4EFB\u52D9\u5931\u6557:', error);
-      alert('\u522A\u9664\u5931\u6557\uFF0C\u8ACB\u7A0D\u5F8C\u518D\u8A66\u3002');
-    }
+    await this.tasksApi.update(id, updateData as any);
   }
 
   private handleTaskCreated(): void {

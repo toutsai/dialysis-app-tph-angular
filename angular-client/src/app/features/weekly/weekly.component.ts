@@ -1,6 +1,6 @@
 import { loadXlsx } from '@/utils/xlsxLoader';
 // Standalone 版：已移除 Firebase
-import { Component, inject, signal, computed, OnInit, OnDestroy, DestroyRef, ChangeDetectionStrategy } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, OnDestroy, DestroyRef, ChangeDetectionStrategy, HostListener } from '@angular/core';
 
 import { nameWithModeFreq } from '@/utils/patientDisplay';
 import { FormsModule } from '@angular/forms';
@@ -88,6 +88,14 @@ export class WeeklyComponent implements OnInit, OnDestroy {
 
   weekScheduleRecords = signal<Map<string, any>>(new Map());
   currentWeekStartDate = signal<Date>(this.getStartOfWeek(new Date()));
+  canLeave(): boolean {
+    if (this.isSaving()) return false;
+    return !this.hasUnsavedChanges() || window.confirm('目前有未儲存變更，確定放棄並離開？');
+  }
+  @HostListener('window:beforeunload', ['$event'])
+  onBeforeUnload(event: BeforeUnloadEvent): void {
+    if (this.isSaving() || this.hasUnsavedChanges()) { event.preventDefault(); event.returnValue = ''; }
+  }
   hasUnsavedChanges = signal(false);
   readonly isSaving = signal(false);
   private readonly draft = new ScheduleDraft();

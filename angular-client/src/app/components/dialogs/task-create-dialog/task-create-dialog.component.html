@@ -5,7 +5,8 @@
         <h2>{{ isEditMode ? '修改交辦 / 留言' : '新增交辦 / 留言' }}</h2>
         <button class="close-btn" (click)="handleClose()">&times;</button>
       </header>
-      <main class="modal-body">
+      @if (submitError || externalError) { <p role="alert">{{ submitError || externalError }}</p> }
+      <fieldset [disabled]="busy" style="border:0;padding:0;margin:0;min-width:0"><main class="modal-body">
         <!-- Category -->
         <div class="form-group">
           <label class="form-label">類型</label>
@@ -179,10 +180,10 @@
             ></textarea>
           }
         </div>
-      </main>
+      </main></fieldset>
       <footer class="modal-footer">
-        <button class="btn btn-primary" (click)="handleSubmit()" [disabled]="!isFormValid || isSubmitting">
-          {{ isSubmitting ? '處理中...' : isEditMode ? '更新' : '送出' }}
+        <button class="btn btn-primary" (click)="handleSubmit()" [disabled]="!isFormValid || busy">
+          {{ busy ? '處理中...' : isEditMode ? '更新' : '送出' }}
         </button>
         <button class="btn btn-secondary" (click)="handleClose()">取消</button>
       </footer>

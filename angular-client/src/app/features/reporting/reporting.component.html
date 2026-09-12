@@ -48,6 +48,8 @@
     </button>
   </div>
 
+  @if (reportError()) { <p role="alert">{{ reportError() }} <button type="button" (click)="generateReport()" [disabled]="isLoading()">重試</button></p> }
+  @if (reportWarning()) { <p role="status">{{ reportWarning() }} <button type="button" (click)="generateReport()" [disabled]="isLoading()">重新讀取來源</button></p> }
   <!-- Chart Area -->
   <div class="chart-section">
     @if (isLoading()) {
@@ -56,7 +58,7 @@
         <p>載入中...</p>
       </div>
     }
-    @if (!isLoading() && noData() && hasGenerated()) {
+    @if (!isLoading() && !reportError() && noData() && hasGenerated()) {
       <div class="empty-state">
         <span class="empty-icon">📊</span>
         <p>此期間無資料</p>

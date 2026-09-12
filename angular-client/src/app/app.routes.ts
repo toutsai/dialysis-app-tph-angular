@@ -44,6 +44,7 @@ export const routes: Routes = [
       { path: '', redirectTo: 'my-patients', pathMatch: 'full' },
       {
         path: 'schedule',
+        canDeactivate: [manualEditorGuard],
         loadComponent: () =>
           import('./features/schedule/schedule.component').then(
             (m) => m.ScheduleComponent
@@ -56,6 +57,7 @@ export const routes: Routes = [
       },
       {
         path: 'weekly',
+        canDeactivate: [manualEditorGuard],
         loadComponent: () =>
           import('./features/weekly/weekly.component').then(
             (m) => m.WeeklyComponent
@@ -77,6 +79,7 @@ export const routes: Routes = [
       },
       {
         path: 'physician',
+        canDeactivate: [manualEditorGuard],
         loadComponent: loadPhysicianHub,
         canActivate: [roleGuard],
         data: {
@@ -87,6 +90,7 @@ export const routes: Routes = [
       {
         // 別名：醫師專用 → 醫師班表
         path: 'physician-schedule',
+        canDeactivate: [manualEditorGuard],
         loadComponent: loadPhysicianHub,
         canActivate: [roleGuard],
         data: {
@@ -121,6 +125,7 @@ export const routes: Routes = [
       },
       {
         path: 'patients',
+        canDeactivate: [manualEditorGuard],
         loadComponent: () =>
           import('./features/patients/patients.component').then(
             (m) => m.PatientsComponent
@@ -130,6 +135,7 @@ export const routes: Routes = [
       },
       {
         path: 'stats',
+        canDeactivate: [manualEditorGuard],
         loadComponent: () =>
           import('./features/stats/stats.component').then(
             (m) => m.StatsComponent
@@ -254,6 +260,7 @@ export const routes: Routes = [
       {
         // 別名：醫師專用 → 醫囑藥囑管理
         path: 'orders',
+        canDeactivate: [manualEditorGuard],
         loadComponent: loadPhysicianHub,
         canActivate: [roleGuard],
         data: { title: PAGE_ACCESS.physicianHub.title, roles: PAGE_ACCESS.orders.roles, tab: 'orders' },
@@ -261,6 +268,7 @@ export const routes: Routes = [
       {
         // 別名：醫師專用 → 醫師藥物調整
         path: 'med-adjustment',
+        canDeactivate: [manualEditorGuard],
         loadComponent: loadPhysicianHub,
         canActivate: [roleGuard],
         data: { title: PAGE_ACCESS.physicianHub.title, roles: PAGE_ACCESS.medAdjustment.roles, tab: 'med' },
@@ -268,6 +276,7 @@ export const routes: Routes = [
       {
         // 別名：醫師專師專用 → 重大傷病申請（同一元件也掛在書記專用頁籤）
         path: 'catastrophic-illness',
+        canDeactivate: [manualEditorGuard],
         loadComponent: loadPhysicianHub,
         canActivate: [roleGuard],
         data: { title: PAGE_ACCESS.physicianHub.title, roles: PAGE_ACCESS.catastrophicIllness.roles, tab: 'ci' },
@@ -275,12 +284,14 @@ export const routes: Routes = [
       {
         // 別名：醫師專用 → 研究專用
         path: 'research',
+        canDeactivate: [manualEditorGuard],
         loadComponent: loadPhysicianHub,
         canActivate: [roleGuard],
         data: { title: PAGE_ACCESS.physicianHub.title, roles: PAGE_ACCESS.research.roles, tab: 'research' },
       },
       {
         path: 'my-patients',
+        canDeactivate: [manualEditorGuard],
         loadComponent: () =>
           import('./features/my-patients/my-patients.component').then(
             (m) => m.MyPatientsComponent

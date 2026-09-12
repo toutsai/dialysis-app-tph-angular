@@ -18,6 +18,10 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
   private readonly apiManagerService = inject(ApiManagerService);
   private readonly ordersHistoryApi: ApiManager<FirestoreRecord>;
 
+  @Input() saving = false;
+  private baseline = '';
+  hasUnsavedChanges(): boolean { return this.baseline !== JSON.stringify(this.localOrderData); }
+  canLeave(): boolean { return !this.saving && (!this.hasUnsavedChanges() || confirm('透析醫囑尚未儲存。確定放棄變更並離開？')); }
   @Input() patient: any = null;
   @Input() patientData: any = null;
   @Output() close = new EventEmitter<void>();
@@ -122,6 +126,7 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
 
       this.fetchOrderHistory(this.patientData.id);
     }
+    this.baseline = JSON.stringify(this.localOrderData);
   }
 
   ngOnDestroy(): void {
@@ -348,6 +353,7 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
   }
 
   handleSave(): void {
+    if (this.saving) return;
     const formattedAk = this.akRotationString();
     const akWeekly: string[] = (this.localOrderData.akWeekly || []).map((v: string) => v || '');
     const formattedHeparinLM = `${this.localOrderData.heparinInitial || '0'}/${this.localOrderData.heparinMaintenance || '0'}`;
@@ -392,11 +398,13 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
   }
 
   handleClose(): void {
+    if (!this.canLeave()) return;
     document.body.classList.remove('modal-open');
     this.close.emit();
   }
 
   requestDeleteOrder(record: any): void {
+    if (this.saving) return;
     if (!record || !record.id) {
       alert('錯誤：無法識別要刪除的記錄');
       return;
@@ -406,7 +414,7 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
   }
 
   async confirmDelete(): Promise<void> {
-    if (!this.orderToDelete?.id) return;
+    if (this.saving || !this.orderToDelete?.id) return;
     const recordId = this.orderToDelete.id;
     try {
       await this.ordersHistoryApi.delete(recordId);

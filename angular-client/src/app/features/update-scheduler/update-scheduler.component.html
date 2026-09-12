@@ -1,4 +1,5 @@
 <div class="page-container">
+  @if (loadError()) { <p role="alert">{{ loadError() }} <button (click)="fetchScheduledUpdates()">重試載入</button></p> }
   <div class="page-header">
     <div class="header-toolbar">
       <div class="toolbar-left">
@@ -36,10 +37,10 @@
         </div>
       }
 
-      @if (!isLoading()) {
+      @if (!isLoading() && !loadError()) {
         <div class="calendar-wrapper">
           <full-calendar #fullCalendar [options]="calendarOptions()"></full-calendar>
-          @if (!isLoading() && scheduledUpdates().length === 0) {
+          @if (!isLoading() && !loadError() && scheduledUpdates().length === 0) {
             <div class="empty-state">
               <i class="fas fa-calendar-check"></i>
               <p>目前沒有任何預約變更記錄。</p>

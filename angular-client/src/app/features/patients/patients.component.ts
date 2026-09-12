@@ -1,6 +1,8 @@
 import { loadXlsx } from '@/utils/xlsxLoader';
 import {
   Component,
+  ViewChild,
+  HostListener,
   inject,
   signal,
   computed,
@@ -109,6 +111,18 @@ export class PatientsComponent implements OnInit, OnDestroy {
   private readonly patientsApi: ApiManager<FirestoreRecord>;
 
   // --- Tab & Sort State ---
+  @ViewChild(PatientSummaryComponent) summary?: PatientSummaryComponent;
+  @ViewChild(DialysisOrderModalComponent) orderModal?: DialysisOrderModalComponent;
+  readonly orderSaving = signal(false);
+  canLeave(): boolean {
+    if (this.orderSaving()) return false;
+    if (this.isOrderModalVisible() && this.orderModal && !this.orderModal.canLeave()) return false;
+    return this.summary?.canLeave() ?? true;
+  }
+  @HostListener('window:beforeunload', ['$event']) beforeUnload(event: BeforeUnloadEvent): void {
+    if (this.orderSaving() || this.orderModal?.hasUnsavedChanges()) { event.preventDefault(); event.returnValue = ''; }
+  }
+  closeOrderModal(): void { if (!this.orderSaving()) this.isOrderModalVisible.set(false); }
   readonly activeTab = signal<PatientTab>('opd');
   readonly currentSort = signal<{ column: string; order: 'asc' | 'desc' }>({
     column: 'updatedAt',
@@ -670,6 +684,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
 
   // --- Tab & Sort ---
   changeTab(tabName: PatientTab): void {
+    if (!this.canLeave()) return;
     this.activeTab.set(tabName);
     this.globalSearchTerm.set('');
   }
@@ -2147,11 +2162,13 @@ export class PatientsComponent implements OnInit, OnDestroy {
 
   // --- Order Modal ---
   openOrderModal(patient: any): void {
+    if (this.orderSaving() || (this.isOrderModalVisible() && !this.orderModal?.canLeave())) return;
     this.editingPatientForOrder.set(JSON.parse(JSON.stringify(patient)));
     this.isOrderModalVisible.set(true);
   }
 
   async handleSaveOrder(orderData: any): Promise<void> {
+    if (this.orderSaving()) return;
     if (this.isPageLocked()) {
       this.showAlert('操作失敗', '操作被鎖定：權限不足。');
       return;
@@ -2162,17 +2179,21 @@ export class PatientsComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.orderSaving.set(true);
+    const submitted = JSON.parse(JSON.stringify(orderData));
     try {
-      await createDialysisOrderAndUpdatePatient(patient.id, patient.name, orderData);
-      await this.patientStore.forceRefreshPatients();
-      await this.recalculateStatsLocally();
+      await createDialysisOrderAndUpdatePatient(patient.id, patient.name, submitted);
       this.isOrderModalVisible.set(false);
+      let refreshFailed = false;
+      try { await this.patientStore.forceRefreshPatients(); await this.recalculateStatsLocally(); }
+      catch { refreshFailed = true; }
       this.notificationService.createNotification(`更新醫囑：${patient.name}`, 'patient');
-      this.showAlert('儲存成功', `已成功更新 ${patient.name} 的透析醫囑。`);
+      if (refreshFailed) this.showAlert('醫囑已儲存', '清單刷新失敗，請重新整理；不需再提交醫囑。');
+      else this.showAlert('儲存成功', `已成功更新 ${patient.name} 的透析醫囑。`);
     } catch (error: any) {
       console.error('儲存醫囑失敗:', error);
       this.showAlert('操作失敗', `儲存醫囑時發生錯誤: ${error.message}`);
-    }
+    } finally { this.orderSaving.set(false); }
   }
 
   // --- Ward Number ---
@@ -2212,6 +2233,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
   readonly profileSeedPatientId = signal<string | null>(null);
 
   openPatientProfile(patientId: string): void {
+    if (!this.canLeave()) return;
     this.profileSeedPatientId.set(patientId);
     this.activeTab.set('query');
   }

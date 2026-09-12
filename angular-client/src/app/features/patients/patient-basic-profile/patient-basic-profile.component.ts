@@ -4,6 +4,7 @@
 // 存檔走 PUT /patients/:id/basic-profile（editor 以上），viewer 唯讀且身分證遮罩。
 import {
   Component,
+  HostListener,
   EventEmitter,
   Input,
   OnChanges,
@@ -120,8 +121,21 @@ export class PatientBasicProfileComponent implements OnChanges {
     return (map[src] || src) + (at ? `　最後更新 ${String(at).slice(0, 16)}` : '');
   });
 
+  private baseline = '';
+  private owner = 0;
+  hasUnsavedChanges(): boolean { return this.baseline !== JSON.stringify([this.form(), this.rocBirthInput()]); }
+  canLeave(): boolean {
+    if (this.saveState() === 'saving') return false;
+    return !this.hasUnsavedChanges() || confirm('基本資料尚未儲存。確定放棄變更並離開？取消可留下儲存。');
+  }
+  @HostListener('window:beforeunload', ['$event']) beforeUnload(event: BeforeUnloadEvent): void {
+    if (this.saveState() === 'saving' || this.hasUnsavedChanges()) { event.preventDefault(); event.returnValue = ''; }
+  }
+  ngOnDestroy(): void { ++this.owner; }
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['patient']) {
+      if (changes['patient'].previousValue?.id === this.patient?.id && (this.hasUnsavedChanges() || this.saveState() === 'saving')) return;
+      ++this.owner;
       this.loadFromPatient();
       this.saveState.set('idle');
       this.saveMessage.set('');
@@ -200,6 +214,7 @@ export class PatientBasicProfileComponent implements OnChanges {
     });
     this.rocBirthInput.set(isoToRocDisplay(this.form().birthDate));
     this.rocBirthError.set(false);
+    this.baseline = JSON.stringify([this.form(), this.rocBirthInput()]);
   }
 
   /** 單欄更新（模板用 [ngModel]/(ngModelChange) 綁 signal） */
@@ -260,7 +275,9 @@ export class PatientBasicProfileComponent implements OnChanges {
       this.saveMessage.set('出生民國年格式無法辨識');
       return;
     }
-    const f = this.form();
+    const owner = this.owner;
+    const submitted = JSON.stringify([this.form(), this.rocBirthInput()]);
+    const f = { ...this.form() };
     const body = {
       idNumber: f.idNumber.trim(),
       isForeign: f.isForeign ? 'Y' : 'N',
@@ -300,16 +317,20 @@ export class PatientBasicProfileComponent implements OnChanges {
       const res = await firstValueFrom(
         this.api.put<Patient>(`/patients/${id}/basic-profile`, body),
       );
-      this.saveState.set('saved');
-      this.saveMessage.set('已儲存');
+      if (owner !== this.owner || this.patient?.id !== id) return;
+      const unchanged = submitted === JSON.stringify([this.form(), this.rocBirthInput()]);
+      this.baseline = submitted;
+      this.saveState.set(unchanged ? 'saved' : 'idle');
+      this.saveMessage.set(unchanged ? '已儲存' : '先前內容已儲存，目前仍有未儲存變更');
       if (res) {
         this.patient = res;
-        this.loadFromPatient();
+        if (unchanged) this.loadFromPatient();
         this.saved.emit(res);
       }
       // 讓病人清單的 idNumber/phone 等同步
       this.patientStore.forceRefreshPatients().catch(() => {});
     } catch (err: any) {
+      if (owner !== this.owner || this.patient?.id !== id) return;
       console.error('儲存基本資料失敗:', err);
       this.saveState.set('error');
       this.saveMessage.set(err?.error?.message || err?.message || '儲存失敗');

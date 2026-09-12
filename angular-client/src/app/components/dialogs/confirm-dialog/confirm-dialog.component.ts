@@ -1,10 +1,11 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { ModalFocusDirective } from '../../../core/directives/modal-focus.directive';
 
 @Component({
   selector: 'app-confirm-dialog',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, ModalFocusDirective],
   templateUrl: './confirm-dialog.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './confirm-dialog.component.css'

@@ -1,5 +1,5 @@
 ﻿<!-- Page Container -->
-<div class="page-container" [class.is-locked]="isPageLocked()">
+<div [attr.inert]="isSaving() ? '' : null" [attr.aria-busy]="isSaving()" class="page-container" [class.is-locked]="isPageLocked()">
   <!-- Loading overlay -->
   @if (isLoading()) {
     <div class="loading-overlay">
@@ -861,9 +861,9 @@
 ></app-icu-orders-dialog>
 
 @if (isOrderModalVisible() && editingPatientForOrder()) {
-  <app-dialysis-order-modal
+  <app-dialysis-order-modal [saving]="orderSaving()"
     [patient]="editingPatientForOrder()"
-    (close)="isOrderModalVisible.set(false)"
+    (close)="closeOrderModal()"
     (save)="handleSaveOrder($event)"
   ></app-dialysis-order-modal>
 }

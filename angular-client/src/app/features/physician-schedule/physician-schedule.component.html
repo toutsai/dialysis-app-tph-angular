@@ -1,4 +1,11 @@
-<div class="page-container">
+@if (isSaving()) { <p role="status">儲存中，請等待所有項目完成…</p> }
+@if (saveResults().length) {
+  <section aria-label="儲存結果" class="save-results">
+    @for (result of saveResults(); track result.key) { <p>{{ result.success ? '已儲存' : '未儲存' }}：{{ result.label }}</p> }
+    @if (saveError()) { <p role="alert">{{ saveError() }}</p><button type="button" (click)="retryFailedSaves()" [disabled]="isSaving()">重試失敗項目（{{ failedSaveJobs().length }}）</button> }
+  </section>
+}
+<fieldset class="page-container save-lock" [disabled]="isSaving()" [attr.inert]="isSaving() ? '' : null">
 
 
   <header class="page-header">
@@ -7,9 +14,9 @@
         <h1 class="page-main-title">醫師班表</h1>
       }
       <div class="month-navigator">
-        <button (click)="goToPreviousMonth()" title="上一個月">&#10094;</button>
+        <button (click)="goToPreviousMonth()" [disabled]="isSaving()" title="上一個月">&#10094;</button>
         <span class="month-display">{{ selectedYear() }} 年 {{ selectedMonth() }} 月</span>
-        <button (click)="goToNextMonth()" title="下一個月">&#10095;</button>
+        <button (click)="goToNextMonth()" [disabled]="isSaving()" title="下一個月">&#10095;</button>
       </div>
       <button (click)="exportRoundingWord()" class="btn btn-secondary" title="匯出查房班表與對照表 (Word)">
         <i class="fas fa-file-word"></i> 匯出 Word
@@ -20,7 +27,7 @@
         <span class="status-indicator" [ngClass]="{ 'has-changes': hasUnsavedChanges() }">
           {{ statusText() }}
         </span>
-        <button (click)="saveAllChanges()" class="save-btn" [disabled]="!hasUnsavedChanges()">
+        <button (click)="saveAllChanges()" class="save-btn" [disabled]="isLoading() || isSaving() || !hasUnsavedChanges() || failedSaveJobs().length > 0">
           <i class="fas fa-save"></i> 儲存所有變更
         </button>
       </div>
@@ -1286,4 +1293,4 @@
                                   (confirm)="handleConfirm()"
                                   (cancel)="handleCancel()"
                                 ></app-confirm-dialog>
-                              </div>
+                              </fieldset>

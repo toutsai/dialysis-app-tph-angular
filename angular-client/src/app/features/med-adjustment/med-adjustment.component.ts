@@ -2,7 +2,7 @@
 // 上半三頁籤（醫囑調整/貧血藥物/鈣磷恆定）＝「有異動的日期」軸（同月多次修改各自一欄，
 // 醫囑合併 dialysis_orders_history + dialysis_order_uploads 逐次全紀錄）；
 // 下半每月累積報告維持月份軸。供醫師依趨勢開立下個月藥物。群組篩選+上一位/下一位輪巡。
-import { Component, HostBinding, Input, inject, signal, computed, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { Component, HostListener, HostBinding, Input, inject, signal, computed, OnInit, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import {
@@ -55,6 +55,22 @@ export class MedAdjustmentComponent implements OnInit {
   private readonly medsApi: ApiManager<FirestoreRecord>;
   private readonly labsApi: ApiManager<FirestoreRecord>;
 
+  private loadOwner = 0;
+  private listOwner = 0;
+  canLeave(): boolean {
+    if (this.isSaving()) return false;
+    return !this.isDirty() || confirm('藥物修正尚未儲存。確定放棄變更並離開？取消可留下儲存。');
+  }
+  @HostListener('window:beforeunload', ['$event']) beforeUnload(event: BeforeUnloadEvent): void {
+    if (this.isSaving() || this.isDirty()) { event.preventDefault(); event.returnValue = ''; }
+  }
+  ngOnDestroy(): void { ++this.loadOwner; ++this.listOwner; }
+  changeGroup(key: 'groupFreq' | 'groupShift', value: string, control?: HTMLSelectElement): void {
+    if (!this.canLeave()) { if (control) control.value = this[key]; return; }
+    this.isDirty.set(false);
+    this[key] = value;
+    void this.rebuildPatientList();
+  }
   // --- 篩選與輪巡 ---
   groupFreq = '一三五';
   groupShift = 'early';
@@ -264,23 +280,27 @@ export class MedAdjustmentComponent implements OnInit {
 
   async saveAdjustments(): Promise<void> {
     const patient = this.currentPatient;
-    if (!patient || this.isSaving()) return;
+    if (!patient || this.isSaving() || this.isLoading()) return;
+    const owner = this.loadOwner;
+    const submitted = { ...this.adjustNotes };
     this.isSaving.set(true);
     try {
       await this.draftsApi.save({
         patientId: patient.patientId,
         kind: 'med_adjustment',
         month: this.currentMonth,
-        notes: { ...this.adjustNotes },
+        notes: submitted,
       } as any);
-      this.isDirty.set(false);
-      this.savedNotes = { ...this.adjustNotes };
-      this.savedHint.set('已儲存');
+      if (owner !== this.loadOwner || this.currentPatient?.patientId !== patient.patientId) return;
+      this.isDirty.set(JSON.stringify(this.adjustNotes) !== JSON.stringify(submitted));
+      this.savedNotes = submitted;
+      this.savedHint.set(this.isDirty() ? '先前內容已儲存，目前仍有未儲存變更' : '已儲存');
     } catch (error) {
+      if (owner !== this.loadOwner) return;
       console.error('儲存藥物修正失敗:', error);
       this.savedHint.set('儲存失敗，請重試');
     } finally {
-      this.isSaving.set(false);
+      if (owner === this.loadOwner) this.isSaving.set(false);
     }
   }
 
@@ -294,7 +314,14 @@ export class MedAdjustmentComponent implements OnInit {
   }
 
   async rebuildPatientList(): Promise<void> {
-    const masterDoc: any = await this.baseSchedulesApi.fetchById('MASTER_SCHEDULE');
+    if (!this.canLeave()) return;
+    const request = ++this.listOwner;
+    ++this.loadOwner;
+    this.isLoading.set(true);
+    let masterDoc: any;
+    try { masterDoc = await this.baseSchedulesApi.fetchById('MASTER_SCHEDULE'); }
+    catch { if (request === this.listOwner) { this.isLoading.set(false); this.savedHint.set('群組載入失敗，請重試'); } return; }
+    if (request !== this.listOwner) return;
     const rules: Record<string, any> = masterDoc?.schedule || {};
     const shiftMap: Record<string, number> = { early: 0, noon: 1, late: 2 };
     const shiftIndex = shiftMap[this.groupShift];
@@ -327,7 +354,8 @@ export class MedAdjustmentComponent implements OnInit {
   }
 
   async selectPatient(index: number): Promise<void> {
-    if (index < 0 || index >= this.patientList().length) return;
+    if (index < 0 || index >= this.patientList().length || !this.canLeave()) return;
+    ++this.listOwner;
     this.selectedIndex.set(index);
     await this.loadPatientData();
   }
@@ -338,11 +366,13 @@ export class MedAdjustmentComponent implements OnInit {
     this.monthOffset.update((v) => Math.max(0, v + delta));
   }
 
-  onSelectChange(value: string): void {
-    this.selectPatient(Number(value));
+  onSelectChange(value: string, control?: HTMLSelectElement): void {
+    void this.selectPatient(Number(value));
+    if (control) control.value = String(this.selectedIndex());
   }
 
   private async loadPatientData(): Promise<void> {
+    const request = ++this.loadOwner;
     const patient = this.currentPatient;
     this.historyRows = [];
     this.medRows = [];
@@ -355,7 +385,7 @@ export class MedAdjustmentComponent implements OnInit {
     this.akOptionsCurrent = [...this.akOptions];
     this.isDirty.set(false);
     this.savedHint.set('');
-    if (!patient) { this.dataRevision.update((v) => v + 1); return; }
+    if (!patient) { this.isLoading.set(false); this.dataRevision.update((v) => v + 1); return; }
     this.isLoading.set(true);
     try {
       const [history, meds, labs, drafts, uploads] = await Promise.all([
@@ -372,6 +402,7 @@ export class MedAdjustmentComponent implements OnInit {
           .then((r) => (r.ok ? r.json() : []))
           .catch(() => []),
       ]);
+      if (request !== this.loadOwner) return;
       // 當月藥物修正：取本月最新一份
       const adjustDoc = ((drafts as any[]) || [])
         .filter((d: any) => d.kind === 'med_adjustment' && d.month === this.currentMonth)
@@ -403,8 +434,11 @@ export class MedAdjustmentComponent implements OnInit {
       this.prefillAdjustNotes();
       this.initStructuredAdjustInputs();
     } catch (error) {
+      if (request !== this.loadOwner) return;
+      this.savedHint.set('載入失敗，請重新選取病人重試');
       console.error('載入病人資料失敗:', error);
     } finally {
+      if (request !== this.loadOwner) return;
       this.isLoading.set(false);
       this.dataRevision.update((v) => v + 1);
     }

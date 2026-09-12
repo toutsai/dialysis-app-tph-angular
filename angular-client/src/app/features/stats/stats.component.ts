@@ -1,9 +1,10 @@
+import { LatestRequest } from '../../core/utils/latest-request';
 import { loadXlsx } from '@/utils/xlsxLoader';
 // Standalone 版：已移除 Firebase
-import { Component, inject, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetectionStrategy } from '@angular/core';
+import { Component, inject, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetectionStrategy, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '@app/core/services/auth.service';
 import { ApiService } from '@app/core/services/api.service';
 import { ApiConfigService } from '@services/api-config.service';
@@ -139,6 +140,8 @@ export class StatsComponent implements OnInit, OnDestroy {
   private readonly userDirectory = inject(UserDirectoryService);
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+  private readonly dayRequest = new LatestRequest();
 
   // API instances
   private readonly schedulesApi = this.apiManager.create<FirestoreRecord>('schedules');
@@ -154,10 +157,29 @@ export class StatsComponent implements OnInit, OnDestroy {
   currentDate = new Date();
 
   initDateFromSharedState(): void {
+    const queryDate = this.route.snapshot.queryParamMap.get('date');
+    if (queryDate && /^\d{4}-\d{2}-\d{2}$/.test(queryDate)) {
+      const parsed = new Date(queryDate + 'T00:00:00');
+      if (this.formatDate(parsed) === queryDate) {
+        this.currentDate = parsed;
+        this.dateState.setDate(parsed.toISOString());
+        return;
+      }
+    }
     const sharedDate = this.dateState.selectedDate;
     if (sharedDate) {
       this.currentDate = new Date(sharedDate);
     }
+  }
+  isSavingUi = false;
+  orderSaving = false;
+  canLeave(): boolean {
+    if (this.isSavingUi || this.orderSaving) return false;
+    return !this.hasUnsavedChanges || window.confirm('目前有未儲存變更，確定放棄並離開？');
+  }
+  @HostListener('window:beforeunload', ['$event'])
+  onBeforeUnload(event: BeforeUnloadEvent): void {
+    if (this.isSavingUi || this.orderSaving || this.hasUnsavedChanges) { event.preventDefault(); event.returnValue = ''; }
   }
   statusIndicator = '';
   isLoading = false;
@@ -266,7 +288,7 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   get isPageLocked(): boolean {
-    return this.cachedIsPageLocked;
+    return this.cachedIsPageLocked || this.isSavingUi || this.isLoading || this.orderSaving;
   }
 
   get statsToolbarData(): any[] {
@@ -584,6 +606,7 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   private reloadCurrentDay(): void {
+    if (this.isSavingUi || this.orderSaving) return;
     const date = new Date(this.currentDate);
     Promise.all([this.loadData(date), this.loadDailyStaffInfo(date)]).catch((error) =>
       console.warn('[Stats] SSE-triggered refresh failed:', error),
@@ -786,6 +809,7 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   async handleRetargetBedAssigned(event: any): Promise<void> {
+    if (this.isSavingUi || this.orderSaving) return;
     const conflict = this.retargetConflictRef;
     if (!conflict?.id || this.isResolvingConflict) return;
     this.isRetargetPickerVisible = false;
@@ -815,6 +839,7 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   async resolveCellConflict(choice: 'keep_base' | 'keep_exception'): Promise<void> {
+    if (this.isSavingUi || this.orderSaving) return;
     const conflict = this.conflictForDialog;
     if (!conflict?.id || this.isResolvingConflict) return;
     this.isResolvingConflict = true;
@@ -912,6 +937,7 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   toggleNoonTakeoff(shiftType: string): void {
+    if (this.isSavingUi || this.orderSaving) return;
     if (shiftType === 'early' || shiftType === 'late') {
       this.noonTakeoffVisibility[shiftType] = !this.noonTakeoffVisibility[shiftType];
     }
@@ -997,13 +1023,14 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   async loadData(date: Date): Promise<void> {
-    this.hasUnsavedScheduleChanges = false;
-    this.hasUnsavedTeamChanges = false;
+    if (this.isSavingUi) return;
+    const request = this.dayRequest.begin();
+    const dateStr = this.formatDate(date);
+    const ownsLoad = () => this.dayRequest.isCurrent(request) && this.formatDate(this.currentDate) === dateStr && !this.isSavingUi;
     this.statusIndicator = '讀取中...';
     this.isLoading = true;
     // 衝突調班清單並行更新（不阻塞主載入）
     this.loadConflictExceptions();
-    const dateStr = this.formatDate(date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const targetDate = new Date(date);
@@ -1021,6 +1048,9 @@ export class StatsComponent implements OnInit, OnDestroy {
 
       const teamsData = await fetchTeamsByDate(dateStr);
 
+      if (!ownsLoad()) return;
+      this.hasUnsavedScheduleChanges = false;
+      this.hasUnsavedTeamChanges = false;
       Object.assign(this.currentRecord, scheduleRecord);
       this.rebuildEmptyBeds();
       this.currentTeamsRecord = teamsData || { id: null, date: dateStr, teams: {}, names: {} };
@@ -1044,10 +1074,11 @@ export class StatsComponent implements OnInit, OnDestroy {
       this.updateStatsCache();
       this.statusIndicator = this.currentRecord.id ? '資料已載入' : '本日無排班資料';
     } catch (error) {
+      if (!ownsLoad()) return;
       console.error('讀取報表資料失敗:', error);
       this.statusIndicator = '讀取失敗';
     } finally {
-      this.isLoading = false;
+      if (ownsLoad()) this.isLoading = false;
     }
   }
 
@@ -1085,6 +1116,17 @@ export class StatsComponent implements OnInit, OnDestroy {
    *                        true＝409 對話框「仍要覆蓋」，同一 payload 但不帶 expectedVersion 重送。
    */
   private async attemptSaveChangesToCloud(forceOverwrite: boolean): Promise<void> {
+    if (this.isSavingUi || this.orderSaving || this.isLoading) return;
+    const record = this.currentRecord, teamsRecord = this.currentTeamsRecord;
+    const date = this.formatDate(this.currentDate);
+    if (record.date !== date || teamsRecord.date !== date) return;
+    const draft = JSON.stringify({ schedule: record.schedule, teams: teamsRecord.teams, names: teamsRecord.names });
+    const scheduleSnapshot = this.buildCleanScheduleForSave();
+    const teamsSnapshot = JSON.parse(JSON.stringify(teamsRecord.teams || {}));
+    const namesSnapshot = JSON.parse(JSON.stringify(teamsRecord.names || {}));
+    const ownsSave = () => this.currentRecord === record && this.currentTeamsRecord === teamsRecord && this.formatDate(this.currentDate) === date;
+    this.dayRequest.invalidate();
+    this.isSavingUi = true;
     this.statusIndicator = '儲存中...';
     try {
       const scheduleDirty = this.hasUnsavedScheduleChanges;
@@ -1093,61 +1135,68 @@ export class StatsComponent implements OnInit, OnDestroy {
       // 護理分組頁面的跨班次拖放會同時改動 schedule 與 teams，
       // 以原子性 endpoint 儲存避免其中一個成功另一個失敗導致 UI/DB 不一致。
       if (scheduleDirty && teamsDirty) {
-        const scheduleToSave = this.buildCleanScheduleForSave();
-        const result = await saveScheduleWithTeams(this.currentRecord.date, {
+        const scheduleToSave = JSON.parse(JSON.stringify(scheduleSnapshot));
+        const result = await saveScheduleWithTeams(record.date, {
           schedule: scheduleToSave,
-          teams: this.currentTeamsRecord.teams || {},
-          names: this.currentTeamsRecord.names || {},
+          teams: teamsSnapshot,
+          names: namesSnapshot,
           ...(forceOverwrite
             ? {}
             : {
-                expectedScheduleVersion: this.currentRecord.version,
-                expectedTeamsVersion: this.currentTeamsRecord.version,
+                expectedScheduleVersion: record.version,
+                expectedTeamsVersion: teamsRecord.version,
               }),
         });
-        if (result.schedule?.id) this.currentRecord.id = result.schedule.id;
-        if (result.schedule) this.currentRecord.version = result.schedule.version;
+        if (result.schedule?.id) record.id = result.schedule.id;
+        if (result.schedule) record.version = result.schedule.version;
         if (result.teams) {
-          if (!this.currentTeamsRecord.id) this.currentTeamsRecord.id = this.currentRecord.date;
-          this.currentTeamsRecord.version = result.teams.version;
+          if (!teamsRecord.id) teamsRecord.id = record.date;
+          teamsRecord.version = result.teams.version;
         }
       } else if (scheduleDirty) {
-        const scheduleToSave = this.buildCleanScheduleForSave();
-        const scheduleData: Record<string, unknown> = { date: this.currentRecord.date, schedule: scheduleToSave };
-        if (!forceOverwrite) scheduleData['expectedVersion'] = this.currentRecord.version;
-        if (this.currentRecord.id) {
-          const updated: any = await this.schedulesApi.update(this.currentRecord.id, scheduleData);
-          if (updated?.version !== undefined) this.currentRecord.version = updated.version;
+        const scheduleToSave = JSON.parse(JSON.stringify(scheduleSnapshot));
+        const scheduleData: Record<string, unknown> = { date: record.date, schedule: scheduleToSave };
+        if (!forceOverwrite) scheduleData['expectedVersion'] = record.version;
+        if (record.id) {
+          const updated: any = await this.schedulesApi.update(record.id, scheduleData);
+          if (updated?.version !== undefined) record.version = updated.version;
         } else if (Object.keys(scheduleToSave).length > 0) {
           const saved: any = await this.schedulesApi.save(scheduleData);
-          this.currentRecord.id = saved.id;
-          this.currentRecord.version = saved.version;
+          record.id = saved.id;
+          record.version = saved.version;
         }
       } else if (teamsDirty) {
         const teamsData: Record<string, unknown> = {
-          date: this.currentTeamsRecord.date,
-          teams: this.currentTeamsRecord.teams || {},
-          names: this.currentTeamsRecord.names || {},
+          date: teamsRecord.date,
+          teams: teamsSnapshot,
+          names: namesSnapshot,
         };
-        if (!forceOverwrite) teamsData['expectedVersion'] = this.currentTeamsRecord.version;
-        if (this.currentTeamsRecord.id) {
-          const updated: any = await updateTeams(this.currentTeamsRecord.id, teamsData);
-          if (updated?.version !== undefined) this.currentTeamsRecord.version = updated.version;
+        if (!forceOverwrite) teamsData['expectedVersion'] = teamsRecord.version;
+        if (teamsRecord.id) {
+          const updated: any = await updateTeams(teamsRecord.id, teamsData);
+          if (updated?.version !== undefined) teamsRecord.version = updated.version;
         } else {
           const saved: any = await saveTeams(teamsData as { date: string; teams?: any; names?: any; expectedVersion?: number });
-          this.currentTeamsRecord.id = saved.id;
-          this.currentTeamsRecord.version = saved.version;
+          teamsRecord.id = saved.id;
+          teamsRecord.version = saved.version;
         }
       }
 
+      if (!ownsSave()) return;
+      const unchanged = draft === JSON.stringify({ schedule: record.schedule, teams: teamsRecord.teams, names: teamsRecord.names });
+      if (!unchanged) {
+        this.statusIndicator = '已儲存提交內容，後續變更尚未儲存';
+        return;
+      }
       this.hasUnsavedScheduleChanges = false;
       this.hasUnsavedTeamChanges = false;
       this.statusIndicator = '變更已儲存！';
-      const message = `修改護理分組: ${this.currentRecord.date}`;
+      const message = `修改護理分組: ${record.date}`;
       this.notificationService.createGlobalNotification(message, 'team');
       this.showAlert('操作成功', '變更儲存成功！');
-      await this.loadData(this.currentDate);
+      this.updateStatsCache();
     } catch (error: any) {
+      if (!ownsSave()) return;
       const conflict = extractVersionConflict(error);
       if (conflict) {
         this.statusIndicator = '儲存衝突，待處理';
@@ -1158,17 +1207,19 @@ export class StatsComponent implements OnInit, OnDestroy {
       console.error('儲存變更失敗:', error);
       this.statusIndicator = '儲存失敗';
       this.showAlert('儲存失敗', `儲存失敗: ${error.message}`);
-    }
+    } finally { this.isSavingUi = false; }
   }
 
   /** 409 對話框:「重新載入最新資料」— 重跑當日載入流程，內部已會清空 dirty 狀態,不殘留本地未存變更 */
   async handleVersionConflictReload(): Promise<void> {
+    if (this.isSavingUi || this.orderSaving) return;
     this.isVersionConflictDialogVisible = false;
     await this.loadData(this.currentDate);
   }
 
   /** 409 對話框:「仍要覆蓋」— 同一 payload 不帶 expectedVersion 重送一次 */
   async handleVersionConflictOverwrite(): Promise<void> {
+    if (this.isSavingUi || this.orderSaving) return;
     this.isVersionConflictDialogVisible = false;
     await this.attemptSaveChangesToCloud(true);
   }
@@ -1189,6 +1240,7 @@ export class StatsComponent implements OnInit, OnDestroy {
   // --- Drag and Drop ---
 
   onDragStart(event: DragEvent, patientDetail: any, responsibility: string): void {
+    if (this.isSavingUi || this.orderSaving) return;
     if (this.isPageLocked) {
       event.preventDefault();
       return;
@@ -1199,6 +1251,7 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   onDrop(event: DragEvent, newTeam: string, newResponsibility: string): void {
+    if (this.isSavingUi || this.orderSaving) return;
     if (this.isPageLocked) return;
     event.preventDefault();
     (event.currentTarget as HTMLElement)?.classList.remove('drag-over-active');
@@ -1262,6 +1315,7 @@ export class StatsComponent implements OnInit, OnDestroy {
     newTeam: string,
     newResponsibility: string,
   ): void {
+    if (this.isSavingUi || this.orderSaving) return;
     const locked = this.getLockedPatient(patientDetail.id);
     if (locked) {
       this.showAlert('操作被鎖定', this.doNotMoveMessage(locked));
@@ -1299,6 +1353,7 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   private performTeamChange(patientDetail: any, newTeam: string, newResponsibility: string): void {
+    if (this.isSavingUi || this.orderSaving) return;
     const patientId = patientDetail.id;
     const shiftId = patientDetail.shiftId;
     const shiftCode = shiftId.split('-')[2];
@@ -1337,6 +1392,7 @@ export class StatsComponent implements OnInit, OnDestroy {
   // --- Bed Change Dialog ---
 
   openBedChangeDialog(patientDetail: any): void {
+    if (this.isSavingUi || this.orderSaving) return;
     if (this.isPageLocked) return;
     const currentShiftCode = patientDetail.shiftId?.split('-')[2];
     const locked = this.getLockedPatient(patientDetail.id);
@@ -1390,6 +1446,7 @@ export class StatsComponent implements OnInit, OnDestroy {
     toShiftCode: string,
     toBedNum: string | null,
   ): void {
+    if (this.isSavingUi || this.orderSaving) return;
     const dateStr = this.formatDate(this.currentDate);
     const patientId = patientDetail.id;
     const patient = this.allPatients.find((p) => p.id === patientId);
@@ -1415,6 +1472,7 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   handleBedChange(event: any): void {
+    if (this.isSavingUi || this.orderSaving) return;
     const { oldShiftId, newShiftId } = event;
     if (this.isPageLocked || !oldShiftId || !newShiftId || !this.currentRecord.schedule[oldShiftId]) {
       this.isBedChangeDialogVisible = false;
@@ -1435,6 +1493,7 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   handleDialogCancel(): void {
+    if (this.isSavingUi || this.orderSaving) return;
     this.isBedChangeDialogVisible = false;
     this.pendingChangeInfo = null;
     this.bedChangeTargetShift = null;
@@ -1549,7 +1608,9 @@ export class StatsComponent implements OnInit, OnDestroy {
   // --- Navigation ---
 
   changeDate(days: number): void {
+    if (this.isSavingUi || this.orderSaving) return;
     const performChange = () => {
+      if (this.isSavingUi || this.orderSaving) return;
       const newDate = new Date(this.currentDate);
       newDate.setDate(newDate.getDate() + days);
       this.currentDate = newDate;
@@ -1566,7 +1627,9 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   goToToday(): void {
+    if (this.isSavingUi || this.orderSaving) return;
     const performChange = () => {
+      if (this.isSavingUi || this.orderSaving) return;
       const today = new Date();
       this.currentDate = today;
       this.dateState.setDate(today.toISOString());
@@ -1584,6 +1647,7 @@ export class StatsComponent implements OnInit, OnDestroy {
   @ViewChild('datePickerInput') datePickerInput?: ElementRef<HTMLInputElement>;
 
   openDatePicker(): void {
+    if (this.isSavingUi || this.orderSaving) return;
     const el = this.datePickerInput?.nativeElement;
     if (!el) return;
     const anyEl = el as any;
@@ -1599,9 +1663,11 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   onDatePicked(event: Event): void {
+    if (this.isSavingUi || this.orderSaving) return;
     const value = (event.target as HTMLInputElement).value;
     if (!value) return;
     const performChange = () => {
+      if (this.isSavingUi || this.orderSaving) return;
       const newDate = new Date(`${value}T00:00:00`);
       this.currentDate = newDate;
       this.dateState.setDate(newDate.toISOString());
@@ -1617,6 +1683,7 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   private onDateChanged(): void {
+    if (this.isSavingUi || this.orderSaving) return;
     this.medicationStore.clearCache();
     this.noonTakeoffVisibility = { early: false, late: false };
     this.loadData(this.currentDate);
@@ -1626,12 +1693,14 @@ export class StatsComponent implements OnInit, OnDestroy {
   // --- Dialogs ---
 
   handleConfirm(): void {
+    if (this.isSavingUi || this.orderSaving) return;
     if (this.onConfirmAction) this.onConfirmAction();
     this.isConfirmDialogVisible = false;
     this.onConfirmAction = null;
   }
 
   handleCancel(): void {
+    if (this.isSavingUi || this.orderSaving) return;
     this.isConfirmDialogVisible = false;
     this.onConfirmAction = null;
   }
@@ -1653,6 +1722,7 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   async handleWardNumberConfirm(value: string): Promise<void> {
+    if (this.isSavingUi || this.orderSaving) return;
     const patientId = this.currentWardEditPatientId;
     if (!patientId) return;
     try {
@@ -1676,6 +1746,7 @@ export class StatsComponent implements OnInit, OnDestroy {
 
 
   handleTaskCreated(): void {
+    if (this.isSavingUi || this.orderSaving) return;
     this.showAlert('操作成功', '交辦/留言已成功新增！');
     this.isCreateTaskModalVisible = false;
   }
@@ -1726,9 +1797,12 @@ export class StatsComponent implements OnInit, OnDestroy {
     this.selectedPatientForDialog = null;
   }
 
+  closeOrderModal(): void { if (!this.orderSaving) this.isOrderModalVisible = false; }
+
   // --- Order Modal ---
 
   async handleSaveOrder(orderData: any): Promise<void> {
+    if (this.isSavingUi || this.orderSaving) return;
     if (this.isPageLocked) {
       this.showAlert('操作失敗', '操作被鎖定：權限不足。');
       return;
@@ -1739,19 +1813,22 @@ export class StatsComponent implements OnInit, OnDestroy {
     }
     const patientId = this.editingPatientForOrder.id;
     const patientName = this.editingPatientForOrder.name;
+    this.orderSaving = true;
+    const submitted = JSON.parse(JSON.stringify(orderData));
     try {
-      await createDialysisOrderAndUpdatePatient(patientId, patientName, orderData);
-      await this.loadData(this.currentDate);
+      await createDialysisOrderAndUpdatePatient(patientId, patientName, submitted);
+      if (!this.hasUnsavedChanges) await this.loadData(this.currentDate);
       this.isOrderModalVisible = false;
       this.notificationService.createGlobalNotification(`更新醫囑：${patientName}`, 'team');
       this.showAlert('儲存成功', `已成功更新 ${patientName} 的透析醫囑。`);
     } catch (error: any) {
       console.error('儲存醫囑失敗:', error);
       this.showAlert('操作失敗', `儲存醫囑時發生錯誤: ${error.message}`);
-    }
+    } finally { this.orderSaving = false; }
   }
 
   openOrderModalFromPopover(patient: any): void {
+    if (this.isSavingUi || this.orderSaving) return;
     if (patient && patient.id) {
       this.onPrepPopoverClose();
       this.editingPatientForOrder = patient;
@@ -1779,6 +1856,7 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   private duplicateLateShiftForTakeOff(): void {
+    if (this.isSavingUi || this.orderSaving) return;
     if (this.isPageLocked) return;
     for (const shiftId in this.currentRecord.schedule) {
       const slot = this.currentRecord.schedule[shiftId];
@@ -1825,6 +1903,7 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   private removeLateShiftTakeOff(): void {
+    if (this.isSavingUi || this.orderSaving) return;
     if (this.isPageLocked) return;
     for (const shiftId in this.currentRecord.schedule) {
       const slot = this.currentRecord.schedule[shiftId];
@@ -1888,6 +1967,7 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   private async doRestoreRevision(rev: any): Promise<void> {
+    if (this.isSavingUi || this.orderSaving) return;
     try {
       await restoreNurseAssignmentRevision(this.currentRecord.date, rev.id);
       this.isHistoryDialogVisible = false;
@@ -1899,6 +1979,7 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   async handleCreateException(formData: any): Promise<void> {
+    if (this.isSavingUi || this.orderSaving) return;
     try {
       const exceptionsApi = this.apiManager.create<FirestoreRecord>('schedule_exceptions');
       const dataToSave: any = {
@@ -1946,6 +2027,7 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   handleNewUpdateTypeSelected(event: any): void {
+    if (this.isSavingUi || this.orderSaving) return;
     this.patientForScheduler = event.patient;
     this.changeTypeForScheduler = event.changeType;
     this.isNewUpdateTypeDialogVisible = false;
@@ -1955,6 +2037,7 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   async handleScheduledUpdate(dataToSubmit: any): Promise<void> {
+    if (this.isSavingUi || this.orderSaving) return;
     this.isSchedulerDialogVisible = false;
     try {
       const scheduledUpdatesApi = this.apiManager.create<FirestoreRecord>('scheduled_patient_updates');

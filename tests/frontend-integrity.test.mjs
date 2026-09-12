@@ -36,7 +36,7 @@ function loadModule(path, dependencies = {}, globals = {}) {
     require(name) {
       if (name in dependencies) return dependencies[name];
       if (name === '@angular/core') return {
-        Component: () => (target) => target, ViewChild: () => () => {}, ChangeDetectionStrategy: { OnPush: 0 },
+        Component: () => (target) => target, ViewChild: () => () => {}, HostListener: () => () => {}, ChangeDetectionStrategy: { OnPush: 0 },
       };
       if (name === '@/utils/scheduleDraft') return integrity;
       if (name === '@/utils/versionConflict') return conflicts;
@@ -66,7 +66,7 @@ function dailyFixture(api = {}, globals = {}) {
     } },
     currentTeamsRecord: signal({ id: formatDate(today), date: formatDate(today), version: 3, teams: {}, takeoffEnabled: true }),
     hasUnsavedChanges: signal(false), hasUnsavedTeamChanges: signal(false), scheduleRevision: signal(0),
-    isSaving: signal(false), isLoading: signal(false), statusIndicator: signal(''),
+    isSaving: signal(false), orderSaving: signal(false), isLoading: signal(false), statusIndicator: signal(''),
     versionConflictMessage: signal(''), isVersionConflictDialogVisible: signal(false),
     isPageLocked: () => false, isTeamEditLocked: () => false,
     patientStore: { fetchPatientsIfNeeded: async () => {} },

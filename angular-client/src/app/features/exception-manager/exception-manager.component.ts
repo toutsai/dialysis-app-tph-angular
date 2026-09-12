@@ -71,6 +71,7 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
   isPageLocked = computed(() => !this.authService.canEditSchedules());
 
   exceptions = signal<any[]>([]);
+  readonly loadError = signal('');
   isLoading = signal(true);
   isCreateDialogVisible = signal(false);
   exceptionToReEdit = signal<any>(null);
@@ -863,9 +864,10 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
     this.pendingFormData.set(null);
   }
 
-  private async initializePageData(): Promise<void> {
+  async initializePageData(): Promise<void> {
     this.sseSubscriptions.forEach((sub) => sub.unsubscribe());
     this.sseSubscriptions = [];
+    this.loadError.set('');
     this.isLoading.set(true);
     try {
       await this.patientStore.fetchPatientsIfNeeded();
@@ -886,6 +888,7 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
       // 此頁不再自行降級輪詢——斷線重連後靠 connectionRestored$ 補一次 refetch。
       this.startExceptionEventStream(fetchExceptions);
     } catch (error) {
+      this.loadError.set('調班資料載入失敗，尚無法確認記錄，請重試。');
       console.error('載入資料失敗:', error);
       this.isLoading.set(false);
     }

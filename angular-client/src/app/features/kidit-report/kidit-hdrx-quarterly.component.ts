@@ -116,7 +116,10 @@ export class KiditHdrxQuarterlyComponent implements OnInit, OnDestroy {
     this.load();
   }
 
+  readonly loadError = signal('');
+
   async load(): Promise<void> {
+    this.loadError.set('');
     const generation = ++this.loadGeneration;
     const quarter = this.quarter();
     this.isLoading.set(true);
@@ -216,7 +219,7 @@ export class KiditHdrxQuarterlyComponent implements OnInit, OnDestroy {
     } catch (error) {
       if (generation !== this.loadGeneration) return;
       console.error('載入 HD處方季度資料失敗:', error);
-      alert('載入 HD處方季度資料失敗，請稍後再試。');
+      this.loadError.set('載入 HD處方季度資料失敗，請重試。');
     } finally {
       if (generation === this.loadGeneration) this.isLoading.set(false);
     }
@@ -252,6 +255,8 @@ export class KiditHdrxQuarterlyComponent implements OnInit, OnDestroy {
   private flushPendingSaves(): void { void this.saveQueue.flush(); }
 
   exportCsv(): void {
+    if (this.isLoading() || this.loadError()) return;
+    if (this.saveQueue.hasPending() && !confirm('部分修改尚未同步儲存。匯出會包含目前畫面的草稿，不代表資料已儲存。仍要匯出？')) return;
     const rows = this.rows().filter((r) => !r.excluded);
     if (!rows.length) { alert('沒有可匯出的病人（全部已排除）。'); return; }
     const missingId = rows.filter((r) => !r.idNumber).length;

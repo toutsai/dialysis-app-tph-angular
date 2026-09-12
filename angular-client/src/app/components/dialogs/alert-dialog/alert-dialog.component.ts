@@ -1,10 +1,11 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from '@angular/core';
+import { ModalFocusDirective } from '../../../core/directives/modal-focus.directive';
 
 
 @Component({
   selector: 'app-alert-dialog',
   standalone: true,
-  imports: [],
+  imports: [ModalFocusDirective],
   templateUrl: './alert-dialog.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './alert-dialog.component.css'
