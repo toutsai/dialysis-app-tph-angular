@@ -157,7 +157,7 @@ test('sidebar navigation can scroll while account and logout remain inside deskt
         return !!box && box.y >= 0 && box.y + box.height <= viewport.height && box.x >= 0 && box.x + box.width <= viewport.width;
       }).toBe(true);
     }
-    const navigation = sidebar.locator('.main-nav-section');
+    const navigation = sidebar.locator('.sidebar-scroll-area');
     expect(await navigation.evaluate(element => getComputedStyle(element).overflowY)).toBe('auto');
     await navigation.evaluate(element => { element.scrollTop = element.scrollHeight; });
     const footer = await sidebar.locator('.btn-logout').boundingBox();

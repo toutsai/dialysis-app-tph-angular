@@ -2,14 +2,15 @@
 <app-update-banner></app-update-banner>
 <div class="dashboard-container" [class.sidebar-open]="isSidebarOpen()">
   <aside id="main-sidebar" class="sidebar" [class.is-open]="isSidebarOpen()">
-    <!-- 1. 固定的頂部導覽 -->
-    <div class="main-nav-section">
-      <div class="sidebar-header">
+    <!-- 平台標題固定；選單與即時動態共用中間捲動區 -->
+    <div class="sidebar-header">
         <span class="platform-title">部北透析管理平台</span>
         @if (environmentTag(); as tag) {
           <span class="environment-tag" [ngClass]="tag.class">{{ tag.text }}</span>
         }
-      </div>
+    </div>
+    <div class="sidebar-scroll-area">
+    <div class="main-nav-section">
       <ul class="sidebar-nav">
         <!-- 個人常用：每日排程 / 護理分組 / 我的病人列表 / 訊息中心 -->
         <li class="nav-section-label">個人常用</li>
@@ -249,10 +250,9 @@
         }
       </div>
     <!-- 即時動態（移至後臺管理下方）-->
-    <div class="notification-area">
-      @if (notificationService.notifications().length > 0) {
+    @if (notificationService.notifications().length > 0) {
+      <div class="notification-area">
         <h3 class="section-title">即時動態</h3>
-      }
       <div class="notification-list">
         @for (notif of notificationService.notifications(); track notif.id) {
           <div
@@ -273,6 +273,8 @@
           </div>
         }
       </div>
+      </div>
+    }
     </div>
 
     <!-- 固定的底部容器（footer）-->
