@@ -1,6 +1,7 @@
+<a class="skip-main-content" href="#main-content" (click)="skipToContent($event)">跳到主要內容</a>
 <app-update-banner></app-update-banner>
 <div class="dashboard-container" [class.sidebar-open]="isSidebarOpen()">
-  <aside class="sidebar" [class.is-open]="isSidebarOpen()">
+  <aside id="main-sidebar" class="sidebar" [class.is-open]="isSidebarOpen()">
     <!-- 1. 固定的頂部導覽 -->
     <div class="main-nav-section">
       <div class="sidebar-header">
@@ -12,6 +13,10 @@
       <ul class="sidebar-nav">
         <!-- 個人常用：每日排程 / 護理分組 / 我的病人列表 / 訊息中心 -->
         <li class="nav-section-label">個人常用</li>
+        @if (canAccessPage('inventory')) {
+          <li><a routerLink="/inventory" [queryParams]="{section:'inventory',view:'overview'}" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact:true}" class="nav-link"><span class="nav-title">庫存總覽</span></a></li>
+          <li><a routerLink="/inventory" [queryParams]="{section:'inventory',view:'calendar'}" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact:true}" class="nav-link"><span class="nav-title">庫存作業</span></a></li>
+        }
         <li>
           <a routerLink="/schedule" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
             <div class="nav-item-content">
@@ -116,17 +121,17 @@
 
     <!-- 後臺管理（移至即時動態上方、預設收合）-->
     <div class="management-section">
-        <h3
+        <button type="button"
           class="section-title is-collapsible"
-          (click)="toggleManagement()"
+          (click)="toggleManagement()" [attr.aria-expanded]="!isManagementSectionCollapsed()" aria-controls="management-links"
           [class.is-collapsed]="isManagementSectionCollapsed()"
         >
           <span>後臺管理</span>
           <i class="fas fa-chevron-down"></i>
-        </h3>
+        </button>
 
         @if (!isManagementSectionCollapsed()) {
-          <ul class="sidebar-nav">
+          <ul id="management-links" class="sidebar-nav">
 
             <!-- 2. [護理班表與職責] Admin, Editor (Nurse) -->
             @if (canAccessPage('nursingSchedule')) {
@@ -290,16 +295,16 @@
     <div class="sidebar-overlay" (click)="closeSidebar()"></div>
   }
 
-  <main class="content-area">
+  <main id="main-content" tabindex="-1" class="content-area">
     <header class="main-header">
-      <button class="sidebar-toggle" (click)="toggleSidebar()">
+      <button type="button" aria-label="切換主選單" aria-controls="main-sidebar" [attr.aria-expanded]="isSidebarOpen()" class="sidebar-toggle" (click)="toggleSidebar()">
         <span></span>
         <span></span>
         <span></span>
       </button>
       <h2 class="current-page-title">{{ currentPageTitle() || '透析管理' }}</h2>
     </header>
-    <div class="content-wrapper">
+    <div class="content-wrapper" #contentScroller>
       <router-outlet />
     </div>
   </main>

@@ -1,3 +1,4 @@
+import { ModalFocusDirective } from '@app/core/directives/modal-focus.directive';
 import {
   Component,
   ChangeDetectionStrategy,
@@ -75,7 +76,7 @@ interface PatientOption {
 @Component({
   selector: 'app-collaboration',
   standalone: true,
-  imports: [FormsModule, TaskCreateDialogComponent, EducationRecordDialogComponent],
+  imports: [ModalFocusDirective, FormsModule, TaskCreateDialogComponent, EducationRecordDialogComponent],
   templateUrl: './collaboration.component.html',
   styleUrl: './collaboration.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -356,7 +357,7 @@ export class CollaborationComponent implements OnInit, OnDestroy {
 
   readonly editBusy = signal(false);
   readonly editError = signal('');
-  private readonly pendingStatus = new Set<string>();
+  readonly pendingStatus = new Set<string>();
   closeCreateModal(): void {
     if (this.editBusy()) return;
     this.isCreateModalVisible.set(false);

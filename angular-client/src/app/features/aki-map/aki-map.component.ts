@@ -703,20 +703,27 @@ export class AkiMapComponent implements OnInit {
     }
   }
 
+  private detailRequest = 0;
+  ngOnDestroy(): void { ++this.detailRequest; }
   async openDetail(mrn: string): Promise<void> {
+    const request = ++this.detailRequest;
     this.detailLoading.set(true);
     this.detail.set(null);
     try {
       const res = await this.akiApi.getPatient(mrn);
+      if (request !== this.detailRequest) return;
       this.detail.set(res);
     } catch (e: any) {
+      if (request !== this.detailRequest) return;
       this.message.set({ type: 'error', text: e?.error?.message || e?.message || '載入病人明細失敗' });
     } finally {
-      this.detailLoading.set(false);
+      if (request === this.detailRequest) this.detailLoading.set(false);
     }
   }
 
   closeDetail(): void {
+    ++this.detailRequest;
+    this.detailLoading.set(false);
     this.detail.set(null);
   }
 

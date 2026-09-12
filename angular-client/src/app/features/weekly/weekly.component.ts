@@ -1,3 +1,4 @@
+import { PeriodNavigationComponent } from '@app/shared/period-navigation/period-navigation.component';
 import { loadXlsx } from '@/utils/xlsxLoader';
 // Standalone 版：已移除 Firebase
 import { Component, inject, signal, computed, OnInit, OnDestroy, DestroyRef, ChangeDetectionStrategy, HostListener } from '@angular/core';
@@ -37,7 +38,7 @@ import { extractVersionConflict, formatVersionConflictMessage } from '@/utils/ve
 @Component({
   selector: 'app-weekly',
   standalone: true,
-  imports: [
+  imports: [PeriodNavigationComponent, 
     FormsModule,
     AlertDialogComponent,
     ConfirmDialogComponent,
@@ -393,6 +394,10 @@ export class WeeklyComponent implements OnInit, OnDestroy {
     this.highlightedPatientId.set(null);
   }
 
+  onSearchFocusOut(event: FocusEvent): void {
+    if ((event.currentTarget as HTMLElement)?.closest('.search-container')?.contains(event.relatedTarget as Node)) return;
+    this.handleSearchBlur();
+  }
   handleSearchBlur(): void { setTimeout(() => this.isSearchFocused.set(false), 200); }
 
   showPatientMemos(patientId: string): void {

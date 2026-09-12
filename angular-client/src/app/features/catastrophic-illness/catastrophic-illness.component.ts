@@ -100,6 +100,14 @@ const RENEWAL_PREP_PROPS: Record<RenewalPrepKey, 'renewalRegisteredDate' | 'rene
   styleUrls: ['./catastrophic-illness.component.css'],
 })
 export class CatastrophicIllnessComponent implements OnInit {
+  navigateSection(event: Event, id: string): void {
+    event.preventDefault();
+    const page = (event.currentTarget as HTMLElement | null)?.closest('.ci-page');
+    const section = page?.querySelector<HTMLElement>('#' + id);
+    section?.scrollIntoView({ block: 'start' });
+    section?.focus({ preventScroll: true });
+  }
+
   /** 內嵌於「書記專用」／「醫師專師專用」主頁籤時隱藏自帶標題並自行捲動（2026-09-05） */
   @HostBinding('class.embedded') @Input() embedded = false;
 

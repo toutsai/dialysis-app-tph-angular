@@ -1,9 +1,9 @@
 @if (isVisible) {
   <div class="dialog-overlay" (click)="onCancel()">
-    <div class="dialog-content" (click)="$event.stopPropagation()">
+    <div class="dialog-content" [appModalFocus]="title" (modalEscape)="onCancel()" (click)="$event.stopPropagation()">
       <header class="dialog-header">
         <h2>{{ title }}</h2>
-        <button class="close-button" (click)="onCancel()">×</button>
+        <button class="close-button" aria-label="關閉病人選擇" (click)="onCancel()">×</button>
       </header>
       <main class="dialog-body">
         <div class="search-controls">
@@ -34,6 +34,9 @@
                 <li
                   class="patient-list-item"
                   [class.selected]="selectedPatientId === patient.id"
+                  role="button" tabindex="0" [attr.aria-pressed]="selectedPatientId === patient.id"
+                  (keydown.enter)="$event.preventDefault(); selectPatient(patient.id)"
+                  (keydown.space)="$event.preventDefault(); selectPatient(patient.id)"
                   (click)="selectPatient(patient.id)"
                 >
                   <div class="patient-info">

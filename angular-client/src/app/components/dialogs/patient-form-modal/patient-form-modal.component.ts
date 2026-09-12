@@ -1,3 +1,4 @@
+import { ModalFocusDirective } from '@app/core/directives/modal-focus.directive';
 import { Component, Input, Output, EventEmitter, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -24,7 +25,7 @@ import {
 @Component({
   selector: 'app-patient-form-modal',
   standalone: true,
-  imports: [FormsModule],
+  imports: [ModalFocusDirective, FormsModule],
   templateUrl: './patient-form-modal.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-form-modal.component.css'
@@ -35,6 +36,10 @@ export class PatientFormModalComponent implements OnInit {
   private readonly baseSchedulesApi: ApiManager<FirestoreRecord>;
   private readonly schedulesApi: ApiManager<FirestoreRecord>;
 
+  @Input() saving = false;
+  private baseline = '';
+  hasUnsavedChanges(): boolean { return this.baseline !== JSON.stringify(this.form); }
+  canLeave(): boolean { return !this.saving && (!this.hasUnsavedChanges() || confirm('病人資料尚未儲存。確定放棄變更並關閉？取消可留下儲存。')); }
   @Input() patientData: any = {};
   @Input() patientType = '';
   @Output() close = new EventEmitter<void>();
@@ -149,6 +154,7 @@ export class PatientFormModalComponent implements OnInit {
     // 刻意不從 firstDialysisDate 自動點亮首透標記：開窗要忠實顯示「已存檔」的狀態，
     // 否則與清單星星不同步（蕭修銘案 2026-08-12）；且此欄位對轉入病人是他院初透日期，
     // 有日期≠本院首透。要標記首透請點狀態晶片。
+    this.baseline = JSON.stringify(this.form);
     this.loadPhysicians();
   }
 
@@ -550,11 +556,13 @@ export class PatientFormModalComponent implements OnInit {
   }
 
   closeModal(): void {
+    if (!this.canLeave()) return;
     document.body.classList.remove('modal-open');
     this.close.emit();
   }
 
   handleSave(): void {
+    if (this.saving || this.isFirstPlanVisible) return;
     if (!this.form.name || !this.form.medicalRecordNumber) {
       alert('姓名和病歷號為必填項！');
       return;
@@ -585,6 +593,6 @@ export class PatientFormModalComponent implements OnInit {
     if (otherText) baseDiseases.push(`${ISOLATION_OTHER_PREFIX}${otherText}`);
     // 標籤由四態衍生：排程備註 B/C/H/R（待追蹤 B?/C?/H?/R?）/C癒、護理分組肝炎優先、清單統計沿用 diseases 標籤
     this.form.diseases = syncTagsFromHepatitis(baseDiseases, this.form.hepatitisStatus);
-    this.save.emit(this.form);
+    this.save.emit(JSON.parse(JSON.stringify(this.form)));
   }
 }

@@ -260,6 +260,10 @@ export class BaseScheduleComponent implements OnInit, OnDestroy {
     this.columnWidths.set(newWidths);
   }
 
+  onSearchFocusOut(event: FocusEvent): void {
+    if ((event.currentTarget as HTMLElement)?.closest('.search-container')?.contains(event.relatedTarget as Node)) return;
+    this.handleSearchBlur();
+  }
   handleSearchBlur(): void {
     setTimeout(() => {
       this.isSearchFocused.set(false);

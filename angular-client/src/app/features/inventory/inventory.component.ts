@@ -1,6 +1,7 @@
 import { loadXlsx } from '@/utils/xlsxLoader';
-import { Component, OnInit, ViewChild, HostListener, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { Component, OnInit, ViewChild, ElementRef, HostListener, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
+import { InventoryNavigation, inventoryLocation, inventoryUrl, inventoryScrollPositions, type InventoryLocation } from './inventory-navigation';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -115,13 +116,85 @@ export class InventoryComponent implements OnInit {
 
   activeTab = signal('dashboard');
   inventoryView = signal('overview');
+  private readonly router = inject(Router);
+  private readonly navigation = new InventoryNavigation();
+  @ViewChild('inventoryContent') private inventoryContent?: ElementRef<HTMLElement>;
+  private saveScroll():void { const state=this.navigation.accepted; if(state)inventoryScrollPositions.set(inventoryUrl(state),this.inventoryContent?.nativeElement.querySelector<HTMLElement>('.tab-panel')?.scrollTop || 0); }
+  private restoreScroll(state:InventoryLocation):void { const key=inventoryUrl(state);setTimeout(()=>{if(!this.destroyed&&this.navigation.accepted&&inventoryUrl(this.navigation.accepted)===key){const panel=this.inventoryContent?.nativeElement.querySelector<HTMLElement>('.tab-panel');if(panel)panel.scrollTop=inventoryScrollPositions.get(key)||0;}}); }
+  private querySubscription?: { unsubscribe(): void };
+  private inventoryReady = false;
+  private destroyed = false;
+  workDate = signal(new Date().toLocaleDateString('sv-SE'));
+
+  private navigateTo(change: Partial<InventoryLocation>): Promise<boolean> {
+    const target = inventoryLocation({ ...(this.navigation.accepted || inventoryLocation({})), ...change });
+    return this.router.navigateByUrl(inventoryUrl(target)).then(result => result && inventoryUrl(this.navigation.accepted || inventoryLocation({})) === inventoryUrl(target));
+  }
+
+  private acceptLocation(params: Record<string, string | null>): void {
+    const target = inventoryLocation(params);
+    this.navigation.accept(target, () => this.checkCanLeave(), state => {
+      const previousSnapshot = this.countSnapshot;
+      // This happens only after approval. Cancelled query/back navigation never changes the snapshot.
+      if (this.hasUnsavedChanges()) {
+        if (!this.saveCountDraft()) return false;
+        this.countSnapshot = this.draftSnapshot();
+      }
+      this.saveScroll();
+      this.applyLocation(state, previousSnapshot);
+    }, url => { queueMicrotask(() => { if (!this.destroyed) void this.router.navigateByUrl(url, { replaceUrl: true }); }); });
+  }
+
+  private applyLocation(state: InventoryLocation, previousSnapshot?: string): void {
+    // Direct count links render before shared initialization finishes. Keep editing locked
+    // until loadCountDoc establishes the owner date and revision.
+    if (state.tab === 'counts' && !this.inventoryReady) this.countsLoading.set(true);
+    this.mainTab.set(state.section as any);
+    this.inventoryView.set(state.view);
+    this.activeTab.set(state.tab);
+    this.consumptionSubTab.set(state.view === 'calendar' && state.tab === 'consumption' ? state.report === 'theoretical' ? 'theoretical' : 'upload' : state.report === 'monthly' ? 'summary' : 'query');
+    this.calendarDate = state.date || this.stock.todayString();
+    this.workDate.set(this.calendarDate);
+    this.calendarMode = state.mode;
+    this.calendarCategory = state.category;
+    this.calendarItem = state.item;
+    if (this.inventoryReady) void this.loadLocation(state, previousSnapshot).finally(() => this.restoreScroll(state));
+  }
+
+  private async loadLocation(state: InventoryLocation, previousSnapshot?: string): Promise<void> {
+    if (state.section !== 'inventory') return;
+    if (state.view === 'overview') { void this.loadDashboard(); return; }
+    if (state.tab === 'counts') {
+      this.countFilter.date = state.date || this.workDate();
+      await this.loadCountDoc(true, previousSnapshot);
+      await this.loadCountRecords();
+    } else if (state.tab === 'weekly') {
+      this.weeklyFilter.countDate = state.date || this.workDate();
+      await this.loadWeeklyData();
+    } else if (state.view === 'calendar' && state.tab === 'consumption') {
+      this.hisWorkDate = state.date || this.workDate();
+      this.theoreticalFilter.startDate = this.hisWorkDate;
+      this.theoreticalFilter.endDate = this.hisWorkDate;
+    }
+  }
+
+  ngOnDestroy(): void { this.saveScroll(); this.destroyed = true; this.querySubscription?.unsubscribe(); ++this.countRequest; ++this.itemDetailRequest; }
+  requestWorkDate(event: Event): void { const input = event.target as HTMLInputElement; void this.navigateTo({date: input.value}).then(() => { input.value = this.workDate(); }); }
+  stepCountDate(delta: number): void { void this.openCountDate(shiftDateLike(this.countFilter.date, delta, 'date')); }
+  requestCountDate(event: Event): void { const input = event.target as HTMLInputElement; void this.openCountDate(input.value).then(() => { input.value = this.countFilter.date; }); }
+  calendarDateChanged(selection: {date:string;category:string;item:string;mode:string}): void { void this.navigateTo(selection); }
+  calendarMode = 'week';
+  openHisView(report: string): void { void this.navigateTo({section:'inventory',view:'calendar',tab:'consumption',report}); }
+  openWeeklyDate(date: string): void { void this.navigateTo({ section: 'inventory', view: 'calendar', tab: 'weekly', date }); }
+  openInventoryReport(report: string): void { void this.navigateTo({ section: 'inventory', view: 'reports', tab: report === 'stock' ? 'stock-report' : 'consumption', report: report === 'monthly' ? 'monthly' : '' }); }
+
   private readonly route = inject(ActivatedRoute);
   @ViewChild(PurchaseCalendarComponent) calendar?:PurchaseCalendarComponent;
   @ViewChild(CatastrophicIllnessComponent) applicationEditor?: CatastrophicIllnessComponent;
   calendarCategory = '';
   calendarDate = '';
   summarySources=signal<any[]>([]);
-  showSourceInCalendar(source:any):void {this.calendarCategory=source.category;this.calendarItem='';this.calendarDate=source.startDate;this.navigateInventory('calendar');}
+  showSourceInCalendar(source:any):void { void this.navigateTo({section:'inventory',view:'calendar',tab:'purchase',category:source.category,item:'',date:source.startDate}); }
   calendarItem = '';
   selectedStockItem = signal<{category:string;item:string}|null>(null);
   itemDetail = signal<any>(null);
@@ -143,7 +216,7 @@ export class InventoryComponent implements OnInit {
   private countSnapshot = '';
   countDraftInfo=signal('');
   private draftKey(date=this.countOwnerDate):string {const user=this.authService.currentUser() as any;return 'inventory-count-draft:'+String(user?.id||user?.uid||user?.name||'anonymous')+':'+date;}
-  saveCountDraft():void {if(!this.countOwnerDate||this.countsLoading()||this.countsSaving())return;try{sessionStorage.setItem(this.draftKey(),JSON.stringify({date:this.countOwnerDate,baseRevision:this.countRevision,boxes:this.countBoxes,loose:this.countLoose,notes:this.countNotes,cutoff:this.countCutoff,countType:this.countType,savedAt:new Date().toLocaleString()}));this.countDraftInfo.set('草稿已暫存在此使用者／日期；尚未變更庫存。');}catch{this.showAlert('草稿未儲存','瀏覽器儲存空間不可用，請先儲存實盤。');}}
+  saveCountDraft():boolean {if(!this.countOwnerDate||this.countsLoading()||this.countsSaving())return false;try{sessionStorage.setItem(this.draftKey(),JSON.stringify({date:this.countOwnerDate,baseRevision:this.countRevision,boxes:this.countBoxes,loose:this.countLoose,notes:this.countNotes,cutoff:this.countCutoff,countType:this.countType,savedAt:new Date().toLocaleString()}));this.countDraftInfo.set('草稿已暫存在此使用者／日期；尚未變更庫存。');return true;}catch{this.showAlert('草稿未儲存','瀏覽器儲存空間不可用，請先儲存實盤。');return false;}}
   restoreCountDraft():void {try{const raw=sessionStorage.getItem(this.draftKey());if(!raw){this.countDraftInfo.set('此使用者／日期尚無草稿。');return;}const draft=JSON.parse(raw);if(draft.date!==this.countOwnerDate)return;const conflict=draft.baseRevision!==this.countRevision;this.countBoxes=draft.boxes;this.countLoose=draft.loose;this.countNotes=draft.notes;this.countCutoff=draft.cutoff;this.countType=draft.countType;this.countRevision=draft.baseRevision;this.syncCountUnits();this.countDraftInfo.set(conflict?'草稿與伺服器版本不同；保留原版本以阻止覆蓋。請核對並重新載入後再修改。':'已還原草稿（尚未儲存實盤）。');}catch{this.countDraftInfo.set('草稿無法讀取。');}}
   private inspectCountDraft():void {try{const raw=sessionStorage.getItem(this.draftKey());if(!raw){this.countDraftInfo.set('');return;}const draft=JSON.parse(raw);this.countDraftInfo.set(draft.baseRevision===this.countRevision?'此使用者／日期有草稿，可按「還原草稿」。':'有舊版本草稿；伺服器盤點已變更，還原後須核對衝突。');}catch{this.countDraftInfo.set('草稿無法讀取。');}}
 
@@ -159,30 +232,29 @@ export class InventoryComponent implements OnInit {
   }
   private draftSnapshot():string { return JSON.stringify([this.countBoxes,this.countLoose,this.countNotes,this.countCutoff,this.countType]); }
   hasUnsavedChanges():boolean { return !!this.countOwnerDate && this.countSnapshot!==this.draftSnapshot(); }
-  canLeave():boolean {
+  canLeave():boolean { return this.checkCanLeave() && (!this.hasUnsavedChanges() || this.saveCountDraft()); }
+  private checkCanLeave():boolean {
     if(this.applicationEditor && !this.applicationEditor.canLeave())return false;
     if(this.calendar && !this.calendar.canLeave())return false;
-    if(this.countsSaving() || this.isUploading() || this.orderCreating()) { this.showAlert('作業進行中','請等待儲存或上傳完成。'); return false; }
+    if(this.countsLoading() || this.countsSaving() || this.isUploading() || this.orderCreating()) { this.showAlert('作業進行中','請等待儲存或上傳完成。'); return false; }
     if(this.showOrderPreview()&&!this.orderCreated()&&!confirm('補貨安排尚未建立，確定離開？'))return false;
-    if(this.hasUnsavedChanges()){if(!confirm('盤點尚未儲存，確定離開並捨棄變更？'))return false;this.countSnapshot=this.draftSnapshot();}return true;
+    if(this.hasUnsavedChanges() && !confirm('盤點尚未儲存，確定暫存草稿後離開？'))return false;return true;
   }
   @HostListener('window:beforeunload',['$event']) onBeforeUnload(event:BeforeUnloadEvent):void { if(this.hasUnsavedChanges() || this.countsSaving() || this.orderCreating() || this.isUploading()) {event.preventDefault();event.returnValue='';} }
-  switchMain(tab:any):void { if(this.canLeave()) { this.mainTab.set(tab); if(tab==='inventory') this.loadDashboard(); } }
+  switchMain(tab:any):void { void this.navigateTo({ section: tab, view: 'overview', tab: 'dashboard', report: '' }); }
   navigateInventory(view:string,tab?:string):void {
-    if(!this.canLeave()) return;
-    this.inventoryView.set(view); this.activeTab.set(tab || ({overview:'dashboard',calendar:'purchase',reports:'consumption',settings:'items'} as any)[view]);
-    if(view==='overview') this.loadDashboard();
-    if(view==='reports') this.consumptionSubTab.set('query');
+    const defaults: Record<string,string> = {overview:'dashboard',calendar:'purchase',reports:'consumption',settings:'items'};
+    void this.navigateTo({section:'inventory',view,tab:tab || defaults[view],report:''});
   }
-  async openCountDate(date:string):Promise<void> { if(!this.canLeave()) return; this.countSnapshot=this.draftSnapshot();this.inventoryView.set('calendar');this.activeTab.set('counts');this.countFilter.date=date;await this.loadCountDoc();await this.loadCountRecords(); }
-  openHisDate(date:string):void { if(!this.canLeave()) return;this.activeTab.set('consumption');this.inventoryView.set('calendar');this.consumptionSubTab.set('upload');this.hisWorkDate=date;this.theoreticalFilter.startDate=date;this.theoreticalFilter.endDate=date; }
+  async openCountDate(date:string):Promise<void> { await this.navigateTo({section:'inventory',view:'calendar',tab:'counts',date}); }
+  openHisDate(date:string):void { void this.navigateTo({section:'inventory',view:'calendar',tab:'consumption',date}); }
   async openStockItem(category:string,item:string):Promise<void> {
     const request=++this.itemDetailRequest;this.lastFocused=document.activeElement as HTMLElement;this.selectedStockItem.set({category,item});this.itemDetailPurchases.set([]);this.itemDetail.set(null);this.itemDetailLoading.set(true);
     try { const docs=await this.countsApi.fetchAll() as unknown as CountDoc[]; const purchases=await this.purchasesApi.fetchAll();const today=this.stock.todayString();const detail=await this.stock.itemTimeline(category,item,today,this.stock.addDays(today,13),docs,purchases); if(request===this.itemDetailRequest&&this.selectedStockItem()?.category===category&&this.selectedStockItem()?.item===item){this.itemDetailPurchases.set(purchases as any[]);const start=detail.anchor?.cutoff==='end-of-day'?this.stock.addDays(detail.anchor.countDate,1):detail.anchor?.countDate||today;const receiptRows=(purchases as any[]).filter(p=>p.category===category&&p.item===item&&(!p.status||p.status==='arrived')&&String(p.date||'').slice(0,10)>=start&&String(p.date||'').slice(0,10)<=today);const ranges=(detail.actualRanges||[]).map(r=>({...r,itemQuantity:r.grouped?.[category]?.[item]??0,source:r.categoryCoverage?.[category]}));const covered=new Set(ranges.flatMap(r=>this.stock.enumerateDays(r.start,r.end)));const forecastDates=this.stock.enumerateDays(start,today).filter(d=>!covered.has(d));this.itemDetail.set({...detail,receipts:receiptRows,actualRanges:ranges,forecastDates,anchorQuantity:detail.anchor?.counts?.[category]?.[item]??null});} }
     catch(e:any){if(request===this.itemDetailRequest)this.showAlert('明細載入失敗',e?.message || String(e));}finally{if(request===this.itemDetailRequest)this.itemDetailLoading.set(false);}
   }
   closeStockItem():void {++this.itemDetailRequest;this.selectedStockItem.set(null);this.itemDetailPurchases.set([]);setTimeout(()=>this.lastFocused?.focus());}
-  itemToCalendar():void {const item=this.selectedStockItem();if(!item)return;this.calendarCategory=item.category;this.calendarItem=item.item;this.calendarDate=this.stock.todayString();this.closeStockItem();this.navigateInventory('calendar');}
+  itemToCalendar():void {const item=this.selectedStockItem();if(!item)return;void this.navigateTo({section:'inventory',view:'calendar',tab:'purchase',category:item.category,item:item.item,date:this.stock.todayString()}).then(accepted=>{if(accepted)this.closeStockItem();});}
 
 
 
@@ -478,7 +550,7 @@ export class InventoryComponent implements OnInit {
   }
 
   async ngOnInit(): Promise<void> {
-    this.route.queryParamMap.subscribe(params=>{ if(params.get('section')==='inventory'){this.mainTab.set('inventory');const view=params.get('view')||'overview';this.inventoryView.set(view);this.activeTab.set(({overview:'dashboard',calendar:'purchase',reports:'consumption',settings:'items'} as any)[view]||'dashboard');this.consumptionSubTab.set(params.get('report')==='monthly'?'summary':'query');} });
+    this.querySubscription = this.route.queryParamMap.subscribe(params => this.acceptLocation(Object.fromEntries(params.keys.map(key => [key, params.get(key)]))));
     await this.patientStore.fetchPatientsIfNeeded();
     await this.initializeDefaultItems();
     await this.fetchInventoryItems();
@@ -486,8 +558,9 @@ export class InventoryComponent implements OnInit {
     await this.fetchBedsSettings();
     await this.fetchPurchases();
     await this.loadKnownItems();
-    // Auto-load dashboard since it's the default tab
-    this.loadDashboard();
+    this.inventoryReady = true;
+    const state=this.navigation.accepted || inventoryLocation({});
+    await this.loadLocation(state);this.restoreScroll(state);
   }
 
   // ==================== Tab 0.5 Methods ====================
@@ -1458,16 +1531,29 @@ export class InventoryComponent implements OnInit {
     }}
   }
   markCountZero(category:string,item:string):void {this.countBoxes[category][item]=0;this.countLoose[category][item]=0;this.syncCountUnits();}
-  async loadCountDoc():Promise<void> {
+  async loadCountDoc(navigationLoad = false, previousSnapshot?: string):Promise<void> {
     const date=this.countFilter.date;if(!date)return;
-    if(this.hasUnsavedChanges() && !confirm('盤點尚未儲存，確定切換日期並捨棄變更？')){this.countFilter.date=this.countOwnerDate;return;}
+    if(!navigationLoad && this.hasUnsavedChanges() && !confirm('盤點尚未儲存，確定切換日期並捨棄變更？')){this.countFilter.date=this.countOwnerDate;return;}
     const request=++this.countRequest;this.countsLoading.set(true);
     try {let missingRevision=0;const doc=await firstValueFrom(this.api.get<CountDoc>('/system/inventory/counts/'+date)).catch((error:any)=>{if(error.status===404){missingRevision=Number(error.error?.revision)||0;return null;}throw error;});if(request!==this.countRequest)return;
       this.resetCountInputs();this.countOwnerDate=date;this.countNotes=doc?.notes||'';this.countRevision=(doc as any)?.revision||missingRevision;this.countCutoff=(doc as any)?.cutoff||(doc?'start-of-day':'end-of-day');this.countType=(doc as any)?.countType||'weekly';this.countDocExists.set(!!doc);this.countDocInfo.set(null);
       if(doc){for(const category of this.categoryKeys){for(const [item,value] of Object.entries(doc.counts?.[category]||{})){const amount=Number(value),perBox=this.getUnitsPerBox(category,item);this.countUnits[category][item]=amount;this.countBoxes[category][item]=Math.floor(amount/perBox);this.countLoose[category][item]=+(amount%perBox).toFixed(6);}}
       this.countDocInfo.set({createdBy:doc.createdBy?.name||'未知',updatedBy:doc.updatedBy?.name||doc.createdBy?.name||'未知',updatedAt:doc.updatedAt||doc.createdAt||''});}
       this.countSnapshot=this.draftSnapshot();this.inspectCountDraft();
-    }catch(error:any){this.showAlert('載入失敗',error?.error?.message||error?.message||String(error));this.countFilter.date=this.countOwnerDate;}finally{if(request===this.countRequest)this.countsLoading.set(false);}
+    }catch(error:any){
+      if(request!==this.countRequest || this.destroyed)return;
+      this.countFilter.date=this.countOwnerDate;
+      if(previousSnapshot!==undefined)this.countSnapshot=previousSnapshot;
+      const current=this.navigation.accepted;
+      if(navigationLoad && current?.tab==='counts' && (current.date || this.workDate())===date){
+        const restored=inventoryLocation({...current,date:this.countOwnerDate, ...(this.countOwnerDate?{}:{view:'overview',tab:'dashboard'})});
+        this.navigation.accepted=restored;
+        this.workDate.set(this.countOwnerDate || this.stock.todayString());this.calendarDate=this.workDate();
+        this.activeTab.set(restored.tab);this.inventoryView.set(restored.view);
+        void this.router.navigateByUrl(inventoryUrl(restored),{replaceUrl:true});
+      }
+      this.showAlert('載入失敗',error?.error?.message||error?.message||String(error));
+    }finally{if(request===this.countRequest)this.countsLoading.set(false);}
   }
   async saveCountDoc():Promise<void> {
     const date=this.countFilter.date;if(this.countsSaving()||this.countsLoading())return;
@@ -1510,17 +1596,10 @@ export class InventoryComponent implements OnInit {
   }
 
   /** 點列 → 載入該日盤點 */
-  async selectCountRecord(countDate: string): Promise<void> {
-    this.countFilter.date = countDate;
-    await this.loadCountDoc();
-  }
+  async selectCountRecord(countDate: string): Promise<void> { await this.openCountDate(countDate); }
 
   /** 進入「盤點」頁籤 */
-  async openCountsTab(): Promise<void> {
-    this.activeTab.set('counts');
-    await this.loadCountRecords();
-    await this.loadCountDoc();
-  }
+  async openCountsTab(): Promise<void> { await this.openCountDate(this.workDate()); }
 
   private buildGroupedCopy(src: Record<string, Record<string, number>>): Grouped {
     const out: Grouped = { artificialKidney: {}, dialysateCa: {}, bicarbonateType: {} };

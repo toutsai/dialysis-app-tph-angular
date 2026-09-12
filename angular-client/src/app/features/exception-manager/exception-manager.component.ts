@@ -70,6 +70,15 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
 
   isPageLocked = computed(() => !this.authService.canEditSchedules());
 
+  readonly contextPatientId = signal(this.route.snapshot.queryParamMap.get('patientId') || '');
+  readonly contextDate = (() => {
+    const value = this.route.snapshot.queryParamMap.get('date');
+    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+    const parsed = new Date(value + 'T00:00:00');
+    return !Number.isNaN(parsed.getTime()) && parsed.getFullYear() === Number(value.slice(0, 4)) && parsed.getMonth() + 1 === Number(value.slice(5, 7)) && parsed.getDate() === Number(value.slice(8, 10)) ? value : undefined;
+  })();
+  readonly returnPath = ['/schedule', '/stats'].includes(this.route.snapshot.queryParamMap.get('from') || '') ? this.route.snapshot.queryParamMap.get('from') : null;
+  returnToSchedule(): void { if (this.returnPath) void this.router.navigate([this.returnPath], { queryParams: { date: this.contextDate } }); }
   exceptions = signal<any[]>([]);
   readonly loadError = signal('');
   isLoading = signal(true);
@@ -115,7 +124,7 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
   shiftMap: Record<string, string> = { early: '早班', noon: '午班', late: '晚班' };
 
   calendarEvents = computed(() => {
-    const exList = this.exceptions();
+    const exList = this.exceptions().filter((ex: any) => !this.contextPatientId() || ex.patientId === this.contextPatientId() || ex.patientId2 === this.contextPatientId());
     if (!exList) return [];
     return exList.flatMap((ex: any) => {
       const statusStyles: Record<string, { color: string; prefix: string }> = {
@@ -189,6 +198,7 @@ export class ExceptionManagerComponent implements OnInit, OnDestroy {
   calendarOptions = computed<CalendarOptions>(() => ({
     plugins: [dayGridPlugin, interactionPlugin, listPlugin],
     initialView: 'dayGridWeek',
+    initialDate: this.contextDate,
     locale: zhTwLocale,
     headerToolbar: false,
     dayMaxEvents: true,

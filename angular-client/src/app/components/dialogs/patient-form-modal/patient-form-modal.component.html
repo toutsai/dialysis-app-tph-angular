@@ -1,10 +1,11 @@
 <div class="modal-overlay" (click)="closeModal()">
-  <div class="modal-content" (click)="$event.stopPropagation()">
+  <div class="modal-content" [appModalFocus]="(isEditing ? '編輯' : '新增') + '病人'" (modalEscape)="closeModal()" [modalEscapeDisabled]="saving" (click)="$event.stopPropagation()">
     <div class="modal-header">
       <h2>{{ isEditing ? '編輯' : '新增' }} {{ patientTypeText }}病人</h2>
-      <button class="close-button" (click)="closeModal()" aria-label="關閉彈窗">&times;</button>
+      <button class="close-button" (click)="closeModal()" aria-label="關閉彈窗" [disabled]="saving">&times;</button>
     </div>
     <form class="modal-body" (ngSubmit)="handleSave()">
+      <fieldset [disabled]="saving" style="border:0;padding:0;margin:0;min-width:0">
       <!-- 區塊 1：基本 + 透析設定（4 欄緊湊 grid） -->
       <div class="form-section">
         <div class="form-grid-4">
@@ -235,7 +236,7 @@
 
       @if (isFirstPlanVisible) {
         <div class="first-plan-overlay" (click)="closeFirstDialysisPlan()">
-          <div class="first-plan-dialog" (click)="$event.stopPropagation()">
+          <div class="first-plan-dialog" appModalFocus="初透排程規劃" (modalEscape)="closeFirstDialysisPlan()" [modalEscapeDisabled]="firstPlanLoading || saving" (click)="$event.stopPropagation()">
             <div class="first-plan-header">
               <h3>首透連續洗設定</h3>
               <button type="button" class="close-button" (click)="closeFirstDialysisPlan()">&times;</button>
@@ -358,6 +359,6 @@
         <button type="submit" class="btn-primary">儲存</button>
         <button type="button" class="btn-secondary" (click)="closeModal()">取消</button>
       </div>
-    </form>
+    </fieldset></form>
   </div>
 </div>

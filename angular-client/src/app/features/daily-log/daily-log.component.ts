@@ -121,6 +121,14 @@ export class DailyLogComponent implements OnInit {
   // ===================================================================
   // UI State
   // ===================================================================
+  private readonly sectionHost = inject<ElementRef<HTMLElement>>(ElementRef);
+  jumpToSection(title: string): void {
+    const heading = Array.from(this.sectionHost.nativeElement.querySelectorAll<HTMLElement>('h2')).find(item => item.textContent?.trim().startsWith(title) && item.getClientRects().length > 0);
+    if (!heading) return;
+    heading.tabIndex = -1;
+    heading.scrollIntoView({ block: 'start', behavior: 'auto' });
+    heading.focus({ preventScroll: true });
+  }
   @ViewChild('otherNotesTextarea') otherNotesTextareaRef?: ElementRef<HTMLTextAreaElement>;
   @ViewChild('hiddenDateInput') hiddenDateInputRef?: ElementRef<HTMLInputElement>;
   isStaffingDetailsVisible = false;
@@ -805,7 +813,7 @@ export class DailyLogComponent implements OnInit {
         cell.classList.remove('col-actions');
         cell.textContent = cell.tagName === 'TH' ? '合計' : '';
       });
-      printCopy.querySelectorAll('button, .header-right, .loading-overlay, .mobile-only, .global-autocomplete-results, .history-lock-banner, .col-actions, app-alert-dialog, app-confirm-dialog, app-handover-notes-dialog').forEach(element => element.remove());
+      printCopy.querySelectorAll('button, .log-section-navigation, .header-right, .loading-overlay, .mobile-only, .global-autocomplete-results, .history-lock-banner, .col-actions, app-alert-dialog, app-confirm-dialog, app-handover-notes-dialog').forEach(element => element.remove());
       printCopy.querySelectorAll('[inert]').forEach(element => element.removeAttribute('inert'));
       printCopy.querySelectorAll('fieldset').forEach(element => element.removeAttribute('disabled'));
       document.body.appendChild(printCopy);

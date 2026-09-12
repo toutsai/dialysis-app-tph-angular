@@ -158,3 +158,8 @@
   font-size: 0.85rem;
   font-weight: bold;
 }
+
+.keyboard-help { display:flex; flex-wrap:wrap; gap:.5rem; padding:.55rem; background:#eef6fa; color:#234; font-size:.85rem; position:sticky; left:0; }
+.keyboard-help button { padding:.4rem .7rem; border:1px solid #64748b; border-radius:5px; background:white; }
+.schedule-slot:focus-visible { outline:3px solid #007f91; outline-offset:-3px; }
+.schedule-slot.keyboard-selected { box-shadow:inset 0 0 0 3px #c77900; }

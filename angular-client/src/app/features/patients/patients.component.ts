@@ -114,13 +114,19 @@ export class PatientsComponent implements OnInit, OnDestroy {
   @ViewChild(PatientSummaryComponent) summary?: PatientSummaryComponent;
   @ViewChild(DialysisOrderModalComponent) orderModal?: DialysisOrderModalComponent;
   readonly orderSaving = signal(false);
+  readonly patientSaving = signal(false);
+  @ViewChild(PatientFormModalComponent) patientForm?: PatientFormModalComponent;
+  private finishPatientSave(): void {
+    this.isModalVisible.set(false); this.editingPatient.set(null); this.globalSearchTerm.set('');
+  }
   canLeave(): boolean {
-    if (this.orderSaving()) return false;
+    if (this.orderSaving() || this.patientSaving()) return false;
+    if (this.isModalVisible() && this.patientForm && !this.patientForm.canLeave()) return false;
     if (this.isOrderModalVisible() && this.orderModal && !this.orderModal.canLeave()) return false;
     return this.summary?.canLeave() ?? true;
   }
   @HostListener('window:beforeunload', ['$event']) beforeUnload(event: BeforeUnloadEvent): void {
-    if (this.orderSaving() || this.orderModal?.hasUnsavedChanges()) { event.preventDefault(); event.returnValue = ''; }
+    if (this.orderSaving() || this.patientSaving() || (this.isModalVisible() && this.patientForm?.hasUnsavedChanges()) || this.orderModal?.hasUnsavedChanges()) { event.preventDefault(); event.returnValue = ''; }
   }
   closeOrderModal(): void { if (!this.orderSaving()) this.isOrderModalVisible.set(false); }
   readonly activeTab = signal<PatientTab>('opd');
@@ -876,62 +882,51 @@ export class PatientsComponent implements OnInit, OnDestroy {
   }
 
   // --- Global Search ---
+  readonly searchMatches = signal<Patient[]>([]);
+  readonly searchPerformed = signal(false);
+  readonly showDetailedColumns = signal(false);
+  readonly expandedRemarks = signal<Set<string>>(new Set());
+  statusLabel(status: string): string { return ({opd:'門診',ipd:'住院',er:'急診',deleted:'已刪除'} as Record<string,string>)[status] || status; }
+  patientSearchLabel(p: any): string { return p.name + '（' + p.medicalRecordNumber + '）'; }
+  toggleRemarks(id: string): void { this.expandedRemarks.update(ids => { const next = new Set(ids); next.has(id) ? next.delete(id) : next.add(id); return next; }); }
   handleGlobalSearch(query: string): void {
-    if (!query?.trim()) {
-      this.showAlert('提示', '請輸入病人姓名或病歷號進行搜尋。');
-      return;
+    const term = query.trim().toLowerCase();
+    this.searchPerformed.set(!!term);
+    this.searchMatches.set(term ? this.patientStore.allPatients().filter(p =>
+      String(p.name || '').toLowerCase().includes(term) || String(p.medicalRecordNumber || '').toLowerCase().includes(term)) : []);
+  }
+  requestSearchTransfer(p: Patient): void {
+    if (this.isPageLocked()) return;
+    const target = this.activeTab();
+    if (!['opd','ipd','er'].includes(target)) return;
+    const label = this.patientSearchLabel(p);
+    if (p.isDeleted || p.status === 'deleted') {
+      this.showConfirm('復原病人', label + ' 已刪除。確定復原並移至' + this.statusLabel(target) + '？', () => {
+        // restorePatient currently uses the active destination; do not apply a stale confirmation after tab change.
+        if (this.activeTab() === target) void this.restorePatient(p.id);
+      });
+    } else if (p.status !== target) {
+      this.showConfirm('轉移病人', label + ' 目前在' + this.statusLabel(p.status) + '。確定移至' + this.statusLabel(target) + '？', () => this.transferPatient(p.id, target));
     }
-    const searchTerm = query.trim();
-    const searchTermLower = searchTerm.toLowerCase();
-    const allPatients = this.patientStore.allPatients();
-    const searchResults = allPatients.filter(
-      (p: any) =>
-        (p.medicalRecordNumber && p.medicalRecordNumber.includes(searchTerm)) ||
-        (p.name && p.name.toLowerCase().includes(searchTermLower))
-    );
-
-    if (searchResults.length > 1) {
-      this.showAlert('找到多位病人', `符合 "${query}" 的病人不只一位，請用更完整的資料查找。`);
-      return;
-    }
-
-    const foundPatient: any = searchResults.length === 1 ? searchResults[0] : null;
-    const statusMap: Record<string, string> = { ipd: '住院', opd: '門診', er: '急診' };
-    const targetStatusText = statusMap[this.activeTab()] || '列表';
-
-    if (foundPatient) {
-      if (foundPatient.isDeleted) {
-        const originalStatusText = statusMap[foundPatient.originalStatus] || '未知';
-        this.showConfirm(
-          '找到已刪除病人',
-          `病人 "${foundPatient.name}" (${foundPatient.medicalRecordNumber}) 已被刪除 (原為${originalStatusText}，原因: ${foundPatient.deleteReason || '未知'})。\n\n是否要復原並移至「${targetStatusText}」清單？`,
-          () => this.restorePatient(foundPatient.id)
-        );
-      } else if (foundPatient.status !== this.activeTab()) {
-        const currentStatusText = statusMap[foundPatient.status] || '未知';
-        this.showConfirm(
-          '找到病人 (不同表單)',
-          `病人 "${foundPatient.name}" (${foundPatient.medicalRecordNumber}) 目前在「${currentStatusText}」清單中。\n\n是否要移至「${targetStatusText}」清單？`,
-          () => this.transferPatient(foundPatient.id, this.activeTab())
-        );
-      } else {
-        this.showAlert('病人已存在', `病人 "${foundPatient.name}" 已在「${targetStatusText}」清單中。`);
-      }
-    } else {
-      const newPatientTemplate: any = { diseases: [] };
-      if (/^\d{6,}$/.test(searchTerm)) {
-        newPatientTemplate.medicalRecordNumber = searchTerm;
-      } else {
-        newPatientTemplate.name = searchTerm;
-      }
-      this.editingPatient.set(newPatientTemplate);
-      this.modalType.set(this.activeTab());
-      this.isModalVisible.set(true);
-    }
+  }
+  createFromSearch(): void {
+    if (this.isPageLocked() || this.patientSaving() || !this.canLeave() || !this.searchPerformed() || this.searchMatches().length) return;
+    const term = this.globalSearchTerm().trim();
+    if (!term || !['opd','ipd','er'].includes(this.activeTab())) return;
+    this.editingPatient.set({diseases:[], ...(/^\d{6,}$/.test(term) ? {medicalRecordNumber:term} : {name:term})});
+    this.modalType.set(this.activeTab());
+    this.isModalVisible.set(true);
   }
 
   // --- Patient CRUD ---
   async handleSavePatient(patientData: any): Promise<void> {
+    if (this.patientSaving()) return;
+    this.patientSaving.set(true);
+    try { await this.preparePatientSave(JSON.parse(JSON.stringify(patientData))); }
+    catch (error: any) { this.showAlert('儲存失敗', error?.message || '內容已保留，請重試'); }
+    finally { this.patientSaving.set(false); }
+  }
+  private async preparePatientSave(patientData: any): Promise<void> {
     if (this.isPageLocked()) {
       this.showAlert('操作失敗', '操作被鎖定：權限不足。');
       return;
@@ -965,8 +960,9 @@ export class PatientsComponent implements OnInit, OnDestroy {
           '確認暫停/中止透析',
           `您確定要將「${patientData.name}」標記為暫停/中止透析嗎？\n\n此操作將會從「總床位表」中移除该病人的固定排班规则。`,
           async () => {
+            if (this.patientSaving()) return;
+            this.patientSaving.set(true);
             try {
-              this.closeModal();
               const dataToUpdate = { ...patientData };
               delete dataToUpdate.id;
               delete dataToUpdate.firstDialysisPlan;
@@ -975,6 +971,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
                 this.patientsApi.save(patientData.id, dataToUpdate),
                 this.patientStore.removeRuleFromMasterSchedule(patientData.id),
               ]);
+              this.finishPatientSave();
               this.patientStore.updatePatientInStore(patientData.id, dataToUpdate);
               await this.recalculateStatsLocally();
               window.dispatchEvent(new CustomEvent('patient-data-updated'));
@@ -988,7 +985,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
               );
             } catch (err: any) {
               this.showAlert('操作失敗', `操作失敗：${err.message}`);
-            }
+            } finally { this.patientSaving.set(false); }
           }
         );
         return;
@@ -1074,6 +1071,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
 
       // Normal edit
       const doSave = async (): Promise<void> => {
+        this.patientSaving.set(true);
         try {
           const dataToUpdate = { ...patientData };
           delete dataToUpdate.id;
@@ -1145,14 +1143,14 @@ export class PatientsComponent implements OnInit, OnDestroy {
           await this.recalculateStatsLocally();
           window.dispatchEvent(new CustomEvent('patient-data-updated'));
           this.notificationService.createNotification(`編輯病人：${patientData.name}`, 'patient');
-          this.closeModal();
+          this.finishPatientSave();
           // CVVHDF 改回 HD/SLED：有改前長期床位快照者詢問是否恢復（同床同班則靜默清快照）
           if (fromCvvhdf) {
             this.promptRestoreLongTermBed(patientData.id, patientData.name, '', 'preCvvhdfRule');
           }
         } catch (err) {
           this.showAlert('操作失敗', '更新病人資料失敗！');
-        }
+        } finally { this.patientSaving.set(false); }
       };
 
       // 當日異動守門：編輯若改到身分/模式/頻率，且病人今天有排程，先確認（今日維持、明日生效）
@@ -1265,7 +1263,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
         `新增病人：${dataToCreate.name} (${statusText[this.modalType()] || '列表'})`,
         'patient'
       );
-      this.closeModal();
+      this.finishPatientSave();
 
       // 新增病人：提示安排常規床位（首透計畫已含規則者不重複問）
       if (!firstDialysisPlan) {
@@ -2248,12 +2246,14 @@ export class PatientsComponent implements OnInit, OnDestroy {
 
   // --- Edit / Close ---
   openEditPatientModal(patient: any): void {
+    if (!this.canLeave()) return;
     this.editingPatient.set(JSON.parse(JSON.stringify(patient)));
     this.modalType.set(this.activeTab());
     this.isModalVisible.set(true);
   }
 
   closeModal(): void {
+    if (this.patientSaving()) return;
     this.isModalVisible.set(false);
     this.editingPatient.set(null);
     this.globalSearchTerm.set('');

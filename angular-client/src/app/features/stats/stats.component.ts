@@ -1,3 +1,5 @@
+import { OperationStatusComponent } from '@app/shared/operation-status/operation-status.component';
+import { PeriodNavigationComponent } from '@app/shared/period-navigation/period-navigation.component';
 import { LatestRequest } from '../../core/utils/latest-request';
 import { loadXlsx } from '@/utils/xlsxLoader';
 // Standalone 版：已移除 Firebase
@@ -97,7 +99,7 @@ const dutyAssignments: Record<string, Record<string, string | string[]>> = {
 @Component({
   selector: 'app-stats',
   standalone: true,
-  imports: [
+  imports: [OperationStatusComponent, PeriodNavigationComponent, 
     CommonModule,
     FormsModule,
     BedChangeDialogComponent,
@@ -865,8 +867,9 @@ export class StatsComponent implements OnInit, OnDestroy {
   }
 
   goToExceptionManager(): void {
+    const patientId = this.conflictForDialog?.patientId;
     this.closeConflictDialog();
-    this.router.navigate(['/exception-manager']);
+    this.router.navigate(['/exception-manager'], { queryParams: { date: this.formatDate(this.currentDate), patientId, from: '/stats' } });
   }
 
   private exceptionAffectsDate(payload: any, dateStr: string): boolean {

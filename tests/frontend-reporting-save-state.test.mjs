@@ -28,26 +28,36 @@ function reporting(api = {}, deps = {}) {
   const p = Object.create(ReportingComponent.prototype);
   Object.assign(p, {reportRequests:new latest.LatestRequest(), reportError:signal(''),reportWarning:signal(''),isLoading:signal(false),hasGenerated:signal(false),
     reportType:signal('monthly'),selectedDate:signal('2026-01-01'),selectedMonth:signal('2026-01'),selectedYear:signal(2026),reportDateRange:signal({}),
-    schedulesApi:{fetchAll:async()=>[]},expiredSchedulesApi:{fetchAll:async()=>[]},patientsApi:{fetchAll:async()=>[]},dailyLogsApi:{fetchAll:async()=>[]},
+    schedulesApi:{fetchWhere:async()=>[]},expiredSchedulesApi:{fetchWhere:async()=>[]},patientsApi:{fetchAll:async()=>[]},dailyLogsApi:{fetchWhere:async()=>[]},
     processMonthlyReport(rows){this.monthlyTableRows.set(rows);},processDailyReport(rows){this.dailyTableRows.set(rows);},processYearlyReport(rows){this.yearlyTableRows.set(rows);},renderChart(){},
     noData(){return this.monthlyTableRows().length===0;},reportTitle(){return this.selectedMonth();},...api});
   for(const key of ['dailyTableRows','monthlyTableRows','yearlyTableRows','staffingTableRows','dailyTableHeaders','monthlyTableHeaders','yearlyTableHeaders']) p[key]=signal([]);
+  for(const name of ['schedulesApi','expiredSchedulesApi','dailyLogsApi']) {
+    const run=p[name].fetchWhere;
+    p[name].fetchWhere=params=>{
+      const type=p.reportType(),[year,month]=p.selectedMonth().split('-').map(Number);
+      const start=type==='daily'?p.selectedDate():type==='yearly'?`${p.selectedYear()}-01-01`:`${p.selectedMonth()}-01`;
+      const end=type==='daily'?start:type==='yearly'?`${p.selectedYear()}-12-31`:`${p.selectedMonth()}-${new Date(year,month,0).getDate()}`;
+      assert.deepEqual(JSON.parse(JSON.stringify(params)),name==='expiredSchedulesApi'?{start,end}:{startDate:start,endDate:end});
+      return run(params);
+    };
+  }
   return p;
 }
 test('report late old month cannot replace current rows, error or busy state', async()=>{
   const a=deferred(),b=deferred();let n=0;
-  const p=reporting({schedulesApi:{fetchAll:()=>++n===1?a.promise:b.promise}});
+  const p=reporting({schedulesApi:{fetchWhere:()=>++n===1?a.promise:b.promise}});
   const first=p.generateReport();p.selectedMonth.set('2026-02');const second=p.generateReport();
   a.reject(new Error('old failed'));await first;assert.equal(p.isLoading(),true);assert.equal(p.reportError(),'');
   b.resolve([{date:'2026-02-01',id:'feb'}]);await second;assert.equal(p.monthlyTableRows()[0].id,'feb');assert.equal(p.isLoading(),false);
 });
 test('report type switching ignores old successful response', async()=>{
-  const a=deferred(),b=deferred();let n=0;const p=reporting({schedulesApi:{fetchAll:()=>++n===1?a.promise:b.promise}});
+  const a=deferred(),b=deferred();let n=0;const p=reporting({schedulesApi:{fetchWhere:()=>++n===1?a.promise:b.promise}});
   const first=p.generateReport();p.reportType.set('daily');const second=p.generateReport();b.resolve([{date:'2026-01-01',id:'day'}]);await second;
   a.resolve([{date:'2026-01-02',id:'old'}]);await first;assert.equal(p.dailyTableRows()[0].id,'day');assert.equal(p.monthlyTableRows().length,0);
 });
 test('current failure is explicit and retry clears the error',async()=>{
-  let fail=true;const p=reporting({schedulesApi:{fetchAll:async()=>{if(fail)throw Error();return [];}}});
+  let fail=true;const p=reporting({schedulesApi:{fetchWhere:async()=>{if(fail)throw Error();return [];}}});
   await p.generateReport();assert.ok(p.reportError());fail=false;await p.generateReport();assert.equal(p.reportError(),'');
 });
 test('annual census failure preserves attendance and marks partial source',async()=>{

@@ -229,8 +229,10 @@
               </div>
             }
             @if (!isLoadingAlerts() && groupedAlerts().length > 0) {
+              <label class="alert-display-filter">顯示項目 <select aria-label="檢驗處理狀態" [ngModel]="alertDisplayFilter()" (ngModelChange)="alertDisplayFilter.set($event)"><option value="all">全部</option><option value="pending">尚未填寫或未儲存</option><option value="failed">儲存失敗</option></select></label>
+              @if (!visibleAlertGroups().length) { <p role="status">目前篩選沒有符合項目。</p> }
               <div class="grouped-tables-container">
-                @for (group of groupedAlerts(); track group) {
+                @for (group of visibleAlertGroups(); track group.key) {
                   <div class="alert-group">
                     <h3 class="group-title">
                       {{ labItemDisplayNames[group.key] || group.key }} - 不合格名單

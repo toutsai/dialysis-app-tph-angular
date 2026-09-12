@@ -1,3 +1,4 @@
+import { ModalFocusDirective } from '@app/core/directives/modal-focus.directive';
 // 叫貨/到貨行事曆（庫存管理 > 叫貨/到貨紀錄）
 // 資料 = inventory_purchases：status 'ordered'（已叫貨待到貨，顯示在預計到貨日）/ 'arrived'（已到貨=入庫，顯示在到貨日）
 // 庫存計算只算 arrived（後端 monthly/calculation 與父元件盤點皆已過濾）
@@ -64,7 +65,7 @@ export function toLocalYmd(value: string | null | undefined): string {
 @Component({
   selector: 'app-purchase-calendar',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, ModalFocusDirective],
   templateUrl: './purchase-calendar.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './purchase-calendar.component.css',
@@ -74,10 +75,13 @@ export class PurchaseCalendarComponent implements OnInit, OnChanges {
   private readonly stock = inject(InventoryStockService);
   @Input() unitLabelFn:(category:string,item:string)=>string=()=>'';
   @Input() initialDate='';
+  @Input() initialMode='week';
   @Input() initialCategory='';
   @Input() initialItem='';
   @Output() countRequested=new EventEmitter<string>();
   @Output() hisRequested=new EventEmitter<string>();
+  @Output() dateSelected=new EventEmitter<{date:string;category:string;item:string;mode:string}>();
+  private sourceRequest=0;
   mode=signal<'week'|'month'>('week');
   selectedDate=signal(ymdOf(new Date()));
   counts=signal<CountDoc[]>([]);
@@ -99,8 +103,18 @@ export class PurchaseCalendarComponent implements OnInit, OnChanges {
   sourcesOn(date:string):any[]{return this.coverage().filter(s=>s.startDate<=date && s.endDate>=date && (!this.filterCategory() || s.category===this.filterCategory()));}
   orderEventsOn(date:string):PurchaseEntry[]{return this.filtered().filter(e=>toLocalYmd(e.orderDate)===date && this.displayDate(e)!==date);}
   selectedEntries():PurchaseEntry[]{return this.filtered().filter(e=>this.displayDate(e)===this.selectedDate());}
-  async openSource(source:any):Promise<void>{this.selectedSource.set({...source,items:[]});try{const ranges=await this.stock.ensureActualRanges();const range=ranges.find(r=>r.start===source.startDate&&r.end===source.endDate);const items=Object.entries(range?.grouped?.[source.category]||{}).map(([item,quantity])=>({item,quantity}));if(this.selectedSource()?.rangeKey===source.rangeKey&&this.selectedSource()?.category===source.category)this.selectedSource.set({...source,items});}catch{if(this.selectedSource()?.rangeKey===source.rangeKey&&this.selectedSource()?.category===source.category)this.selectedSource.set({...source,items:[],loadError:true});}}
-  async selectDay(date:string):Promise<void>{this.selectedDate.set(date);this.month.set(date.slice(0,7));await this.loadDailyDetail();}
+  async openSource(source:any):Promise<void>{
+    const request=++this.sourceRequest;
+    this.selectedSource.set({...source,items:[],loading:true});
+    try{const ranges=await this.stock.ensureActualRanges();const range=ranges.find(r=>r.start===source.startDate&&r.end===source.endDate);const items=Object.entries(range?.grouped?.[source.category]||{}).map(([item,quantity])=>({item,quantity}));
+      if(request===this.sourceRequest&&this.selectedSource())this.selectedSource.set({...source,items,loading:false});
+    }catch{if(request===this.sourceRequest&&this.selectedSource())this.selectedSource.set({...source,items:[],loadError:true,loading:false});}
+  }
+  closeSource():void{++this.sourceRequest;this.selectedSource.set(null);}
+  ngOnDestroy():void{++this.sourceRequest;++this.dailyRequest;}
+  async selectDay(date:string):Promise<void>{this.requestSelection(date);}
+  private requestSelection(date=this.selectedDate(),category=this.filterCategory(),item=this.filterItem(),mode=this.mode()):void {this.dateSelected.emit({date,category,item,mode});}
+  setDisplayMode(mode:'week'|'month'):void{this.requestSelection(this.selectedDate(),this.filterCategory(),this.filterItem(),mode);}
   async loadDailyDetail():Promise<void>{const request=++this.dailyRequest;this.dailyDetail.set(null);this.calendarDays.set({});if(!this.filterCategory()||!this.filterItem()){this.detailLoading.set(false);return;}this.detailLoading.set(true);try{const date=this.selectedDate();const data=await this.stock.itemTimeline(this.filterCategory(),this.filterItem(),this.stock.addDays(date,-1),date,this.counts(),this.all());if(request===this.dailyRequest)this.dailyDetail.set(data);const weeks=this.shownWeeks();const first=weeks[0]?.[0]?.ymd,last=weeks[weeks.length-1]?.[6]?.ymd;if(first&&last){const grid=await this.stock.itemTimeline(this.filterCategory(),this.filterItem(),this.stock.addDays(first,-1),last,this.counts(),this.all());if(request===this.dailyRequest)this.calendarDays.set(Object.fromEntries(grid.days.map(day=>[day.date,day])));}}catch(error:any){if(request===this.dailyRequest)this.dailyDetail.set({warnings:[error?.message||'每日需求載入失敗'],days:[]});}finally{if(request===this.dailyRequest)this.detailLoading.set(false);}}
 
   private readonly apiManager = inject(ApiManagerService);
@@ -260,12 +274,15 @@ export class PurchaseCalendarComponent implements OnInit, OnChanges {
 
   ngOnChanges(changes:SimpleChanges):void {
     if(!Object.values(changes).some(change=>!change.firstChange))return;
+    this.closeSource();
+    if(changes['initialMode'])this.mode.set(this.initialMode==='month'?'month':'week');
     if(changes['initialCategory'])this.filterCategory.set(this.initialCategory||'');
     if(changes['initialItem'])this.filterItem.set(this.initialItem||'');
     if(changes['initialDate']){const date=this.initialDate||this.today;this.selectedDate.set(date);this.month.set(date.slice(0,7));}
     this.loadDailyDetail();
   }
   ngOnInit(): void {
+    this.mode.set(this.initialMode==='month'?'month':'week');
     if(this.initialDate){this.selectedDate.set(this.initialDate);this.month.set(this.initialDate.slice(0,7));}
     this.filterCategory.set(this.initialCategory);this.filterItem.set(this.initialItem);this.load();
   }
@@ -288,31 +305,23 @@ export class PurchaseCalendarComponent implements OnInit, OnChanges {
   }
 
   stepMonth(delta: number): void {
-    if(this.mode()==='week'){this.selectDay(shiftDateString(this.selectedDate(),delta*7));}else{this.month.set(shiftMonthString(this.month(),delta));this.selectDay(this.month()+'-01');}
+    if(this.mode()==='week'){this.selectDay(shiftDateString(this.selectedDate(),delta*7));}else{this.selectDay(shiftMonthString(this.month(),delta)+'-01');}
   }
   goToday(): void {
     this.selectDay(this.today);
   }
   /** 改類別篩選：目前選的品項若不屬於該類別就清掉 */
   setFilterCategory(cat: string): void {
-    this.filterCategory.set(cat || '');this.dailyDetail.set(null);
-    const item = this.filterItem();
-    if (item && !this.itemFilterGroups().some((g) => g.items.includes(item))) this.filterItem.set('');
-    this.loadDailyDetail();
+    const item=this.filterItem();
+    const keep=!cat || (this.knownItems[cat] || []).includes(item);
+    this.requestSelection(this.selectedDate(),cat,keep?item:'');
   }
-  /** 選品項時若沒選類別，自動帶上該品項所屬類別（同名品項跨類別時不帶） */
   setFilterItem(item: string): void {
-    this.filterItem.set(item || '');
-    if (item && !this.filterCategory()) {
-      const owners = this.itemFilterGroups().filter((g) => g.items.includes(item));
-      if (owners.length === 1) this.filterCategory.set(owners[0].category);
-    }
-    this.loadDailyDetail();
+    let category=this.filterCategory();
+    if(item&&!category){const owners=Object.keys(this.knownItems).filter(key=>this.knownItems[key].includes(item));if(owners.length===1)category=owners[0];}
+    this.requestSelection(this.selectedDate(),category,item);
   }
-  clearFilters(): void {
-    this.filterCategory.set('');
-    this.filterItem.set('');++this.dailyRequest;this.detailLoading.set(false);this.dailyDetail.set(null);this.calendarDays.set({});
-  }
+  clearFilters(): void {this.requestSelection(this.selectedDate(),'','');}
   /** 表單變動 → 重算批次日期列（保留已填過的箱數） */
   touch(): void {
     if (!this.newForm.batch) {

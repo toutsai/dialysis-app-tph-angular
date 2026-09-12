@@ -45,6 +45,11 @@ body {
   overflow: hidden;
 }
 
+:where(button, a[href], input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid #0b7285;
+  outline-offset: 3px;
+}
+
 /* Page Container */
 .page-container {
   width: 100%;

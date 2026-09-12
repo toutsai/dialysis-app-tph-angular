@@ -204,3 +204,41 @@ for(const failure of ['patients','schedule'])test(`successful schedule order clo
   assert.equal(p.orderSaving(),false);assert.equal(alerts[0][0],'已儲存，更新畫面失敗');assert.match(alerts[0][1],/勿重複新增/);
   await p.handleSaveOrder({note:'submitted'});assert.equal(writes,1);
 });
+
+test('schedule table keyboard move dispatches the same drag rules, cancels safely and rejects stale source',()=>{
+  class Transfer {}
+  class Drag { constructor(type,options){Object.assign(this,{type,defaultPrevented:false,...options});}preventDefault(){this.defaultPrevented=true;} }
+  const p=subject('components/schedule-table/schedule-table.component.ts',['onSlotKeydown','onDragStart','onDrop','isSlotInteractive','cancelKeyboardMove'],{DataTransfer:Transfer,DragEvent:Drag});let starts=0,drops=0,blocked=false;
+  Object.assign(p,{keyboardSource:null,isPageLocked:false,isDateInPast:day=>day===1,scheduleData:{'1-0-0':{patientId:'synthetic'}},slotLabel:()=> 'Synthetic',dragStart:{emit:({event})=>{starts++;if(blocked)event.preventDefault();}},drop:{emit:()=>drops++}});
+  const key=value=>({key:value,preventDefault(){}});
+  p.onSlotKeydown(key(' '),'1-0-0',0);p.onSlotKeydown(key('Escape'),'1-0-0',0);assert.equal(starts,0);assert.equal(drops,0);
+  p.onSlotKeydown(key(' '),'1-0-0',0);p.onSlotKeydown(key(' '),'2-0-0',0);assert.equal(starts,1);assert.equal(drops,1);
+  blocked=true;p.onSlotKeydown(key(' '),'1-0-0',0);p.onSlotKeydown(key(' '),'2-0-0',0);assert.equal(starts,2);assert.equal(drops,1);
+  p.onSlotKeydown(key(' '),'1-0-0',0);p.scheduleData['1-0-0']={patientId:'changed'};p.onSlotKeydown(key(' '),'2-0-0',0);assert.equal(starts,2);assert.equal(drops,1);
+  p.isPageLocked=true;p.onSlotKeydown(key(' '),'1-0-0',0);assert.equal(p.keyboardSource,null);
+});
+
+test('schedule table roving focus offers only one Tab stop among editable dates',()=>{
+  const p=subject('components/schedule-table/schedule-table.component.ts',['slotTabIndex','isSlotInteractive']);Object.assign(p,{layout:[1,2],weekdays:['Mon','Tue'],focusedSlot:'',isPageLocked:false,isDateInPast:day=>day===1});
+  assert.equal(p.slotTabIndex('1-0-0',0),0);assert.equal(p.slotTabIndex('2-0-0',0),-1);assert.equal(p.slotTabIndex('1-0-1',1),-1);
+  p.focusedSlot='2-0-0';assert.equal(p.slotTabIndex('1-0-0',0),-1);assert.equal(p.slotTabIndex('2-0-0',0),0);
+});
+
+for(const feature of ['weekly','base-schedule'])test(`${feature} search keeps its native result available when Tab leaves input`,()=>{
+  const p=subject(feature,['onSearchFocusOut']);let closed=0;p.handleSearchBlur=()=>closed++;
+  p.onSearchFocusOut({currentTarget:{closest:()=>({contains:target=>target==='result'})},relatedTarget:'result'});assert.equal(closed,0);
+  p.onSearchFocusOut({currentTarget:{closest:()=>({contains:()=>false})},relatedTarget:'outside'});assert.equal(closed,1);
+  const html=read(`features/${feature}/${feature}.component.html`);assert.match(html,/<li><button type="button" class="search-result-button" \(click\)="locatePatientOnGrid/);assert.doesNotMatch(html,/<li \(click\)="locatePatientOnGrid/);
+});
+
+test('stats conflict navigation carries date/patient and target supports scoped calendar plus safe return',()=>{
+  let navigation;const p=subject('stats',['goToExceptionManager']);Object.assign(p,{conflictForDialog:{patientId:'synthetic'},currentDate:new Date('2026-09-14T00:00:00'),formatDate:dateKey,closeConflictDialog(){this.conflictForDialog=null;},router:{navigate:(...args)=>navigation=args}});p.goToExceptionManager();assert.equal(navigation[1].queryParams.patientId,'synthetic');assert.equal(navigation[1].queryParams.date,'2026-09-14');assert.equal(navigation[1].queryParams.from,'/stats');
+  const target=subject('exception-manager',['returnToSchedule']);Object.assign(target,{returnPath:'/stats',contextDate:'2026-09-14',router:{navigate:(...args)=>navigation=args}});target.returnToSchedule();assert.equal(navigation[0][0],'/stats');assert.equal(navigation[1].queryParams.date,'2026-09-14');
+  const source=read('features/exception-manager/exception-manager.component.ts');assert.match(source,/initialDate: this.contextDate/);assert.match(source,/ex.patientId === this.contextPatientId\(\)/);
+});
+
+test('daily log section navigation focuses only visible heading and excludes navigation from PDF clone',()=>{
+  let scrolled=0,focused=0;const hidden={textContent:'其他事項',getClientRects:()=>[]},visible={textContent:'其他事項',getClientRects:()=>[{}],scrollIntoView:()=>scrolled++,focus:()=>focused++};
+  const p=subject('daily-log',['jumpToSection']);p.sectionHost={nativeElement:{querySelectorAll:()=>[hidden,visible]}};p.jumpToSection('其他事項');assert.equal(scrolled,1);assert.equal(focused,1);assert.equal(visible.tabIndex,-1);assert.equal(hidden.tabIndex,undefined);
+  assert.match(read('features/daily-log/daily-log.component.ts'),/querySelectorAll\('button, .log-section-navigation/);
+});

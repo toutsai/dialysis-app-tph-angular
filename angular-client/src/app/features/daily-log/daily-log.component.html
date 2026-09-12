@@ -31,11 +31,18 @@
     </div>
     <div class="header-right">
       <button type="button" class="action-btn" (click)="openHistory()" [disabled]="isLoading()">歷史版本</button>
-      <span class="status-indicator">{{ statusText }}</span>
+      <span class="status-indicator" role="status">{{ statusText }}</span>
+      <button type="button" class="action-btn" (click)="saveLog()" [disabled]="isPageLocked || isLoading() || historyRestoring() || !hasUnsavedChanges()">儲存日誌</button>
       <button (click)="exportToPDF()" class="export-pdf-btn" [disabled]="isLoading()">匯出 PDF</button>
     </div>
   </header>
 
+  <nav class="log-section-navigation" aria-label="工作日誌段落">
+    <button type="button" (click)="jumpToSection('營運統計')">營運統計</button>
+    <button type="button" (click)="jumpToSection('病人動態')">病人動態</button>
+    <button type="button" (click)="jumpToSection('血管通路')">血管通路</button>
+    <button type="button" (click)="jumpToSection('其他事項')">其他事項</button>
+  </nav>
   <main class="log-page-main">
     <!-- ================================== -->
     <!-- Desktop Layout -->

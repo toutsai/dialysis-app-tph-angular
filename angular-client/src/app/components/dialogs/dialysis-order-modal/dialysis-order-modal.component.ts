@@ -1,3 +1,4 @@
+import { ModalFocusDirective } from '@app/core/directives/modal-focus.directive';
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -9,7 +10,7 @@ import { getToday, formatDateToYYYYMMDD } from '@/utils/dateUtils';
 @Component({
   selector: 'app-dialysis-order-modal',
   standalone: true,
-  imports: [FormsModule, ConfirmDialogComponent],
+  imports: [ModalFocusDirective, FormsModule, ConfirmDialogComponent],
   templateUrl: './dialysis-order-modal.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './dialysis-order-modal.component.css'

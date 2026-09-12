@@ -1228,3 +1228,47 @@ button.hepatitis-badge:hover { filter: brightness(1.08); }
     cursor: pointer;
   }
 }
+
+/* Task-focused list; clinical status and infection markers stay visible. */
+.patient-search-panel { margin: 6px 0 8px; padding: 8px 10px; background: #fff; border: 1px solid #d7e0e8; border-radius: 8px; }
+.patient-search-panel input { box-sizing:border-box; max-width:100%; height:40px; padding:8px; margin:0 8px; border:1px solid #b9c8d3; border-radius:5px; font:inherit; }
+.patient-search-panel button { box-sizing:border-box; min-height:40px; padding:7px 14px; border:1px solid #17869a; border-radius:5px; background:#17a2b8; color:#fff; font:inherit; cursor:pointer; }
+.patient-search-result button { background:#f3fbfc; color:#146c7b; }
+.patient-search-panel button:hover:not(:disabled) { background:#138496; color:#fff; }
+.patient-search-panel button:disabled { opacity:.55; cursor:not-allowed; }
+.patient-search-panel p { margin:8px 0; }
+.tab-content.desktop-only > .view-header { margin-bottom:4px; gap:10px; }
+.patient-search-result { display:flex; flex-wrap:wrap; gap:10px; align-items:center; padding:10px 0; border-top:1px solid #e6edf2; }
+.patient-search-result strong,.patient-search-result span { overflow-wrap:anywhere; }
+.detail-columns-toggle { display:flex; align-items:center; gap:6px; min-height:30px; padding:2px 0 4px; cursor:pointer; }
+.compact-columns .col-physician,.compact-columns .col-hospital,.compact-columns .col-updated { display:none; }
+.flex-table-wrapper .col-name,.flex-table-wrapper .col-mrn { white-space:normal; overflow:visible; text-overflow:clip; min-width:100px; }
+.patient-name-text { white-space:normal!important; overflow:visible!important; text-overflow:clip!important; overflow-wrap:anywhere; }
+.flex-table-wrapper .col-remarks { display:flex; flex-direction:column; align-items:flex-start; white-space:normal; min-width:150px; }
+.remarks-text { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; white-space:pre-wrap; overflow-wrap:anywhere; }
+.remarks-text.expanded { display:block; overflow:visible; }
+.remarks-toggle { min-height:32px; min-width:44px; border:0; border-radius:4px; background:transparent; color:#24629a; cursor:pointer; padding:4px 8px; font:inherit; }
+.remarks-toggle:hover { background:#eaf3fa; }
+.patient-actions summary { box-sizing:border-box; min-height:32px; cursor:pointer; padding:5px 8px; white-space:nowrap; color:#375a71; background:#f4f7fa; border:1px solid #d2dde6; border-radius:5px; }
+.patient-actions summary:hover { background:#e8f0f6; }
+.flex-table-wrapper .action-buttons > button { box-sizing:border-box; min-height:36px; min-width:62px; padding:6px 10px; font:inherit; color:#185e8a; background:#edf6fc; border:1px solid #a8c8df; border-radius:5px; cursor:pointer; }
+.flex-table-wrapper .action-buttons > button:hover:not(:disabled) { background:#dceefa; }
+.flex-table-wrapper .action-buttons > button:disabled { opacity:.55; cursor:not-allowed; }
+.patient-search-panel input:focus-visible,.patient-search-panel button:focus-visible,.patient-actions summary:focus-visible,.remarks-toggle:focus-visible,.flex-table-wrapper .action-buttons > button:focus-visible { outline:3px solid #2375aa; outline-offset:2px; }
+.more-actions { display:flex; flex-wrap:wrap; gap:6px; padding:8px; background:#f5f8fb; }
+.flex-table-wrapper .col-actions { min-width:155px; overflow:visible; }
+.desktop-only .flex-table-wrapper.compact-columns { min-width:960px; }
+.compact-columns .flex-cell { box-sizing:border-box; padding:8px; }
+.compact-columns .col-name { flex:0 0 135px; }
+.compact-columns .col-mrn { flex:0 0 105px; }
+.compact-columns .col-freq { flex:0 0 70px; }
+.compact-columns .col-mode { flex:0 0 65px; }
+.compact-columns .col-ward-number { flex:0 0 80px; }
+.compact-columns .col-status { flex:0 0 170px; white-space:normal; }
+.flex-table-wrapper .col-actions { flex:0 0 170px; }
+.flex-table-wrapper .action-buttons { flex-wrap:wrap; gap:6px; }
+.flex-table-wrapper .name-cell-content { flex-wrap:wrap; min-width:0; }
+.flex-table-wrapper .patient-actions { width:100%; }
+.desktop-only .table-wrapper { overflow-x:auto; }
+@media(max-width:600px) { .patient-search-panel label { display:block; } .patient-search-panel input { width:calc(100% - 24px); margin:6px 0; } }
+@media(max-width:992px) { .patient-search-panel button,.remarks-toggle,.patient-actions summary,.flex-table-wrapper .action-buttons > button { min-height:42px; } }

@@ -311,3 +311,6 @@ button {
   color: #795548;
   font-size: 0.85rem;
 }
+
+.search-result-button { display:block; width:100%; text-align:left; border:0; background:transparent; color:inherit; font:inherit; padding:.65rem; cursor:pointer; }
+.search-result-button:focus-visible { outline:3px solid #007f91; outline-offset:-3px; background:#e6f4f7; }

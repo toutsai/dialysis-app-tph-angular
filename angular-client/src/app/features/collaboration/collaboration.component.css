@@ -153,3 +153,13 @@
 .dialog-box h3 { margin: 0 0 16px; }
 .dialog-box p { margin: 0 0 20px; line-height: 1.5; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+@media(max-width:992px) {
+  .toolbar-left .btn-primary { display:inline-flex; min-height:40px; }
+  .mobile-tabs { position:sticky; top:0; z-index:5; background:white; flex-wrap:wrap; }
+  .mobile-content-area { min-width:0; overflow-y:auto; }
+  .task-panel .item-footer { flex-wrap:wrap; gap:.5rem; }
+  .task-panel .item-actions { margin-left:auto; flex-shrink:0; }
+  .btn-complete-task { min-height:42px; min-width:72px; }
+  .item-content { overflow-wrap:anywhere; }
+}

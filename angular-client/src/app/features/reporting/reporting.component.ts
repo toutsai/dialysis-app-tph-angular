@@ -553,7 +553,7 @@ export class ReportingComponent implements AfterViewInit {
       this.reportDateRange.set({ start: startDate, end: endDate });
 
       if (type === 'staffing_monthly') {
-        const allDailyLogs = await this.dailyLogsApi.fetchAll();
+        const allDailyLogs = await this.dailyLogsApi.fetchWhere({ startDate, endDate });
         if (!this.reportRequests.isCurrent(request)) return;
         const dailyLogsData = allDailyLogs.filter((d: any) => d.date >= startDate && d.date <= endDate);
         this.processStaffingReport(dailyLogsData);
@@ -561,8 +561,8 @@ export class ReportingComponent implements AfterViewInit {
         // 同時抓 schedules 與 archived_schedules：歸檔可能不完整,過去日期可能仍只在 schedules
         // 同日期兩表都有時,歸檔(archived)為真理之源,後寫覆蓋前者
         const [schedAll, expiredAll, patientsData] = await Promise.all([
-          this.schedulesApi.fetchAll(),
-          this.expiredSchedulesApi.fetchAll(),
+          this.schedulesApi.fetchWhere({ startDate, endDate }),
+          this.expiredSchedulesApi.fetchWhere({ start: startDate, end: endDate }),
           this.patientsApi.fetchAll(),
         ]);
         if (!this.reportRequests.isCurrent(request)) return;

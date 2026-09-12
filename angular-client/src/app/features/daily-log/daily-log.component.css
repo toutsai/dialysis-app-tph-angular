@@ -502,3 +502,10 @@ h1 { font-size: 2rem; margin: 0; color: #343a40; }
 .vascular-events-table .save-btn:disabled, .vascular-events-table .delete-btn:disabled,
 .entry-actions .save-btn:disabled, .entry-actions .delete-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .entry-actions { display: flex; gap: 0.5rem; margin-top: 0.25rem; }
+
+.log-page-container:not(.pdf-export-mode) .page-header { position:sticky; top:0; z-index:20; background:#fff; }
+.log-section-navigation { display:flex; flex-wrap:wrap; gap:.5rem; margin:.75rem 0; }
+.log-section-navigation button { padding:.55rem .8rem; border:1px solid #94a3b8; border-radius:6px; background:#f8fafc; color:#334155; }
+.log-page-main h2 { scroll-margin-top:170px; }
+.log-page-main h2:focus-visible { outline:3px solid #0891b2; }
+@media(max-width:768px) { .header-right { display:flex; flex-wrap:wrap; gap:.4rem; } .log-page-main h2 { scroll-margin-top:230px; } }

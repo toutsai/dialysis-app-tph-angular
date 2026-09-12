@@ -1,3 +1,4 @@
+import { ModalFocusDirective } from '@app/core/directives/modal-focus.directive';
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -19,7 +20,7 @@ interface SupplyItem {
 @Component({
   selector: 'app-task-create-dialog',
   standalone: true,
-  imports: [FormsModule, PatientSelectDialogComponent],
+  imports: [ModalFocusDirective, FormsModule, PatientSelectDialogComponent],
   templateUrl: './task-create-dialog.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './task-create-dialog.component.css'

@@ -16,14 +16,14 @@
             class="patient-search-input"
             placeholder="搜尋病人姓名/病歷號..."
             (focus)="isSearchFocused.set(true)"
-            (blur)="handleSearchBlur()"
+            (focusout)="onSearchFocusOut($event)"
           />
           @if (searchResults().length > 0 && isSearchFocused()) {
           <ul class="search-results">
             @for (patient of searchResults(); track patient.id) {
-              <li (click)="locatePatientOnGrid(patient.id)">
+              <li><button type="button" class="search-result-button" (click)="locatePatientOnGrid(patient.id)">
                 {{ patient.name }} - {{ patient.medicalRecordNumber }}
-              </li>
+              </button></li>
             }
           </ul>
         }

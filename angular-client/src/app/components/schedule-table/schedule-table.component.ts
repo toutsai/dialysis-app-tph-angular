@@ -61,7 +61,67 @@ export class ScheduleTableComponent implements AfterViewInit, OnDestroy {
   private resizeObserver: ResizeObserver | null = null;
   private isMounted = false;
 
-  constructor(private ngZone: NgZone) {}
+  constructor(private ngZone: NgZone, private hostElement: ElementRef<HTMLElement>) {}
+
+  keyboardSource: { slotId: string; dayIndex: number; patientId: string } | null = null;
+  keyboardMessage = '';
+  focusedSlot = '';
+
+  slotTabIndex(slotId: string, dayIndex: number): number {
+    if (!this.isSlotInteractive(dayIndex)) return -1;
+    const firstDay = this.weekdays.findIndex((_, index) => this.isSlotInteractive(index));
+    const focusedDay = Number(this.focusedSlot.split('-').at(-1));
+    const active = this.focusedSlot && this.isSlotInteractive(focusedDay) ? this.focusedSlot : `${this.layout[0]}-0-${firstDay}`;
+    return slotId === active ? 0 : -1;
+  }
+
+  slotLabel(slotId: string, dayIndex: number): string {
+    const parts = slotId.split('-');
+    const shiftIndex = Number(parts.at(-2));
+    const bed = parts.slice(0, -2).join('-');
+    return `${this.weekDates[dayIndex] || this.weekdays[dayIndex]} ${this.getShiftDisplayName(this.shifts[shiftIndex])} ${this.getBedDisplayName(bed)}，${this.getPatientDetails(slotId)?.name || '空床'}`;
+  }
+
+  cancelKeyboardMove(): void {
+    this.keyboardSource = null;
+    this.keyboardMessage = '已取消移動，班表未變更。';
+  }
+
+  onSlotKeydown(event: KeyboardEvent, slotId: string, dayIndex: number): void {
+    if (event.key === 'Escape') { event.preventDefault(); this.cancelKeyboardMove(); return; }
+    if (!this.isSlotInteractive(dayIndex)) return;
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+      event.preventDefault();
+      const cells = Array.from(this.hostElement.nativeElement.querySelectorAll<HTMLElement>('.schedule-slot[aria-disabled="false"]'));
+      const current = cells.findIndex(cell => cell.dataset['slotId'] === slotId);
+      const columns = this.weekdays.filter((_, index) => this.isSlotInteractive(index)).length;
+      const step = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : event.key === 'ArrowUp' ? -columns : columns;
+      cells[Math.max(0, Math.min(cells.length - 1, current + step))]?.focus();
+      return;
+    }
+    if (event.key === 'Enter') { event.preventDefault(); this.onGridClick(slotId, dayIndex); return; }
+    if (event.key !== ' ' || event.repeat) return;
+    event.preventDefault();
+    if (!this.keyboardSource) {
+      const patientId = this.scheduleData[slotId]?.patientId;
+      if (!patientId) { this.onGridClick(slotId, dayIndex); return; }
+      this.keyboardSource = { slotId, dayIndex, patientId };
+      this.keyboardMessage = `已選取 ${this.slotLabel(slotId, dayIndex)}。移到目標床位後按空白鍵，Esc 取消。`;
+      return;
+    }
+    const source = this.keyboardSource;
+    if (source.slotId === slotId || !this.isSlotInteractive(source.dayIndex) || this.scheduleData[source.slotId]?.patientId !== source.patientId) {
+      this.cancelKeyboardMove(); return;
+    }
+    // Use the exact existing drag handlers, including parent permissions, conflicts and confirmations.
+    const transfer = new DataTransfer();
+    const start = new DragEvent('dragstart', { dataTransfer: transfer, cancelable: true });
+    this.onDragStart(start, source.slotId, source.dayIndex);
+    this.keyboardSource = null;
+    if (start.defaultPrevented) { this.keyboardMessage = '目前無法移動此床位。'; return; }
+    this.onDrop(new DragEvent('drop', { dataTransfer: transfer, cancelable: true }), slotId, dayIndex);
+    this.keyboardMessage = '已送出床位移動，請核對班表或依畫面提示確認。';
+  }
 
   /** Generate array [1, 2, ..., n-1] for iterating remaining shifts after the first */
   get remainingShiftIndices(): number[] {

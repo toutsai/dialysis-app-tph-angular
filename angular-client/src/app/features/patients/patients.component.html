@@ -90,20 +90,31 @@
 </button>
 </div>
 </div>
+@if (activeTab() !== 'query') {
+<section class="patient-search-panel" aria-label="查詢病人">
+  <label>搜尋病人 <input aria-label="搜尋病人" type="search" [ngModel]="globalSearchTerm()" (ngModelChange)="globalSearchTerm.set($event); searchPerformed.set(false)" (keydown.enter)="handleGlobalSearch(globalSearchTerm())" placeholder="姓名或病歷號" /></label>
+  <button type="button" (click)="handleGlobalSearch(globalSearchTerm())">查詢</button>
+  @if (searchPerformed()) {
+    <p role="status">找到 {{ searchMatches().length }} 位病人；查看不會變更清單。</p>
+    @for (p of searchMatches(); track p.id) {
+      <div class="patient-search-result">
+        <strong>{{ p.name }}</strong><span>{{ p.medicalRecordNumber }}</span><span>{{ p.isDeleted ? '已刪除' : statusLabel(p.status) }}</span>
+        <button type="button" [attr.aria-label]="'查看履歷：' + patientSearchLabel(p)" (click)="openPatientProfile(p.id)">查看履歷</button>
+        @if ((p.isDeleted || p.status !== activeTab()) && activeTab() !== 'deleted') {
+          <button type="button" [disabled]="isPageLocked()" [attr.aria-label]="(p.isDeleted ? '復原至' : '移至') + statusLabel(activeTab()) + '：' + patientSearchLabel(p)" (click)="requestSearchTransfer(p)">{{ p.isDeleted ? '復原至' : '移至' }}{{ statusLabel(activeTab()) }}</button>
+        }
+      </div>
+    }
+    @if (!searchMatches().length && activeTab() !== 'deleted') { <button type="button" [disabled]="isPageLocked()" (click)="createFromSearch()">新增病人</button> }
+  }
+</section>
+}
 <!-- Desktop: non-deleted tab -->
 @if (activeTab() !== 'deleted' && activeTab() !== 'query') {
   <div class="tab-content active desktop-only">
     <div class="view-header">
       <div class="controls-left">
-        <div class="search-group global-search">
-          <input
-            type="text"
-            [ngModel]="globalSearchTerm()"
-            (ngModelChange)="globalSearchTerm.set($event)"
-            (keydown.enter)="handleGlobalSearch(globalSearchTerm())"
-            placeholder="搜尋/新增/轉移病人..."
-            /><button class="btn-search" (click)="handleGlobalSearch(globalSearchTerm())">執行</button>
-          </div>
+        
           <div class="search-group list-filter">
             @if (activeTab() === 'er') {
               <input type="text" [ngModel]="erListFilter()" (ngModelChange)="erListFilter.set($event)" placeholder="篩選列表..." />
@@ -169,7 +180,8 @@
         </div>
       }
       <div class="table-wrapper">
-        <div class="flex-table-wrapper">
+        <label class="detail-columns-toggle"><input type="checkbox" [ngModel]="showDetailedColumns()" (ngModelChange)="showDetailedColumns.set($event)" /> 顯示詳細欄位</label>
+        <div class="flex-table-wrapper" [class.compact-columns]="!showDetailedColumns()">
           <div class="flex-table-header">
             <div class="flex-cell col-name" (click)="handleSort('name')">姓名</div>
             @if (activeTab() === 'ipd' || activeTab() === 'er') {
@@ -248,12 +260,10 @@
                       </div>
                     </div>
                     <div class="flex-cell col-actions">
-                      <div class="action-buttons">
+                      <div class="action-buttons"><button type="button" (click)="openPatientProfile(p.id)" [attr.aria-label]="'查看履歷：' + patientSearchLabel(p)">履歷</button><button type="button" (click)="openOrderModal(p)" [disabled]="isPageLocked()" [attr.aria-label]="'透析醫囑：' + patientSearchLabel(p)">醫囑</button><details class="patient-actions"><summary [attr.aria-label]="'更多操作：' + p.name">更多操作</summary><div class="more-actions">
                         <button class="btn-icon btn-edit" (click)="openEditPatientModal(p)" [disabled]="isPageLocked()" title="編輯">
                           <i class="fas fa-pencil-alt"></i>
-                        </button><button class="btn-icon btn-order" (click)="openOrderModal(p)" [disabled]="isPageLocked()" title="醫囑">
-                        <i class="fas fa-notes-medical"></i>
-                      </button><button class="btn-icon btn-delete" (click)="deletePatient(p.id)" [disabled]="isDeleteLocked()" title="刪除">
+                        </button><button class="btn-icon btn-delete" (click)="deletePatient(p.id)" [disabled]="isDeleteLocked()" title="刪除">
                       <i class="fas fa-trash-alt"></i>
                     </button>
                     <div class="action-divider"></div>
@@ -271,12 +281,10 @@
                       </button>
                     }
                     <div class="action-divider"></div>
-                    <button class="btn-icon btn-history" (click)="openPatientProfile(p.id)" title="病人履歷">
-                      <i class="fas fa-address-card"></i>
-                    </button><button class="btn-icon btn-problem-list" (click)="openProblemList(p)" title="病史與問題列表">
+                    <button class="btn-icon btn-problem-list" (click)="openProblemList(p)" title="病史與問題列表">
                     <i class="fas fa-clipboard-list"></i>
                   </button>
-                </div>
+                </div></details></div>
               </div>
               <div class="flex-cell col-hospital">
                 <div class="hospital-cell-content">
@@ -287,7 +295,7 @@
                   <span class="hospital-transfer-out">{{ p.hospitalInfo?.transferOut }}</span>
                 </div>
               </div>
-              <div class="flex-cell col-remarks">{{ p.remarks }}</div>
+              <div class="flex-cell col-remarks"><span class="remarks-text" [class.expanded]="expandedRemarks().has(p.id)">{{ p.remarks }}</span>@if (p.remarks) { <button type="button" class="remarks-toggle" [attr.aria-label]="(expandedRemarks().has(p.id) ? '收合備註：' : '展開備註：') + p.name" [attr.aria-expanded]="expandedRemarks().has(p.id)" (click)="toggleRemarks(p.id)">{{ expandedRemarks().has(p.id) ? '收合' : '展開' }}</button> }</div>
               <div class="flex-cell col-updated">{{ formatDate(p.updatedAt) }}</div>
             </div>
           }
@@ -543,20 +551,12 @@
 }
 </div>
 <div class="fixed-bottom-bar mobile-only">
-  <div class="search-group global-search">
-    <input
-      type="text"
-      [ngModel]="globalSearchTerm()"
-      (ngModelChange)="globalSearchTerm.set($event)"
-      (keydown.enter)="handleGlobalSearch(globalSearchTerm())"
-      placeholder="搜尋/新增/轉移病人..."
-      /><button class="btn-search" (click)="handleGlobalSearch(globalSearchTerm())">執行</button>
-    </div>
+  
   </div>
 </div>
 <!-- Dialogs -->
 @if (isModalVisible()) {
-  <app-patient-form-modal
+  <app-patient-form-modal [saving]="patientSaving()"
     [patientData]="editingPatient()"
     [patientType]="modalType()"
     (close)="closeModal()"
@@ -575,6 +575,7 @@
 }
 @if (isAlertDialogVisible()) {
   <app-alert-dialog
+    [isVisible]="true"
     [title]="alertDialogTitle()"
     [message]="alertDialogMessage()"
     (confirm)="isAlertDialogVisible.set(false)"

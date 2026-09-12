@@ -825,3 +825,6 @@ input[type='file'] {
     flex-grow: 1;
   }
 }
+
+.alert-display-filter { display:flex; gap:12px; align-items:center; padding:12px 0; }
+.alert-display-filter select { min-height:40px; padding:6px; }

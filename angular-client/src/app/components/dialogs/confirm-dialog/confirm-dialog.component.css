@@ -15,6 +15,9 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   width: 90%;
   max-width: 500px;
+  margin: 0;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
   z-index: 1001;
   animation: fadeIn 0.3s ease-out;
   position: fixed;

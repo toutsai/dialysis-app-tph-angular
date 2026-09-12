@@ -147,6 +147,7 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    ++this.dashboardRequest;
     if (this.refreshTimer) {
       clearInterval(this.refreshTimer);
     }
@@ -226,29 +227,36 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
     }
   }
 
+  private dashboardRequest = 0;
   async loadDashboard(showLoading = true): Promise<void> {
+    const request = ++this.dashboardRequest;
     const bedKey = this.bedKey();
-    if (!bedKey || this.needsPin()) return;
+    const date = this.selectedDate();
+    const shift = this.selectedShift();
+    const isCurrent = () => request === this.dashboardRequest && bedKey === this.bedKey() && date === this.selectedDate() && shift === this.selectedShift();
+    if (!bedKey || this.needsPin()) { this.isLoading.set(false); return; }
 
     if (showLoading) this.isLoading.set(true);
     this.errorMessage.set('');
     try {
       const dashboard = await this.dashboardService.getBedDashboard(
         bedKey,
-        this.selectedDate(),
-        this.selectedShift(),
+        date,
+        shift,
       );
+      if (!isCurrent()) return;
       this.data.set(dashboard);
       this.scheduleOverflowCheck();
       this.lastRefreshLabel.set(new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }));
     } catch (error) {
+      if (!isCurrent()) return;
       const message = error instanceof Error ? error.message : '讀取床邊儀表板失敗';
       this.errorMessage.set(message);
       if (!this.dashboardService.hasStaffToken()) {
         this.needsPin.set(true);
       }
     } finally {
-      if (showLoading) this.isLoading.set(false);
+      if (isCurrent()) this.isLoading.set(false);
     }
   }
 
@@ -274,7 +282,7 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
       queryParams: { date: this.selectedDate(), shift },
       queryParamsHandling: 'merge',
     });
-    void this.loadDashboard();
+
   }
 
   changeDate(date: string): void {
@@ -285,7 +293,7 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
       queryParams: { date, shift: this.selectedShift() },
       queryParamsHandling: 'merge',
     });
-    void this.loadDashboard();
+
   }
 
   /** 記錄使用者/網址選了哪一天：選今天就繼續跟著今天走，選別天則當天內固定。 */

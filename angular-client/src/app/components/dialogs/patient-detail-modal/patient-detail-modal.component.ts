@@ -1,3 +1,4 @@
+import { ModalFocusDirective } from '@app/core/directives/modal-focus.directive';
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -15,7 +16,7 @@ import { LabMedCorrelationViewComponent } from '../../lab-med-correlation-view/l
 @Component({
   selector: 'app-patient-detail-modal',
   standalone: true,
-  imports: [
+  imports: [ModalFocusDirective, 
     FormsModule,
     ConditionRecordPanelComponent,
     MemoPanelComponent,

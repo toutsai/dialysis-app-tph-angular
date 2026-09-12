@@ -174,3 +174,9 @@ input:disabled { background: #f1f3f5; color: #adb5bd; }
 :host(.embedded) .ci-page {
   padding: 0 4px 16px;
 }
+
+.ci-section-nav { display:flex; flex-wrap:wrap; gap:6px; padding:10px; margin:10px 0; background:#f2f7fb; border:1px solid #d2e1ed; border-radius:8px; }
+.ci-section-nav a { display:inline-block; padding:8px 10px; color:#185a8c; border-radius:4px; }
+.ci-section-nav a:focus-visible,.section:focus-visible { outline:3px solid #2774b1; }
+.section[id] { scroll-margin-top:24px; }
+@media(min-width:900px) { .ci-section-nav { position:sticky; top:0; z-index:2; } .section[id] { scroll-margin-top:110px; } }

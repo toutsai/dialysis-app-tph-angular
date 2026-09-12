@@ -1,3 +1,4 @@
+import { ModalFocusDirective } from '@app/core/directives/modal-focus.directive';
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -8,7 +9,7 @@ import { LabMedCorrelationViewComponent } from '../../lab-med-correlation-view/l
 @Component({
   selector: 'app-lab-alert-detail-modal',
   standalone: true,
-  imports: [FormsModule, PatientLabSummaryPanelComponent, LabMedCorrelationViewComponent],
+  imports: [ModalFocusDirective, FormsModule, PatientLabSummaryPanelComponent, LabMedCorrelationViewComponent],
   templateUrl: './lab-alert-detail-modal.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-alert-detail-modal.component.css'

@@ -7,7 +7,7 @@
       <button type="button" class="pc-nav-btn" (click)="stepMonth(1)" [title]="mode()==='week'?'下一週':'下一月'" [attr.aria-label]="mode()==='week'?'下一週':'下一月'">›</button>
       <button type="button" class="pc-today-btn" (click)="goToday()">今天</button>
     </div>
-    <div class="pc-view-toggle"><button class="pc-today-btn" [class.on]="mode()==='week'" (click)="mode.set('week');loadDailyDetail()">週</button><button class="pc-today-btn" [class.on]="mode()==='month'" (click)="mode.set('month');loadDailyDetail()">月</button></div><div class="pc-filters">
+    <div class="pc-view-toggle"><button class="pc-today-btn" [class.on]="mode()==='week'" [attr.aria-pressed]="mode()==='week'" (click)="setDisplayMode('week')">週</button><button class="pc-today-btn" [class.on]="mode()==='month'" [attr.aria-pressed]="mode()==='month'" (click)="setDisplayMode('month')">月</button></div><div class="pc-filters">
       <select [ngModel]="filterCategory()" (ngModelChange)="setFilterCategory($event)" title="篩選類別">
         <option value="">全部類別</option>
         @for (cat of categoryKeys; track cat) {
@@ -73,13 +73,13 @@
           class="pc-cell"
           [class.out]="!cell.inMonth"
           [class.today]="cell.isToday"
-          (click)="selectDay(cell.ymd)" tabindex="0" role="button" (keydown.enter)="selectDay(cell.ymd)" (keydown.space)="$event.preventDefault();selectDay(cell.ymd)" [class.selected]="cell.ymd===selectedDate()"
+          [class.selected]="cell.ymd===selectedDate()"
           [attr.aria-label]="cell.ymd + ' 作業明細'"
         >
-          <div class="pc-cell-head">
+          <button type="button" class="pc-cell-head pc-day-button" (click)="selectDay(cell.ymd)" [attr.aria-label]="cell.ymd + ' 作業明細'" [attr.aria-pressed]="cell.ymd===selectedDate()">
             <span class="pc-day">{{ cell.day }}</span>
             <span class="pc-add">查看</span>
-          </div>
+          </button>
           <div class="pc-entries">@if(calendarDays()[cell.ymd];as day){<span class="pc-count-chip">需 {{day.forecast ?? '—'}} {{unitLabelFn(filterCategory(),filterItem())}}</span>@if(day.actual!==null){<span class="pc-count-chip">實 {{day.actual}} · 差 {{day.difference ?? '—'}}</span>}}
             @if(countOn(cell.ymd);as count){<span class="pc-count-chip">{{count.countType==='both'?'週盤＋月結':count.countType==='monthly'?'月結盤點':'實體盤點'}}</span>}
             @for(source of sourcesOn(cell.ymd);track source.rangeKey+source.category){<button class="pc-source-chip" (click)="$event.stopPropagation();openSource(source)">HIS {{CATEGORY_SHORT[source.category]}} {{source.startDate===source.endDate?'單日':'區間'}} {{source.complete?'完整':'待補'}}</button>}
@@ -112,7 +112,7 @@
   }@else{<p class="pc-muted">選擇單一品項即可查看每日需求、單日 HIS 實際與差異；不同單位不合計。</p>}
   @for(source of sourcesOn(selectedDate());track source.rangeKey+source.category){<button class="pc-source-chip" (click)="openSource(source)">{{CATEGORY_NAMES[source.category]}} HIS {{source.startDate}} ～ {{source.endDate}} · {{source.complete?'完整類別':'未完整／推估補足'}} · 查看來源</button>}
 </section>
-@if(selectedSource();as source){<div class="pc-overlay" (click)="selectedSource.set(null)"><section class="pc-modal" role="dialog" aria-modal="true" aria-label="HIS來源區間" (click)="$event.stopPropagation()"><div class="pc-modal-head"><h3>HIS 原始來源</h3><button class="pc-close" aria-label="關閉來源" (click)="selectedSource.set(null)">×</button></div><div class="pc-modal-body"><p>{{CATEGORY_NAMES[source.category]}} · {{source.startDate}} ～ {{source.endDate}}</p><p>{{source.sourceFile}} · {{source.uploadedAt}}</p><p>{{source.complete?'已確認完整類別；未列品項可視為零':'資料未完整，不將缺項當零。缺日沿用排程推估。'}}</p><p>多日來源只代表整段數量，不拆成每日實際。</p>@if(source.loadError){<p>來源數量載入失敗。</p>}@for(item of source.items;track item.item){<p>{{item.item}}：{{item.quantity}} {{unitLabelFn(source.category,item.item)}}</p>}</div></section></div>}
+@if(selectedSource();as source){<dialog class="pc-modal pc-source-dialog" appModalFocus="HIS來源區間" (modalEscape)="closeSource()"><div class="pc-modal-head"><h3>HIS 原始來源</h3><button class="pc-close" aria-label="關閉來源" (click)="closeSource()">×</button></div><div class="pc-modal-body"><p>{{CATEGORY_NAMES[source.category]}} · {{source.startDate}} ～ {{source.endDate}}</p><p>{{source.sourceFile}} · {{source.uploadedAt}}</p><p>{{source.complete?'已確認完整類別；未列品項可視為零':'資料未完整，不將缺項當零。缺日沿用排程推估。'}}</p><p>多日來源只代表整段數量，不拆成每日實際。</p>@if(source.loading){<p role="status">讀取來源數量…</p>}@if(source.loadError){<p role="alert">來源數量載入失敗。<button type="button" (click)="openSource(source)">重試來源</button></p>}@for(item of source.items;track item.item){<p>{{item.item}}：{{item.quantity}} {{unitLabelFn(source.category,item.item)}}</p>}</div></dialog>}
 
 <!-- 新增叫貨 -->
 @if (showNewModal()) {

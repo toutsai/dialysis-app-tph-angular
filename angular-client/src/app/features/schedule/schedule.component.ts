@@ -1,3 +1,4 @@
+import { PeriodNavigationComponent } from '@app/shared/period-navigation/period-navigation.component';
 import { loadXlsx } from '@/utils/xlsxLoader';
 // Standalone 版：已移除 Firebase
 import {
@@ -15,7 +16,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom, Subscription } from 'rxjs';
 
 import { AuthService } from '@app/core/services/auth.service';
@@ -239,7 +240,7 @@ const PERIPHERAL_BED_RANGE = Array.from({ length: PERIPHERAL_BED_COUNT }, (_, i)
 @Component({
   selector: 'app-schedule',
   standalone: true,
-  imports: [CommonModule, FormsModule, InpatientSidebarComponent, BedAssignmentDialogComponent, DailyStaffDisplayComponent, StatsToolbarComponent, WardNumberDialogComponent, InpatientRoundsDialogComponent, IcuOrdersDialogComponent, DialysisOrderModalComponent, CrrtOrderModalComponent, DailyRecordsSummaryDialogComponent, DailyInjectionListDialogComponent, PatientDetailModalComponent, PatientMessagesIconComponent, MemoDisplayDialogComponent, ConditionRecordDisplayDialogComponent, AutoAssignConfigDialogComponent, PatientSelectDialogComponent],
+  imports: [PeriodNavigationComponent, CommonModule, FormsModule, InpatientSidebarComponent, BedAssignmentDialogComponent, DailyStaffDisplayComponent, StatsToolbarComponent, WardNumberDialogComponent, InpatientRoundsDialogComponent, IcuOrdersDialogComponent, DialysisOrderModalComponent, CrrtOrderModalComponent, DailyRecordsSummaryDialogComponent, DailyInjectionListDialogComponent, PatientDetailModalComponent, PatientMessagesIconComponent, MemoDisplayDialogComponent, ConditionRecordDisplayDialogComponent, AutoAssignConfigDialogComponent, PatientSelectDialogComponent],
   templateUrl: './schedule.component.html',
   styleUrl: './schedule.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -259,6 +260,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   private readonly dateState = inject(DateStateService);
   private readonly userDirectory = inject(UserDirectoryService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly autoAssignConfig = inject(AutoAssignConfigService);
 
   // API managers (cached — avoid re-creating per call)
@@ -666,7 +668,9 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   async ngOnInit(): Promise<void> {
     this.isLoading.set(true);
     // Restore shared date if available
-    const sharedDate = this.dateState.selectedDate;
+    const queryDate = this.route.snapshot.queryParamMap.get('date');
+    const parsed = queryDate && /^\d{4}-\d{2}-\d{2}$/.test(queryDate) ? new Date(queryDate + 'T00:00:00') : null;
+    const sharedDate = parsed && this.formatDate(parsed) === queryDate ? parsed.toISOString() : this.dateState.selectedDate;
     if (sharedDate) {
       this.currentDate.set(new Date(sharedDate));
     }
@@ -981,8 +985,9 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   goToExceptionManager(): void {
+    const patientId = this.conflictForDialog()?.patientId;
     this.closeConflictDialog();
-    this.router.navigate(['/exception-manager']);
+    this.router.navigate(['/exception-manager'], { queryParams: { date: this.currentDateDisplay(), patientId, from: '/schedule' } });
   }
 
   // ---------------------------------------------------------------------------

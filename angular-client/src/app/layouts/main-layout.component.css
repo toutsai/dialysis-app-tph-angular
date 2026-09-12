@@ -38,7 +38,9 @@
    -------------------------------------------------------------------------- */
 .main-nav-section {
   padding: 10px 0 6px;
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* --------------------------------------------------------------------------
@@ -720,3 +722,8 @@
 .btn-logout-now:hover {
   background-color: #545b62;
 }
+
+button.section-title { width:100%; border:0; background:transparent; text-align:left; font:inherit; cursor:pointer; }
+
+.skip-main-content { position:fixed; z-index:10000; top:.5rem; left:.5rem; transform:translateY(-150%); padding:.65rem 1rem; background:white; color:#174ea6; border:2px solid currentColor; }
+.skip-main-content:focus { transform:none; }

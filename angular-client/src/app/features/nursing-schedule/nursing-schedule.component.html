@@ -8,14 +8,7 @@
     </div>
     <div class="header-actions">
       <!-- 週班表狀態訊息（篩選/編輯按鈕在週次頁籤列右側） -->
-      @if (activeTab() === 'weekly' && uploadStatus()) {
-        <span
-          [ngClass]="['status-inline', uploadStatus().includes('失敗') ? 'error' : 'success']"
-          [title]="uploadStatus()"
-          >
-          {{ uploadStatus() }}
-        </span>
-      }
+
 
       <!-- 匯出本週 Excel（僅週班表頁籤顯示，置於組別配置左側） -->
       @if (activeTab() === 'weekly') {
@@ -42,6 +35,7 @@
     </div>
   </header>
 
+  <app-operation-status [message]="uploadStatus() || (isUploading() || isSavingDuties() ? '保存中，請稍候' : hasChanges() || hasUnsavedShiftChanges() || isGroupEditMode() ? '有未儲存的變更' : '')" [busy]="isUploading() || isSavingDuties()" [state]="uploadStatus().includes('失敗') ? 'error' : isUploading() || isSavingDuties() ? 'loading' : hasChanges() || hasUnsavedShiftChanges() || isGroupEditMode() ? 'dirty' : uploadStatus().includes('成功') ? 'saved' : 'idle'" />
   <!-- 頁籤導覽列 -->
   <nav class="tabs-nav">
     <button [class.active]="activeTab() === 'master'" (click)="onTabChange('master')">
@@ -101,13 +95,7 @@
               }
             </section>
             <!-- 上傳狀態訊息 -->
-            @if (uploadStatus()) {
-              <div
-                [ngClass]="['status-message', uploadStatus().includes('成功') ? 'success' : 'error']"
-                >
-                {{ uploadStatus() }}
-              </div>
-            }
+
             <!-- 班表顯示區域 -->
             <section class="schedule-display-section">
               @if (isLoadingSchedule()) {
@@ -196,21 +184,9 @@
               <div class="weekly-content-wrapper">
                 <!-- 月份導航＋週次頁籤同一列（使用者指定整併）；無資料月份也要能切換月份 -->
                 <nav class="weekly-tabs-nav">
-                  <div class="month-nav-group">
-                    <button class="month-nav-btn" (click)="shiftMonth(-1)" title="上個月">
-                      <i class="fas fa-chevron-left"></i>
-                    </button>
-                    <input
-                      type="month"
-                      id="schedule-month-weekly"
-                      title="月份"
-                      [ngModel]="selectedMonth"
-                      #monthInput1 (ngModelChange)="onMonthChange($event, monthInput1)"
-                      />
-                      <button class="month-nav-btn" (click)="shiftMonth(1)" title="下個月">
-                        <i class="fas fa-chevron-right"></i>
-                      </button>
-                    </div>
+                  <app-period-navigation period="month" navigationLabel="護理班表月份" [disabled]="isUploading() || isSavingDuties()" [showCurrent]="false" (previous)="shiftMonth(-1)" (next)="shiftMonth(1)">
+  <input type="month" id="schedule-month-weekly" title="月份" aria-label="護理班表月份" [ngModel]="selectedMonth" #monthInput1 (ngModelChange)="onMonthChange($event, monthInput1)" />
+ </app-period-navigation>
                     @if (monthlySchedule) {
                       <button [class.active]="activeWeekTab() === 0" (click)="activeWeekTab.set(0)">
                         分組統計

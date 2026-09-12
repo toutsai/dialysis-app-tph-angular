@@ -10,10 +10,10 @@
         @for (section of sections; track section) {
           <li
             [class.active]="activeSection() === section.id"
-            (click)="activeSection.set(section.id)"
+
             >
-            <i [class]="'fas ' + section.icon"></i>
-            <span>{{ section.name }}</span>
+            <button type="button" class="guide-section-button" [attr.aria-current]="activeSection()===section.id ? 'page' : null" (click)="activeSection.set(section.id)"><i [class]="'fas ' + section.icon"></i>
+            <span>{{ section.name }}</span></button>
           </li>
         }
       </ul>
@@ -93,7 +93,7 @@
           <p class="section-desc">所有使用者皆可使用的核心功能</p>
           @for (key of commonPages; track key) {
             <div class="page-card">
-              <div class="page-header" (click)="togglePage(key)">
+              <button type="button" class="page-header" (click)="togglePage(key)" [attr.aria-expanded]="isExpanded(key)" [attr.aria-controls]="'guide-' + key">
                 <div class="page-title">
                   <i [class]="'fas ' + pageGuides[key].icon"></i>
                   <h3>{{ pageGuides[key].name }}</h3>
@@ -103,9 +103,9 @@
                   <span class="role-tag">{{ pageGuides[key].roles }}</span>
                   <i [class]="'fas ' + (isExpanded(key) ? 'fa-chevron-up' : 'fa-chevron-down')"></i>
                 </div>
-              </div>
+              </button>
               @if (isExpanded(key)) {
-                <div class="page-content">
+                <div class="page-content" [id]="'guide-' + key">
                   <p class="page-desc">{{ pageGuides[key].description }}</p>
                   <div class="feature-list">
                     @for (feature of pageGuides[key].features; track feature) {
@@ -129,7 +129,7 @@
           <p class="section-desc">管理員與編輯者專用的排班管理功能</p>
           @for (key of adminEditorPages; track key) {
             <div class="page-card">
-              <div class="page-header" (click)="togglePage(key)">
+              <button type="button" class="page-header" (click)="togglePage(key)" [attr.aria-expanded]="isExpanded(key)" [attr.aria-controls]="'guide-' + key">
                 <div class="page-title">
                   <i [class]="'fas ' + pageGuides[key].icon"></i>
                   <h3>{{ pageGuides[key].name }}</h3>
@@ -139,7 +139,7 @@
                   <span class="role-tag">{{ pageGuides[key].roles }}</span>
                   <i [class]="'fas ' + (isExpanded(key) ? 'fa-chevron-up' : 'fa-chevron-down')"></i>
                 </div>
-              </div>
+              </button>
               @if (isExpanded(key)) {
                 <div class="page-content">
                   <p class="page-desc">{{ pageGuides[key].description }}</p>
@@ -165,7 +165,7 @@
           <p class="section-desc">依角色權限提供的後臺管理功能</p>
           @for (key of backendPages; track key) {
             <div class="page-card">
-              <div class="page-header" (click)="togglePage(key)">
+              <button type="button" class="page-header" (click)="togglePage(key)" [attr.aria-expanded]="isExpanded(key)" [attr.aria-controls]="'guide-' + key">
                 <div class="page-title">
                   <i [class]="'fas ' + pageGuides[key].icon"></i>
                   <h3>{{ pageGuides[key].name }}</h3>
@@ -175,7 +175,7 @@
                   <span class="role-tag">{{ pageGuides[key].roles }}</span>
                   <i [class]="'fas ' + (isExpanded(key) ? 'fa-chevron-up' : 'fa-chevron-down')"></i>
                 </div>
-              </div>
+              </button>
               @if (isExpanded(key)) {
                 <div class="page-content">
                   <p class="page-desc">{{ pageGuides[key].description }}</p>

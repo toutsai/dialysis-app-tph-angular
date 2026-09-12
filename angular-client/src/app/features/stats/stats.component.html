@@ -6,18 +6,9 @@
       <div class="toolbar-left">
         <h1 class="page-title">護理分組</h1>
         <div class="date-navigator">
-          <button class="btn" (click)="changeDate(-1)">&laquo; 上一天</button>
-          <span class="current-date-text date-clickable" (click)="openDatePicker()" title="點擊選擇日期">{{ formatDate(currentDate) }}</span>
-          <span class="weekday-display date-clickable" (click)="openDatePicker()" title="點擊選擇日期">({{ weekdayDisplay }})</span>
-          <input
-            #datePickerInput
-            type="date"
-            class="date-picker-hidden"
-            [value]="formatDate(currentDate)"
-            (change)="onDatePicked($event)"
-            />
-            <button class="btn" (click)="changeDate(1)">下一天 &raquo;</button>
-            <button class="btn btn-today-ghost" (click)="goToToday()">回到今日</button>
+          <app-period-navigation period="day" navigationLabel="護理分組日期" [disabled]="isSavingUi || orderSaving" (previous)="changeDate(-1)" (next)="changeDate(1)" (current)="goToToday()">
+            <input #datePickerInput type="date" aria-label="護理分組日期" [value]="formatDate(currentDate)" [disabled]="isSavingUi || orderSaving" (change)="onDatePicked($event)" />
+          </app-period-navigation>
             <button class="btn btn-primary desktop-only" (click)="isCreateTaskModalVisible = true" [disabled]="!hasPermission('viewer')">
               <i class="fas fa-plus"></i> 新增交辦
             </button>
@@ -35,7 +26,7 @@
           </div>
         </div>
         <div class="toolbar-right desktop-only-flex">
-          <span class="status-indicator">{{ statusIndicator }}</span>
+          
           <button class="btn btn-success" id="save-changes-btn" [disabled]="!hasUnsavedChanges || isPageLocked" (click)="saveChangesToCloud()">
             儲存變更
           </button>
@@ -50,6 +41,7 @@
         </div>
       </div>
 
+      <app-operation-status [message]="statusIndicator || (hasUnsavedChanges ? '有未儲存的變更' : '')" [busy]="isSavingUi || isLoading" [state]="statusIndicator.includes('失敗') ? 'error' : statusIndicator.includes('衝突') ? 'conflict' : isSavingUi || isLoading ? 'loading' : hasUnsavedChanges ? 'dirty' : statusIndicator.includes('已儲存') ? 'saved' : 'idle'" />
       @if (scheduleSavedBanner) {
         <div class="sse-update-banner">
           <span>{{ scheduleSavedBanner }}</span>

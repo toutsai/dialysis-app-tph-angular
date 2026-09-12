@@ -9,6 +9,7 @@
       }
     </header>
 
+    <p id="password-requirements">新密碼至少 8 個字元，包含大寫字母、小寫字母與數字；可用符號為 @$!%*?&，不接受空白或其他符號。</p>
     <form (ngSubmit)="handleChangePassword()" class="password-form">
       <div class="form-group">
         <label for="old-password">舊密碼</label>
@@ -22,9 +23,9 @@
             required
             autocomplete="current-password"
             />
-            <span class="password-toggle-icon" (click)="togglePasswordVisibility('old')">
+            <button type="button" class="password-toggle-icon" (click)="togglePasswordVisibility('old')" [attr.aria-pressed]="isOldPasswordVisible()" [attr.aria-label]="isOldPasswordVisible() ? '隱藏舊密碼' : '顯示舊密碼'">
               {{ isOldPasswordVisible() ? '🙈' : '👁️' }}
-            </span>
+            </button>
           </div>
         </div>
 
@@ -38,11 +39,11 @@
               (ngModelChange)="newPassword.set($event)"
               name="newPassword"
               required
-              autocomplete="new-password"
+              autocomplete="new-password" aria-describedby="password-requirements"
               />
-              <span class="password-toggle-icon" (click)="togglePasswordVisibility('new')">
+              <button type="button" class="password-toggle-icon" (click)="togglePasswordVisibility('new')" [attr.aria-pressed]="isNewPasswordVisible()" [attr.aria-label]="isNewPasswordVisible() ? '隱藏新密碼' : '顯示新密碼'">
                 {{ isNewPasswordVisible() ? '🙈' : '👁️' }}
-              </span>
+              </button>
             </div>
           </div>
 
@@ -58,9 +59,9 @@
                 required
                 autocomplete="new-password"
                 />
-                <span class="password-toggle-icon" (click)="togglePasswordVisibility('confirm')">
+                <button type="button" class="password-toggle-icon" (click)="togglePasswordVisibility('confirm')" [attr.aria-pressed]="isConfirmPasswordVisible()" [attr.aria-label]="isConfirmPasswordVisible() ? '隱藏確認新密碼' : '顯示確認新密碼'">
                   {{ isConfirmPasswordVisible() ? '🙈' : '👁️' }}
-                </span>
+                </button>
               </div>
             </div>
 

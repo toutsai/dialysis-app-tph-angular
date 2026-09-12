@@ -4,13 +4,9 @@
       <div class="header-toolbar">
         <div class="toolbar-left">
           <h1 class="page-title">週排班表</h1>
-          <div class="date-navigator">
-            <button [disabled]="isSaving()" (click)="changeWeek(-7)">&lt; 上一週</button>
-            <span class="week-display-text">{{ weekDisplay() }}</span>
-            <button [disabled]="isSaving()" (click)="changeWeek(7)">下一週 &gt;</button>
-          </div>
+          <app-period-navigation period="week" navigationLabel="週排班期間" [label]="weekDisplay()" [disabled]="isSaving()" (previous)="changeWeek(-7)" (next)="changeWeek(7)" (current)="goToToday()" />
           <div class="main-actions">
-            <button [disabled]="isSaving()" (click)="goToToday()">回到本週</button>
+            
             <button class="btn btn-warning" (click)="runScheduleCheck()">排程檢視</button>
             <button
               class="btn btn-info"
@@ -26,14 +22,14 @@
                 class="patient-search-input"
                 placeholder="搜尋病人姓名/病歷號..."
                 (focus)="isSearchFocused.set(true)"
-                (blur)="handleSearchBlur()"
+                (focusout)="onSearchFocusOut($event)"
               />
               @if (searchResults().length > 0 && isSearchFocused()) {
               <ul class="search-results">
                 @for (patient of searchResults(); track patient.id) {
-                  <li (click)="locatePatientOnGrid(patient.id)">
+                  <li><button type="button" class="search-result-button" (click)="locatePatientOnGrid(patient.id)">
                     {{ patient.name }} - {{ patient.medicalRecordNumber }}
-                  </li>
+                  </button></li>
                 }
               </ul>
               }

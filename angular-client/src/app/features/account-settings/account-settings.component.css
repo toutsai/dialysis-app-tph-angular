@@ -185,3 +185,5 @@
     width: 100%;
   }
 }
+
+button.password-toggle-icon { border:0; background:transparent; padding:.25rem; font:inherit; }

@@ -17,10 +17,18 @@ export class ModalFocusDirective implements AfterViewInit, OnDestroy {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   private previous: HTMLElement | null = null;
   private destroyed = false;
+  private openedNatively = false;
 
   ngAfterViewInit(): void {
     this.previous = this.document.activeElement as HTMLElement | null;
     ModalFocusDirective.active.push(this);
+    // A confirmation above another native dialog must enter the browser's top layer.
+    if (this.host.tagName === 'DIALOG' && !this.host.matches(':modal')) {
+      const dialog = this.host as HTMLDialogElement;
+      dialog.removeAttribute('open');
+      dialog.showModal();
+      this.openedNatively = true;
+    }
     this.document.addEventListener('keydown', this.onKeydown, true);
     this.document.addEventListener('focusin', this.onFocus, true);
     queueMicrotask(() => { if (!this.destroyed && this.isTop()) this.focusFirst(); });
@@ -32,6 +40,7 @@ export class ModalFocusDirective implements AfterViewInit, OnDestroy {
     ModalFocusDirective.active = ModalFocusDirective.active.filter(item => item !== this);
     this.document.removeEventListener('keydown', this.onKeydown, true);
     this.document.removeEventListener('focusin', this.onFocus, true);
+    if (this.openedNatively) (this.host as HTMLDialogElement).close();
     if (!wasTop) return;
     const previous = this.previous;
     queueMicrotask(() => {
@@ -42,8 +51,10 @@ export class ModalFocusDirective implements AfterViewInit, OnDestroy {
   }
 
   private isTop(): boolean {
-    const nativeModal = this.document.querySelector('dialog:modal');
-    return ModalFocusDirective.active.at(-1) === this && (!nativeModal || nativeModal.contains(this.host));
+    const nativeModal = this.document.activeElement?.closest('dialog:modal') ||
+      this.document.querySelector('dialog:modal');
+    return !this.destroyed && ModalFocusDirective.active.at(-1) === this &&
+      (!nativeModal || nativeModal.contains(this.host));
   }
 
   private focusable(): HTMLElement[] {

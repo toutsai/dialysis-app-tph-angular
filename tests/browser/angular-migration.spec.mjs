@@ -18,7 +18,7 @@ test('nursing month and week views preserve nurse rows and day columns across mo
   await page.getByRole('button', { name: '當月週班表', exact: true }).click();
   await page.getByRole('button', { name: /^第 1 週/ }).click();
   await expect(page.getByRole('row').filter({ hasText: '九月合成護理師' })).toBeVisible();
-  await page.getByTitle('下個月', { exact: true }).click();
+  await page.getByRole('button', { name: '下個月', exact: true }).click();
   await expect(page.getByTitle('月份', { exact: true })).toHaveValue('2026-10');
   await page.getByRole('button', { name: /^第 1 週/ }).click();
   await expect(page.getByRole('row').filter({ hasText: '十月合成護理師' })).toBeVisible();
@@ -27,7 +27,7 @@ test('nursing month and week views preserve nurse rows and day columns across mo
   row = page.getByRole('row').filter({ hasText: '十月合成護理師' });
   await expect(row.getByRole('cell')).toHaveCount(32);
   await page.getByRole('button', { name: '當月週班表', exact: true }).click();
-  await page.getByTitle('上個月', { exact: true }).click();
+  await page.getByRole('button', { name: '上個月', exact: true }).click();
   await expect(page.getByTitle('月份', { exact: true })).toHaveValue('2026-09');
   await page.getByRole('button', { name: /^第 1 週/ }).click();
   await expect(page.getByRole('row').filter({ hasText: '九月合成護理師' })).toBeVisible();

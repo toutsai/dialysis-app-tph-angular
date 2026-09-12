@@ -1,3 +1,5 @@
+import { OperationStatusComponent } from '@app/shared/operation-status/operation-status.component';
+import { PeriodNavigationComponent } from '@app/shared/period-navigation/period-navigation.component';
 import { LatestRequest } from '@app/core/utils/latest-request';
 import { loadXlsx } from '@/utils/xlsxLoader';
 import {
@@ -35,7 +37,7 @@ import { NursingGroupConfigDialogComponent } from '@app/components/dialogs/nursi
 @Component({
   selector: 'app-nursing-schedule',
   standalone: true,
-  imports: [
+  imports: [OperationStatusComponent, PeriodNavigationComponent, 
     CommonModule,
     FormsModule,
     AlertDialogComponent,

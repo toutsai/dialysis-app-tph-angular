@@ -185,6 +185,17 @@ export class LabReportsComponent implements OnInit, OnDestroy {
     return { start: formatDate(start), end: formatDate(end) };
   });
 
+  readonly alertDisplayFilter = signal<'all' | 'pending' | 'failed'>('all');
+  readonly visibleAlertGroups = computed(() => {
+    const filter = this.alertDisplayFilter();
+    const failed = new Set(this.failedAlertSaves().map(job => job.id));
+    return this.groupedAlerts().map((group: any) => ({ ...group, items: group.items.filter((item: any) => {
+      if (filter === 'all') return true;
+      const id = item.patient.id + '_' + group.key + '_' + this.alertResultMonthRange;
+      if (filter === 'failed') return failed.has(id);
+      return (!item.analysisText && !item.suggestionText) || failed.has(id) || this.savedAlertSignatures.get(id) !== JSON.stringify([item.analysisText, item.suggestionText]);
+    }) })).filter((group: any) => group.items.length);
+  });
   groupedAlerts = computed(() => {
     const groups: Record<string, any> = {};
     this.alertList().forEach((item: any) => {

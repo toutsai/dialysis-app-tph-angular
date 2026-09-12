@@ -1134,3 +1134,13 @@ tr.dash-warning {
 .inventory-primary-nav{display:flex;gap:.5rem}.inventory-primary-nav button{flex:1;padding:.85rem}.workflow-nav{display:flex;gap:.5rem;flex-wrap:wrap;padding:.8rem 0}.workflow-nav button{background:#fff;border:1px solid #cfdbe6;border-radius:7px;padding:.6rem 1rem;color:#244c66}.workflow-nav button.active{background:#e7f2fc;border-color:#4292bd}.dash-card{text-align:left;font:inherit;cursor:pointer;width:100%;transition:box-shadow .15s}.dash-card:hover,.dash-card:focus-visible{box-shadow:0 0 0 3px #77b5dc;outline:none}.dash-card-stock small{font-size:.85rem;font-weight:400}.stock-detail{width:min(960px,94vw);max-height:90vh;overflow:auto}.source-note{background:#edf5fa;border-left:3px solid #488baa;padding:.8rem 1rem;margin-bottom:1rem;color:#234459}.source-note p{margin:.3rem 0}.box-input-group{flex-wrap:wrap}.box-input-group input{width:70px}details{max-width:340px}summary{cursor:pointer;color:#276d91}@media(max-width:700px){.inventory-primary-nav{display:grid;grid-template-columns:1fr 1fr}.workflow-nav button{flex:1}.dash-cards-grid{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}.stock-detail .modal-body{padding:.7rem}.item-row{flex-wrap:wrap}}
 
 .count-fields{border:0;padding:0;margin:0;min-width:0}.count-fields:disabled{opacity:.7}
+
+.inventory-navigation-row { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; margin-bottom:.5rem; }
+.inventory-navigation-row .inventory-primary-nav { flex:1; margin:0; }
+.inventory-settings-tool { padding:.5rem .75rem; border:1px solid #cbd5e1; border-radius:.4rem; background:white; }
+.inventory-workflow { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; padding:.5rem; background:#f1f5f9; margin-bottom:.5rem; }
+.inventory-workflow label { display:flex; align-items:center; gap:.4rem; }
+.inventory-workflow-steps { display:flex; flex-wrap:wrap; gap:.4rem; }
+.inventory-workflow button { padding:.45rem .65rem; background:white; border:1px solid #cbd5e1; border-radius:.35rem; }
+.inventory-workflow button.active { background:#e0efff; border-color:#2563eb; }
+@media(max-width:600px) { .inventory-workflow label { width:100%; } .inventory-workflow-steps { width:100%; } .page-header h1 { font-size:1.4rem; } }

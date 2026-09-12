@@ -1,4 +1,7 @@
 <div class="schedule-table-container">
+  @if (!isPageLocked) { <div class="keyboard-help"><span>鍵盤：Enter 開啟床位；空白鍵選取／移動；方向鍵換格；Esc 取消。</span>
+    @if (keyboardSource) { <button type="button" (click)="cancelKeyboardMove()">取消床位移動</button> }
+    <span role="status" aria-live="polite">{{ keyboardMessage }}</span></div> }
     <table class="schedule-table">
       <thead #theadRef>
         <tr>
@@ -31,6 +34,11 @@
                 <div
                   class="schedule-slot"
                   [attr.data-slot-id]="bedNum + '-0-' + dayIndex"
+                  role="button" [attr.tabindex]="slotTabIndex(bedNum + '-0-' + dayIndex, dayIndex)" [attr.aria-disabled]="!isSlotInteractive(dayIndex)"
+                  [attr.aria-label]="slotLabel(bedNum + '-0-' + dayIndex, dayIndex)"
+                  [attr.aria-pressed]="keyboardSource?.slotId === (bedNum + '-0-' + dayIndex)"
+                  [class.keyboard-selected]="keyboardSource?.slotId === (bedNum + '-0-' + dayIndex)"
+                  (focus)="focusedSlot = $any($event.target).dataset.slotId" (keydown)="onSlotKeydown($event, bedNum + '-0-' + dayIndex, dayIndex)"
                   [ngClass]="getSlotClasses(bedNum + '-0-' + dayIndex, dayIndex)"
                   [attr.draggable]="isDraggable(bedNum + '-0-' + dayIndex, dayIndex)"
                   (click)="onGridClick(bedNum + '-0-' + dayIndex, dayIndex)"
@@ -75,6 +83,11 @@
                   <div
                     class="schedule-slot"
                     [attr.data-slot-id]="bedNum + '-' + shiftIndex + '-' + dayIndex"
+                  role="button" [attr.tabindex]="slotTabIndex(bedNum + '-' + shiftIndex + '-' + dayIndex, dayIndex)" [attr.aria-disabled]="!isSlotInteractive(dayIndex)"
+                  [attr.aria-label]="slotLabel(bedNum + '-' + shiftIndex + '-' + dayIndex, dayIndex)"
+                  [attr.aria-pressed]="keyboardSource?.slotId === (bedNum + '-' + shiftIndex + '-' + dayIndex)"
+                  [class.keyboard-selected]="keyboardSource?.slotId === (bedNum + '-' + shiftIndex + '-' + dayIndex)"
+                  (focus)="focusedSlot = $any($event.target).dataset.slotId" (keydown)="onSlotKeydown($event, bedNum + '-' + shiftIndex + '-' + dayIndex, dayIndex)"
                     [ngClass]="getSlotClasses(bedNum + '-' + shiftIndex + '-' + dayIndex, dayIndex)"
                     [attr.draggable]="isDraggable(bedNum + '-' + shiftIndex + '-' + dayIndex, dayIndex)"
                     (click)="onGridClick(bedNum + '-' + shiftIndex + '-' + dayIndex, dayIndex)"

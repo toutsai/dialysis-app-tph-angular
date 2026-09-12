@@ -39,3 +39,11 @@
 .btn-assignee.active { background-color: #007bff; color: white; border-color: #007bff; box-shadow: 0 0 0 2px rgba(0,123,255,0.25); }
 .assignee-info-text { margin-top: 0.75rem; padding: 0.75rem; background-color: #e3f2fd; color: #0d47a1; border-radius: 4px; font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem; }
 .message-type-icon { font-size: 1.1em; }
+.modal-container > fieldset { display:flex; flex-direction:column; min-height:0; overflow:hidden; flex:1 1 auto; }
+.modal-header, .modal-footer { flex-shrink:0; }
+@media(max-width:600px) {
+  .modal-container { width:calc(100% - 1rem); max-height:calc(100dvh - 1rem); }
+  .modal-body { padding:1rem; }
+  .dynamic-supply-item { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
+  .modal-footer .btn { min-height:42px; }
+}

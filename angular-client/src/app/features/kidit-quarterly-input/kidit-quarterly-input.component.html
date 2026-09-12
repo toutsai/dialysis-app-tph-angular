@@ -78,7 +78,7 @@
       <!-- 左：病人清單 -->
       <aside class="patient-list">
         @for (p of patients(); track p) {
-          <div
+          <button type="button"
             class="patient-item"
             [class.active]="selectedPatientId() === p.id"
             (click)="selectPatient(p.id)"
@@ -92,7 +92,7 @@
               <span class="dot" [class.done]="completionOf(p.id).diagnose" title="醫療狀況評估">評</span>
               <span class="dot" [class.done]="completionOf(p.id).comorbid" title="合併症">併</span>
             </div>
-          </div>
+          </button>
         }
       </aside>
       <!-- 右：表單 -->

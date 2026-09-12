@@ -53,7 +53,7 @@ export class AccountSettingsComponent {
     // 強化密碼複雜度驗證：至少 8 字元，包含大小寫和數字
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d@$!%*?&]{8,}$/;
     if (!passwordRegex.test(this.newPassword())) {
-      this.message.set('新密碼需至少 8 個字元，並包含大寫字母、小寫字母和數字。');
+      this.message.set('新密碼需至少 8 個字元，包含大寫字母、小寫字母和數字；符號限 @$!%*?&，不可含空白或其他符號。');
       this.messageType.set('error');
       this.isLoading.set(false);
       return;

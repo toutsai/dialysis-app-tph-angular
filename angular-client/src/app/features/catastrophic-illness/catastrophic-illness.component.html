@@ -275,12 +275,21 @@
     </div>
 
     @if (formLoaded) {
-      <div class="form-card">
+      <nav class="ci-section-nav" aria-label="申請表區塊">
+  <a href="#ci-basic" (click)="navigateSection($event, 'ci-basic')">基本資料</a>
+  @if (activeTab === 'initial') { <a href="#ci-indication" (click)="navigateSection($event, 'ci-indication')">適應症</a> } @else { <a href="#ci-previous" (click)="navigateSection($event, 'ci-previous')">上次申請</a> }
+  <a href="#ci-labs" (click)="navigateSection($event, 'ci-labs')">生化檢驗值</a>
+  @if (activeTab === 'renewal') { <a href="#ci-checks" (click)="navigateSection($event, 'ci-checks')">相關檢查</a> }
+  <a href="#ci-symptoms" (click)="navigateSection($event, 'ci-symptoms')">伴隨症狀</a><a href="#ci-diseases" (click)="navigateSection($event, 'ci-diseases')">相關疾病</a>
+  @if (activeTab === 'initial') { <a href="#ci-other-checks" (click)="navigateSection($event, 'ci-other-checks')">其他檢查</a> }
+  <a href="#ci-reasons" (click)="navigateSection($event, 'ci-reasons')">特殊理由</a><a href="#ci-physician" (click)="navigateSection($event, 'ci-physician')">負責醫師</a>
+</nav>
+<div class="form-card">
         @if (kiditSource) {
           <div class="source-hint">📋 {{ kiditSource }}（仍可手動修改）</div>
         }
         <!-- ============ 共同表頭 ============ -->
-        <fieldset class="section">
+        <fieldset class="section" id="ci-basic" tabindex="-1">
           <legend>基本資料</legend>
           <div class="grid">
             <label>姓名<input type="text" [(ngModel)]="form.name" /></label>
@@ -321,13 +330,13 @@
 
         <!-- ============ 初次申請 ============ -->
         @if (activeTab === 'initial') {
-          <fieldset class="section">
+          <fieldset class="section" id="ci-indication" tabindex="-1">
             <legend>一、定期透析適應症 (Indication)</legend>
             <label class="inline"><input type="radio" name="indication" value="absolute" [(ngModel)]="form.indication" />（一）絕對適應症</label>
             <label class="inline"><input type="radio" name="indication" value="relative" [(ngModel)]="form.indication" />（二）相對適應症</label>
           </fieldset>
         } @else {
-          <fieldset class="section">
+          <fieldset class="section" id="ci-previous" tabindex="-1">
             <legend>一、上次申請結果</legend>
             <div class="row-line">
               <label class="inline-date">此次申請為第<input type="text" class="w-narrow" [(ngModel)]="form.applicationNo" />次申請</label>
@@ -347,7 +356,7 @@
         }
 
         <!-- ============ 檢驗值 ============ -->
-        <fieldset class="section">
+        <fieldset class="section" id="ci-labs" tabindex="-1">
           <legend>{{ activeTab === 'initial' ? '四、生化檢驗值 (Laboratory data)' : '二、目前之透析情況與生化檢驗值' }}</legend>
           <div class="row-line">
             <label class="inline-date">檢驗日期<input type="date" [(ngModel)]="form.labDate" /></label>
@@ -378,7 +387,7 @@
         </fieldset>
 
         @if (activeTab === 'renewal') {
-          <fieldset class="section">
+          <fieldset class="section" id="ci-checks" tabindex="-1">
             <legend>三、相關檢查資料與說明（是否嘗試停止透析）</legend>
             <div class="row-line">
               <label class="inline"><input type="radio" name="triedStop" value="yes" [(ngModel)]="form.triedStop" />有</label>
@@ -403,7 +412,7 @@
         }
 
         <!-- ============ 伴隨症狀 ============ -->
-        <fieldset class="section">
+        <fieldset class="section" id="ci-symptoms" tabindex="-1">
           <legend>{{ activeTab === 'initial' ? '二、伴隨症狀 (Symptoms and Signs)' : '四、目前之伴隨症狀' }}（請務必勾選）</legend>
           <div class="check-grid">
             @for (o of SYMPTOM_OPTIONS; track o.key) {
@@ -418,7 +427,7 @@
         </fieldset>
 
         <!-- ============ 相關疾病 ============ -->
-        <fieldset class="section">
+        <fieldset class="section" id="ci-diseases" tabindex="-1">
           <legend>{{ activeTab === 'initial' ? '三、相關疾病 (Comorbidity)' : '五、目前之相關疾病' }}（請務必勾選）</legend>
           <div class="check-grid">
             @for (o of COMORBIDITY_OPTIONS; track o.key) {
@@ -434,7 +443,7 @@
 
         <!-- ============ 初次：五、其他相關檢查 ============ -->
         @if (activeTab === 'initial') {
-          <fieldset class="section">
+          <fieldset class="section" id="ci-other-checks" tabindex="-1">
             <legend>五、其他相關檢查資料與說明（病史、腎臟超音波等）</legend>
             <div class="row-line">
               <label class="inline"><input type="checkbox" [(ngModel)]="form.histKnownCkd" />過去病史及檢查已知為慢性腎衰竭</label>
@@ -462,13 +471,13 @@
         }
 
         <!-- ============ 六、其他理由 ============ -->
-        <fieldset class="section">
+        <fieldset class="section" id="ci-reasons" tabindex="-1">
           <legend>六、未符合上述條件但因其他嚴重或危及生命之臨床狀況必須進入定期透析之理由</legend>
           <textarea rows="2" [(ngModel)]="form.reason6"></textarea>
         </fieldset>
 
         <!-- ============ 負責醫師 ============ -->
-        <fieldset class="section">
+        <fieldset class="section" id="ci-physician" tabindex="-1">
           <legend>負責醫師</legend>
           <div class="row-line">
             <label class="inline-date">姓名<input type="text" [(ngModel)]="form.physicianName" /></label>

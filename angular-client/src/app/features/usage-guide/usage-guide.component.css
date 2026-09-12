@@ -220,3 +220,7 @@
   .feature-list { grid-template-columns: 1fr; }
   .changelog-header { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
 }
+
+button.page-header { width:100%; border:0; background:transparent; text-align:left; color:inherit; font:inherit; }
+
+.guide-section-button { display:flex; gap:.6rem; align-items:center; width:100%; border:0; padding:0; background:transparent; font:inherit; color:inherit; text-align:left; cursor:pointer; }

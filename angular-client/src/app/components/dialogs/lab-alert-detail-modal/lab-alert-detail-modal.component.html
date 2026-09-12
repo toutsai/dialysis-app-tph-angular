@@ -1,12 +1,12 @@
 @if (isVisible) {
   <div class="modal-overlay" (click)="handleClose()">
-    <div class="modal-container large" (click)="$event.stopPropagation()">
+    <div class="modal-container large" [appModalFocus]="(patient?.name || '') + ' - 警示報告分析'" (modalEscape)="handleClose()" [modalEscapeDisabled]="saving" (click)="$event.stopPropagation()">
       <div class="modal-header">
         <div class="header-title">
           <h2>{{ patient?.name }} - 警示報告分析</h2>
           <span class="abnormality-tag">{{ labItemDisplayNames[abnormalityKey] || abnormalityKey }}</span>
         </div>
-        <button (click)="handleClose()" class="close-btn">×</button>
+        <button (click)="handleClose()" class="close-btn" aria-label="關閉分析視窗" [disabled]="saving">×</button>
       </div>
       <div class="tabs-navigation">
         <button [class.active]="activeTab === 'analysis'" (click)="activeTab = 'analysis'">病因分析</button>

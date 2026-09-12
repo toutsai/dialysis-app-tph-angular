@@ -830,3 +830,6 @@ tr.qi-untouched .qi-flag { background: #eceff1; color: #90a4ae; }
   padding: 8px 12px;
   font-weight: 600;
 }
+
+button.ov-card { font:inherit; color:inherit; text-align:left; }
+button.ov-card:focus-visible { outline:3px solid #2165a6; outline-offset:3px; }

@@ -75,7 +75,7 @@ export class UsageGuideComponent {
       path: '/my-patients',
       roles: PAGE_ACCESS.myPatients.roleLabel,
       icon: 'fa-user-nurse',
-      description: '護理師專屬頁面，顯示當日分配給自己的病人清單',
+      description: '依職務顯示今日病人：護理分組清單或醫師／專師臨床查閱內容',
       features: [
         { title: '病人清單', desc: '顯示今日分配給您負責的所有病人' },
         { title: '交班備忘查詢', desc: '快速查看每位病人的待處理交班事項' },

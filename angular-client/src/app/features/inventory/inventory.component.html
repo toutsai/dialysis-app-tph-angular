@@ -1,7 +1,9 @@
 <div class="page-container">
   <!-- 主頁籤併入標題列（2026-09-05 使用者要求：內容區多留高度），副標拿掉 -->
   <header class="page-header">
-    <h1>書記專用</h1>
+    <h1>{{ mainTab() === 'inventory' ? '庫存管理' : '書記作業' }}</h1>
+    @if (mainTab() === 'inventory') { <button type="button" class="btn-secondary" (click)="switchMain('physician')">返回書記作業</button> }
+    @else {
     <nav class="main-tabs" aria-label="書記專用功能">
       <button [class.active]="mainTab() === 'physician'" (click)="switchMain('physician')">醫師班表列印</button>
       <button [class.active]="mainTab() === 'register'" (click)="switchMain('register')">常規病人掛號</button>
@@ -10,6 +12,7 @@
       <button [class.active]="mainTab() === 'catastrophic'" (click)="switchMain('catastrophic')">重大傷病申請</button>
       <button [class.active]="mainTab() === 'inventory'" (click)="switchMain('inventory')">庫存管理</button>
     </nav>
+    }
   </header>
 
   @if (mainTab() === 'physician') {
@@ -44,24 +47,29 @@
 
   @if (mainTab() === 'inventory') {
 
-  <nav class="tabs-navigation inventory-primary-nav" aria-label="庫存功能">
-    <button [class.active]="inventoryView()==='overview'" (click)="navigateInventory('overview')">庫存總覽</button>
-    <button [class.active]="inventoryView()==='calendar'" (click)="navigateInventory('calendar')">作業行事曆</button>
-    <button [class.active]="inventoryView()==='reports'" (click)="navigateInventory('reports')">報表</button>
-    <button [class.active]="inventoryView()==='settings'" (click)="navigateInventory('settings')">設定</button>
-  </nav>
-  @if(inventoryView()==='calendar') {
-    <nav class="workflow-nav" aria-label="當週作業">
-      <button (click)="navigateInventory('calendar')" [class.active]="activeTab()==='purchase'">行事曆</button>
-      <button (click)="openCountsTab()" [class.active]="activeTab()==='counts'">實體盤點</button>
-      <button (click)="navigateInventory('calendar','weekly');loadWeeklyData()" [class.active]="activeTab()==='weekly'">本週盤點與補貨</button>
-      <button (click)="openHisDate(countFilter.date)" [class.active]="activeTab()==='consumption'">HIS 資料上傳</button>
+  <div class="inventory-navigation-row">
+    <nav class="tabs-navigation inventory-primary-nav" aria-label="庫存功能">
+      <button [attr.aria-current]="inventoryView()==='overview' ? 'page' : null" [class.active]="inventoryView()==='overview'" (click)="navigateInventory('overview')">庫存總覽</button>
+      <button [attr.aria-current]="inventoryView()==='calendar' ? 'page' : null" [class.active]="inventoryView()==='calendar'" (click)="navigateInventory('calendar')">作業行事曆</button>
+      <button [attr.aria-current]="inventoryView()==='reports' ? 'page' : null" [class.active]="inventoryView()==='reports'" (click)="navigateInventory('reports')">報表</button>
     </nav>
+    <button type="button" class="inventory-settings-tool" [attr.aria-current]="inventoryView()==='settings' ? 'page' : null" (click)="navigateInventory('settings')">庫存設定</button>
+  </div>
+  @if(inventoryView()==='calendar') {
+    <section class="inventory-workflow" aria-label="日期作業">
+      <label>作業日期 <input type="date" [value]="workDate()" (change)="requestWorkDate($event)" /></label>
+      <div class="inventory-workflow-steps" aria-label="核對與補貨步驟">
+        <button type="button" [class.active]="activeTab()==='consumption'" (click)="openHisDate(workDate())">1 核對／上傳 HIS</button>
+        <button type="button" [class.active]="activeTab()==='counts'" (click)="openCountDate(workDate())">2 實體盤點</button>
+        <button type="button" [class.active]="activeTab()==='weekly'" (click)="openWeeklyDate(workDate())">3 計算週補貨</button>
+      </div>
+      @if(activeTab()!=='purchase') { <button type="button" (click)="navigateInventory('calendar')">回到當日行事曆</button> }
+    </section>
   }
-  @if(inventoryView()==='settings') {<nav class="workflow-nav" aria-label="庫存設定"><button (click)="activeTab.set('items')" [class.active]="activeTab()==='items'">品項、箱規與安全量</button><button (click)="activeTab.set('beds')" [class.active]="activeTab()==='beds'">床位與機型預設</button></nav>}
-  @if(inventoryView()==='reports') {<nav class="workflow-nav" aria-label="庫存報表"><button (click)="activeTab.set('consumption');consumptionSubTab.set('query')">病人／品項耗材</button><button (click)="activeTab.set('consumption');consumptionSubTab.set('summary')">每月消耗</button><button (click)="activeTab.set('stock-report')">庫存月報</button></nav>}
+  @if(inventoryView()==='settings') {<nav class="workflow-nav" aria-label="庫存設定"><button (click)="navigateInventory('settings','items')" [class.active]="activeTab()==='items'">品項、箱規與安全量</button><button (click)="navigateInventory('settings','beds')" [class.active]="activeTab()==='beds'">床位與機型預設</button></nav>}
+  @if(inventoryView()==='reports') {<nav class="workflow-nav" aria-label="庫存報表"><button (click)="openInventoryReport('query')" [class.active]="activeTab()==='consumption' && consumptionSubTab()==='query'">病人／品項耗材</button><button (click)="openInventoryReport('monthly')" [class.active]="consumptionSubTab()==='summary'">每月消耗</button><button (click)="openInventoryReport('stock')" [class.active]="activeTab()==='stock-report'">庫存月報</button></nav>}
 
-  <main class="page-main-content">
+  <main class="page-main-content" #inventoryContent>
     <!-- ========== Dashboard: 庫存總覽 ========== -->
     @if (activeTab() === 'dashboard') {
     <div class="tab-panel">
@@ -331,7 +339,7 @@
       </div>
 
       @if (purchaseView() === 'calendar') {
-        <app-purchase-calendar [knownItems]="knownItems" [unitsPerBoxFn]="unitsPerBoxFn" [unitLabelFn]="unitLabelFn" [initialDate]="calendarDate" [initialCategory]="calendarCategory" [initialItem]="calendarItem" (countRequested)="openCountDate($event)" (hisRequested)="openHisDate($event)" (changed)="fetchPurchases();loadDashboard()"></app-purchase-calendar>
+        <app-purchase-calendar [knownItems]="knownItems" [unitsPerBoxFn]="unitsPerBoxFn" [unitLabelFn]="unitLabelFn" [initialDate]="calendarDate" [initialMode]="calendarMode" [initialCategory]="calendarCategory" [initialItem]="calendarItem" (countRequested)="openCountDate($event)" (hisRequested)="openHisDate($event)" (dateSelected)="calendarDateChanged($event)" (changed)="fetchPurchases();loadDashboard()"></app-purchase-calendar>
       } @else {
       <div class="filter-bar">
         <div class="filter-field">
@@ -435,7 +443,7 @@
     <!-- ========== Tab 2: 消耗紀錄 ========== -->
     @if (activeTab() === 'consumption') {
     <div class="tab-panel">
-      @if(inventoryView()==='calendar'){<nav class="workflow-nav"><button (click)="consumptionSubTab.set('upload')">HIS 上傳</button><button (click)="consumptionSubTab.set('theoretical')">每日排程需求</button></nav>}
+      @if(inventoryView()==='calendar'){<nav class="workflow-nav"><button (click)="openHisView('')">HIS 上傳</button><button (click)="openHisView('theoretical')">每日排程需求</button></nav>}
 
       <!-- 耗材查詢 -->
       @if (consumptionSubTab() === 'query') {
@@ -753,9 +761,9 @@
         <div class="filter-field">
           <label>盤點日</label>
           <div class="date-nav">
-            <button type="button" class="date-nav-btn" title="前一天" (click)="stepDate(countFilter, 'date', -1, 'date'); loadCountDoc()">‹</button>
-            <input type="date" [(ngModel)]="countFilter.date" (change)="loadCountDoc()" />
-            <button type="button" class="date-nav-btn" title="後一天" (click)="stepDate(countFilter, 'date', 1, 'date'); loadCountDoc()">›</button>
+            <button type="button" class="date-nav-btn" title="前一天" (click)="stepCountDate(-1)">‹</button>
+            <input type="date" [value]="countFilter.date" (change)="requestCountDate($event)" />
+            <button type="button" class="date-nav-btn" title="後一天" (click)="stepCountDate(1)">›</button>
           </div>
         </div>
         <div class="filter-field"><label>盤點截止</label><select [(ngModel)]="countCutoff"><option value="end-of-day">全部班別結束後（日終）</option><option value="start-of-day">當日班別開始前（日初）</option></select></div>

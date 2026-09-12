@@ -267,7 +267,7 @@
                     <div class="item-actions">
                       <button
                         class="btn-action btn-complete-task"
-                        (click)="updateTaskStatus(task.id, 'completed')"
+                        [disabled]="pendingStatus.has(task.id)" (click)="updateTaskStatus(task.id, 'completed')"
                       >
                         <i class="fas fa-check"></i> 完成
                       </button>
@@ -596,7 +596,7 @@
   <!-- Confirm Delete Dialog -->
   @if (isConfirmDeleteVisible()) {
     <div class="dialog-overlay" (click)="cancelDelete()">
-      <div class="dialog-box" (click)="$event.stopPropagation()">
+      <div appModalFocus="刪除交辦確認" [modalEscapeDisabled]="deleteBusy()" (modalEscape)="cancelDelete()" class="dialog-box" (click)="$event.stopPropagation()">
         <h3>確認刪除</h3>
         @if (deleteError()) { <p role="alert">{{ deleteError() }}</p> }
         <p>您確定要永久刪除此項目嗎？此操作無法復原。</p>

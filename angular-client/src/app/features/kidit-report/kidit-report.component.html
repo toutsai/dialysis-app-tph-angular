@@ -17,59 +17,59 @@
       </p>
 
       <div class="ov-grid">
-        <div class="ov-card ov-c-initial" role="button" tabindex="0" [class.active]="activeTab() === 'initial'" (click)="setTab('initial')">
+        <button type="button" class="ov-card ov-c-initial" [class.active]="activeTab() === 'initial'" (click)="setTab('initial')">
           <div class="ov-card-head">
             <i class="fas fa-id-card"></i>
             <h3>初次建檔</h3>
             <span class="ov-freq">初次・每月上傳</span>
           </div>
           <p class="ov-desc">病患資料＋病史原發病。組長於病人清單標記「本院初透」，主護於「我的病人」填寫建檔，此處核對缺漏後匯出兩支官方 CSV 上傳。</p>
-        </div>
+        </button>
 
-        <div class="ov-card ov-c-vascular" role="button" tabindex="0" [class.active]="activeTab() === 'vascular'" (click)="setTab('vascular')">
+        <button type="button" class="ov-card ov-c-vascular" [class.active]="activeTab() === 'vascular'" (click)="setTab('vascular')">
           <div class="ov-card-head">
             <i class="fas fa-file-csv"></i>
             <h3>HD造管</h3>
             <span class="ov-freq">每季・當季第一次透析日</span>
           </div>
           <p class="ov-desc">當次護理師填寫通路事件→同步工作日誌→組長確認→季度造管 CSV（官方 82 欄）。</p>
-        </div>
+        </button>
 
-        <div class="ov-card ov-c-movement" role="button" tabindex="0" [class.active]="activeTab() === 'movement'" (click)="setTab('movement')">
+        <button type="button" class="ov-card ov-c-movement" [class.active]="activeTab() === 'movement'" (click)="setTab('movement')">
           <div class="ov-card-head">
             <i class="fas fa-calendar-alt"></i>
             <h3>病人動態</h3>
             <span class="ov-freq">每日自動同步</span>
           </div>
           <p class="ov-desc">資料蒐集區：工作日誌動態與通路事件自動同步至日誌本，月曆核對「已登錄 KiDit」勾選。</p>
-        </div>
+        </button>
 
-        <div class="ov-card ov-c-hdrx" role="button" tabindex="0" [class.active]="activeTab() === 'hdrx'" (click)="setTab('hdrx')">
+        <button type="button" class="ov-card ov-c-hdrx" [class.active]="activeTab() === 'hdrx'" (click)="setTab('hdrx')">
           <div class="ov-card-head">
             <i class="fas fa-prescription"></i>
             <h3>HD處方</h3>
             <span class="ov-freq">每季・當季最後一次透析日</span>
           </div>
           <p class="ov-desc">由透析醫囑自動產生季度處方快照（血流量、時數、AK 對應官方代碼等），逐欄核對修改後匯出官方 CSV。</p>
-        </div>
+        </button>
 
-        <div class="ov-card ov-c-qinput" role="button" tabindex="0" [class.active]="activeTab() === 'qinput'" (click)="setTab('qinput')">
+        <button type="button" class="ov-card ov-c-qinput" [class.active]="activeTab() === 'qinput'" (click)="setTab('qinput')">
           <div class="ov-card-head">
             <i class="fas fa-notes-medical"></i>
             <h3>季度輸入</h3>
             <span class="ov-freq">每季・當季最後一次抽血日</span>
           </div>
           <p class="ov-desc">透析紀錄／醫療狀況評估／合併症。主護於「我的病人 → 季度病人 KiDit 輸入」填寫，此處彙整進度並匯出三支官方 CSV。</p>
-        </div>
+        </button>
 
-        <div class="ov-card ov-c-hosp" role="button" tabindex="0" [class.active]="activeTab() === 'hosp'" (click)="setTab('hosp')">
+        <button type="button" class="ov-card ov-c-hosp" [class.active]="activeTab() === 'hosp'" (click)="setTab('hosp')">
           <div class="ov-card-head">
             <i class="fas fa-hospital"></i>
             <h3>住出院</h3>
             <span class="ov-freq">依實際住出院</span>
           </div>
           <p class="ov-desc">由病人動態自動配對住院／出院日期，補登住院原因大類／細類代碼後匯出官方 CSV。</p>
-        </div>
+        </button>
       </div>
     </aside>
 

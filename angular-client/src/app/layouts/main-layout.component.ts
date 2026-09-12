@@ -2,6 +2,7 @@
 // Standalone 版：已移除 Firebase，改用 REST API + polling
 import {
   Component,
+  ViewChild, ElementRef,
   OnInit,
   OnDestroy,
   inject,
@@ -19,7 +20,7 @@ import {
   RouterOutlet,
   RouterLink,
   RouterLinkActive,
-  NavigationEnd,
+  NavigationEnd, NavigationStart,
 } from '@angular/router';
 import { filter, map } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
@@ -243,7 +244,26 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   // Lifecycle
   // -------------------------------------------------------------------------
 
+  @ViewChild('contentScroller') contentScroller?: ElementRef<HTMLElement>;
+  private readonly pageScroll = new Map<string, number>();
+  private scrollRoute = '';
+  skipToContent(event: Event): void { event.preventDefault(); document.getElementById('main-content')?.focus(); }
+
   ngOnInit(): void {
+    this.scrollRoute = this.router.url;
+    const scrollSubscription = this.router.events.subscribe(event => {
+      if (event instanceof NavigationStart && event.url.split('?')[0] !== this.scrollRoute.split('?')[0])
+        this.pageScroll.set(this.scrollRoute, this.contentScroller?.nativeElement.scrollTop || 0);
+      if (event instanceof NavigationEnd) {
+        const previous = this.scrollRoute;
+        this.scrollRoute = event.urlAfterRedirects;
+        if (previous.split('?')[0] !== this.scrollRoute.split('?')[0]) {
+          const key = this.scrollRoute;
+          setTimeout(() => { if (this.scrollRoute === key && this.contentScroller) this.contentScroller.nativeElement.scrollTop = this.pageScroll.get(key) || 0; });
+        }
+      }
+    });
+    this.destroyRef.onDestroy(() => scrollSubscription.unsubscribe());
     // Listen to route changes: update page title + close sidebar on mobile
     this.router.events
       .pipe(
