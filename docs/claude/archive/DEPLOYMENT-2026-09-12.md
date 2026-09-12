@@ -13,14 +13,13 @@
 
 ## 先在獨立測試站驗證
 
-依 [測試說明](docs/onsite-main-dev-testing.md) 取得 onsite-main-dev，使用 .nvmrc 指定的 Node 22.23.2（套件要求 >=22.22.3 <23）。Angular 22／TypeScript 6 的本輪更新詳見 [維護交接](docs/maintenance-2026-09-12.md)。
+依 [測試說明](docs/onsite-main-dev-testing.md) 取得 onsite-main-dev，使用 .nvmrc 指定的 Node 22。
 依序執行 npm ci、npm ci --prefix angular-client、npm run check:syntax、
 npm test、npm run build:angular、npm run smoke:tph-angular，每步成功才繼續。
-安裝測試用 Chromium（`npx playwright install chromium`）後執行 `npm run test:browser`；此測試自行建立合成暫存資料庫。
 
 npm run start:review 啟動本機 3003，沿用該 checkout 的 data-dev/dialysis.db。
 不讀正式 .env、不連 HIS、定時排程停用。帳號與資料庫均不隨 Git 提交。
-日誌、備份與庫存流程都需在合成資料／獨立測試庫驗證；測試通過不代表核准正式部署。
+庫存不是本輪修改驗收範圍；請以模擬資料驗證其他操作。
 
 ## 發布前準備
 
@@ -31,7 +30,7 @@ npm run start:review 啟動本機 3003，沿用該 checkout 的 data-dev/dialysi
 5. 核對主機 PM2 程序的 name、cwd、port 與上表一致，單一 fork process。
 6. 核對正式 .env 已設定 JWT_SECRET，備份路徑與正式 DB_PATH 正確。
    請勿把密鑰或整份環境設定貼進驗證紀錄。
-7. 先以管理員的備份狀態頁建立並核對備份；如使用 `npm run backup`，須先將已核實的 DB_PATH／BACKUP_DIR 載入目前 shell（此 CLI 不自動讀取 PM2 的 env_file），確認備份對象正確且驗證成功。
+7. 在正式目錄執行 npm run backup，確認 online backup 已成功產生，檔案可讀且非空。
    備份現行程式、dist、package.json、package-lock.json、vendor 與 PM2 設定，
    記下版本和備份位置；正式資料與密鑰各自保存。
 
@@ -62,8 +61,7 @@ npm run start:review 啟動本機 3003，沿用該 checkout 的 data-dev/dialysi
 重新安裝匹配的依賴，再啟動同一個 Angular 程序。
 純程式回復不要直接倒回資料庫，以免丟失部署後新增資料。
 
-若需要資料庫還原，先保存目前資料庫的 online backup，依 [隔離復原流程](docs/backup-recovery.md)
-使用 `scripts/restore-backup.mjs` 還原至全新目錄，再核對資料。工具執行 `quick_check` 一致性快速檢查，
-不等同完整 `integrity_check` 或內容驗收。先確認需要保留的部署後資料；正式切換另由維護人員
-在維護時段決定，本工具不覆蓋現有資料庫，不刪除 WAL，也不自動啟動服務。
+若需要資料庫還原，先保存目前資料庫的 online backup，確認要還原的備份已在
+隔離資料庫通過 integrity_check 與必要資料核對，並確認需要保留的部署後資料。
+由維護人員在停止所有該資料庫連線後執行既定還原程序；不要直接覆蓋仍開啟的 WAL 資料庫。
 最後核對健康狀態、資料日期、排程與已發布版本。
