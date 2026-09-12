@@ -1,3 +1,4 @@
+import { validateCountMap, assertCountRevision, recordCountVersion, idempotentInventoryRequest, inventoryError } from '../services/inventoryLedger.js'
 // 系統相關路由 (任務、通知、庫存、配置等)
 import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
@@ -799,7 +800,7 @@ router.post('/inventory/purchases', ...isInventoryRole, async (req, res) => {
   try {
     const db = getDatabase()
     const createdBy = JSON.stringify({ uid: req.user.id, name: req.user.name })
-    const result = insertPurchaseRow(db, req.body, createdBy)
+    const result = idempotentInventoryRequest(db, req.user.id, 'purchase', req.body?.idempotencyKey, req.body, () => insertPurchaseRow(db, req.body, createdBy))
     if (result.error) {
       return res.status(400).json({ error: true, message: result.error })
     }
@@ -809,6 +810,7 @@ router.post('/inventory/purchases', ...isInventoryRole, async (req, res) => {
       id: result.id,
     })
   } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: true, message: error.message })
     console.error('新增進貨紀錄錯誤:', error)
     res.status(500).json({
       error: true,
@@ -821,7 +823,34 @@ router.post('/inventory/purchases', ...isInventoryRole, async (req, res) => {
  * 寫入一列 inventory_purchases（POST 單筆與 /batch 共用）
  * status 預設 'arrived'（相容舊的「新增進貨」= 直接入庫）；'ordered' 時 purchase_date 可為空（到貨時才填）
  */
+function validatePurchaseInput(body, existing = null) {
+  const status = body.status ?? existing?.status ?? 'arrived'
+  if (!PURCHASE_STATUSES.has(status)) throw inventoryError('status 只能是 ordered 或 arrived')
+  const values = {
+    quantity: body.quantity === undefined ? existing?.quantity : body.quantity,
+    boxQuantity: body.boxQuantity === undefined ? existing?.box_quantity : body.boxQuantity,
+    unitPrice: body.unitPrice === undefined ? existing?.unit_price : body.unitPrice,
+  }
+  for (const [field, value] of Object.entries(values)) {
+    if (field !== 'quantity' && value === undefined) continue
+    if (field !== 'quantity' && value === null && body[field] === undefined) continue
+    if (!['number','string'].includes(typeof value) || String(value).trim() === '' || !Number.isFinite(Number(value)) || Number(value) < 0) {
+      throw inventoryError(`${field} 必須是非負數字`)
+    }
+  }
+  const date = body.date === undefined ? existing?.purchase_date : body.date
+  const expectedDate = body.expectedDate === undefined ? existing?.expected_date : body.expectedDate
+  const orderDate = body.orderDate === undefined ? existing?.order_date : body.orderDate
+  if (status === 'ordered' && !expectedDate) throw inventoryError('叫貨需填預計到貨日')
+  if (status === 'arrived' && !date) throw inventoryError('已到貨需填實際到貨日')
+  // Unchanged legacy ISO dates remain editable; newly supplied dates use the canonical format.
+  for (const value of [body.date, body.expectedDate, body.orderDate]) {
+    if (value !== undefined && value !== null && value !== '' && !isValidCountDate(value)) throw inventoryError('進貨日期須為有效的 YYYY-MM-DD')
+  }
+}
+
 function insertPurchaseRow(db, body, createdBy, batchId = null) {
+  validatePurchaseInput(body || {})
   const { itemId, item, category, quantity, boxQuantity, unitPrice, supplier, date, notes, status, orderDate, expectedDate } = body || {}
   const resolvedItemId = resolveInventoryItemId(db, { itemId, item, category })
   if (!resolvedItemId) return { error: '缺少品項（itemId 或 item 品名）' }
@@ -871,21 +900,18 @@ router.post('/inventory/purchases/batch', ...isInventoryRole, async (req, res) =
     }
     const db = getDatabase()
     const createdBy = JSON.stringify({ uid: req.user.id, name: req.user.name })
-    const batchId = uuidv4()
-    const ids = []
-    let failed = null
-    db.transaction(() => {
-      for (const entry of entries) {
-        const r = insertPurchaseRow(db, { status: 'ordered', ...entry }, createdBy, batchId)
-        if (r.error) {
-          failed = r.error
-          throw new Error(r.error)
-        }
-        ids.push(r.id)
-      }
-    })()
-    res.status(201).json({ success: true, batchId, ids, count: ids.length })
+    const response = idempotentInventoryRequest(db, req.user.id, 'purchase-batch', req.body?.idempotencyKey, req.body, () => {
+      const batchId = uuidv4()
+      const ids = entries.map(entry => {
+        const result = insertPurchaseRow(db, { status: 'ordered', ...entry }, createdBy, batchId)
+        if (result.error) throw inventoryError(result.error)
+        return result.id
+      })
+      return { success: true, batchId, ids, count: ids.length }
+    })
+    res.status(201).json(response)
   } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: true, message: error.message })
     if (error && /缺少品項|預計到貨日/.test(error.message)) {
       return res.status(400).json({ error: true, message: error.message })
     }
@@ -921,6 +947,9 @@ router.put('/inventory/purchases/:id', ...isInventoryRole, async (req, res) => {
     const { id } = req.params
     const { itemId, item, category, quantity, boxQuantity, unitPrice, supplier, date, notes, status, orderDate, expectedDate } = req.body
     const db = getDatabase()
+    const existing = db.prepare('SELECT * FROM inventory_purchases WHERE id=?').get(id)
+    if (!existing) return res.status(404).json({error:true,message:'進貨紀錄不存在'})
+    validatePurchaseInput(req.body, existing)
 
     const updates = [`updated_at = datetime('now', 'localtime')`]
     const params = []
@@ -990,6 +1019,7 @@ router.put('/inventory/purchases/:id', ...isInventoryRole, async (req, res) => {
       message: '進貨紀錄已更新',
     })
   } catch (error) {
+    if (error.status) return res.status(error.status).json({error:true,message:error.message})
     console.error('更新進貨紀錄錯誤:', error)
     res.status(500).json({
       error: true,
@@ -1052,22 +1082,7 @@ function isValidCountDate(value) {
 }
 
 /** 只保留三類別 × 品名 → 非負數字；其餘鍵值丟棄 */
-function sanitizeCountMap(input) {
-  const out = {}
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return out
-  for (const category of COUNT_CATEGORIES) {
-    const src = input[category]
-    if (!src || typeof src !== 'object' || Array.isArray(src)) continue
-    out[category] = {}
-    for (const [name, value] of Object.entries(src)) {
-      const key = String(name).trim()
-      if (!key) continue
-      const n = Number(value)
-      out[category][key] = Number.isFinite(n) && n >= 0 ? n : 0
-    }
-  }
-  return out
-}
+const sanitizeCountMap = validateCountMap
 
 function mapCountDocRow(row) {
   const parseActor = (text) => {
@@ -1077,6 +1092,10 @@ function mapCountDocRow(row) {
   return {
     id: row.count_date,
     countDate: row.count_date,
+    cutoff: row.cutoff || 'start-of-day',
+    countType: row.count_type || 'weekly',
+    revision: row.revision || 0,
+    unitSnapshot: parseJsonObject(row.unit_snapshot),
     counts: parseJsonObject(row.counts),
     countBoxes: parseJsonObject(row.count_boxes),
     notes: row.notes || '',
@@ -1173,6 +1192,12 @@ router.get('/inventory/counts/latest', ...isInventoryRole, (req, res) => {
 /**
  * GET /api/system/inventory/counts/:date
  */
+router.get('/inventory/counts/:date/history', ...isInventoryRole, (req, res) => {
+  if (!isValidCountDate(req.params.date)) return res.status(400).json({error:true,message:'盤點日格式須為 YYYY-MM-DD'})
+  const rows = getDatabase().prepare('SELECT * FROM inventory_count_versions WHERE count_date=? ORDER BY revision,id').all(req.params.date)
+  res.json(rows.map(row => ({id:row.id,countDate:row.count_date,revision:row.revision,operation:row.operation,document:JSON.parse(row.document),actor:JSON.parse(row.actor),createdAt:row.created_at})))
+})
+
 router.get('/inventory/counts/:date', ...isInventoryRole, (req, res) => {
   try {
     const { date } = req.params
@@ -1182,7 +1207,7 @@ router.get('/inventory/counts/:date', ...isInventoryRole, (req, res) => {
     const db = getDatabase()
     const row = db.prepare('SELECT * FROM inventory_count_docs WHERE count_date = ?').get(date)
     if (!row) {
-      return res.status(404).json({ error: true, message: `${date} 沒有盤點紀錄` })
+      return res.status(404).json({ error: true, message: `${date} 沒有盤點紀錄`, revision: db.prepare('SELECT MAX(revision) AS revision FROM inventory_count_versions WHERE count_date=?').get(date).revision || 0 })
     }
     res.json(mapCountDocRow(row))
   } catch (error) {
@@ -1204,7 +1229,9 @@ router.put('/inventory/counts/:date', ...isInventoryRole, async (req, res) => {
     }
     const body = req.body && typeof req.body === 'object' ? req.body : {}
     const counts = sanitizeCountMap(body.counts)
-    const countBoxes = sanitizeCountMap(body.countBoxes)
+    const countBoxes = sanitizeCountMap(body.countBoxes || {})
+    if (body.cutoff !== undefined && !['start-of-day', 'end-of-day'].includes(body.cutoff)) throw inventoryError('盤點日界不正確')
+    if (body.countType !== undefined && !['weekly', 'monthly', 'both'].includes(body.countType)) throw inventoryError('盤點類型不正確')
     const notes = typeof body.notes === 'string' ? body.notes.trim() : ''
     const actor = JSON.stringify({ uid: req.user.id, name: req.user.name })
     const db = getDatabase()
@@ -1229,7 +1256,15 @@ router.put('/inventory/counts/:date', ...isInventoryRole, async (req, res) => {
     `)
 
     db.transaction(() => {
+      const existing = db.prepare('SELECT * FROM inventory_count_docs WHERE count_date=?').get(date)
+      const priorRevision = existing?.revision ?? db.prepare('SELECT MAX(revision) AS revision FROM inventory_count_versions WHERE count_date=?').get(date).revision ?? 0
+      assertCountRevision({revision:priorRevision}, body.expectedRevision)
+      if (existing) recordCountVersion(db, date, existing.revision || 0, 'before-save', existing, actor)
+      const revision = priorRevision + 1
       upsert.run(date, JSON.stringify(counts), JSON.stringify(countBoxes), notes, actor, actor)
+      const snapshot = db.prepare('SELECT id,name,category,unit,units_per_box FROM inventory_items').all()
+      db.prepare('UPDATE inventory_count_docs SET cutoff=?,count_type=?,revision=?,unit_snapshot=? WHERE count_date=?').run(body.cutoff || existing?.cutoff || 'start-of-day', body.countType || existing?.count_type || 'weekly', revision, JSON.stringify(Object.fromEntries(snapshot.map(item => [item.id, item]))), date)
+      recordCountVersion(db, date, revision, 'save', db.prepare('SELECT * FROM inventory_count_docs WHERE count_date=?').get(date), actor)
       deleteRows.run(date)
       const itemMap = buildInventoryItemIdMap(db)
       for (const category of Object.keys(counts)) {
@@ -1250,6 +1285,7 @@ router.put('/inventory/counts/:date', ...isInventoryRole, async (req, res) => {
     const row = db.prepare('SELECT * FROM inventory_count_docs WHERE count_date = ?').get(date)
     res.json(mapCountDocRow(row))
   } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: true, message: error.message })
     console.error('儲存盤點錯誤:', error)
     res.status(500).json({ error: true, message: '儲存盤點失敗' })
   }
@@ -1266,14 +1302,17 @@ router.delete('/inventory/counts/:date', ...isInventoryRole, async (req, res) =>
       return res.status(400).json({ error: true, message: '盤點日格式須為 YYYY-MM-DD' })
     }
     const db = getDatabase()
-    const existing = db.prepare('SELECT count_date FROM inventory_count_docs WHERE count_date = ?').get(date)
+    const existing = db.prepare('SELECT * FROM inventory_count_docs WHERE count_date = ?').get(date)
     if (!existing) {
-      return res.status(404).json({ error: true, message: `${date} 沒有盤點紀錄` })
+      return res.status(404).json({ error: true, message: `${date} 沒有盤點紀錄`, revision: db.prepare('SELECT MAX(revision) AS revision FROM inventory_count_versions WHERE count_date=?').get(date).revision || 0 })
     }
     const latest = db.prepare('SELECT MAX(count_date) AS d FROM inventory_count_docs').get()
     const wasLatest = latest?.d === date
 
     db.transaction(() => {
+      const expected = req.body?.expectedRevision ?? (req.query.expectedRevision === undefined ? undefined : Number(req.query.expectedRevision))
+      assertCountRevision(existing, expected)
+      recordCountVersion(db, date, (existing.revision || 0) + 1, 'delete', existing, JSON.stringify({uid:req.user.id,name:req.user.name}))
       db.prepare('DELETE FROM inventory_count_docs WHERE count_date = ?').run(date)
       db.prepare('DELETE FROM inventory_counts WHERE count_date = ?').run(date)
       if (wasLatest) {
@@ -1288,6 +1327,7 @@ router.delete('/inventory/counts/:date', ...isInventoryRole, async (req, res) =>
 
     res.json({ success: true, message: '盤點紀錄已刪除', countDate: date })
   } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: true, message: error.message })
     console.error('刪除盤點錯誤:', error)
     res.status(500).json({ error: true, message: '刪除盤點失敗' })
   }

@@ -3,12 +3,12 @@
   <header class="page-header">
     <h1>書記專用</h1>
     <nav class="main-tabs" aria-label="書記專用功能">
-      <button [class.active]="mainTab() === 'physician'" (click)="mainTab.set('physician')">醫師班表列印</button>
-      <button [class.active]="mainTab() === 'register'" (click)="mainTab.set('register')">常規病人掛號</button>
-      <button [class.active]="mainTab() === 'injection'" (click)="mainTab.set('injection')">針劑發放名單</button>
-      <button [class.active]="mainTab() === 'gentamycin'" (click)="mainTab.set('gentamycin')">Gentamycin 開立清單</button>
-      <button [class.active]="mainTab() === 'catastrophic'" (click)="mainTab.set('catastrophic')">重大傷病申請</button>
-      <button [class.active]="mainTab() === 'inventory'" (click)="mainTab.set('inventory')">庫存管理</button>
+      <button [class.active]="mainTab() === 'physician'" (click)="switchMain('physician')">醫師班表列印</button>
+      <button [class.active]="mainTab() === 'register'" (click)="switchMain('register')">常規病人掛號</button>
+      <button [class.active]="mainTab() === 'injection'" (click)="switchMain('injection')">針劑發放名單</button>
+      <button [class.active]="mainTab() === 'gentamycin'" (click)="switchMain('gentamycin')">Gentamycin 開立清單</button>
+      <button [class.active]="mainTab() === 'catastrophic'" (click)="switchMain('catastrophic')">重大傷病申請</button>
+      <button [class.active]="mainTab() === 'inventory'" (click)="switchMain('inventory')">庫存管理</button>
     </nav>
   </header>
 
@@ -44,15 +44,22 @@
 
   @if (mainTab() === 'inventory') {
 
-  <div class="tabs-navigation">
-    <button [class.active]="activeTab() === 'dashboard'" (click)="activeTab.set('dashboard'); loadDashboard()">庫存總覽</button>
-    <button [class.active]="activeTab() === 'items'" (click)="activeTab.set('items')">品項設定</button>
-    <button [class.active]="activeTab() === 'beds'" (click)="activeTab.set('beds')">床位預設用物</button>
-    <button [class.active]="activeTab() === 'purchase'" (click)="activeTab.set('purchase')">叫貨/到貨紀錄</button>
-    <button [class.active]="activeTab() === 'consumption'" (click)="activeTab.set('consumption')">消耗紀錄</button>
-    <button [class.active]="activeTab() === 'weekly'" (click)="activeTab.set('weekly'); loadWeeklyData()">每週訂單</button>
-    <button [class.active]="activeTab() === 'counts'" (click)="openCountsTab()">盤點</button>
-  </div>
+  <nav class="tabs-navigation inventory-primary-nav" aria-label="庫存功能">
+    <button [class.active]="inventoryView()==='overview'" (click)="navigateInventory('overview')">庫存總覽</button>
+    <button [class.active]="inventoryView()==='calendar'" (click)="navigateInventory('calendar')">作業行事曆</button>
+    <button [class.active]="inventoryView()==='reports'" (click)="navigateInventory('reports')">報表</button>
+    <button [class.active]="inventoryView()==='settings'" (click)="navigateInventory('settings')">設定</button>
+  </nav>
+  @if(inventoryView()==='calendar') {
+    <nav class="workflow-nav" aria-label="當週作業">
+      <button (click)="navigateInventory('calendar')" [class.active]="activeTab()==='purchase'">行事曆</button>
+      <button (click)="openCountsTab()" [class.active]="activeTab()==='counts'">實體盤點</button>
+      <button (click)="navigateInventory('calendar','weekly');loadWeeklyData()" [class.active]="activeTab()==='weekly'">本週盤點與補貨</button>
+      <button (click)="openHisDate(countFilter.date)" [class.active]="activeTab()==='consumption'">HIS 資料上傳</button>
+    </nav>
+  }
+  @if(inventoryView()==='settings') {<nav class="workflow-nav" aria-label="庫存設定"><button (click)="activeTab.set('items')" [class.active]="activeTab()==='items'">品項、箱規與安全量</button><button (click)="activeTab.set('beds')" [class.active]="activeTab()==='beds'">床位與機型預設</button></nav>}
+  @if(inventoryView()==='reports') {<nav class="workflow-nav" aria-label="庫存報表"><button (click)="activeTab.set('consumption');consumptionSubTab.set('query')">病人／品項耗材</button><button (click)="activeTab.set('consumption');consumptionSubTab.set('summary')">每月消耗</button><button (click)="activeTab.set('stock-report')">庫存月報</button></nav>}
 
   <main class="page-main-content">
     <!-- ========== Dashboard: 庫存總覽 ========== -->
@@ -63,8 +70,7 @@
           <h3>庫存總覽</h3>
           @if (dashboardHasCount()) {
             <p class="panel-description">
-              盤點基礎：{{ dashboardLastCountDate() }}（{{ dashboardCountAgeDays() }} 天前）
-              ｜卡片數字 = 今日消耗前的推估庫存（盤點量 + 盤點後到貨 − 盤點後至昨日消耗）；餘 = 再扣今日預估消耗
+              截至今日收班推估。各品項以自己的最近實盤為基準；未到貨不計入現貨。
             </p>
             @if (dashboardConsumptionNote()) {
               <p class="panel-description">安全庫存 = 日均 × 9 天；{{ dashboardConsumptionNote() }}</p>
@@ -88,7 +94,7 @@
         <!-- Stock Level Cards -->
         @if (!dashboardHasCount()) {
           <div class="empty-state">
-            <p>尚無盤點紀錄，請先到「盤點」頁籤盤點。</p>
+            <p>尚無盤點紀錄，請到「作業行事曆 → 實體盤點」建立盤點。</p>
             <p style="color: #6c757d; font-size: 0.9rem;">推估庫存以最近一次盤點為基準，沒有盤點就無法推算（下方每日預估消耗仍可參考）。</p>
           </div>
         } @else if (dashboardItems().length === 0) {
@@ -98,26 +104,28 @@
         @for (category of categoryKeys; track category) {
           @if (getDashboardItemsByCategory(category).length > 0) {
             <div class="dash-category-section">
-              <h4 class="dash-category-title">{{ CATEGORY_NAMES[category] }}</h4>
+              <h4 class="dash-category-title">{{ category === 'artificialKidney' ? 'AK 人工腎臟' : category === 'dialysateCa' ? 'A 液' : 'B 液' }}</h4>
               <div class="dash-cards-grid">
                 @for (item of getDashboardItemsByCategory(category); track item.itemName) {
-                  <div class="dash-card" [class.dash-card-safe]="item.status === 'safe'" [class.dash-card-warning]="item.status === 'warning'" [class.dash-card-danger]="item.status === 'danger'" [class.dash-card-critical]="item.status === 'critical'">
+                  <button type="button" (click)="openStockItem(item.category,item.itemName)" [attr.aria-label]="item.itemName + ' 庫存明細'" class="dash-card" [class.dash-card-safe]="item.status === 'safe'" [class.dash-card-warning]="item.status === 'warning'" [class.dash-card-danger]="item.status === 'danger'" [class.dash-card-critical]="item.status === 'critical'">
                     <div class="dash-card-header">
                       <span class="dash-card-name">{{ item.itemName }}</span>
                       <span class="status-dot" [class.dot-safe]="item.status === 'safe'" [class.dot-warning]="item.status === 'warning'" [class.dot-danger]="item.status === 'danger'" [class.dot-critical]="item.status === 'critical'"></span>
                     </div>
-                    <div class="dash-card-stock">{{ item.estimatedStock }}</div>
-                    <div class="dash-card-safe-level">{{ item.statusLabel }} ｜ 安全庫存：{{ item.safeLevel > 0 ? item.safeLevel : '-' }}</div>
-                    @if (item.dailyUsage > 0 || item.todayConsumption > 0 || item.pending > 0) {
-                      <div class="dash-card-detail">日均：{{ item.dailyUsage }} ｜ 今消耗：{{ item.todayConsumption }} ｜ 餘：{{ item.remainingAfterToday }}@if (item.pending > 0) {<span> ｜ 待到貨：{{ item.pending }}</span>}</div>
+                    <div class="dash-card-stock">{{ item.estimatedStock ?? '—' }} <small>{{ unitLabel(item.category,item.itemName) }}</small></div>
+                    <div class="dash-card-safe-level">{{ item.statusLabel }} ｜ 安全庫存：{{item.safeLevel ?? '待核對'}}@if(item.autoSafeLevel===null){<span>（自動安全量未知）</span>}</div>
+                    @if (item.dailyUsage !== null || item.todayConsumption !== null || item.pending > 0) {
+                      <div class="dash-card-detail">日均：{{ item.dailyUsage ?? '待核對' }} ｜ 今日排程：{{ item.todayConsumption ?? '待核對' }}@if (item.pending > 0) {<span> ｜ 待到貨：{{ item.pending }}</span>}</div>
                     }
-                  </div>
+                    <div class="dash-card-detail">最近實盤 {{item.lastCountDate || '尚無'}} · 預計不足 {{item.firstDeficitDate || '—'}}</div><div class="dash-card-detail">下次到貨 {{item.nextDelivery?.date || '尚無'}} {{item.nextDelivery?.quantity ?? ''}} {{item.nextDelivery ? unitLabel(item.category,item.itemName) : ''}}</div>
+                  </button>
                 }
               </div>
             </div>
           }
         }
 
+        @for(warning of forecastWarnings();track warning){<p class="source-note">{{warning}}；受影響品項未顯示推估數量。</p>}
         <!-- Daily Forecast -->
         <div class="panel-header" style="border-top: 1px solid #e9ecef; padding-top: 1rem;">
           <h3>每日預估消耗</h3>
@@ -138,7 +146,7 @@
                 }
               }
               @if (isForecastEmpty(todayForecast())) {
-                <p style="color: #6c757d; font-size: 0.9rem;">今日無排程</p>
+                <p style="color: #6c757d; font-size: 0.9rem;">今日推估耗用為零</p>
               }
             </div>
             <!-- Tomorrow -->
@@ -153,7 +161,7 @@
                 }
               }
               @if (isForecastEmpty(tomorrowForecast())) {
-                <p style="color: #6c757d; font-size: 0.9rem;">明日無排程</p>
+                <p style="color: #6c757d; font-size: 0.9rem;">明日推估耗用為零</p>
               }
             </div>
           </div>
@@ -311,12 +319,9 @@
     @if (activeTab() === 'purchase') {
     <div class="tab-panel">
       <div class="panel-header">
-        <h3>叫貨/到貨紀錄</h3>
+        <h3>作業行事曆</h3>
         <div style="display: flex; gap: 8px; align-items: center;">
-          <div class="sub-tabs" style="margin: 0;">
-            <button [class.active]="purchaseView() === 'calendar'" (click)="purchaseView.set('calendar')">行事曆</button>
-            <button [class.active]="purchaseView() === 'list'" (click)="purchaseView.set('list'); fetchPurchases()">列表</button>
-          </div>
+          <nav class="workflow-nav"><button (click)="purchaseView.set('calendar')" [class.active]="purchaseView()==='calendar'">週／月行事曆</button><button (click)="purchaseView.set('list')" [class.active]="purchaseView()==='list'">叫貨／到貨清單</button></nav>
           @if (purchaseView() === 'list') {
             <button class="btn-primary" (click)="toggleInlineAdd()">
               {{ showPurchaseInlineAdd() ? '取消新增' : '+ 新增到貨(直接入庫)' }}
@@ -326,7 +331,7 @@
       </div>
 
       @if (purchaseView() === 'calendar') {
-        <app-purchase-calendar [knownItems]="knownItems" [unitsPerBoxFn]="unitsPerBoxFn" (changed)="fetchPurchases()"></app-purchase-calendar>
+        <app-purchase-calendar [knownItems]="knownItems" [unitsPerBoxFn]="unitsPerBoxFn" [unitLabelFn]="unitLabelFn" [initialDate]="calendarDate" [initialCategory]="calendarCategory" [initialItem]="calendarItem" (countRequested)="openCountDate($event)" (hisRequested)="openHisDate($event)" (changed)="fetchPurchases();loadDashboard()"></app-purchase-calendar>
       } @else {
       <div class="filter-bar">
         <div class="filter-field">
@@ -430,12 +435,7 @@
     <!-- ========== Tab 2: 消耗紀錄 ========== -->
     @if (activeTab() === 'consumption') {
     <div class="tab-panel">
-      <div class="sub-tabs">
-        <button [class.active]="consumptionSubTab() === 'upload'" (click)="consumptionSubTab.set('upload')">資料上傳</button>
-        <button [class.active]="consumptionSubTab() === 'query'" (click)="consumptionSubTab.set('query')">病人耗材查詢</button>
-        <button [class.active]="consumptionSubTab() === 'summary'" (click)="consumptionSubTab.set('summary')">每月消耗量</button>
-        <button [class.active]="consumptionSubTab() === 'theoretical'" (click)="consumptionSubTab.set('theoretical')">排程推算消耗</button>
-      </div>
+      @if(inventoryView()==='calendar'){<nav class="workflow-nav"><button (click)="consumptionSubTab.set('upload')">HIS 上傳</button><button (click)="consumptionSubTab.set('theoretical')">每日排程需求</button></nav>}
 
       <!-- 耗材查詢 -->
       @if (consumptionSubTab() === 'query') {
@@ -559,6 +559,7 @@
 
       <!-- 當月總量 -->
       @if (consumptionSubTab() === 'summary') {
+      <div class="source-note"><h4>歸檔月份來源合計</h4><p>沿用來源迄日所屬月份歸檔；跨月區間不拆分，本表不是精確曆月實際耗用。曆月庫存請查看「庫存月報」。</p>@for(source of summarySources();track source.rangeKey+source.category){<button class="btn-secondary" (click)="showSourceInCalendar(source)">{{source.startDate}} ～ {{source.endDate}} · {{CATEGORY_NAMES[source.category]}} {{source.startDate.slice(0,7)!==source.endDate.slice(0,7)?'⚠ 跨月，需核對':''}} · 查看來源</button>}</div>
       <div class="sub-panel">
         <div class="search-controls">
           <div class="search-field">
@@ -592,8 +593,8 @@
                     <th>類別</th>
                     <th>品項</th>
                     <th>每箱數量</th>
-                    <th>當月消耗(個)</th>
-                    <th>當月消耗(箱)</th>
+                    <th>來源合計（依品項單位）</th>
+                    <th>來源合計(箱)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -603,26 +604,13 @@
                         <td>{{ CATEGORY_NAMES[category] }}</td>
                         <td>{{ item }}</td>
                         <td>{{ getUnitsPerBox(category, item) }}</td>
-                        <td>{{ monthlySummaryData[category][item] }}</td>
+                        <td>{{ monthlySummaryData[category][item] }} {{unitLabel(category,item)}}</td>
                         <td class="box-cell">{{ calculateBoxes(category, item, monthlySummaryData[category][item]) }}</td>
                       </tr>
                     }
                   }
                 </tbody>
-                <tfoot>
-                  <tr class="summary-total-row">
-                    <td colspan="3"><strong>各類別小計</strong></td>
-                    <td colspan="2"></td>
-                  </tr>
-                  @for (category of categoryKeys; track category) {
-                    <tr class="category-total">
-                      <td>{{ CATEGORY_NAMES[category] }}</td>
-                      <td colspan="2">合計</td>
-                      <td><strong>{{ getCategoryTotal(category) }}</strong></td>
-                      <td class="box-cell">-</td>
-                    </tr>
-                  }
-                </tfoot>
+
               </table>
             </div>
           }
@@ -632,6 +620,7 @@
 
       <!-- 資料上傳 -->
       @if (consumptionSubTab() === 'upload') {
+      <div class="source-note"><p>作業日期 {{hisWorkDate}}；實際涵蓋日期以 HIS 檔案原始標頭為準，請核對上傳結果。</p><p>可上傳每日 HIS 檔。單日來源才顯示每日實際；多日資料保留原始區間，不平均拆成每日。缺資料日期仍標示排程推估。</p><label><input type="checkbox" [(ngModel)]="completeCategory" /> 我確認此檔涵蓋來源日期內該類別全部耗用（未列品項可視為零）</label>@if(completeCategory){<label><input type="checkbox" [(ngModel)]="confirmEmptyCategory" /> 若原始檔沒有任何耗用列，我再次確認該類別整段為零</label>}<p>只有無略過、無錯誤且完成品項對照的資料才可作為完整類別；A 液上傳不代表 B 液完整。</p></div>
       <div class="sub-panel upload-panel">
         <div class="upload-core-panel">
           <h4>批次上傳每月耗材 Excel</h4>
@@ -662,7 +651,7 @@
               {{ selectedFile() ? '重新選擇檔案' : '選擇檔案' }}
             </label>
           </div>
-          <button class="btn-primary upload-btn-main" (click)="handleUpload()" [disabled]="!selectedFile() || isUploading()">
+          @if(selectedFile()){<div class="source-note"><strong>來源日期標頭</strong><p>{{uploadHeaderLoading()?'讀取中…':uploadHeader()}}</p><label><input type="checkbox" [(ngModel)]="uploadDatesReviewed" [disabled]="uploadHeaderLoading()" /> 已核對來源起迄日（作業日期 {{hisWorkDate}} 不會覆蓋來源日期）</label></div>}<button class="btn-primary upload-btn-main" (click)="handleUpload()" [disabled]="!selectedFile() || isUploading() || uploadHeaderLoading() || !uploadDatesReviewed">
             {{ isUploading() ? '處理中...' : '開始上傳' }}
           </button>
           @if (uploadResult()) {
@@ -708,6 +697,7 @@
         </div>
 
         @if (theoreticalResult()) {
+        @for(warning of theoreticalResult()!.warnings;track warning){<p class="source-note">{{warning}}；缺資料類別未顯示數量。</p>}
         <p style="color: #6c757d; font-size: 0.9rem; margin-bottom: 1rem;">
           查詢期間：{{ theoreticalResult()!.period.start }} ～ {{ theoreticalResult()!.period.end }}，
           共處理 {{ theoreticalResult()!.totalSlots }} 筆排程。
@@ -749,7 +739,7 @@
 
     <!-- ========== Tab 3: 盤點（原「每月盤點」+「週二盤點」已合併） ========== -->
     @if (activeTab() === 'counts') {
-    <div class="tab-panel">
+    <div class="tab-panel"><fieldset class="count-fields" [disabled]="countsSaving() || countsLoading()">
       <div class="panel-header">
         <div>
           <h3>盤點</h3>
@@ -768,6 +758,9 @@
             <button type="button" class="date-nav-btn" title="後一天" (click)="stepDate(countFilter, 'date', 1, 'date'); loadCountDoc()">›</button>
           </div>
         </div>
+        <div class="filter-field"><label>盤點截止</label><select [(ngModel)]="countCutoff"><option value="end-of-day">全部班別結束後（日終）</option><option value="start-of-day">當日班別開始前（日初）</option></select></div>
+        <div class="filter-field"><label>用途（同日同一份）</label><select [(ngModel)]="countType"><option value="weekly">每週實盤</option><option value="monthly">月結盤點</option><option value="both">每週實盤＋月結</option></select></div>
+        <button class="btn-secondary" (click)="saveCountDraft()">存草稿</button><button class="btn-secondary" (click)="restoreCountDraft()">還原草稿</button>
         <button class="btn-primary" (click)="saveCountDoc()" [disabled]="countsSaving() || countsLoading()">
           {{ countsSaving() ? '儲存中...' : '儲存盤點' }}
         </button>
@@ -776,6 +769,7 @@
         </button>
       </div>
 
+      @if(countDraftInfo()){<p role="status" class="source-note">{{countDraftInfo()}}</p>}
       @if (countsLoading()) {
         <div class="loading-state">載入盤點紀錄中...</div>
       } @else {
@@ -792,7 +786,7 @@
         <div class="weekly-section">
           <div class="section-header">
             <h4>盤點數量輸入</h4>
-            <span class="unit-hint">每箱個數依「品項設定」；每箱 1 個者箱數即個數</span>
+            <span class="unit-hint">空白＝未盤點；整箱＋零散數量＝實盤總量，零請明確確認</span>
           </div>
           <div class="inventory-grid">
             @for (category of categoryKeys; track category) {
@@ -812,9 +806,7 @@
                           class="box-input"
                         />
                         <span class="box-unit">箱</span>
-                        @if (countBoxes[category]?.[item]) {
-                          <span class="unit-hint">= {{ countUnits[category][item] }} 個</span>
-                        }
+                        <input type="number" min="0" [(ngModel)]="countLoose[category][item]" (ngModelChange)="syncCountUnits()" placeholder="零散" class="box-input" [attr.aria-label]="item+'零散數量'" /><span>{{unitLabel(category,item)}}</span><button type="button" class="btn-sm btn-secondary" (click)="markCountZero(category,item)">確認零</button><span class="unit-hint">{{ countUnits[category][item] == null ? '未盤點' : '= '+countUnits[category][item]+' '+unitLabel(category,item) }}</span>
                       </div>
                     </div>
                   }
@@ -865,10 +857,14 @@
         </div>
       }
 
+    </fieldset>
+    </div>
+    }
+    @if(activeTab()==='stock-report') {<div class="tab-panel">
       <!-- 月報表 -->
       <div class="weekly-section">
         <div class="section-header">
-          <h4>月報表</h4>
+          <h4>月報表</h4><button class="btn-secondary" (click)="exportCountMonthReport()" [disabled]="!countReportLoaded()">匯出庫存月報</button>
           <span class="unit-hint">期初 = 該月月初前最近一次盤點推估到月初；消耗為實際優先、缺的日子以排程推估</span>
         </div>
         <div class="filter-bar">
@@ -922,11 +918,11 @@
                 @for (row of countReportRows(); track row.category + '|' + row.item) {
                   <tr>
                     <td>{{ row.categoryName }}</td>
-                    <td>{{ row.item }}</td>
+                    <td>{{ row.item }}（{{unitLabel(row.category,row.item)}}）</td>
                     <td>{{ row.opening != null ? row.opening : '—' }}</td>
                     <td class="positive">+{{ row.arrived }}</td>
                     <td class="negative">
-                      -{{ row.consumed }}
+                      {{ row.consumed===null?'待核對':'−'+row.consumed }}
                       <span class="unit-hint">（{{ row.daysLabel }}）</span>
                     </td>
                     <td class="result-cell">{{ row.closing != null ? row.closing : '—' }}</td>
@@ -964,7 +960,7 @@
 
       <div class="filter-bar">
         <div class="filter-field">
-          <label>盤點日（週二）</label>
+          <label>已儲存盤點日（預設週二）</label>
           <div class="date-nav">
             <button type="button" class="date-nav-btn" title="前一天" (click)="stepDate(weeklyFilter, 'countDate', -1, 'date')">‹</button>
             <input type="date" [(ngModel)]="weeklyFilter.countDate" />
@@ -986,99 +982,20 @@
 
       @if (weeklyDataLoaded()) {
         <div class="weekly-content">
-          <!-- 盤點輸入區（與「盤點」頁籤同一份文件，key = 盤點日） -->
-          <div class="weekly-section">
-            <div class="section-header">
-              <h4>盤點輸入 ({{ weeklyFilter.countDate }})</h4>
-              <button class="btn-sm btn-primary" (click)="saveWeeklyCount()" [disabled]="weeklyLoading()">
-                儲存盤點
-              </button>
-            </div>
-            @if (weeklyCountSavedInfo()) {
-              <p class="panel-description">{{ weeklyCountSavedInfo() }}</p>
-            }
-            <div class="inventory-grid">
-              @for (category of categoryKeys; track category) {
-                <div class="category-section">
-                  <h5>{{ CATEGORY_NAMES[category] }}</h5>
-                  <div class="item-inputs">
-                    @for (item of getItemsForCategory(category); track item) {
-                      <div class="item-row">
-                        <label>{{ item }}</label>
-                        <div class="box-input-group">
-                          <input
-                            type="number"
-                            [(ngModel)]="weeklyCountBoxes[category][item]"
-                            (ngModelChange)="syncWeeklyCount()"
-                            placeholder="箱數"
-                            min="0"
-                            class="box-input"
-                          />
-                          <span class="box-unit">箱</span>
-                          @if (weeklyCountBoxes[category]?.[item]) {
-                            <span class="unit-hint">
-                              = {{ weeklyCount[category][item] }} 個
-                            </span>
-                          }
-                        </div>
-                      </div>
-                    }
-                  </div>
-                </div>
-              }
-            </div>
-          </div>
-
+          <div class="weekly-section"><h4>使用已儲存盤點 · {{weeklyFilter.countDate}}</h4><p>{{weeklyCountSavedInfo()}}</p><button class="btn-secondary" (click)="openCountDate(weeklyFilter.countDate)">開啟同一份盤點</button><p class="panel-description">盤點只在實體盤點表輸入一次。先儲存，再回來計算補貨；待到貨尚未入庫。沒有實盤基準的品項不產生建議。</p></div>
+          @for(message of weeklyBlockedItems();track message){<p class="source-note">{{message}}</p>}
           <!-- 訂購建議表 -->
           <div class="weekly-section">
             <div class="section-header">
               <h4>訂購建議</h4>
               <button class="btn-success" (click)="exportWeeklyOrder()" [disabled]="!hasOrderData">
-                匯出訂單 (以箱為單位)
+                預覽補貨安排
               </button>
             </div>
             <div class="table-container">
-              <table>
-                <thead>
-                  <tr>
-                    <th>類別</th>
-                    <th>品項</th>
-                    <th>每箱數量</th>
-                    <th>上週消耗(個)</th>
-                    <th>日均消耗</th>
-                    <th>安全庫存(9天)</th>
-                    <th>盤點量</th>
-                    <th>盤點後到貨</th>
-                    <th>盤點後消耗</th>
-                    <th>目前推估</th>
-                    <th>待到貨</th>
-                    <th>建議訂購(個)</th>
-                    <th>建議訂購(箱)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (row of weeklyRows(); track row.category + '|' + row.item) {
-                    <tr>
-                      <td>{{ row.categoryName }}</td>
-                      <td>{{ row.item }}</td>
-                      <td>{{ row.unitsPerBox }}</td>
-                      <td>
-                        {{ row.lastWeekConsumption }}
-                        <span class="unit-hint">({{ row.sourceLabel }})</span>
-                      </td>
-                      <td>{{ row.dailyAvg }}</td>
-                      <td>{{ row.safetyStock }}</td>
-                      <td>{{ row.countUnits }}</td>
-                      <td class="positive">+{{ row.arrivedSinceCount }}</td>
-                      <td class="negative">-{{ row.consumedSinceCount }}</td>
-                      <td class="result-cell">{{ row.estimatedStock }}</td>
-                      <td>{{ row.pending }}</td>
-                      <td [class.need-order]="row.orderQuantity > 0">{{ row.orderQuantity }}</td>
-                      <td [class.need-order]="row.orderQuantity > 0" class="box-cell">{{ row.orderBoxes }}</td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
+              <table><thead><tr><th>品項</th><th>目前推估現貨</th><th>待到貨（未入庫）</th><th>建議箱數</th><th>到貨與依據</th></tr></thead><tbody>
+              @for(row of weeklyRows();track row.category+'|'+row.item){<tr><td>{{row.categoryName}} · {{row.item}}</td><td>{{row.estimatedStock}} {{unitLabel(row.category,row.item)}}</td><td>{{row.pending}} {{unitLabel(row.category,row.item)}}</td><td>{{row.orderBoxes}} 箱</td><td><p [class.negative]="row.firstDeficitDate">預計不足：{{row.firstDeficitDate || '—'}}</p><details><summary>查看計算</summary><p>實盤基準 {{row.anchorDate}}</p><p>盤點 {{row.countUnits}} ＋到貨 {{row.arrivedSinceCount}} −消耗 {{row.consumedSinceCount}}</p><p>上週 {{row.lastWeekConsumption}}（{{row.sourceLabel}}）；安全量 {{row.safetyStock}}；每箱 {{row.unitsPerBox}} {{unitLabel(row.category,row.item)}}</p></details></td></tr>}
+              </tbody></table>
             </div>
           </div>
         </div>
@@ -1091,11 +1008,11 @@
 
   <!-- 訂單預覽 Modal -->
   @if (showOrderPreview()) {
-  <div class="modal-overlay" (click)="showOrderPreview.set(false)">
+  <div class="modal-overlay" (click)="closeOrderPreview()">
     <div class="modal-content modal-wide" (click)="$event.stopPropagation()">
       <div class="modal-header">
-        <h3>訂單預覽</h3>
-        <button class="modal-close" (click)="showOrderPreview.set(false)">&times;</button>
+        <h3>訂單預覽</h3>@if(orderRetryPayload){<p role="status">上次結果尚未確認；請重試確認原叫貨。原始安排已鎖定，暫停匯出。</p>}
+        <button class="modal-close" (click)="closeOrderPreview()">&times;</button>
       </div>
       <div class="modal-body">
         <div class="order-info-row">
@@ -1122,7 +1039,7 @@
                   @for (dayIdx of [0, 1, 2, 3, 4, 5]; track dayIdx) {
                     <td style="text-align: center;">
                       <input type="number" min="0"
-                        [(ngModel)]="orderPreviewGrid[entry.category + '|' + entry.item][dayIdx]"
+                        [(ngModel)]="orderPreviewGrid[entry.category + '|' + entry.item][dayIdx]" [disabled]="orderCreated()||orderCreating()||!!orderRetryPayload"
                         style="width: 70px; text-align: center;"
                         class="order-cell-input"
                       />
@@ -1137,20 +1054,17 @@
           </table>
         </div>
         <p style="color: #6c757d; font-size: 0.85rem; margin-top: 0.5rem;">
-          💡 預設到貨日為週一、週三。可手動調整各日數量（單位：個）。
+          預設到貨日為週一、週三。可手動調整各日數量（單位：箱，匯出與建單使用同一數量）。
         </p>
-        <label style="display: flex; align-items: center; gap: 6px; font-size: 0.9rem; margin-top: 0.25rem;">
-          <input type="checkbox" [(ngModel)]="createCalendarOrdersOnExport" />
-          同時建立行事曆叫貨（每個有數量的日期一筆「待到貨」，以整箱計、無條件進位；到貨時在行事曆點選入庫）
-        </label>
+        <p>建議量已換算整箱；Excel 下載可重複執行，不會另外建單。只在實際到貨日確認後入庫。</p>
         <div class="order-signature-row">
           <span><strong>製表人：</strong>{{ authService.currentUser()?.name || '' }}</span>
           <span><strong>洗腎室護理長：</strong>_______________</span>
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn-secondary" (click)="showOrderPreview.set(false)">取消</button>
-        <button class="btn-success" (click)="confirmExportOrder()">{{ createCalendarOrdersOnExport ? '確認匯出 Excel 並建立叫貨' : '確認匯出 Excel' }}</button>
+        <button class="btn-secondary" (click)="closeOrderPreview()">取消</button>
+        <button class="btn-primary" (click)="confirmCreateOrder()" [disabled]="orderCreating()||orderCreated()">{{orderCreated()?'已建立叫貨':orderCreating()?'建立中…':'確認建立叫貨'}}</button><button class="btn-success" (click)="confirmExportOrder()" [disabled]="orderCreating()||!!orderRetryPayload">下載 Excel（不建單）</button>
       </div>
     </div>
   </div>
@@ -1192,8 +1106,8 @@
           <input type="number" [(ngModel)]="purchaseForm.boxQuantity" min="1" required />
           @if (purchaseForm.item && purchaseForm.boxQuantity) {
             <small class="field-hint">
-              = {{ calculateUnits(purchaseForm.category, purchaseForm.item, purchaseForm.boxQuantity) }} 個
-              (每箱 {{ getUnitsPerBox(purchaseForm.category, purchaseForm.item) }} 個)
+              = {{ calculateUnits(purchaseForm.category, purchaseForm.item, purchaseForm.boxQuantity) }} {{unitLabel(purchaseForm.category,purchaseForm.item)}}
+              (每箱 {{ getUnitsPerBox(purchaseForm.category, purchaseForm.item) }} {{unitLabel(purchaseForm.category,purchaseForm.item)}})
             </small>
           }
         </div>
@@ -1236,7 +1150,7 @@
         </div>
         <div class="form-field">
           <label>每箱個數</label>
-          <input type="number" [(ngModel)]="itemForm.unitsPerBox" placeholder="例如：20" min="1" />
+          <input type="text" [(ngModel)]="itemForm.unit" placeholder="基礎單位，例如支、桶、袋" aria-label="基礎單位" /><input type="number" [(ngModel)]="itemForm.unitsPerBox" placeholder="例如：20" min="1" />
         </div>
         <div class="form-field">
           <label>安全庫存量</label>
@@ -1352,3 +1266,7 @@
     (cancel)="onItemMappingCancel()"
   ></app-consumable-item-mapping-dialog>
 </div>
+
+@if (selectedStockItem(); as selected) {
+  <app-inventory-item-detail [selected]="selected" [detail]="itemDetail()" [loading]="itemDetailLoading()" [unit]="unitLabel(selected.category, selected.item)" [purchases]="itemDetailPurchases()" (closed)="closeStockItem()" (calendarRequested)="itemToCalendar()" />
+}

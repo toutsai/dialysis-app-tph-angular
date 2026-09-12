@@ -1,13 +1,14 @@
 // 叫貨/到貨行事曆（庫存管理 > 叫貨/到貨紀錄）
 // 資料 = inventory_purchases：status 'ordered'（已叫貨待到貨，顯示在預計到貨日）/ 'arrived'（已到貨=入庫，顯示在到貨日）
 // 庫存計算只算 arrived（後端 monthly/calculation 與父元件盤點皆已過濾）
-import { Component, EventEmitter, Input, OnInit, Output, computed, inject, signal } from '@angular/core';
+import { Component, EventEmitter, Input, OnInit, OnChanges, SimpleChanges, Output, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '@services/api.service';
 import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@services/api-manager.service';
 import { AuthService } from '@services/auth.service';
+import { InventoryStockService, type CountDoc } from './inventory-stock.service';
 import { shiftMonthString, shiftDateString } from '@/utils/dateStep';
 
 export type PurchaseStatus = 'ordered' | 'arrived';
@@ -67,8 +68,40 @@ export function toLocalYmd(value: string | null | undefined): string {
   templateUrl: './purchase-calendar.component.html',
   styleUrl: './purchase-calendar.component.css',
 })
-export class PurchaseCalendarComponent implements OnInit {
+export class PurchaseCalendarComponent implements OnInit, OnChanges {
   private readonly api = inject(ApiService);
+  private readonly stock = inject(InventoryStockService);
+  @Input() unitLabelFn:(category:string,item:string)=>string=()=>'';
+  @Input() initialDate='';
+  @Input() initialCategory='';
+  @Input() initialItem='';
+  @Output() countRequested=new EventEmitter<string>();
+  @Output() hisRequested=new EventEmitter<string>();
+  mode=signal<'week'|'month'>('week');
+  selectedDate=signal(ymdOf(new Date()));
+  counts=signal<CountDoc[]>([]);
+  coverage=signal<any[]>([]);
+  dailyDetail=signal<any>(null);
+  calendarDays=signal<Record<string,any>>({});
+  detailLoading=signal(false);
+  selectedSource=signal<any>(null);
+  private dailyRequest=0;
+  private newSnapshot='';
+  private detailSnapshot='';
+  private newKey='';
+  private formSnapshot():string{return JSON.stringify([this.newForm,this.batchRows()]);}
+  canLeave():boolean {if(this.saving()){alert('請等待叫貨／到貨儲存完成。');return false;}const dirty=(this.showNewModal()&&this.formSnapshot()!==this.newSnapshot)||(this.showDetail()&&JSON.stringify([this.detailEdit,this.arriveDate])!==this.detailSnapshot);return !dirty||confirm('叫貨／到貨修改尚未儲存，確定捨棄？');}
+
+  readonly shownWeeks=computed(()=>this.mode()==='month'?this.weeks():[this.makeWeek(this.selectedDate())]);
+  private makeWeek(date:string):CalendarCell[]{const d=new Date(date+'T12:00:00');d.setDate(d.getDate()-(d.getDay()+6)%7);return Array.from({length:7},(_,i)=>{const cur=new Date(d);cur.setDate(d.getDate()+i);const ymd=ymdOf(cur);return {ymd,day:cur.getDate(),inMonth:ymd.startsWith(this.month()),isToday:ymd===this.today,entries:this.entriesByDate().get(ymd)||[]};});}
+  countOn(date:string):CountDoc|undefined{return this.counts().find(c=>c.countDate===date);}
+  sourcesOn(date:string):any[]{return this.coverage().filter(s=>s.startDate<=date && s.endDate>=date && (!this.filterCategory() || s.category===this.filterCategory()));}
+  orderEventsOn(date:string):PurchaseEntry[]{return this.filtered().filter(e=>toLocalYmd(e.orderDate)===date && this.displayDate(e)!==date);}
+  selectedEntries():PurchaseEntry[]{return this.filtered().filter(e=>this.displayDate(e)===this.selectedDate());}
+  async openSource(source:any):Promise<void>{this.selectedSource.set({...source,items:[]});try{const ranges=await this.stock.ensureActualRanges();const range=ranges.find(r=>r.start===source.startDate&&r.end===source.endDate);const items=Object.entries(range?.grouped?.[source.category]||{}).map(([item,quantity])=>({item,quantity}));if(this.selectedSource()?.rangeKey===source.rangeKey&&this.selectedSource()?.category===source.category)this.selectedSource.set({...source,items});}catch{if(this.selectedSource()?.rangeKey===source.rangeKey&&this.selectedSource()?.category===source.category)this.selectedSource.set({...source,items:[],loadError:true});}}
+  async selectDay(date:string):Promise<void>{this.selectedDate.set(date);this.month.set(date.slice(0,7));await this.loadDailyDetail();}
+  async loadDailyDetail():Promise<void>{const request=++this.dailyRequest;this.dailyDetail.set(null);this.calendarDays.set({});if(!this.filterCategory()||!this.filterItem()){this.detailLoading.set(false);return;}this.detailLoading.set(true);try{const date=this.selectedDate();const data=await this.stock.itemTimeline(this.filterCategory(),this.filterItem(),this.stock.addDays(date,-1),date,this.counts(),this.all());if(request===this.dailyRequest)this.dailyDetail.set(data);const weeks=this.shownWeeks();const first=weeks[0]?.[0]?.ymd,last=weeks[weeks.length-1]?.[6]?.ymd;if(first&&last){const grid=await this.stock.itemTimeline(this.filterCategory(),this.filterItem(),this.stock.addDays(first,-1),last,this.counts(),this.all());if(request===this.dailyRequest)this.calendarDays.set(Object.fromEntries(grid.days.map(day=>[day.date,day])));}}catch(error:any){if(request===this.dailyRequest)this.dailyDetail.set({warnings:[error?.message||'每日需求載入失敗'],days:[]});}finally{if(request===this.dailyRequest)this.detailLoading.set(false);}}
+
   private readonly apiManager = inject(ApiManagerService);
   protected readonly authService = inject(AuthService);
   private readonly purchasesApi: ApiManager<FirestoreRecord>;
@@ -224,15 +257,24 @@ export class PurchaseCalendarComponent implements OnInit {
     this.purchasesApi = this.apiManager.create<FirestoreRecord>('inventory_purchases');
   }
 
+  ngOnChanges(changes:SimpleChanges):void {
+    if(!Object.values(changes).some(change=>!change.firstChange))return;
+    if(changes['initialCategory'])this.filterCategory.set(this.initialCategory||'');
+    if(changes['initialItem'])this.filterItem.set(this.initialItem||'');
+    if(changes['initialDate']){const date=this.initialDate||this.today;this.selectedDate.set(date);this.month.set(date.slice(0,7));}
+    this.loadDailyDetail();
+  }
   ngOnInit(): void {
-    this.load();
+    if(this.initialDate){this.selectedDate.set(this.initialDate);this.month.set(this.initialDate.slice(0,7));}
+    this.filterCategory.set(this.initialCategory);this.filterItem.set(this.initialItem);this.load();
   }
 
   async load(): Promise<void> {
-    this.loading.set(true);
+    this.stock.invalidateActualRanges();this.loading.set(true);
     try {
       const rows = (await this.purchasesApi.fetchAll()) as unknown as PurchaseEntry[];
       this.all.set(rows.map((r) => ({ ...r, status: r.status === 'ordered' ? 'ordered' : 'arrived' })));
+      const [counts,coverage]=await Promise.all([firstValueFrom(this.api.get<CountDoc[]>('/system/inventory/counts')),firstValueFrom(this.api.get<any[]>('/orders/consumables/coverage'))]);this.counts.set(counts);this.coverage.set(coverage.map(source=>({...source,startDate:String(source.startDate).replace(/^(\d{4})(\d{2})(\d{2})$/,'$1-$2-$3'),endDate:String(source.endDate).replace(/^(\d{4})(\d{2})(\d{2})$/,'$1-$2-$3')})));await this.loadDailyDetail();
     } catch (error) {
       console.error('載入叫貨/到貨紀錄失敗:', error);
     } finally {
@@ -245,16 +287,17 @@ export class PurchaseCalendarComponent implements OnInit {
   }
 
   stepMonth(delta: number): void {
-    this.month.set(shiftMonthString(this.month(), delta));
+    if(this.mode()==='week'){this.selectDay(shiftDateString(this.selectedDate(),delta*7));}else{this.month.set(shiftMonthString(this.month(),delta));this.selectDay(this.month()+'-01');}
   }
   goToday(): void {
-    this.month.set(this.today.substring(0, 7));
+    this.selectDay(this.today);
   }
   /** 改類別篩選：目前選的品項若不屬於該類別就清掉 */
   setFilterCategory(cat: string): void {
-    this.filterCategory.set(cat || '');
+    this.filterCategory.set(cat || '');this.dailyDetail.set(null);
     const item = this.filterItem();
     if (item && !this.itemFilterGroups().some((g) => g.items.includes(item))) this.filterItem.set('');
+    this.loadDailyDetail();
   }
   /** 選品項時若沒選類別，自動帶上該品項所屬類別（同名品項跨類別時不帶） */
   setFilterItem(item: string): void {
@@ -263,10 +306,11 @@ export class PurchaseCalendarComponent implements OnInit {
       const owners = this.itemFilterGroups().filter((g) => g.items.includes(item));
       if (owners.length === 1) this.filterCategory.set(owners[0].category);
     }
+    this.loadDailyDetail();
   }
   clearFilters(): void {
     this.filterCategory.set('');
-    this.filterItem.set('');
+    this.filterItem.set('');++this.dailyRequest;this.detailLoading.set(false);this.dailyDetail.set(null);this.calendarDays.set({});
   }
   /** 表單變動 → 重算批次日期列（保留已填過的箱數） */
   touch(): void {
@@ -348,10 +392,10 @@ export class PurchaseCalendarComponent implements OnInit {
     this.excludedDates.clear();
     this.batchRows.set([]);
     this.touch();
-    this.showNewModal.set(true);
+    this.newKey=crypto.randomUUID();this.newSnapshot=this.formSnapshot();this.showNewModal.set(true);
   }
   closeNew(): void {
-    this.showNewModal.set(false);
+    if(!this.canLeave())return;this.showNewModal.set(false);
   }
   onCategoryChange(): void {
     if (!this.itemsFor(this.newForm.category).includes(this.newForm.item)) this.newForm.item = '';
@@ -397,6 +441,7 @@ export class PurchaseCalendarComponent implements OnInit {
     const f = this.newForm;
     const unitsPerBox = this.unitsPerBox(f.category, f.item);
     const base = {
+      idempotencyKey:this.newKey,
       category: f.category,
       item: f.item,
       boxQuantity: f.boxQuantity,
@@ -415,7 +460,7 @@ export class PurchaseCalendarComponent implements OnInit {
           expectedDate: row.date,
           status: 'ordered',
         }));
-        await firstValueFrom(this.api.post('/system/inventory/purchases/batch', { entries }));
+        await firstValueFrom(this.api.post('/system/inventory/purchases/batch', { entries,idempotencyKey:this.newKey }));
       } else if (f.arrivedNow) {
         await this.purchasesApi.create({ ...base, status: 'arrived', expectedDate: f.expectedDate, date: f.expectedDate } as any);
       } else {
@@ -447,9 +492,10 @@ export class PurchaseCalendarComponent implements OnInit {
     };
     const exp = toLocalYmd(e.expectedDate);
     this.arriveDate = e.status === 'arrived' ? toLocalYmd(e.date) : exp && exp <= this.today ? exp : this.today;
-    this.showDetail.set(true);
+    this.detailSnapshot=JSON.stringify([this.detailEdit,this.arriveDate]);this.showDetail.set(true);
   }
   closeDetail(): void {
+    if(!this.canLeave())return;
     this.showDetail.set(false);
     this.detail.set(null);
   }
@@ -461,6 +507,7 @@ export class PurchaseCalendarComponent implements OnInit {
   async markArrived(): Promise<void> {
     const e = this.detail();
     if (!e || this.saving()) return;
+    if(this.detailEdit.boxQuantity!==e.boxQuantity || this.detailEdit.item!==e.item){alert('到貨確認為整筆原單。若需更正品項或箱數，請先儲存修改後再確認。');return;}
     if (!this.arriveDate) {
       alert('請填到貨日');
       return;
@@ -471,10 +518,9 @@ export class PurchaseCalendarComponent implements OnInit {
       await this.purchasesApi.update(e.id, {
         status: 'arrived',
         date: this.arriveDate,
-        boxQuantity: this.detailEdit.boxQuantity,
-        quantity: this.detailEdit.boxQuantity * unitsPerBox,
+
       } as any);
-      this.closeDetail();
+      this.showDetail.set(false);this.detail.set(null);
       await this.load();
       this.changed.emit();
     } catch (error: any) {

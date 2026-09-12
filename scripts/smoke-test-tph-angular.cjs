@@ -297,6 +297,13 @@ function removeTemporaryWorkspace() {
 }
 
 async function testStaticRoutes() {
+  const legacy = await fetch(`${BASE_URL}/consumables`, { redirect: 'manual' });
+  const expectedLocation = '/inventory?section=inventory&view=reports&report=monthly';
+  if (legacy.status === 302 && legacy.headers.get('location') === expectedLocation) {
+    pass('legacy consumables redirects to monthly inventory report', expectedLocation);
+  } else {
+    fail('legacy consumables redirects to monthly inventory report', `${legacy.status} ${legacy.headers.get('location')}`);
+  }
   if (!existsSync(path.join(STATIC_PATH, 'index.html'))) {
     fail('production dist exists', `missing ${path.join(STATIC_PATH, 'index.html')}`);
     return;
@@ -499,7 +506,7 @@ async function testCrud(token) {
       'DELETE',
       `/api/system/inventory/counts/${countDate}`,
       200,
-      undefined,
+      { expectedRevision: countDoc.data.revision },
       token,
     );
     await expectStatus(

@@ -213,6 +213,12 @@ app.get('/api/version', (req, res) => {
   }
 })
 
+// Legacy direct links must retain the inventory reports context before the SPA loads.
+app.get('/consumables', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+  res.redirect(302, '/inventory?section=inventory&view=reports&report=monthly')
+})
+
 app.use(
   express.static(staticPath, {
     setHeaders: (res, filePath) => {

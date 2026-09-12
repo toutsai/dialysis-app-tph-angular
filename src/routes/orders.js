@@ -1,3 +1,4 @@
+import { assertNoConsumableOverlap } from '../services/inventoryLedger.js'
 // 醫囑與相關資料路由
 import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
@@ -132,7 +133,7 @@ function normalizeHeaderDate(digits) {
   }
   if (!Number.isFinite(year) || year < 2000 || year > 2100) return null
   if (!Number.isFinite(month) || month < 1 || month > 12) return null
-  if (!Number.isFinite(day) || day < 1 || day > 31) return null
+  if (!Number.isFinite(day) || day < 1 || day > new Date(year, month, 0).getDate()) return null
   return `${year}${String(month).padStart(2, '0')}${String(day).padStart(2, '0')}`
 }
 
@@ -1670,6 +1671,57 @@ router.post('/lab-reports/upload', ...isDoctorRole, async (req, res) => {
  * 上傳並處理耗材報告 Excel 檔案
  * 對應 Firebase: processConsumables
  */
+function mapConsumableReportRow(r) {
+        let data = {}
+        try {
+          data = JSON.parse(r.report_data || '{}') || {}
+        } catch {
+          data = {}
+        }
+        return {
+          id: r.id,
+          patientId: r.patient_id,
+          patientName: r.patient_current_name || r.patient_name,
+          medicalRecordNumber: r.medical_record_number,
+          reportDate: r.report_date,
+          // 前端（inventory.component 月盤點/區間消耗）以 reportMonth 篩選
+          reportMonth: String(r.report_date || '').substring(0, 7),
+          data,
+          // 已上傳的區間 key 清單（`起日-迄日` YYYYMMDD；'legacy' = 改制前資料）
+          ranges: data.ranges && typeof data.ranges === 'object' ? Object.keys(data.ranges) : [],
+          patientDeleted: !!r.patient_is_deleted,
+          patientDeletedAt: r.patient_deleted_at || null,
+          sourceFile: r.source_file,
+          createdBy: JSON.parse(r.created_by || '{}'),
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
+        }
+
+}
+
+function readConsumableCoverage(db) {
+  return db.prepare('SELECT * FROM consumables_import_sources ORDER BY start_date,category').all().map(row => ({rangeKey:row.range_key,category:row.category,startDate:row.start_date,endDate:row.end_date,complete:!!row.complete,sourceFile:row.source_file,uploadedAt:row.uploaded_at}))
+}
+
+router.get('/consumables/stock-sources', ...isInventoryRole, (req, res) => {
+  try {
+    const db = getDatabase()
+    const sources = db.transaction(() => {
+      const reports = db.prepare(`SELECT c.*, p.is_deleted AS patient_is_deleted, p.deleted_at AS patient_deleted_at, p.name AS patient_current_name
+        FROM consumables_reports c LEFT JOIN patients p ON p.id=c.patient_id ORDER BY c.report_date DESC`).all().map(mapConsumableReportRow)
+      return {reports,coverage:readConsumableCoverage(db)}
+    })()
+    res.json(sources)
+  } catch (error) {
+    console.error('取得耗用來源錯誤:', error)
+    res.status(500).json({error:true,message:'取得耗用來源失敗'})
+  }
+})
+
+router.get('/consumables/coverage', ...isInventoryRole, (req, res) => {
+  res.json(readConsumableCoverage(getDatabase()))
+})
+
 router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
   try {
     // itemMappings：使用者在「品項對照確認」視窗的決定
@@ -1721,6 +1773,7 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
     }
 
     const { reportMonth, rangeKey, startDate, endDate } = range
+    if (!startDate || startDate > endDate) return res.status(400).json({error:true,message:'請提供有效且明確的起迄日期'})
     const fmtMd = (d) => (d ? `${d.substring(4, 6)}/${d.substring(6, 8)}` : '?')
     const rangeLabel = `${fmtMd(startDate)}～${fmtMd(endDate)}`
     console.log(
@@ -1778,6 +1831,8 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
     const itemResolver = buildConsumableItemResolver(db, firestoreField, itemMappings)
     const consumableIndex = headerToIndex[consumableHeader]
     const countIndex = headerToIndex['COUNT(*)']
+    if (countIndex === undefined) return res.status(400).json({error:true,message:'缺少 COUNT(*) 欄位'})
+    assertNoConsumableOverlap(db, rangeKey, startDate, endDate, firestoreField)
     const unmatchedItems = new Map()
     for (const rowArray of dataRows) {
       const raw = rowArray[consumableIndex]
@@ -1832,11 +1887,15 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
     // 預先載入本月既有報表（同月不同區間要累積、同區間同類別要取代，所以在 JS 端合併後整包寫回）
     const existingReports = new Map()
     for (const row of db
-      .prepare(`SELECT id, report_data FROM consumables_reports WHERE report_date = ?`)
+      .prepare(`SELECT * FROM consumables_reports WHERE report_date = ?`)
       .all(`${reportMonth}-01`)) {
       try {
         const parsed = JSON.parse(row.report_data || '{}')
         existingReports.set(row.id, parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {})
+        if (parsed.ranges?.[rangeKey]?.[firestoreField]) {
+          parsed.ranges[rangeKey][firestoreField] = []
+          updatesMap.set(row.id, {id:row.id,patientId:row.patient_id,patientName:row.patient_name,medicalRecordNumber:row.medical_record_number,reportDate:row.report_date,sourceFile:fileName,data:parsed})
+        }
       } catch {
         existingReports.set(row.id, {})
       }
@@ -1866,6 +1925,7 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
         continue
       }
 
+      if (!['number','string'].includes(typeof count) || String(count).trim() === '' || !Number.isFinite(Number(count)) || Number(count) < 0) return res.status(400).json({error:true,message:'COUNT(*) 必須為非負數字，未寫入任何資料'})
       medicalRecordNumber = medicalRecordNumber.replace(/^0+/, '')
 
       const patientData = patientCache.get(medicalRecordNumber)
@@ -1903,13 +1963,7 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
         rangeEntry[firestoreField] = []
         rangeEntry.sourceFiles = { ...(rangeEntry.sourceFiles || {}), [firestoreField]: fileName }
         rangeEntry.uploadedAt = new Date().toLocaleString('sv-SE')
-        // 舊制（區間不明）資料若含同類別，視為被本次上傳取代，避免重複計算
-        if (ranges.legacy && ranges.legacy[firestoreField]) {
-          delete ranges.legacy[firestoreField]
-          if (!CONSUMABLE_CATEGORIES.some((c) => Array.isArray(ranges.legacy[c]) && ranges.legacy[c].length)) {
-            delete ranges.legacy
-          }
-        }
+
       }
 
       // 品名一律存「品項設定」的正式名稱（別名/寬鬆比對/使用者對應都轉成正式名稱）；略過的品項不寫入
@@ -1930,6 +1984,16 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
       processedRowCount++
     }
 
+    const complete = req.body.completeCategory === true && errors.length === 0 && skippedRowCount === 0
+    if (processedRowCount === 0 && req.body.completeCategory === true && req.body.confirmEmptyCategory !== true) {
+      return res.status(400).json({error:true,message:'空白類別匯入需明確確認 confirmEmptyCategory；未寫入任何資料'})
+    }
+    const uploadedAt = new Date().toLocaleString('sv-SE')
+    for (const update of updatesMap.values()) {
+      const entry = update.data.ranges[rangeKey]
+      entry.categoryCoverage = { ...(entry.categoryCoverage || {}), [firestoreField]: {complete,sourceFile:fileName,uploadedAt} }
+      entry.sourceFiles = { ...(entry.sourceFiles || {}), [firestoreField]: fileName }
+    }
     // 由各區間明細重算月聚合
     for (const update of updatesMap.values()) {
       recomputeConsumableAggregates(update.data)
@@ -1938,7 +2002,7 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
     // 批次寫入資料庫 (使用 UPSERT；report_data 已在 JS 端與既有資料合併，整包覆寫)
     // 同一交易內：使用者確認「新增為品項」→ inventory_items；「對應既有品項＋記住」→ inventory_item_aliases
     const { pendingCreates, pendingAliases } = itemResolver
-    if (updatesMap.size > 0 || pendingCreates.length > 0 || pendingAliases.length > 0) {
+    {
       const createdByJson = JSON.stringify({ uid: req.user.id, name: req.user.name })
       const insertItemStmt = db.prepare(`INSERT INTO inventory_items (id, name, category) VALUES (?, ?, ?)`)
       const upsertAliasStmt = db.prepare(`
@@ -1960,6 +2024,11 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
       `)
 
       const upsertMany = db.transaction((reportList) => {
+        const previousReports = db.prepare('SELECT * FROM consumables_reports WHERE report_date=?').all(`${reportMonth}-01`)
+        const previousSource = db.prepare('SELECT * FROM consumables_import_sources WHERE range_key=? AND category=?').get(rangeKey,firestoreField)
+        db.prepare('INSERT INTO consumables_import_versions (id,range_key,category,document,actor) VALUES (?,?,?,?,?)').run(uuidv4(),rangeKey,firestoreField,JSON.stringify({previousSource,previousReports,newReports:reportList,complete,sourceFile:fileName}),createdByJson)
+        db.prepare(`INSERT INTO consumables_import_sources (range_key,category,start_date,end_date,complete,source_file,uploaded_at) VALUES (?,?,?,?,?,?,?)
+          ON CONFLICT(range_key,category) DO UPDATE SET complete=excluded.complete,source_file=excluded.source_file,uploaded_at=excluded.uploaded_at`).run(rangeKey,firestoreField,startDate,endDate,complete ? 1 : 0,fileName,uploadedAt)
         for (const c of pendingCreates) insertItemStmt.run(c.id, c.name, firestoreField)
         for (const a of pendingAliases) upsertAliasStmt.run(uuidv4(), firestoreField, a.alias, a.itemId, createdByJson)
         for (const report of reportList) {
@@ -2018,7 +2087,7 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
     const mappingNote = mappingNotes.length ? ` 品項對照 — ${mappingNotes.join('；')}。` : ''
     res.json({
       success: true,
-      message: `處理完成！${reportMonth} 區間 ${rangeLabel}（${consumableHeader}）：成功處理 ${processedRowCount} 筆耗材資料，寫入 ${updatesMap.size} 位病人的月報表${deletedNote}，發現 ${errors.length} 個問題行。同區間重傳會覆蓋、不同區間會累加。${mappingNote}`,
+      message: `處理完成！${reportMonth} 區間 ${rangeLabel}（${consumableHeader}）：成功處理 ${processedRowCount} 筆耗材資料，寫入 ${updatesMap.size} 位病人的月報表${deletedNote}，發現 ${errors.length} 個問題行。同區間重傳會取代原資料；不重疊區間才會累計，重疊區間會先拒絕匯入。${mappingNote}`,
       processedCount: updatesMap.size,
       errorCount: errors.length,
       errors: errors.slice(0, 50),
@@ -2029,6 +2098,7 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
       itemMapping: itemMappingSummary,
     })
   } catch (error) {
+    if (error.status) return res.status(error.status).json({error:true,message:error.message})
     console.error('[Consumables] 處理檔案時發生錯誤:', error)
     res.status(500).json({
       error: true,
@@ -2775,32 +2845,7 @@ router.get('/consumables', ...isInventoryRole, (req, res) => {
     const reports = db.prepare(query).all(...params)
 
     res.json(
-      reports.map((r) => {
-        let data = {}
-        try {
-          data = JSON.parse(r.report_data || '{}') || {}
-        } catch {
-          data = {}
-        }
-        return {
-          id: r.id,
-          patientId: r.patient_id,
-          patientName: r.patient_current_name || r.patient_name,
-          medicalRecordNumber: r.medical_record_number,
-          reportDate: r.report_date,
-          // 前端（inventory.component 月盤點/區間消耗）以 reportMonth 篩選
-          reportMonth: String(r.report_date || '').substring(0, 7),
-          data,
-          // 已上傳的區間 key 清單（`起日-迄日` YYYYMMDD；'legacy' = 改制前資料）
-          ranges: data.ranges && typeof data.ranges === 'object' ? Object.keys(data.ranges) : [],
-          patientDeleted: !!r.patient_is_deleted,
-          patientDeletedAt: r.patient_deleted_at || null,
-          sourceFile: r.source_file,
-          createdBy: JSON.parse(r.created_by || '{}'),
-          createdAt: r.created_at,
-          updatedAt: r.updated_at,
-        }
-      }),
+      reports.map(mapConsumableReportRow),
     )
   } catch (error) {
     console.error('取得耗材報告錯誤:', error)

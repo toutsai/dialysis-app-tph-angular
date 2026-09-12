@@ -2,12 +2,12 @@
   <!-- 工具列 -->
   <div class="pc-toolbar">
     <div class="pc-month-nav">
-      <button type="button" class="pc-nav-btn" (click)="stepMonth(-1)" title="上個月">‹</button>
-      <span class="pc-month-label">{{ month() }}</span>
-      <button type="button" class="pc-nav-btn" (click)="stepMonth(1)" title="下個月">›</button>
+      <button type="button" class="pc-nav-btn" (click)="stepMonth(-1)" [title]="mode()==='week'?'上一週':'上一月'" [attr.aria-label]="mode()==='week'?'上一週':'上一月'">‹</button>
+      <span class="pc-month-label">{{ mode()==='week'?shownWeeks()[0][0].ymd+' ～ '+shownWeeks()[0][6].ymd:month() }}</span>
+      <button type="button" class="pc-nav-btn" (click)="stepMonth(1)" [title]="mode()==='week'?'下一週':'下一月'" [attr.aria-label]="mode()==='week'?'下一週':'下一月'">›</button>
       <button type="button" class="pc-today-btn" (click)="goToday()">今天</button>
     </div>
-    <div class="pc-filters">
+    <div class="pc-view-toggle"><button class="pc-today-btn" [class.on]="mode()==='week'" (click)="mode.set('week');loadDailyDetail()">週</button><button class="pc-today-btn" [class.on]="mode()==='month'" (click)="mode.set('month');loadDailyDetail()">月</button></div><div class="pc-filters">
       <select [ngModel]="filterCategory()" (ngModelChange)="setFilterCategory($event)" title="篩選類別">
         <option value="">全部類別</option>
         @for (cat of categoryKeys; track cat) {
@@ -67,20 +67,23 @@
     @for (label of weekdayLabels; track label) {
       <div class="pc-head">週{{ label }}</div>
     }
-    @for (week of weeks(); track $index) {
+    @for (week of shownWeeks(); track $index) {
       @for (cell of week; track cell.ymd) {
         <div
           class="pc-cell"
           [class.out]="!cell.inMonth"
           [class.today]="cell.isToday"
-          (click)="openNew(cell.ymd)"
-          [title]="'點一下新增 ' + cell.ymd + ' 的叫貨'"
+          (click)="selectDay(cell.ymd)" tabindex="0" role="button" (keydown.enter)="selectDay(cell.ymd)" (keydown.space)="$event.preventDefault();selectDay(cell.ymd)" [class.selected]="cell.ymd===selectedDate()"
+          [attr.aria-label]="cell.ymd + ' 作業明細'"
         >
           <div class="pc-cell-head">
             <span class="pc-day">{{ cell.day }}</span>
-            <span class="pc-add">＋</span>
+            <span class="pc-add">查看</span>
           </div>
-          <div class="pc-entries">
+          <div class="pc-entries">@if(calendarDays()[cell.ymd];as day){<span class="pc-count-chip">需 {{day.forecast ?? '—'}} {{unitLabelFn(filterCategory(),filterItem())}}</span>@if(day.actual!==null){<span class="pc-count-chip">實 {{day.actual}} · 差 {{day.difference ?? '—'}}</span>}}
+            @if(countOn(cell.ymd);as count){<span class="pc-count-chip">{{count.countType==='both'?'週盤＋月結':count.countType==='monthly'?'月結盤點':'實體盤點'}}</span>}
+            @for(source of sourcesOn(cell.ymd);track source.rangeKey+source.category){<button class="pc-source-chip" (click)="$event.stopPropagation();openSource(source)">HIS {{CATEGORY_SHORT[source.category]}} {{source.startDate===source.endDate?'單日':'區間'}} {{source.complete?'完整':'待補'}}</button>}
+            @for(order of orderEventsOn(cell.ymd);track order.id){<button class="pc-chip" (click)="openDetail(order,$event)">叫貨 {{entryLabel(order)}}</button>}
             @for (e of cell.entries; track e.id) {
               <button type="button" class="pc-chip {{ entryClass(e) }}" (click)="openDetail(e, $event)" [title]="statusText(e) + '：' + entryLabel(e)">
                 {{ entryLabel(e) }}
@@ -92,6 +95,24 @@
     }
   </div>
 </div>
+
+<section class="pc-day-detail" aria-label="所選日期作業">
+  <div class="pc-day-title"><h3>{{selectedDate()}} · 當日作業</h3><div><button class="btn-primary" (click)="openNew(selectedDate())">新增叫貨</button><button class="btn-secondary" (click)="countRequested.emit(selectedDate())">{{countOn(selectedDate())?'開啟盤點':'建立實體盤點'}}</button><button class="btn-secondary" (click)="hisRequested.emit(selectedDate())">上傳 HIS</button></div></div>
+  <p class="pc-muted">待到貨不計入現貨；請核對實際日期，再以整筆確認到貨。</p>
+  @for(entry of selectedEntries();track entry.id){<button class="pc-chip {{entryClass(entry)}}" (click)="openDetail(entry)">{{statusText(entry)}} · {{entryLabel(entry)}} · 開啟／確認到貨</button>}
+  @if(selectedEntries().length===0){<p class="pc-muted">本日無預計或實際到貨。</p>}
+  @if(detailLoading()){<p role="status">載入每日需求…</p>}
+  @if(dailyDetail();as detail){
+    @for(day of detail.days;track day.date){<div class="pc-metrics"><div>排程需求<strong>{{day.forecast ?? '—'}}</strong></div><div>單日實際<strong>{{day.actual ?? '待補'}}</strong></div><div>實際－排程<strong>{{day.difference ?? '—'}}</strong></div><div>日末預計餘額<strong>{{day.projectedBalance ?? '無實盤基準'}}</strong></div></div><p>{{day.source}} · {{filterItem()}}，單位：{{unitLabelFn(filterCategory(),filterItem())}}</p>
+    @if(day.closingCount!=null){<p class="pc-count-chip">日終實盤校準：{{day.closingCount}}</p>}@if(day.openingCount!=null){<p class="pc-count-chip">日初實盤基準：{{day.openingCount}}</p>}
+    @if(day.intervalRanges?.length){<p class="pc-count-chip">HIS 區間核對 · 整段結算差異 {{day.intervalAdjustment ?? '待核對'}}；非單日實際</p>}
+    }
+    <p class="pc-muted">本日期初沿用的實盤：{{detail.anchor?.countDate||'無日期初基準'}}@if(detail.anchor){<span>；{{detail.anchor.cutoff==='end-of-day'?'收班後':'開班前'}}基準</span>}。本日實盤若有校準，另列於上方。</p>
+    @for(warning of detail.warnings;track warning){<p class="pc-warning">{{warning}}</p>}
+  }@else{<p class="pc-muted">選擇單一品項即可查看每日需求、單日 HIS 實際與差異；不同單位不合計。</p>}
+  @for(source of sourcesOn(selectedDate());track source.rangeKey+source.category){<button class="pc-source-chip" (click)="openSource(source)">{{CATEGORY_NAMES[source.category]}} HIS {{source.startDate}} ～ {{source.endDate}} · {{source.complete?'完整類別':'未完整／推估補足'}} · 查看來源</button>}
+</section>
+@if(selectedSource();as source){<div class="pc-overlay" (click)="selectedSource.set(null)"><section class="pc-modal" role="dialog" aria-modal="true" aria-label="HIS來源區間" (click)="$event.stopPropagation()"><div class="pc-modal-head"><h3>HIS 原始來源</h3><button class="pc-close" aria-label="關閉來源" (click)="selectedSource.set(null)">×</button></div><div class="pc-modal-body"><p>{{CATEGORY_NAMES[source.category]}} · {{source.startDate}} ～ {{source.endDate}}</p><p>{{source.sourceFile}} · {{source.uploadedAt}}</p><p>{{source.complete?'已確認完整類別；未列品項可視為零':'資料未完整，不將缺項當零。缺日沿用排程推估。'}}</p><p>多日來源只代表整段數量，不拆成每日實際。</p>@if(source.loadError){<p>來源數量載入失敗。</p>}@for(item of source.items;track item.item){<p>{{item.item}}：{{item.quantity}} {{unitLabelFn(source.category,item.item)}}</p>}</div></section></div>}
 
 <!-- 新增叫貨 -->
 @if (showNewModal()) {
@@ -124,7 +145,7 @@
             <label>{{ newForm.batch ? '預設箱數' : '箱數 *' }}</label>
             <input type="number" min="1" [(ngModel)]="newForm.boxQuantity" />
             @if (newForm.item) {
-              <small>= {{ newForm.boxQuantity * unitsPerBox(newForm.category, newForm.item) }} 個（每箱 {{ unitsPerBox(newForm.category, newForm.item) }}）</small>
+              <small>= {{ newForm.boxQuantity * unitsPerBox(newForm.category, newForm.item) }} {{unitLabelFn(newForm.category,newForm.item)}}（每箱 {{ unitsPerBox(newForm.category, newForm.item) }}）</small>
             }
           </div>
         </div>
@@ -239,7 +260,7 @@
           <div class="pc-field pc-field-sm">
             <label>箱數</label>
             <input type="number" min="1" [(ngModel)]="detailEdit.boxQuantity" />
-            <small>= {{ detailEdit.boxQuantity * unitsPerBox(detailEdit.category, detailEdit.item) }} 個</small>
+            <small>= {{ detailEdit.boxQuantity * unitsPerBox(detailEdit.category, detailEdit.item) }} {{unitLabelFn(detailEdit.category,detailEdit.item)}}</small>
           </div>
         </div>
         <div class="pc-row">

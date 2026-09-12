@@ -1,0 +1,45 @@
+<dialog #dialog aria-labelledby="inventory-item-detail-title" (cancel)="cancel($event)">
+  <header><div><p class="eyebrow">品項庫存 · {{ unit || '依品項單位' }}</p><h2 id="inventory-item-detail-title">{{ selected.item }}</h2></div><button class="close" type="button" aria-label="關閉品項明細" autofocus (click)="closed.emit()">×</button></header>
+  <div class="body" [attr.aria-busy]="loading">
+    @if (loading) { <p class="notice" role="status">正在整理實盤、耗用來源與每日餘量…</p> }
+    @if (!loading && !detail) { <p class="notice" role="status">暫時無法取得明細，請關閉後重新開啟。</p> }
+    @if (detail) {
+      <div class="summary">
+        <section><h3>最近實盤</h3><strong>{{ amount(baseline) }}</strong><p>{{ detail.anchor?.countDate || '尚無實盤' }}</p><small>{{ cutoffLabel }}</small></section>
+        <section><h3>目前推估可用量</h3><strong [class.negative]="detail.current != null && detail.current < 0">{{ amount(detail.current) }}</strong><p>截至 {{ asOf }} 收班</p><small>實盤＋已到貨－盤後耗用</small></section>
+        <section><h3>首次預計不足</h3><strong class="date" [class.negative]="!!detail.firstDeficitDate">{{ deficitLabel }}</strong><p>依下方日期順序推算</p></section>
+        <section><h3>下一筆待到貨</h3><strong>{{ detail.nextDelivery ? amount(detail.nextDelivery.quantity) : '尚無' }}</strong><p>{{ detail.nextDelivery?.date || '尚未安排日期' }}</p><small>待到貨尚未計入現貨</small></section>
+      </div>
+      @if (detail.warnings?.length) { <div class="notice" role="note"><strong>本次推估需留意</strong><ul>@for (warning of detail.warnings; track $index) { <li>{{ warning }}</li> }</ul></div> }
+      <div class="section-title"><h3>每日需求與餘量</h3><span>數量皆以 {{ unit || '品項原始單位' }} 顯示</span></div>
+      <div class="table-scroll" tabindex="0" aria-label="每日需求與餘量，可左右捲動">
+        <table><thead><tr><th scope="col">日期</th><th scope="col">排程預估</th><th scope="col">單日 HIS 實耗</th><th scope="col">實耗－預估</th><th scope="col">當日到貨</th><th scope="col">日末餘量</th></tr></thead><tbody>
+          @for (day of detail.days; track day.date) {
+            <tr><th scope="row">{{ day.date }}<small>{{ day.source }}</small></th><td>{{ amount(day.forecast) }}</td><td>{{ day.actual == null ? '未有完整單日實耗' : amount(day.actual) }}</td><td>{{ day.difference == null ? '—' : amount(day.difference) }}</td><td>{{ amount(day.arrivals) }}<small>{{ dayArrivals(day.date) }}</small></td><td [class.negative]="day.projectedBalance != null && day.projectedBalance < 0"><strong>{{ amount(day.projectedBalance) }}</strong></td></tr>
+            @if (day.openingCount != null || day.closingCount != null || day.intervalRanges?.length) {
+              <tr class="reconcile"><td colspan="6">
+                @if (day.openingCount != null) { <span>日初實盤重設基準 {{ amount(day.openingCount) }}；再計當日到貨與耗用。</span> }
+                @if (day.closingCount != null) { <span>日終實盤重設餘量 {{ amount(day.closingCount) }}，當日到貨與耗用已含在實盤。</span> }
+                @for (range of day.intervalRanges || []; track range.key) { <span>HIS 區間 {{ range.start }}～{{ range.end }}：原始合計 {{ amount(rangeQuantity(range)) }}，於本日核對餘量，非本日單日實耗。</span> }
+                @if (day.intervalRanges?.length) { <span>區間核對餘量差額：{{ amount(day.intervalAdjustment) }}。</span> }
+              </td></tr>
+            }
+          } @empty { <tr><td colspan="6">此查詢期間沒有後續日期。</td></tr> }
+        </tbody></table>
+      </div>
+      <p class="caption">待到貨依預計日期、於當日耗用前加入未來餘量；實際日內到貨時間尚未確認。較晚到貨不會消除前幾天的缺口。</p>
+      <details><summary>查看依據 <span>實盤、實際到貨與 HIS 來源</span></summary><div class="evidence">
+        <h4>盤後已到貨</h4><p class="caption">只列實盤日界後、截至 {{ asOf }} 的已到貨紀錄；待到貨不列入。</p>
+        @if (!detail.anchor) { <p>尚無實盤基準，無法界定盤後到貨。</p> }
+        @else { <ul class="records">@for (row of receipts; track row.id || $index) { <li><span>{{ row.date?.slice(0, 10) }} <small>已到貨</small></span><strong>{{ amount(row.quantity) }}</strong></li> } @empty { <li>此期間沒有已到貨紀錄。</li> }</ul> }
+        <h4>盤後耗用來源</h4><p>完整 HIS 覆蓋 {{ detail.provenance?.actualDays ?? 0 }} 天；排程推估 {{ detail.provenance?.estimatedDays ?? 0 }} 天。</p>
+        @if (detail.forecastDates?.length) { <p class="filename">採排程推估日期：{{ detail.forecastDates.join('、') }}。若來源載入失敗或設定缺漏，這些日期的數量仍為未知。</p> }
+        <p class="caption">多日 HIS 僅使用原始區間合計，不拆成每日實耗。只有完整類別匯入，未列品項才可視為 0。</p>
+        @for (range of detail.actualRanges || []; track range.key) {
+          <article class="source"><div class="source-heading"><strong>{{ range.start }} ～ {{ range.end }}</strong><span class="badge">{{ rangeCoverage(range)?.complete ? '此類別已完整核對' : '此類別未完整' }}</span></div><p>本品項原始{{ range.start === range.end ? '單日' : '區間' }}耗用：<strong>{{ amount(rangeQuantity(range)) }}</strong></p><p class="filename">來源檔：{{ rangeCoverage(range)?.sourceFile || '舊資料未記錄檔名' }}</p><small>上傳：{{ rangeCoverage(range)?.uploadedAt || '未記錄時間' }}</small></article>
+        } @empty { <p>此盤後期間沒有可採用的完整 HIS 區間。</p> }
+      </div></details>
+    }
+  </div>
+  <footer><button type="button" class="secondary" (click)="closed.emit()">關閉</button><button type="button" class="primary" (click)="calendarRequested.emit()">在作業行事曆查看此品項</button></footer>
+</dialog>

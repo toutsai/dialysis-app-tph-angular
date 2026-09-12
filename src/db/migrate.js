@@ -1,3 +1,4 @@
+import { initializeInventoryLedger } from '../services/inventoryLedger.js'
 // 資料庫遷移腳本 - 用於更新現有資料庫結構
 import Database from 'better-sqlite3'
 import { fileURLToPath } from 'url'
@@ -1088,6 +1089,8 @@ export function runMigrations() {
     // inventory_item_aliases：消耗紀錄品名別名（2026-09-04）
     // 消耗上傳時 HIS 品名對不上 inventory_items，使用者在確認視窗對應既有品項後記住，下次自動對應。
     // ========================================
+    initializeInventoryLedger(db)
+
     const itemAliasesExists = db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='inventory_item_aliases'")
       .get()

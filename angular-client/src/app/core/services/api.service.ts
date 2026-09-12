@@ -115,8 +115,8 @@ export class ApiService {
   }
 
   /** DELETE 請求 */
-  delete<T>(url: string): Observable<T> {
-    return this.http.delete<T>(`${this.baseUrl}${url}`);
+  delete<T>(url: string, params?: Record<string, string>): Observable<T> {
+    return this.http.delete<T>(`${this.baseUrl}${url}`, { params });
   }
 
   // -----------------------------------------------------------------------

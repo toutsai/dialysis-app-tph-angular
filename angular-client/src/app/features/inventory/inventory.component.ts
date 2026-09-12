@@ -1,5 +1,6 @@
 import { loadXlsx } from '@/utils/xlsxLoader';
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, ViewChild, HostListener, inject, signal, computed } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -20,6 +21,7 @@ import { ClerkInjectionPrintComponent } from './clerk-injection-print.component'
 import { ClerkGentamycinListComponent } from './clerk-gentamycin-list.component';
 import { CatastrophicIllnessComponent } from '../catastrophic-illness/catastrophic-illness.component';
 import { PurchaseCalendarComponent } from './purchase-calendar.component';
+import { InventoryItemDetailComponent } from './inventory-item-detail.component';
 import {
   ApiManagerService,
   type ApiManager,
@@ -81,6 +83,7 @@ const DEFAULT_ITEMS: Record<string, string[]> = {
     ClerkGentamycinListComponent,
     CatastrophicIllnessComponent,
     PurchaseCalendarComponent,
+    InventoryItemDetailComponent,
   ],
   templateUrl: './inventory.component.html',
   styleUrl: './inventory.component.css',
@@ -110,11 +113,80 @@ export class InventoryComponent implements OnInit {
   mainTab = signal<'physician' | 'register' | 'injection' | 'gentamycin' | 'catastrophic' | 'inventory'>('physician');
 
   activeTab = signal('dashboard');
+  inventoryView = signal('overview');
+  private readonly route = inject(ActivatedRoute);
+  @ViewChild(PurchaseCalendarComponent) calendar?:PurchaseCalendarComponent;
+  calendarCategory = '';
+  calendarDate = '';
+  summarySources=signal<any[]>([]);
+  showSourceInCalendar(source:any):void {this.calendarCategory=source.category;this.calendarItem='';this.calendarDate=source.startDate;this.navigateInventory('calendar');}
+  calendarItem = '';
+  selectedStockItem = signal<{category:string;item:string}|null>(null);
+  itemDetail = signal<any>(null);
+  itemDetailLoading = signal(false);
+  itemDetailPurchases=signal<any[]>([]);
+  private itemDetailRequest=0;
+  completeCategory = false;
+  confirmEmptyCategory = false;
+  hisWorkDate = localToday();
+  uploadHeader=signal('');
+  uploadHeaderLoading=signal(false);
+  uploadDatesReviewed=false;
+  async inspectUploadFile(file:File):Promise<void>{this.uploadHeader.set('');this.uploadHeaderLoading.set(true);this.uploadDatesReviewed=false;this.completeCategory=false;this.confirmEmptyCategory=false;try{const XLSX=await loadXlsx();const wb=XLSX.read(await file.arrayBuffer(),{type:'array'});const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1}) as any[][];const headers=rows.slice(0,5).flat().map(String).filter(cell=>/起日|迄日/.test(cell));if(this.selectedFile()===file)this.uploadHeader.set(headers.join(' / ')||'找不到起迄日標頭，請確認 HIS 原始檔案。');}catch{this.uploadHeader.set('無法讀取來源日期，請重新選取有效 Excel 檔。');}finally{this.uploadHeaderLoading.set(false);}}
+  countLoose: Record<string, Record<string, number|null>> = { artificialKidney:{}, dialysateCa:{}, bicarbonateType:{} };
+  countCutoff = 'end-of-day';
+  countType = 'weekly';
+  countRevision = 0;
+  private countOwnerDate = '';
+  private countSnapshot = '';
+  countDraftInfo=signal('');
+  private draftKey(date=this.countOwnerDate):string {const user=this.authService.currentUser() as any;return 'inventory-count-draft:'+String(user?.id||user?.uid||user?.name||'anonymous')+':'+date;}
+  saveCountDraft():void {if(!this.countOwnerDate||this.countsLoading()||this.countsSaving())return;try{sessionStorage.setItem(this.draftKey(),JSON.stringify({date:this.countOwnerDate,baseRevision:this.countRevision,boxes:this.countBoxes,loose:this.countLoose,notes:this.countNotes,cutoff:this.countCutoff,countType:this.countType,savedAt:new Date().toLocaleString()}));this.countDraftInfo.set('草稿已暫存在此使用者／日期；尚未變更庫存。');}catch{this.showAlert('草稿未儲存','瀏覽器儲存空間不可用，請先儲存實盤。');}}
+  restoreCountDraft():void {try{const raw=sessionStorage.getItem(this.draftKey());if(!raw){this.countDraftInfo.set('此使用者／日期尚無草稿。');return;}const draft=JSON.parse(raw);if(draft.date!==this.countOwnerDate)return;const conflict=draft.baseRevision!==this.countRevision;this.countBoxes=draft.boxes;this.countLoose=draft.loose;this.countNotes=draft.notes;this.countCutoff=draft.cutoff;this.countType=draft.countType;this.countRevision=draft.baseRevision;this.syncCountUnits();this.countDraftInfo.set(conflict?'草稿與伺服器版本不同；保留原版本以阻止覆蓋。請核對並重新載入後再修改。':'已還原草稿（尚未儲存實盤）。');}catch{this.countDraftInfo.set('草稿無法讀取。');}}
+  private inspectCountDraft():void {try{const raw=sessionStorage.getItem(this.draftKey());if(!raw){this.countDraftInfo.set('');return;}const draft=JSON.parse(raw);this.countDraftInfo.set(draft.baseRevision===this.countRevision?'此使用者／日期有草稿，可按「還原草稿」。':'有舊版本草稿；伺服器盤點已變更，還原後須核對衝突。');}catch{this.countDraftInfo.set('草稿無法讀取。');}}
+
+  private countRequest = 0;
+  orderRetryPayload:any[]|null=null;
+  weeklyBlockedItems=signal<string[]>([]);
+  orderCreating = signal(false);
+  orderCreated = signal(false);
+  private orderIdempotencyKey = '';
+  private lastFocused: HTMLElement|null = null;
+  unitLabel(category:string,item:string):string {
+    return this.inventoryItems().find(i=>i.category===category && i.name===item)?.unit || '單位（未設定）';
+  }
+  private draftSnapshot():string { return JSON.stringify([this.countBoxes,this.countLoose,this.countNotes,this.countCutoff,this.countType]); }
+  hasUnsavedChanges():boolean { return !!this.countOwnerDate && this.countSnapshot!==this.draftSnapshot(); }
+  canLeave():boolean {
+    if(this.calendar && !this.calendar.canLeave())return false;
+    if(this.countsSaving() || this.isUploading() || this.orderCreating()) { this.showAlert('作業進行中','請等待儲存或上傳完成。'); return false; }
+    if(this.showOrderPreview()&&!this.orderCreated()&&!confirm('補貨安排尚未建立，確定離開？'))return false;
+    if(this.hasUnsavedChanges()){if(!confirm('盤點尚未儲存，確定離開並捨棄變更？'))return false;this.countSnapshot=this.draftSnapshot();}return true;
+  }
+  @HostListener('window:beforeunload',['$event']) onBeforeUnload(event:BeforeUnloadEvent):void { if(this.hasUnsavedChanges() || this.countsSaving() || this.orderCreating() || this.isUploading()) {event.preventDefault();event.returnValue='';} }
+  switchMain(tab:any):void { if(this.canLeave()) { this.mainTab.set(tab); if(tab==='inventory') this.loadDashboard(); } }
+  navigateInventory(view:string,tab?:string):void {
+    if(!this.canLeave()) return;
+    this.inventoryView.set(view); this.activeTab.set(tab || ({overview:'dashboard',calendar:'purchase',reports:'consumption',settings:'items'} as any)[view]);
+    if(view==='overview') this.loadDashboard();
+    if(view==='reports') this.consumptionSubTab.set('query');
+  }
+  async openCountDate(date:string):Promise<void> { if(!this.canLeave()) return; this.countSnapshot=this.draftSnapshot();this.inventoryView.set('calendar');this.activeTab.set('counts');this.countFilter.date=date;await this.loadCountDoc();await this.loadCountRecords(); }
+  openHisDate(date:string):void { if(!this.canLeave()) return;this.activeTab.set('consumption');this.inventoryView.set('calendar');this.consumptionSubTab.set('upload');this.hisWorkDate=date;this.theoreticalFilter.startDate=date;this.theoreticalFilter.endDate=date; }
+  async openStockItem(category:string,item:string):Promise<void> {
+    const request=++this.itemDetailRequest;this.lastFocused=document.activeElement as HTMLElement;this.selectedStockItem.set({category,item});this.itemDetailPurchases.set([]);this.itemDetail.set(null);this.itemDetailLoading.set(true);
+    try { const docs=await this.countsApi.fetchAll() as unknown as CountDoc[]; const purchases=await this.purchasesApi.fetchAll();const today=this.stock.todayString();const detail=await this.stock.itemTimeline(category,item,today,this.stock.addDays(today,13),docs,purchases); if(request===this.itemDetailRequest&&this.selectedStockItem()?.category===category&&this.selectedStockItem()?.item===item){this.itemDetailPurchases.set(purchases as any[]);const start=detail.anchor?.cutoff==='end-of-day'?this.stock.addDays(detail.anchor.countDate,1):detail.anchor?.countDate||today;const receiptRows=(purchases as any[]).filter(p=>p.category===category&&p.item===item&&(!p.status||p.status==='arrived')&&String(p.date||'').slice(0,10)>=start&&String(p.date||'').slice(0,10)<=today);const ranges=(detail.actualRanges||[]).map(r=>({...r,itemQuantity:r.grouped?.[category]?.[item]??0,source:r.categoryCoverage?.[category]}));const covered=new Set(ranges.flatMap(r=>this.stock.enumerateDays(r.start,r.end)));const forecastDates=this.stock.enumerateDays(start,today).filter(d=>!covered.has(d));this.itemDetail.set({...detail,receipts:receiptRows,actualRanges:ranges,forecastDates,anchorQuantity:detail.anchor?.counts?.[category]?.[item]??null});} }
+    catch(e:any){if(request===this.itemDetailRequest)this.showAlert('明細載入失敗',e?.message || String(e));}finally{if(request===this.itemDetailRequest)this.itemDetailLoading.set(false);}
+  }
+  closeStockItem():void {++this.itemDetailRequest;this.selectedStockItem.set(null);this.itemDetailPurchases.set([]);setTimeout(()=>this.lastFocused?.focus());}
+  itemToCalendar():void {const item=this.selectedStockItem();if(!item)return;this.calendarCategory=item.category;this.calendarItem=item.item;this.calendarDate=this.stock.todayString();this.closeStockItem();this.navigateInventory('calendar');}
+
+
 
   // ==================== Dashboard ====================
   dashboardLoading = signal(false);
   dashboardLoaded = signal(false);
-  dashboardItems = signal<{ category: string; itemName: string; estimatedStock: number; safeLevel: number; autoSafeLevel: number; dailyUsage: number; todayConsumption: number; remainingAfterToday: number; pending: number; status: 'safe' | 'warning' | 'danger' | 'critical'; statusLabel: string }[]>([]);
+  dashboardItems = signal<{ category: string; itemName: string; estimatedStock: number|null; lastCountDate:string; firstDeficitDate:string|null; nextDelivery:any; safeLevel: number|null; autoSafeLevel: number|null; dailyUsage: number|null; todayConsumption: number|null; remainingAfterToday: number|null; pending: number; status: 'safe' | 'warning' | 'danger' | 'critical'; statusLabel: string }[]>([]);
   dashboardLastCountDate = signal('');
   /** 是否找得到任何盤點紀錄（false → 畫面顯示「請先盤點」而不是全 0） */
   dashboardHasCount = signal(false);
@@ -125,6 +197,7 @@ export class InventoryComponent implements OnInit {
   todayForecast = signal<Record<string, Record<string, number>>>({});
   tomorrowForecast = signal<Record<string, Record<string, number>>>({});
   forecastLoading = signal(false);
+  forecastWarnings=signal<string[]>([]);
 
   // Alert dialog
   isAlertDialogVisible = signal(false);
@@ -141,6 +214,7 @@ export class InventoryComponent implements OnInit {
   itemForm = {
     category: '',
     name: '',
+    unit: '',
     unitsPerBox: null as number | null,
     safeInventoryLevel: 0 as number,
     hospitalCode: '',
@@ -177,6 +251,7 @@ export class InventoryComponent implements OnInit {
   /** 叫貨/到貨紀錄：行事曆（預設）或列表 */
   purchaseView = signal<'calendar' | 'list'>('calendar');
   /** 給行事曆子元件用：每箱個數 */
+  readonly unitLabelFn=(category:string,item:string)=>this.unitLabel(category,item);
   readonly unitsPerBoxFn = (category: string, item: string) => this.getUnitsPerBox(category, item);
   purchaseStatusText(p: any): string {
     if (p.status !== 'ordered') return '已到貨';
@@ -307,7 +382,7 @@ export class InventoryComponent implements OnInit {
     item: string;
     opening: number | null;
     arrived: number;
-    consumed: number;
+    consumed: number|null;
     daysLabel: string;
     closing: number | null;
     counted: number | null;
@@ -345,6 +420,8 @@ export class InventoryComponent implements OnInit {
     pending: number;
     orderQuantity: number;
     orderBoxes: number;
+    firstDeficitDate:string|null;
+    anchorDate:string;
   }[]>([]);
   weeklyConsumptionNote = signal('');
   weeklyStockNote = signal('');
@@ -364,7 +441,7 @@ export class InventoryComponent implements OnInit {
   // Order preview modal
   showOrderPreview = signal(false);
   /** 確認匯出時同時把訂單建成行事曆叫貨（待到貨） */
-  createCalendarOrdersOnExport = true;
+
   orderDate = '';
   orderPreviewDates: string[] = []; // 6 dates: Mon-Sat
   orderPreviewDayLabels: string[] = [];
@@ -372,7 +449,7 @@ export class InventoryComponent implements OnInit {
   orderPreviewGrid: Record<string, number[]> = {}; // key = "category|item", value = [mon,tue,wed,thu,fri,sat]
 
   get hasOrderData(): boolean {
-    return this.weeklyRows().some((r) => r.orderQuantity > 0);
+    return this.weeklyBlockedItems().length===0 && this.weeklyRows().some((r) => r.orderQuantity > 0);
   }
 
   knownItems: Record<string, string[]> = {
@@ -398,6 +475,7 @@ export class InventoryComponent implements OnInit {
   }
 
   async ngOnInit(): Promise<void> {
+    this.route.queryParamMap.subscribe(params=>{ if(params.get('section')==='inventory'){this.mainTab.set('inventory');const view=params.get('view')||'overview';this.inventoryView.set(view);this.activeTab.set(({overview:'dashboard',calendar:'purchase',reports:'consumption',settings:'items'} as any)[view]||'dashboard');this.consumptionSubTab.set(params.get('report')==='monthly'?'summary':'query');} });
     await this.patientStore.fetchPatientsIfNeeded();
     await this.initializeDefaultItems();
     await this.fetchInventoryItems();
@@ -627,6 +705,7 @@ export class InventoryComponent implements OnInit {
       this.editingItem.set(item);
       this.itemForm.category = item.category;
       this.itemForm.name = item.name;
+      this.itemForm.unit=item.unit||'';
       this.itemForm.unitsPerBox = item.unitsPerBox || null;
       this.itemForm.safeInventoryLevel = item.safeInventoryLevel || 0;
       this.itemForm.hospitalCode = item.hospitalCode || '';
@@ -636,6 +715,7 @@ export class InventoryComponent implements OnInit {
       this.editingItem.set(null);
       this.itemForm.category = '';
       this.itemForm.name = '';
+      this.itemForm.unit='';
       this.itemForm.unitsPerBox = null;
       this.itemForm.safeInventoryLevel = 0;
       this.itemForm.hospitalCode = '';
@@ -658,6 +738,7 @@ export class InventoryComponent implements OnInit {
       const data: any = {
         category: this.itemForm.category,
         name: this.itemForm.name,
+        unit:this.itemForm.unit || null,
         unitsPerBox: this.itemForm.unitsPerBox || null,
         safeInventoryLevel: this.itemForm.safeInventoryLevel || 0,
         hospitalCode: this.itemForm.hospitalCode || null,
@@ -1080,7 +1161,7 @@ export class InventoryComponent implements OnInit {
   onFileSelect(event: Event): void {
     const input = event.target as HTMLInputElement;
     if (input.files && input.files[0]) {
-      this.selectedFile.set(input.files[0]);
+      this.selectedFile.set(input.files[0]);this.inspectUploadFile(input.files[0]);
       this.uploadResult.set(null);
     }
   }
@@ -1100,7 +1181,7 @@ export class InventoryComponent implements OnInit {
     this.isDragOver.set(false);
     const files = event.dataTransfer?.files;
     if (files && files.length > 0) {
-      this.selectedFile.set(files[0]);
+      this.selectedFile.set(files[0]);this.inspectUploadFile(files[0]);
       this.uploadResult.set(null);
     }
   }
@@ -1120,6 +1201,7 @@ export class InventoryComponent implements OnInit {
       this.showAlert('提示', '請先選擇一個檔案！');
       return;
     }
+    if(!this.uploadDatesReviewed){this.showAlert('請核對來源日期','確認原始檔的起迄日後再上傳，行事曆作業日期不會改寫 HIS 來源日期。');return;}
     await this.postConsumablesUpload(file);
   }
 
@@ -1137,6 +1219,8 @@ export class InventoryComponent implements OnInit {
         method: 'POST',
         headers: this.firebaseService.getHeaders(),
         body: JSON.stringify({
+          completeCategory:this.completeCategory,
+          confirmEmptyCategory:this.completeCategory && this.confirmEmptyCategory,
           fileName: file.name,
           fileContent: fileContentBase64,
           ...(itemMappings ? { itemMappings } : {}),
@@ -1207,7 +1291,7 @@ export class InventoryComponent implements OnInit {
         this.theoreticalFilter.startDate,
         this.theoreticalFilter.endDate,
       );
-      this.theoreticalResult.set(result);
+      const grouped={...result.grouped};for(const category of result.unknownCategories||[])delete grouped[category];this.theoreticalResult.set({...result,grouped});
     } catch (error: any) {
       console.error('理論消耗推算失敗:', error);
       this.showAlert('推算失敗', error.message);
@@ -1225,139 +1309,35 @@ export class InventoryComponent implements OnInit {
    * 安全庫存 = ceil(上一個完整週消耗 / 7 × 9 天)，若品項有手動安全量則取兩者較大。
    * 狀態：餘 < 0 今日不足 → 餘 < 日均×2 撐不到 2 天 → 餘 < 安全庫存 低於安全量 → 充足。
    */
-  async loadDashboard(): Promise<void> {
-    this.dashboardLoading.set(true);
-    this.dashboardLoaded.set(false);
-    this.forecastLoading.set(true);
-    try {
-      const todayStr = this.stock.todayString();
-
-      // 1. 最近一次盤點（今天或之前）；後端 /counts/latest，404 → null
-      const lastCountDoc = (await this.countsApi.fetchById('latest')) as CountDoc | null;
-      const countDate = lastCountDoc?.countDate || '';
-      this.dashboardHasCount.set(!!countDate);
-      this.dashboardLastCountDate.set(countDate);
-      this.dashboardCountAgeDays.set(
-        countDate ? Math.max(0, this.stock.daysInclusive(countDate, todayStr) - 1) : 0,
-      );
-
-      // 2. 推估庫存（盤點 + 到貨 − 消耗）：消耗算到昨天（今天的消耗在第 5 步另扣一次），到貨含今天
-      const allPurchases = (await this.purchasesApi.fetchAll()) as any[];
-      const yesterdayStr = this.stock.addDays(todayStr, -1);
-      const estimate = await this.stock.estimateStock(lastCountDoc, yesterdayStr, allPurchases);
-      const todayArrivals = countDate ? this.stock.arrivedBetween(allPurchases, todayStr, todayStr) : this.stock.emptyGrouped();
-      const pendingArrivals = this.stock.pendingArrivals(allPurchases);
-
-      // 3. 手動安全量（品項設定）
-      if (this.inventoryItems().length === 0) {
-        await this.fetchInventoryItems();
-      }
-      const safetyMap = new Map<string, number>();
-      for (const item of this.inventoryItems()) {
-        safetyMap.set(`${item.category}:${item.name}`, item.safeInventoryLevel || 0);
-      }
-
-      // 4. 上一個完整週（週一~週日）消耗 → 日均
-      const lastWeekMonday = this.stock.lastCompleteWeekMonday(todayStr);
-      const lastWeek = await this.stock.weeklyConsumption(lastWeekMonday);
-      this.dashboardConsumptionNote.set(
-        `日均依 ${lastWeekMonday} ~ ${this.stock.addDays(lastWeekMonday, 6)} 消耗計算（${this.stock.daysLabel(lastWeek.actualDays, lastWeek.estimatedDays)}）`,
-      );
-
-      // 5. 今/明日預估消耗（排程推算）
-      let todayForecastData: Record<string, Record<string, number>> = {};
-      try {
-        const todayResult = await this.consumptionEngine.calculateTheoreticalConsumption(todayStr, todayStr);
-        todayForecastData = todayResult.grouped;
-        this.todayForecast.set(todayForecastData);
-
-        const tomorrowStr = this.stock.addDays(todayStr, 1);
-        const tomorrowResult = await this.consumptionEngine.calculateTheoreticalConsumption(tomorrowStr, tomorrowStr);
-        this.tomorrowForecast.set(tomorrowResult.grouped);
-      } catch (e) {
-        console.warn('今日預估消耗載入失敗:', e);
-      }
-      this.forecastLoading.set(false);
-
-      // 沒有盤點基準就不要顯示一堆 0，讓畫面提示先去盤點
-      if (!countDate) {
-        this.dashboardItems.set([]);
-        this.dashboardLoaded.set(true);
-        return;
-      }
-
-      // 6. 合併所有品項
-      const itemsByCategory = this.stock.collectItems([
-        estimate.stock,
-        estimate.arrivals,
-        estimate.consumption,
-        todayArrivals,
-        lastWeek.grouped,
-      ]);
-      // 品名本身可能含冒號（如 HI:23），不能把 `${cat}:${item}` 組成字串再 split 回來（曾把 HI:23 截成 HI）
-      const allEntries: { category: string; itemName: string; key: string }[] = [];
-      for (const cat of Object.keys(CATEGORY_NAMES)) {
-        for (const item of itemsByCategory[cat] || []) {
-          allEntries.push({ category: cat, itemName: item, key: `${cat}:${item}` });
-        }
-      }
-
-      // 7. 每品項推估庫存 + 4 階狀態
-      const dashItems: ReturnType<typeof this.dashboardItems> = [];
-      allEntries.forEach(({ category, itemName, key }) => {
-        // 今日消耗前的庫存 = 推估（消耗到昨天）+ 今天已到貨
-        const estimatedStock =
-          this.stock.value(estimate.stock, category, itemName) +
-          this.stock.value(todayArrivals, category, itemName);
-
-        // 上週消耗 → 日均用量 → 自動安全庫存（9 天）
-        const weeklyUsage = this.stock.value(lastWeek.grouped, category, itemName);
-        const dailyUsage = weeklyUsage > 0 ? +this.stock.dailyAverage(weeklyUsage).toFixed(1) : 0;
-        const manualSafeLevel = safetyMap.get(key) || 0;
-        const autoSafeLevel = this.stock.safetyStock(weeklyUsage);
-        const safeLevel = Math.max(autoSafeLevel, manualSafeLevel);
-
-        // 今日預估消耗（只在這裡扣一次）
-        const todayConsumption = todayForecastData[category]?.[itemName] || 0;
-        const remainingAfterToday = estimatedStock - todayConsumption;
-        const pending = this.stock.value(pendingArrivals, category, itemName);
-
-        // 4 階狀態：與每週訂單的「安全庫存 = 日均 × 9 天」同一把尺
-        let status: 'safe' | 'warning' | 'danger' | 'critical' = 'safe';
-        let statusLabel = '充足';
-        if (remainingAfterToday < 0) {
-          status = 'critical';
-          statusLabel = '今日不足';
-        } else if (dailyUsage > 0 && remainingAfterToday < dailyUsage * 2) {
-          status = 'danger';
-          statusLabel = '撐不到 2 天';
-        } else if (safeLevel > 0 && remainingAfterToday < safeLevel) {
-          status = 'warning';
-          statusLabel = '低於安全量';
-        }
-        if (status !== 'safe' && pending > 0) statusLabel += '（已叫貨）';
-
-        dashItems.push({ category, itemName, estimatedStock, safeLevel, autoSafeLevel, dailyUsage, todayConsumption, remainingAfterToday, pending, status, statusLabel });
-      });
-
-      const statusOrder: Record<string, number> = { critical: 0, danger: 1, warning: 2, safe: 3 };
-      dashItems.sort(
-        (a, b) => statusOrder[a.status] - statusOrder[b.status] || a.itemName.localeCompare(b.itemName, 'zh-Hant'),
-      );
-
-      this.dashboardItems.set(dashItems);
-      this.dashboardLoaded.set(true);
-
-    } catch (error: any) {
-      console.error('Dashboard 載入失敗:', error);
-    } finally {
-      this.dashboardLoading.set(false);
-    }
+  async loadDashboard():Promise<void>{
+    if(this.dashboardLoading())return;this.stock.invalidateActualRanges();this.dashboardLoading.set(true);this.forecastLoading.set(true);
+    try{const today=this.stock.todayString();const docs=await this.countsApi.fetchAll() as unknown as CountDoc[];const purchases=await this.purchasesApi.fetchAll();const weekStart=this.stock.lastCompleteWeekMonday(today);const week=await this.stock.weeklyConsumption(weekStart);
+      this.dashboardHasCount.set(docs.some(d=>d.countDate<=today));this.dashboardLastCountDate.set(docs.filter(d=>d.countDate<=today).map(d=>d.countDate).sort().pop()||'');this.dashboardConsumptionNote.set('安全量沿用上週用量與品項設定；'+(week.warnings||[]).join('；'));
+      const [forecast,tomorrow]=await Promise.all([this.consumptionEngine.calculateTheoreticalConsumption(today,today),this.consumptionEngine.calculateTheoreticalConsumption(this.stock.addDays(today,1),this.stock.addDays(today,1))]);this.forecastWarnings.set([...(forecast.warnings||[]),...(tomorrow.warnings||[])]);const todayGroup={...forecast.grouped},tomorrowGroup={...tomorrow.grouped};for(const c of forecast.unknownCategories||[])delete todayGroup[c];for(const c of tomorrow.unknownCategories||[])delete tomorrowGroup[c];this.todayForecast.set(todayGroup);this.tomorrowForecast.set(tomorrowGroup);
+      const rows:ReturnType<typeof this.dashboardItems>=[];
+      for(const category of this.categoryKeys){for(const itemName of this.getItemsForCategory(category)){
+        const timeline=await this.stock.itemTimeline(category,itemName,today,this.stock.addDays(today,9),docs,purchases);const usage=this.stock.value(week.grouped,category,itemName);const usageUnknown=!!week.warnings?.some(w=>w.startsWith(category)&&w.includes('數量未知'));const manualSafe=Number(this.inventoryItems().find(i=>i.category===category&&i.name===itemName)?.safeInventoryLevel)||0;const autoSafeLevel=usageUnknown?null:this.stock.safetyStock(usage);const safeLevel=autoSafeLevel===null?(manualSafe>0?manualSafe:null):Math.max(autoSafeLevel,manualSafe);const estimatedStock=timeline.current;const dailyUsage=usageUnknown?null:+this.stock.dailyAverage(usage).toFixed(1);const pending=this.stock.value(this.stock.pendingArrivals(purchases),category,itemName);
+        const demandUnknown=!!forecast.unknownCategories?.includes(category)||timeline.days.some(day=>day.need===null||day.projectedBalance===null);
+        let status:'safe'|'warning'|'danger'|'critical'='safe';
+        let statusLabel='充足';
+        if(estimatedStock!==null&&estimatedStock<0){status='critical';statusLabel='預計不足';}
+        else if(timeline.firstDeficitDate){status='danger';statusLabel='預計 '+timeline.firstDeficitDate+' 不足';}
+        else if(estimatedStock===null){status='warning';statusLabel='缺少實盤或來源';}
+        else if(demandUnknown){status='warning';statusLabel='後續需求待核對';}
+        else if(usageUnknown){status='warning';statusLabel='安全量來源待核對';}
+        else if(dailyUsage!==null&&dailyUsage>0&&estimatedStock<dailyUsage*2){status='danger';statusLabel='預計不足 2 天';}
+        else if(safeLevel!==null&&estimatedStock<safeLevel){status='warning';statusLabel='低於安全量';}
+        rows.push({category,itemName,estimatedStock,lastCountDate:timeline.anchor?.countDate||'',firstDeficitDate:timeline.firstDeficitDate,nextDelivery:timeline.nextDelivery,safeLevel,autoSafeLevel,dailyUsage,todayConsumption:forecast.unknownCategories?.includes(category)?null:this.stock.value(forecast.grouped as Grouped,category,itemName),remainingAfterToday:estimatedStock,pending,status,statusLabel});
+      }}this.dashboardItems.set(rows);this.dashboardLoaded.set(true);
+    }catch(error:any){this.showAlert('庫存總覽載入失敗',error?.message||String(error));}finally{this.dashboardLoading.set(false);this.forecastLoading.set(false);}
   }
 
-  isForecastEmpty(forecast: Record<string, Record<string, number>>): boolean {
-    return Object.values(forecast).every((cat) => Object.keys(cat).length === 0);
+  isForecastEmpty(forecast:Record<string,Record<string,number>>):boolean {
+    // A missing category means unknown data, not a zero-usage day.
+    return this.categoryKeys.every(category=>forecast[category]!=null&&Object.values(forecast[category]).every(value=>Number.isFinite(value)&&value===0));
   }
+  editMachineConfigInline(config:any):void {this.openMachineConfigModal(config);}
+  cancelMachineConfigEdit():void {this.openMachineConfigModal();}
 
   getDashboardItemsByCategory(category: string) {
     return this.dashboardItems().filter((i) => i.category === category);
@@ -1378,6 +1358,7 @@ export class InventoryComponent implements OnInit {
     }
 
     try {
+      const sources=await firstValueFrom(this.api.get<any[]>('/orders/consumables/coverage'));this.summarySources.set(sources.map(source=>({...source,startDate:String(source.startDate).replace(/^(\d{4})(\d{2})(\d{2})$/,'$1-$2-$3'),endDate:String(source.endDate).replace(/^(\d{4})(\d{2})(\d{2})$/,'$1-$2-$3')})).filter(source=>source.endDate.startsWith(this.summaryMonth)));
       const consumption = await this.getMonthlyConsumption(this.summaryMonth);
       for (const category of Object.keys(this.monthlySummaryData)) {
         this.monthlySummaryData[category] = consumption[category] || {};
@@ -1398,14 +1379,14 @@ export class InventoryComponent implements OnInit {
 
   async exportMonthlySummary(): Promise<void> {
     const XLSX = await loadXlsx();
-    const rows: any[][] = [['類別', '品項', '每箱數量', '當月消耗(個)', '當月消耗(箱)']];
+    const rows: any[][] = [['歸檔月份',this.summaryMonth,'跨月區間不拆分；本表不是曆月實耗'],['來源區間',...this.summarySources().map(s=>s.startDate+'～'+s.endDate+' '+s.category)],['類別', '品項', '每箱數量', '來源合計（品項單位）', '來源合計(箱)']];
 
     for (const category of Object.keys(CATEGORY_NAMES)) {
       const items = this.monthlySummaryData[category] || {};
       for (const [item, count] of Object.entries(items)) {
         rows.push([
           CATEGORY_NAMES[category],
-          item,
+          item+'（'+this.unitLabel(category,item)+'）',
           this.getUnitsPerBox(category, item),
           count,
           this.calculateBoxes(category, item, count),
@@ -1414,11 +1395,6 @@ export class InventoryComponent implements OnInit {
     }
 
     rows.push([]);
-    rows.push(['類別小計', '', '', '', '']);
-    for (const category of Object.keys(CATEGORY_NAMES)) {
-      rows.push([CATEGORY_NAMES[category], '合計', '', this.getCategoryTotal(category), '']);
-    }
-
     const ws = XLSX.utils.aoa_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '當月消耗總量');
@@ -1427,7 +1403,7 @@ export class InventoryComponent implements OnInit {
     const blob = new Blob([wbout], { type: 'application/octet-stream' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `當月消耗總量_${this.summaryMonth}.xlsx`;
+    link.download = `歸檔來源合計_${this.summaryMonth}.xlsx`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1470,126 +1446,47 @@ export class InventoryComponent implements OnInit {
   // 「每月盤點」與「週二盤點」已合併成單一概念：一天一份盤點文件（inventory_count_docs）。
   // 總覽 / 每週訂單 / 月報表都以「最近一次盤點」為基準自動推算。
 
-  /** 把三類別的品項輸入格重設為 0（以 knownItems 為準） */
-  private resetCountInputs(): void {
-    for (const category of this.categoryKeys) {
-      this.countBoxes[category] = {};
-      this.countUnits[category] = {};
-      for (const item of this.getItemsForCategory(category)) {
-        this.countBoxes[category][item] = 0;
-        this.countUnits[category][item] = 0;
-      }
-    }
+  private resetCountInputs():void { for(const category of this.categoryKeys){this.countBoxes[category]={};this.countUnits[category]={};this.countLoose[category]={};} }
+  syncCountUnits():void {
+    for(const category of this.categoryKeys){this.countUnits[category]={};for(const item of new Set([...Object.keys(this.countBoxes[category]),...Object.keys(this.countLoose[category])])){
+      const boxes=this.countBoxes[category][item];const loose=this.countLoose[category][item];
+      if(boxes==null && loose==null)continue;
+      this.countUnits[category][item]=Number(boxes||0)*this.getUnitsPerBox(category,item)+Number(loose||0);
+    }}
   }
-
-  /** 箱數 → 個數（unitsPerBox = 1 者箱數即個數） */
-  syncCountUnits(): void {
-    for (const category of this.categoryKeys) {
-      for (const [item, boxes] of Object.entries(this.countBoxes[category] || {})) {
-        this.countUnits[category][item] = (Number(boxes) || 0) * this.getUnitsPerBox(category, item);
-      }
-    }
+  markCountZero(category:string,item:string):void {this.countBoxes[category][item]=0;this.countLoose[category][item]=0;this.syncCountUnits();}
+  async loadCountDoc():Promise<void> {
+    const date=this.countFilter.date;if(!date)return;
+    if(this.hasUnsavedChanges() && !confirm('盤點尚未儲存，確定切換日期並捨棄變更？')){this.countFilter.date=this.countOwnerDate;return;}
+    const request=++this.countRequest;this.countsLoading.set(true);
+    try {let missingRevision=0;const doc=await firstValueFrom(this.api.get<CountDoc>('/system/inventory/counts/'+date)).catch((error:any)=>{if(error.status===404){missingRevision=Number(error.error?.revision)||0;return null;}throw error;});if(request!==this.countRequest)return;
+      this.resetCountInputs();this.countOwnerDate=date;this.countNotes=doc?.notes||'';this.countRevision=(doc as any)?.revision||missingRevision;this.countCutoff=(doc as any)?.cutoff||(doc?'start-of-day':'end-of-day');this.countType=(doc as any)?.countType||'weekly';this.countDocExists.set(!!doc);this.countDocInfo.set(null);
+      if(doc){for(const category of this.categoryKeys){for(const [item,value] of Object.entries(doc.counts?.[category]||{})){const amount=Number(value),perBox=this.getUnitsPerBox(category,item);this.countUnits[category][item]=amount;this.countBoxes[category][item]=Math.floor(amount/perBox);this.countLoose[category][item]=+(amount%perBox).toFixed(6);}}
+      this.countDocInfo.set({createdBy:doc.createdBy?.name||'未知',updatedBy:doc.updatedBy?.name||doc.createdBy?.name||'未知',updatedAt:doc.updatedAt||doc.createdAt||''});}
+      this.countSnapshot=this.draftSnapshot();this.inspectCountDraft();
+    }catch(error:any){this.showAlert('載入失敗',error?.error?.message||error?.message||String(error));this.countFilter.date=this.countOwnerDate;}finally{if(request===this.countRequest)this.countsLoading.set(false);}
   }
-
-  /** 載入盤點日的文件；沒有就以全 0 起始 */
-  async loadCountDoc(): Promise<void> {
-    const date = this.countFilter.date;
-    if (!date) return;
-    this.countsLoading.set(true);
-    this.countDocInfo.set(null);
-    this.countDocExists.set(false);
-    this.resetCountInputs();
-    this.countNotes = '';
-
-    try {
-      const doc = (await this.countsApi.fetchById(date)) as CountDoc | null;
-      if (doc) {
-        this.countDocExists.set(true);
-        this.countNotes = doc.notes || '';
-        for (const category of this.categoryKeys) {
-          const units = doc.counts?.[category] || {};
-          const boxes = doc.countBoxes?.[category] || {};
-          for (const [item, value] of Object.entries(units)) {
-            this.countUnits[category][item] = Number(value) || 0;
-          }
-          for (const [item, value] of Object.entries(boxes)) {
-            this.countBoxes[category][item] = Number(value) || 0;
-          }
-          // 舊資料沒存箱數 → 由個數回推
-          for (const [item, value] of Object.entries(units)) {
-            if (this.countBoxes[category][item] === undefined || this.countBoxes[category][item] === 0) {
-              const unitsPerBox = this.getUnitsPerBox(category, item);
-              const n = Number(value) || 0;
-              if (boxes[item] === undefined && n > 0) {
-                this.countBoxes[category][item] = unitsPerBox > 1 ? Math.round(n / unitsPerBox) : n;
-              }
-            }
-          }
-        }
-        this.countDocInfo.set({
-          createdBy: doc.createdBy?.name || '未知',
-          updatedBy: doc.updatedBy?.name || doc.createdBy?.name || '未知',
-          updatedAt: doc.updatedAt || doc.createdAt || '',
-        });
-      }
-    } catch (error: any) {
-      console.error('載入盤點紀錄失敗:', error);
-      this.showAlert('載入失敗', error?.error?.message || error?.message || String(error));
-    } finally {
-      this.countsLoading.set(false);
-    }
-  }
-
-  /** 儲存盤點（以盤點日為 key，upsert） */
-  async saveCountDoc(): Promise<void> {
-    const date = this.countFilter.date;
-    if (!date) {
-      this.showAlert('無法儲存', '請先選擇盤點日。');
-      return;
-    }
-    this.syncCountUnits();
+  async saveCountDoc():Promise<void> {
+    const date=this.countFilter.date;if(this.countsSaving()||this.countsLoading())return;
+    if(!date || date!==this.countOwnerDate){this.showAlert('請重新載入','日期已變更，請先載入該日盤點。');return;}
+    this.syncCountUnits();const quantities=Object.values(this.countUnits).flatMap(Object.values);
+    const inputs=[...Object.values(this.countBoxes),...Object.values(this.countLoose)].flatMap(Object.values).filter(v=>v!=null);
+    if(!quantities.length||inputs.some(v=>!Number.isFinite(Number(v))||Number(v)<0)||quantities.some(v=>!Number.isFinite(v)||v<0)){this.showAlert('請檢查數量','至少填寫一項實盤數量；不可為負數。空白表示未盤點，零請明確輸入或按「確認零」。');return;}
+    const savedSnapshot=this.draftSnapshot();const savedRevision=this.countRevision;
     this.countsSaving.set(true);
-    try {
-      const doc = (await this.countsApi.save(date, {
-        counts: this.buildGroupedCopy(this.countUnits),
-        countBoxes: this.buildGroupedCopy(this.countBoxes),
-        notes: this.countNotes || '',
-      } as any)) as CountDoc;
-
-      this.countDocExists.set(true);
-      this.countDocInfo.set({
-        createdBy: doc?.createdBy?.name || '未知',
-        updatedBy: doc?.updatedBy?.name || doc?.createdBy?.name || '未知',
-        updatedAt: doc?.updatedAt || doc?.createdAt || '',
-      });
-      await this.loadCountRecords();
-      this.showAlert('操作成功', `${date} 盤點已儲存`);
-    } catch (error: any) {
-      console.error('儲存盤點失敗:', error);
-      this.showAlert('儲存失敗', error?.error?.message || error?.message || String(error));
-    } finally {
-      this.countsSaving.set(false);
-    }
+    try {const doc=await this.countsApi.save(date,{counts:this.buildGroupedCopy(this.countUnits),countBoxes:Object.fromEntries(this.categoryKeys.map(c=>[c,Object.fromEntries(Object.entries(this.countBoxes[c]).filter(([,v])=>v!=null))])),notes:this.countNotes,cutoff:this.countCutoff,countType:this.countType,expectedRevision:savedRevision} as any) as CountDoc;
+      if(date!==this.countOwnerDate||date!==this.countFilter.date)return;
+      this.countRevision=(doc as any).revision;this.countSnapshot=savedSnapshot;try{sessionStorage.removeItem(this.draftKey(date));}catch{/* A successful server save must remain successful if browser storage is unavailable. */}this.countDraftInfo.set('');this.countDocExists.set(true);this.countDocInfo.set({createdBy:doc.createdBy?.name||'未知',updatedBy:doc.updatedBy?.name||'未知',updatedAt:doc.updatedAt||''});await this.loadCountRecords();this.dashboardLoaded.set(false);this.weeklyDataLoaded.set(false);this.showAlert('已儲存',date+' 盤點已儲存，可使用同一份盤點計算補貨。');
+    }catch(error:any){this.showAlert(error?.status===409?'盤點已被其他人更新':'儲存失敗',(error?.error?.message||error?.message||String(error))+'；您的輸入保留在畫面，請核對後重新載入。');}finally{this.countsSaving.set(false);}
   }
 
   /** 刪除盤點日的文件 */
-  async deleteCountDoc(): Promise<void> {
-    const date = this.countFilter.date;
-    if (!date || !this.countDocExists()) return;
-    if (!confirm(`確定要刪除 ${date} 的盤點紀錄嗎？此動作無法復原。`)) return;
-
-    try {
-      await this.countsApi.delete(date);
-      this.countDocExists.set(false);
-      this.countDocInfo.set(null);
-      this.resetCountInputs();
-      this.countNotes = '';
-      await this.loadCountRecords();
-      this.showAlert('操作成功', `${date} 盤點紀錄已刪除`);
-    } catch (error: any) {
-      console.error('刪除盤點失敗:', error);
-      this.showAlert('刪除失敗', error?.error?.message || error?.message || String(error));
-    }
+  async deleteCountDoc():Promise<void>{
+    const date=this.countFilter.date;if(!date||!this.countDocExists()||this.countsSaving()||this.countsLoading())return;
+    if(!confirm('確定刪除 '+date+' 的盤點紀錄？'))return;
+    const revision=this.countRevision;this.countsSaving.set(true);
+    try{await firstValueFrom(this.api.delete('/system/inventory/counts/'+date,{expectedRevision:String(revision)}));if(date!==this.countOwnerDate)return;this.resetCountInputs();this.countNotes='';this.countDocExists.set(false);this.countDocInfo.set(null);this.countSnapshot=this.draftSnapshot();await this.loadCountDoc();await this.loadCountRecords();this.dashboardLoaded.set(false);this.weeklyDataLoaded.set(false);this.showAlert('已刪除',date+' 盤點已刪除，可重新填寫儲存。');}
+    catch(error:any){this.showAlert('刪除失敗',error?.error?.message||error?.message||String(error));}finally{this.countsSaving.set(false);}
   }
 
   /** 盤點紀錄列表（最近 30 筆，新→舊） */
@@ -1650,91 +1547,17 @@ export class InventoryComponent implements OnInit {
    * 月報表：期初（以該月第一天之前最近一次盤點推估到月初）、當月到貨、當月消耗、
    * 期末推估，以及當月最後一次盤點量與差異。
    */
-  async loadCountMonthReport(): Promise<void> {
-    this.countReportLoading.set(true);
-    this.countReportLoaded.set(false);
-    this.countReportNote.set('');
-    this.countReportRows.set([]);
-
-    try {
-      const { start, end } = this.stock.monthRange(this.countReportFilter.month);
-      const purchases = (await this.purchasesApi.fetchAll()) as any[];
-
-      // 期初基準：月初前一天（含）最近一次盤點
-      const baseDoc = await this.fetchLatestCountBefore(this.stock.addDays(start, -1));
-      this.countReportBaseDate.set(baseDoc?.countDate || '');
-
-      const opening = baseDoc
-        ? await this.stock.estimateStock(baseDoc, this.stock.addDays(start, -1), purchases)
-        : null;
-      if (!baseDoc) {
-        this.countReportNote.set('該月月初之前沒有盤點紀錄，期初結存無法推算（顯示「—」）。請先補一筆盤點。');
-      }
-
-      const arrived = this.stock.arrivedBetween(purchases, start, end);
-      const consumed = await this.stock.consumptionBetween(start, end);
-      const daysLabel = this.stock.daysLabel(consumed.actualDays, consumed.estimatedDays);
-
-      // 當月最後一次盤點
-      const monthCounts = (await this.countsApi.fetchAll()) as unknown as CountDoc[];
-      const lastCount = (monthCounts || []).find(
-        (d) => d.countDate >= start && d.countDate <= end,
-      ) || null;
-      // 推估到「該盤點日開始前」的庫存，才能跟盤點量對比
-      const estimateAtCount =
-        lastCount && baseDoc
-          ? await this.stock.estimateStock(baseDoc, this.stock.addDays(lastCount.countDate, -1), purchases)
-          : null;
-
-      const itemsByCategory = this.stock.collectItems([
-        opening?.stock,
-        arrived,
-        consumed.grouped,
-        lastCount ? this.stock.normalizeGrouped(lastCount.counts) : null,
-      ]);
-
-      const rows: ReturnType<typeof this.countReportRows> = [];
-      for (const category of this.categoryKeys) {
-        const items = new Set<string>([
-          ...(itemsByCategory[category] || []),
-          ...this.getItemsForCategory(category),
-        ]);
-        for (const item of [...items].sort()) {
-          const open = opening ? this.stock.value(opening.stock, category, item) : null;
-          const got = this.stock.value(arrived, category, item);
-          const used = this.stock.value(consumed.grouped, category, item);
-          const closing = open != null ? open + got - used : null;
-          const counted = lastCount
-            ? this.stock.value(this.stock.normalizeGrouped(lastCount.counts), category, item)
-            : null;
-          const estAtCount = estimateAtCount
-            ? this.stock.value(estimateAtCount.stock, category, item)
-            : null;
-          if (open == null && got === 0 && used === 0 && counted == null) continue;
-          rows.push({
-            category,
-            categoryName: CATEGORY_NAMES[category],
-            item,
-            opening: open,
-            arrived: got,
-            consumed: used,
-            daysLabel,
-            closing,
-            counted,
-            diff: counted != null && estAtCount != null ? counted - estAtCount : null,
-          });
-        }
-      }
-
-      this.countReportRows.set(rows);
-      this.countReportLastCountDate.set(lastCount?.countDate || '');
-      this.countReportLoaded.set(true);
-    } catch (error: any) {
-      console.error('盤點月報表計算失敗:', error);
-      this.showAlert('計算失敗', error?.error?.message || error?.message || String(error));
-    } finally {
-      this.countReportLoading.set(false);
-    }
+  async exportCountMonthReport():Promise<void>{if(!this.countReportLoaded())return;const XLSX=await loadXlsx();const rows:any[][]=[['月份',this.countReportFilter.month],['類別','品項','單位','期初推估','已到貨','耗用','來源','期末推估','最後實盤','盤點差異']];for(const row of this.countReportRows())rows.push([row.categoryName,row.item,this.unitLabel(row.category,row.item),row.opening??'待核對',row.arrived,row.consumed??'待核對',row.daysLabel,row.closing??'待核對',row.counted??'未盤',row.diff??'待核對']);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'庫存月報');XLSX.writeFile(wb,'庫存月報_'+this.countReportFilter.month+'.xlsx');}
+  async loadCountMonthReport():Promise<void>{
+    this.countReportLoading.set(true);this.countReportLoaded.set(false);this.countReportRows.set([]);
+    try{const {start,end}=this.stock.monthRange(this.countReportFilter.month);const docs=await this.countsApi.fetchAll() as unknown as CountDoc[];const purchases=await this.purchasesApi.fetchAll();const arrived=this.stock.arrivedBetween(purchases,start,end);const consumed=await this.stock.consumptionBetween(start,end);const rows:ReturnType<typeof this.countReportRows>=[];
+      for(const category of this.categoryKeys){for(const item of this.getItemsForCategory(category)){
+        const before=this.stock.addDays(start,-1);const opening=await this.stock.itemTimeline(category,item,before,before,docs,purchases);const closing=await this.stock.itemTimeline(category,item,end,end,docs,purchases);const latest=docs.filter(d=>d.countDate>=start&&d.countDate<=end&&d.counts?.[category]?.[item]!=null).sort((a,b)=>b.countDate.localeCompare(a.countDate))[0];
+        let difference:number|null=null;const counted=latest?.counts[category][item]??null;
+        if(latest){const at=latest.cutoff==='end-of-day'?latest.countDate:this.stock.addDays(latest.countDate,-1);const previous=await this.stock.itemTimeline(category,item,at,at,docs.filter(d=>d.countDate<latest.countDate),purchases);if(previous.current!==null)difference=counted!-previous.current;}
+        const source=consumed.categorySources?.[category];rows.push({category,categoryName:CATEGORY_NAMES[category],item,opening:opening.current,arrived:this.stock.value(arrived,category,item),consumed:consumed.warnings?.some(w=>w.startsWith(category)&&w.includes('數量未知'))?null:this.stock.value(consumed.grouped,category,item),daysLabel:this.stock.daysLabel(source?.actualDays||0,source?.estimatedDays||0),closing:closing.current,counted,diff:difference});
+      }}this.countReportRows.set(rows);this.countReportBaseDate.set('各品項最近實盤');this.countReportLastCountDate.set(docs.filter(d=>d.countDate>=start&&d.countDate<=end).map(d=>d.countDate).sort().pop()||'');this.countReportNote.set('各品項依自己的最近實盤截止時點計算；空白實盤不視為零。期末採用當月後續實盤重新校準，差異不自動轉成耗用。');this.countReportLoaded.set(true);
+    }catch(error:any){this.showAlert('月報載入失敗',error?.message||String(error));}finally{this.countReportLoading.set(false);}
   }
 
   // ==================== Tab 4 Methods ====================
@@ -1780,144 +1603,26 @@ export class InventoryComponent implements OnInit {
    * 每週訂單：以「盤點日的盤點文件」為基準推算。
    * 上週 = 訂單週的前一週（週一~週日）；訂購量 = max(0, 安全庫存(9天) − 目前推估庫存 − 待到貨)。
    */
-  async loadWeeklyData(): Promise<void> {
-    this.weeklyLoading.set(true);
-    this.weeklyDataLoaded.set(false);
-    this.weeklyCountSavedInfo.set('');
-
-    for (const category of Object.keys(this.weeklyCount)) {
-      this.weeklyCount[category] = {};
-      this.weeklyCountBoxes[category] = {};
-    }
-
-    try {
-      const countDate = this.weeklyFilter.countDate;
-
-      // 1. 載入盤點日的盤點文件（以「盤點日」為 key，與「盤點」頁籤同一份資料）
-      const countDoc = countDate
-        ? ((await this.countsApi.fetchById(countDate)) as CountDoc | null)
-        : null;
-
-      for (const category of Object.keys(this.weeklyCount)) {
-        const units = countDoc?.counts?.[category] || {};
-        const boxes = countDoc?.countBoxes?.[category] || {};
-        for (const [item, value] of Object.entries(units)) {
-          this.weeklyCount[category][item] = Number(value) || 0;
-        }
-        for (const [item, value] of Object.entries(boxes)) {
-          this.weeklyCountBoxes[category][item] = Number(value) || 0;
-        }
-        // 舊資料沒存箱數 → 由個數回推
-        for (const [item, value] of Object.entries(units)) {
-          if (boxes[item] === undefined) {
-            const unitsPerBox = this.getUnitsPerBox(category, item);
-            const n = Number(value) || 0;
-            this.weeklyCountBoxes[category][item] = unitsPerBox > 1 ? Math.round(n / unitsPerBox) : n;
-          }
-        }
-      }
-      if (countDoc) {
-        const who = countDoc.updatedBy?.name || countDoc.createdBy?.name || '未知';
-        this.weeklyCountSavedInfo.set(`已載入 ${countDate} 盤點（${who}，${countDoc.updatedAt || countDoc.createdAt || ''}）`);
-      } else {
-        this.weeklyCountSavedInfo.set(`${countDate} 尚無盤點紀錄，請輸入後按「儲存盤點」`);
-      }
-
-      // 2. 上週（訂單週的前一週，週一~週日）消耗 → 日均 → 安全庫存
-      const { start: weekStart } = this.getWeekDateRange(this.weeklyFilter.week);
-      const lastWeekMonday = this.stock.addDays(weekStart, -7);
-      const lastWeek = await this.stock.weeklyConsumption(lastWeekMonday);
-      this.weeklyLastWeekDays = { actual: lastWeek.actualDays, estimated: lastWeek.estimatedDays };
-      this.weeklyConsumptionNote.set(
-        `上週 ${lastWeekMonday} ~ ${this.stock.addDays(lastWeekMonday, 6)}（${this.stock.daysLabel(lastWeek.actualDays, lastWeek.estimatedDays)}）`,
-      );
-
-      // 3. 盤點後到貨 / 盤點後消耗 / 已叫貨待到貨
-      const purchases = (await this.purchasesApi.fetchAll()) as any[];
-      const today = this.stock.todayString();
-      const asOf = today >= countDate ? today : countDate;
-      const arrivals = countDate
-        ? this.stock.arrivedBetween(purchases, countDate, asOf)
-        : this.stock.emptyGrouped();
-      const sinceCount = countDate
-        ? await this.stock.consumptionBetween(countDate, asOf)
-        : { grouped: this.stock.emptyGrouped(), actualDays: 0, estimatedDays: 0 };
-      const pending = this.stock.pendingArrivals(purchases);
-      this.weeklyStockNote.set(
-        countDate
-          ? `推估庫存基準：${countDate} 盤點，加計 ${countDate} ~ ${asOf} 到貨、扣除同期消耗（${this.stock.daysLabel(sinceCount.actualDays, sinceCount.estimatedDays)}）`
-          : '尚未選擇盤點日',
-      );
-
-      this.weeklyCtx = {
-        lastWeek: lastWeek.grouped,
-        arrivals,
-        consumption: sinceCount.grouped,
-        pending,
-      };
-
-      // 4. 補齊所有已知品項的輸入格
-      for (const category of Object.keys(this.knownItems)) {
-        for (const item of this.getItemsForCategory(category)) {
-          if (this.weeklyCount[category][item] === undefined) this.weeklyCount[category][item] = 0;
-          if (this.weeklyCountBoxes[category][item] === undefined) this.weeklyCountBoxes[category][item] = 0;
-        }
-      }
-
-      this.recomputeWeeklyRows();
-      this.weeklyDataLoaded.set(true);
-    } catch (error: any) {
-      console.error('載入週資料失敗:', error);
-      this.showAlert('載入失敗', error?.error?.message || error?.message || String(error));
-    } finally {
-      this.weeklyLoading.set(false);
-    }
+  async loadWeeklyData():Promise<void>{
+    if(this.weeklyLoading())return;this.weeklyLoading.set(true);this.weeklyDataLoaded.set(false);this.weeklyRows.set([]);this.weeklyBlockedItems.set([]);
+    try{const docs=await this.countsApi.fetchAll() as unknown as CountDoc[];const count=docs.find(d=>d.countDate===this.weeklyFilter.countDate);if(!count){this.weeklyCountSavedInfo.set('該日尚無實盤，請先開啟同一份盤點表儲存。');this.weeklyDataLoaded.set(true);return;}
+      const purchases=await this.purchasesApi.fetchAll() as any[];const today=this.stock.todayString();if(count.countDate>today){this.weeklyCountSavedInfo.set('未來盤點不可作為目前現貨，請選已完成的盤點。');this.weeklyDataLoaded.set(true);return;}
+      const {start:weekStart}=this.getWeekDateRange(this.weeklyFilter.week);const coverageEnd=this.stock.addDays(weekStart,12);const week=await this.stock.weeklyConsumption(this.stock.addDays(weekStart,-7));
+      this.weeklyCountSavedInfo.set(count.countDate+' 已儲存 · '+(count.updatedBy?.name||count.createdBy?.name||'未知')+' · '+(count.cutoff==='end-of-day'?'收班後':'開班前'));
+      this.weeklyStockNote.set('截至 '+today+' 收班推估；只抵扣明日到 '+coverageEnd+' 的預計到貨。逾期及更晚到貨不抵扣本次建議；不足日另列。');this.weeklyConsumptionNote.set('每週補貨安全庫存 = 上週日均 × 9 天（維持原規則）；總覽另外比較手動安全量。');
+      const rows:ReturnType<typeof this.weeklyRows>=[];
+      for(const category of this.categoryKeys){for(const item of this.getItemsForCategory(category)){
+        const timeline=await this.stock.itemTimeline(category,item,today,coverageEnd,docs.filter(d=>d.countDate<=count.countDate),purchases);
+        if(timeline.current===null){this.weeklyBlockedItems.update(items=>[...items,item+'：無有效現貨基準，補貨建議待核對']);continue;}
+        const anchor=timeline.anchor!;const start=anchor.cutoff==='end-of-day'?this.stock.addDays(anchor.countDate,1):anchor.countDate;const consumption=await this.stock.consumptionBetween(start,today);const arrivals=this.stock.arrivedBetween(purchases,start,today);
+        if(week.warnings?.some(w=>w.startsWith(category)&&w.includes('數量未知'))){this.weeklyBlockedItems.update(items=>[...items,item+'：上週需求未知，補貨建議待核對']);continue;}
+        const lastWeekConsumption=this.stock.value(week.grouped,category,item);const safetyStock=this.stock.safetyStock(lastWeekConsumption);
+        const pending=purchases.filter(p=>p.status==='ordered'&&p.category===category&&p.item===item&&p.expectedDate>today&&p.expectedDate<=coverageEnd).reduce((sum,p)=>sum+Number(p.quantity||0),0);const orderQuantity=this.stock.orderQuantity(safetyStock,timeline.current,pending);
+        rows.push({category,categoryName:CATEGORY_NAMES[category],item,unitsPerBox:this.getUnitsPerBox(category,item),lastWeekConsumption,sourceLabel:this.stock.sourceLabel(week.categorySources?.[category]?.actualDays||0,week.categorySources?.[category]?.estimatedDays||0),dailyAvg:this.stock.dailyAverage(lastWeekConsumption).toFixed(1),safetyStock,countUnits:anchor.counts[category][item],arrivedSinceCount:this.stock.value(arrivals,category,item),consumedSinceCount:this.stock.value(consumption.grouped,category,item),estimatedStock:timeline.current,pending,orderQuantity,orderBoxes:this.calculateBoxesRounded(category,item,orderQuantity),firstDeficitDate:timeline.firstDeficitDate,anchorDate:anchor.countDate});
+      }}this.weeklyRows.set(rows);this.weeklyDataLoaded.set(true);
+    }catch(error:any){this.showAlert('補貨計算失敗',error?.message||String(error));}finally{this.weeklyLoading.set(false);}
   }
-
-  /** 只做加減的重算（盤點量改動時呼叫），推估用的到貨/消耗來自 weeklyCtx 快取 */
-  private recomputeWeeklyRows(): void {
-    const ctx = this.weeklyCtx;
-    if (!ctx) {
-      this.weeklyRows.set([]);
-      return;
-    }
-    const rows: ReturnType<typeof this.weeklyRows> = [];
-    for (const category of this.categoryKeys) {
-      const items = new Set<string>([
-        ...this.getItemsForCategory(category),
-        ...Object.keys(ctx.lastWeek[category] || {}),
-        ...Object.keys(this.weeklyCount[category] || {}),
-      ]);
-      for (const item of [...items].sort()) {
-        const lastWeekConsumption = this.stock.value(ctx.lastWeek, category, item);
-        const safetyStock = this.stock.safetyStock(lastWeekConsumption);
-        const countUnits = Number(this.weeklyCount[category]?.[item]) || 0;
-        const arrivedSinceCount = this.stock.value(ctx.arrivals, category, item);
-        const consumedSinceCount = this.stock.value(ctx.consumption, category, item);
-        const estimatedStock = countUnits + arrivedSinceCount - consumedSinceCount;
-        const pending = this.stock.value(ctx.pending, category, item);
-        const orderQuantity = this.stock.orderQuantity(safetyStock, estimatedStock, pending);
-        rows.push({
-          category,
-          categoryName: CATEGORY_NAMES[category],
-          item,
-          unitsPerBox: this.getUnitsPerBox(category, item),
-          lastWeekConsumption,
-          sourceLabel: this.weeklyConsumptionSource(),
-          dailyAvg: this.stock.dailyAverage(lastWeekConsumption).toFixed(1),
-          safetyStock,
-          countUnits,
-          arrivedSinceCount,
-          consumedSinceCount,
-          estimatedStock,
-          pending,
-          orderQuantity,
-          orderBoxes: this.calculateBoxesRounded(category, item, orderQuantity),
-        });
-      }
-    }
-    this.weeklyRows.set(rows);
-  }
+  private recomputeWeeklyRows():void { /* Saved counts are immutable in the replenishment view. */ }
 
   /** 上週消耗的資料來源（實際/推估/混合） */
   private weeklyConsumptionSource(): string {
@@ -1950,32 +1655,8 @@ export class InventoryComponent implements OnInit {
    * 儲存盤點：key = 盤點日（與「盤點」頁籤同一份文件），不是週次。
    * 舊版以 ISO 週次為 key 且打到已移除的舊路由，所以永遠存不進去。
    */
-  async saveWeeklyCount(): Promise<void> {
-    const countDate = this.weeklyFilter.countDate;
-    if (!countDate) {
-      this.showAlert('無法儲存', '請先選擇盤點日。');
-      return;
-    }
-    this.syncWeeklyCount();
+  async saveWeeklyCount():Promise<void> {await this.openCountDate(this.weeklyFilter.countDate);}
 
-    try {
-      const doc = (await this.countsApi.save(countDate, {
-        counts: this.buildGroupedCopy(this.weeklyCount),
-        countBoxes: this.buildGroupedCopy(this.weeklyCountBoxes),
-        notes: `每週訂單 ${this.weeklyFilter.week}`,
-      } as any)) as CountDoc;
-
-      const who = doc?.updatedBy?.name || doc?.createdBy?.name || '未知';
-      this.weeklyCountSavedInfo.set(`已儲存 ${countDate} 盤點（${who}，${doc?.updatedAt || ''}）`);
-      this.recomputeWeeklyRows();
-      this.showAlert('操作成功', `${countDate} 盤點已儲存`);
-    } catch (error: any) {
-      console.error('儲存盤點失敗:', error);
-      this.showAlert('儲存失敗', error?.error?.message || error?.message || String(error));
-    }
-  }
-
-  /** 訂購量 = max(0, 安全庫存(9天) − 目前推估庫存 − 已叫貨待到貨)；查已算好的 rows */
   getOrderQuantity(category: string, item: string): number {
     const row = this.weeklyRows().find((r) => r.category === category && r.item === item);
     return row ? row.orderQuantity : 0;
@@ -1986,6 +1667,7 @@ export class InventoryComponent implements OnInit {
   }
 
   openOrderPreview(): void {
+    if(this.orderRetryPayload){this.showOrderPreview.set(true);return;}
     const pad = (n: number) => String(n).padStart(2, '0');
     const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
     const fmtLabel = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
@@ -2023,16 +1705,20 @@ export class InventoryComponent implements OnInit {
         this.orderPreviewItems.push({ category, item, label, hospitalCode });
 
         // Split order qty evenly between Mon(index 0) and Wed(index 2)
-        const half1 = Math.ceil(orderQty / 2);
-        const half2 = orderQty - half1;
+        const boxes=this.calculateBoxesRounded(category,item,orderQty);
+        const half1 = Math.ceil(boxes / 2);
+        const half2 = boxes - half1;
         this.orderPreviewGrid[key] = [half1, 0, half2, 0, 0, 0];
       }
     }
 
+    this.orderIdempotencyKey=crypto.randomUUID();this.orderCreated.set(false);
     this.showOrderPreview.set(true);
   }
 
   async confirmExportOrder(): Promise<void> {
+    if(this.orderCreating()||this.orderRetryPayload){this.showAlert('請先確認叫貨結果','上次建單結果尚未確認；重試使用原叫貨，確認後再匯出。');return;}
+    if(!this.validOrderPreview())return;
     const XLSX = await loadXlsx();
     const rows: any[][] = [];
 
@@ -2085,15 +1771,7 @@ export class InventoryComponent implements OnInit {
     document.body.removeChild(link);
     URL.revokeObjectURL(link.href);
 
-    this.showOrderPreview.set(false);
-
-    // 同步建成行事曆叫貨（每格 >0 的數量 → 一筆待到貨，預計到貨日 = 該欄日期）
-    if (this.createCalendarOrdersOnExport) {
-      const result = await this.createCalendarOrdersFromPreview();
-      this.showAlert('匯出成功', `訂單已下載。${result}`);
-    } else {
-      this.showAlert('匯出成功', '訂單已下載');
-    }
+    this.showAlert('匯出成功','訂單已下載，匯出不會建立叫貨。');
   }
 
   /**
@@ -2101,7 +1779,11 @@ export class InventoryComponent implements OnInit {
    * 訂單數量是「個」，行事曆以整箱計：箱數 = 無條件進位(個數 / 每箱個數)，個數 = 箱數 × 每箱個數。
    * 同品項同預計到貨日已有待到貨時先確認，避免重複叫。
    */
+  validOrderPreview():boolean {if(Object.values(this.orderPreviewGrid).flat().some(v=>!Number.isInteger(Number(v))||Number(v)<0)){this.showAlert('請檢查箱數','補貨安排須填零或正整數箱。');return false;}return true;}
+  closeOrderPreview():void {if(this.orderCreating())return;if(!this.orderCreated()&&!confirm('補貨安排尚未建立，確定關閉？'))return;this.showOrderPreview.set(false);}
+  async confirmCreateOrder():Promise<void> {if(this.orderCreating()||this.orderCreated()||!this.validOrderPreview())return;this.orderCreating.set(true);try{const result=await this.createCalendarOrdersFromPreview();this.showAlert('建立叫貨',result);}finally{this.orderCreating.set(false);}}
   private async createCalendarOrdersFromPreview(): Promise<string> {
+    if(this.orderRetryPayload){return this.sendOrderPayload(this.orderRetryPayload);}
     const entries: any[] = [];
     for (const entry of this.orderPreviewItems) {
       const grid = this.orderPreviewGrid[`${entry.category}|${entry.item}`] || [];
@@ -2109,7 +1791,7 @@ export class InventoryComponent implements OnInit {
       grid.forEach((units: number, idx: number) => {
         const u = Number(units) || 0;
         if (u <= 0 || !this.orderPreviewDates[idx]) return;
-        const boxQuantity = unitsPerBox > 1 ? Math.ceil(u / unitsPerBox) : u;
+        const boxQuantity = u;
         entries.push({
           category: entry.category,
           item: entry.item,
@@ -2118,7 +1800,7 @@ export class InventoryComponent implements OnInit {
           expectedDate: this.orderPreviewDates[idx],
           orderDate: this.orderDate,
           status: 'ordered',
-          notes: `每週訂單 ${this.weeklyFilter.week}（訂單量 ${u} 個）`,
+          notes: `每週訂單 ${this.weeklyFilter.week}（訂單量 ${u} 箱）`,
         });
       });
     }
@@ -2131,18 +1813,16 @@ export class InventoryComponent implements OnInit {
       );
       if (dup.length > 0) {
         const sample = dup.slice(0, 3).map((d) => `${d.expectedDate} ${d.item}`).join('、');
-        if (!confirm(`行事曆已有 ${dup.length} 筆同品項同到貨日的待到貨（如 ${sample}），仍要再建立 ${entries.length} 筆叫貨嗎？\n（取消 = 只匯出 Excel，不建立）`)) {
-          return '（未建立行事曆叫貨）';
-        }
+        return `已有相同品項及日期的叫貨（${sample}），本次未重複建立。請在行事曆核對或修改原單。`;
       }
-      const res: any = await firstValueFrom(this.api.post('/system/inventory/purchases/batch', { entries }));
-      await this.fetchPurchases();
-      return `已建立 ${res?.count ?? entries.length} 筆行事曆叫貨（待到貨），可到「叫貨/到貨紀錄」查看。`;
+      this.orderRetryPayload=JSON.parse(JSON.stringify(entries));return this.sendOrderPayload(this.orderRetryPayload!);
     } catch (error: any) {
       console.error('建立行事曆叫貨失敗:', error);
       return `但建立行事曆叫貨失敗：${error?.error?.message || error?.message || error}`;
     }
   }
+
+  private async sendOrderPayload(entries:any[]):Promise<string>{try{const res:any=await firstValueFrom(this.api.post('/system/inventory/purchases/batch',{entries,idempotencyKey:this.orderIdempotencyKey}));this.orderCreated.set(true);this.orderRetryPayload=null;await this.fetchPurchases();return '已建立 '+(res?.count??entries.length)+' 筆叫貨，重複匯出不會建單。';}catch(error:any){return '建立結果尚未確認：'+(error?.error?.message||error?.message||String(error))+'；重試會使用原始訂單與同一識別碼，避免重複。';}}
 
   getOrderRowTotal(category: string, item: string): number {
     const grid = this.orderPreviewGrid[`${category}|${item}`] || [];

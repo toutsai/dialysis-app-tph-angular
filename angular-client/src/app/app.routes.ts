@@ -201,6 +201,7 @@ export const routes: Routes = [
             (m) => m.InventoryComponent
           ),
         canActivate: [roleGuard],
+        canDeactivate: [manualEditorGuard],
         data: {
           title: PAGE_ACCESS.inventory.title,
           roles: PAGE_ACCESS.inventory.roles,
@@ -358,15 +359,8 @@ export const routes: Routes = [
       },
       {
         path: 'consumables',
-        loadComponent: () =>
-          import('./features/consumables/consumables.component').then(
-            (m) => m.ConsumablesComponent
-          ),
-        canActivate: [roleGuard],
-        data: {
-          title: PAGE_ACCESS.consumables.title,
-          roles: PAGE_ACCESS.consumables.roles,
-        },
+        pathMatch: 'full',
+        redirectTo: 'inventory?section=inventory&view=reports&report=monthly',
       },
     ],
   },

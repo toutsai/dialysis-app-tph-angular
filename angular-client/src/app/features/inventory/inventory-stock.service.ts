@@ -8,31 +8,18 @@
 //   - 推估消耗：由排程推算（ConsumptionEngineService），用於「還沒上傳實際資料」的日子。
 import { Injectable, inject } from '@angular/core';
 import { ConsumptionEngineService } from '@services/consumption-engine.service';
-import {
-  ApiManagerService,
-  type ApiManager,
-  type FirestoreRecord,
-} from '@services/api-manager.service';
+import { type FirestoreRecord } from '@services/api-manager.service';
 
-/** category → itemName → 數量 */
-export type Grouped = Record<string, Record<string, number>>;
-
-export const STOCK_CATEGORIES = ['artificialKidney', 'dialysateCa', 'bicarbonateType'] as const;
-
-/** consumables_reports 的一段實際消耗區間（跨病人已加總） */
-export interface ActualRange {
-  /** 原始 key，例如 '20260824-20260828' */
-  key: string;
-  /** YYYY-MM-DD */
-  start: string;
-  /** YYYY-MM-DD */
-  end: string;
-  grouped: Grouped;
-}
+import { ApiService } from '@services/api.service';
+import { firstValueFrom } from 'rxjs';
+import { consumptionPlan, anchorStart, itemAnchor, projectBalances, addLocalDays, type Coverage, type ActualRange, type Grouped, STOCK_CATEGORIES } from './inventory-calculation';
+export { type ActualRange, type Grouped, STOCK_CATEGORIES } from './inventory-calculation';
 
 /** 一段期間的消耗量，附帶「幾天用實際、幾天用推估」 */
 export interface ConsumptionBreakdown {
   grouped: Grouped;
+  warnings?: string[];
+  categorySources?: Record<string, { actualDays: number; estimatedDays: number; ranges: ActualRange[]; warnings: string[] }>;
   actualDays: number;
   estimatedDays: number;
 }
@@ -41,6 +28,9 @@ export interface ConsumptionBreakdown {
 export interface CountDoc extends FirestoreRecord {
   id?: string;
   countDate: string;
+  cutoff?: 'start-of-day' | 'end-of-day';
+  countType?: 'weekly' | 'monthly' | 'both';
+  revision?: number;
   counts: Grouped;
   countBoxes: Grouped;
   notes?: string;
@@ -63,20 +53,38 @@ export interface StockEstimate {
   countDate: string;
 }
 
+interface ForecastSource {
+  grouped: Grouped;
+  unknownCategories?: string[];
+  warnings?: string[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class InventoryStockService {
+  private readonly api = inject(ApiService);
   private readonly engine = inject(ConsumptionEngineService);
-  private readonly apiManagerService = inject(ApiManagerService);
-  private readonly reportsApi: ApiManager<FirestoreRecord>;
 
   /** 安全庫存天數（使用者拍板：日均消耗 × 9 天） */
   readonly SAFETY_DAYS = 9;
 
-  private actualRangesPromise: Promise<ActualRange[]> | null = null;
-
-  constructor() {
-    this.reportsApi = this.apiManagerService.create<FirestoreRecord>('consumables_reports');
+  private readonly forecastRequests = new Map<string,{at:number;request:Promise<ForecastSource>}>();
+  /** A refresh invalidates both HIS and forecast sources; concurrent item views share work. */
+  private forecast(start:string,end:string):Promise<ForecastSource> {
+    const key=`${start}/${end}`;
+    const cached=this.forecastRequests.get(key);
+    if(cached && Date.now()-cached.at<30000) return cached.request;
+    const request: Promise<ForecastSource> = this.engine.calculateTheoreticalConsumption(start,end);
+    this.forecastRequests.set(key,{at:Date.now(),request});
+    request.catch(() => {
+      if (this.forecastRequests.get(key)?.request === request) this.forecastRequests.delete(key);
+    });
+    return request;
   }
+
+  sourceWarnings: string[] = [];
+  private actualRangesLoadedAt = 0;
+  private actualRangesPromise: Promise<ActualRange[]> | null = null;
+  private actualRangesGeneration = 0;
 
   // =========================================================================
   // 日期工具（一律本地年月日組字串，不用 toISOString —— 會跨日）
@@ -159,7 +167,7 @@ export class InventoryStockService {
     const obj = (src || {}) as Record<string, Record<string, unknown>>;
     for (const c of STOCK_CATEGORIES) {
       for (const [item, v] of Object.entries(obj[c] || {})) {
-        g[c][item] = Number(v) || 0;
+        if (v !== null && v !== '' && Number.isFinite(Number(v))) g[c][item] = Number(v);
       }
     }
     return g;
@@ -210,6 +218,7 @@ export class InventoryStockService {
    */
   loadActualRanges(reports: unknown[]): ActualRange[] {
     const map = new Map<string, Grouped>();
+    const coverage = new Map<string, Record<string, Coverage>>();
     for (const report of (reports || []) as Record<string, any>[]) {
       const ranges = (report?.['data'] || {})['ranges'];
       if (!ranges || typeof ranges !== 'object') continue;
@@ -220,6 +229,7 @@ export class InventoryStockService {
           g = this.emptyGrouped();
           map.set(key, g);
         }
+        coverage.set(key, { ...coverage.get(key), ...(entry?.categoryCoverage || {}) });
         for (const c of STOCK_CATEGORIES) {
           const list = entry?.[c];
           if (!Array.isArray(list)) continue;
@@ -238,7 +248,7 @@ export class InventoryStockService {
     const out: ActualRange[] = [];
     for (const [key, grouped] of map) {
       const [s, e] = key.split('-');
-      out.push({ key, start: expand(s), end: expand(e), grouped });
+      out.push({ key, start: expand(s), end: expand(e), grouped, categoryCoverage: coverage.get(key) });
     }
     out.sort((a, b) => a.start.localeCompare(b.start));
     return out;
@@ -246,13 +256,38 @@ export class InventoryStockService {
 
   /** 載入（並快取）實際消耗區間；force=true 重新抓 */
   ensureActualRanges(force = false): Promise<ActualRange[]> {
-    if (force) this.actualRangesPromise = null;
+    if (force || (this.actualRangesPromise && Date.now() - this.actualRangesLoadedAt > 30000)) {
+      this.invalidateActualRanges();
+    }
     if (!this.actualRangesPromise) {
+      const generation = this.actualRangesGeneration;
+      this.sourceWarnings = [];
+      this.actualRangesLoadedAt = Date.now();
       this.actualRangesPromise = (async () => {
         try {
-          const reports = await this.reportsApi.fetchAll();
-          return this.loadActualRanges(reports as unknown[]);
+          // Quantities and completeness must come from the same database snapshot.
+          const snapshot = await firstValueFrom(this.api.get<{
+            reports: unknown[];
+            coverage: Array<{ rangeKey: string; startDate: string; endDate: string; category: string; complete: boolean; sourceFile?: string; uploadedAt?: string }>;
+          }>('/orders/consumables/stock-sources'));
+          if (generation !== this.actualRangesGeneration) return this.ensureActualRanges();
+          if (!Array.isArray(snapshot?.reports) || !Array.isArray(snapshot?.coverage)) throw new Error('Invalid inventory source snapshot');
+          const ranges = this.loadActualRanges(snapshot.reports);
+          for (const source of snapshot.coverage) {
+            let range = ranges.find(r => r.key === source.rangeKey);
+            if (!range) {
+              const toDay = (date: string) => date.replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3');
+              range = { key: source.rangeKey, start: toDay(source.startDate), end: toDay(source.endDate), grouped: this.emptyGrouped() };
+              ranges.push(range);
+            }
+            range.categoryCoverage ??= {};
+            range.categoryCoverage[source.category] = source;
+          }
+          this.actualRangesLoadedAt = Date.now();
+          return ranges;
         } catch (error) {
+          if (generation !== this.actualRangesGeneration) return this.ensureActualRanges();
+          this.sourceWarnings.push('HIS 耗材來源載入失敗，暫採排程推估；請重新整理核對');
           console.warn('[InventoryStock] 載入耗材實際消耗區間失敗，全部改用排程推估:', error);
           return [];
         }
@@ -263,6 +298,8 @@ export class InventoryStockService {
 
   /** 丟掉快取（上傳新的消耗紀錄後呼叫） */
   invalidateActualRanges(): void {
+    this.actualRangesGeneration++;
+    this.forecastRequests.clear();
     this.actualRangesPromise = null;
   }
 
@@ -272,7 +309,7 @@ export class InventoryStockService {
 
   /**
    * [start, end] 每一天的消耗量：
-   *   - 被某個實際區間涵蓋的日子 → 該區間總量按日比例分攤（總量 × 涵蓋天數 / 區間天數）
+   *   - 完整且無重疊的類別區間全落在查詢內 → 合計只取一次，不按日拆分
    *   - 沒被涵蓋的日子 → 依連續日段合併，一段呼叫一次排程推估（不逐日呼叫）
    */
   async consumptionBetween(
@@ -286,37 +323,33 @@ export class InventoryStockService {
     }
 
     const rs = ranges ?? (await this.ensureActualRanges());
-    const days = this.enumerateDays(start, end);
-
-    const coveredByRange = new Map<number, number>();
-    const uncovered: string[] = [];
-    for (const day of days) {
-      const idx = rs.findIndex((r) => r.start <= day && day <= r.end);
-      if (idx >= 0) coveredByRange.set(idx, (coveredByRange.get(idx) || 0) + 1);
-      else uncovered.push(day);
-    }
-
-    for (const [idx, coveredDays] of coveredByRange) {
-      const r = rs[idx];
-      const total = Math.max(1, this.daysInclusive(r.start, r.end));
-      this.addGrouped(grouped, r.grouped, coveredDays / total);
-    }
-
-    for (const seg of this.toSegments(uncovered)) {
-      try {
-        const res = await this.engine.calculateTheoreticalConsumption(seg.start, seg.end);
-        this.addGrouped(grouped, res.grouped as Grouped, 1);
-      } catch (error) {
-        console.warn(`[InventoryStock] 排程推估失敗 (${seg.start}~${seg.end}):`, error);
+    const categorySources: NonNullable<ConsumptionBreakdown['categorySources']> = {};
+    const warnings: string[] = [...this.sourceWarnings];
+    const forecasts = new Map<string, Promise<ForecastSource>>();
+    for (const category of STOCK_CATEGORIES) {
+      const plan = consumptionPlan(start, end, rs, category);
+      warnings.push(...plan.warnings);
+      categorySources[category] = {actualDays:plan.actualDays,estimatedDays:plan.estimatedDays,ranges:plan.accepted,warnings:plan.warnings};
+      for (const range of plan.accepted) this.addGrouped(grouped, {[category]:range.grouped[category] || {}});
+      for (const segment of this.toSegments(plan.forecastDays)) {
+        const key = `${segment.start}/${segment.end}`;
+        let request = forecasts.get(key);
+        if (!request) { request=this.forecast(segment.start,segment.end); forecasts.set(key,request); }
+        try {
+          const result = await request;
+          if (result.unknownCategories?.includes(category)) {
+            warnings.push(`${category} ${key}：排程或用物設定不完整，數量未知`);
+          } else {
+            this.addGrouped(grouped, { [category]: result.grouped[category] || {} });
+          }
+        }
+        catch { warnings.push(`${category} ${key}：排程推估載入失敗，數量未知`); }
       }
     }
-
     this.roundGrouped(grouped);
-    return {
-      grouped,
-      actualDays: days.length - uncovered.length,
-      estimatedDays: uncovered.length,
-    };
+    return {grouped,categorySources,warnings,
+      actualDays:Math.min(...Object.values(categorySources).map(s=>s.actualDays)),
+      estimatedDays:Math.max(...Object.values(categorySources).map(s=>s.estimatedDays))};
   }
 
   /** 已排序的日期陣列 → 連續日段 */
@@ -347,10 +380,11 @@ export class InventoryStockService {
   // =========================================================================
 
   /** 已叫貨但還沒到貨（不看預計日，全部計入） */
-  pendingArrivals(purchases: unknown[]): Grouped {
+  pendingArrivals(purchases: unknown[], throughDate?: string): Grouped {
     const g = this.emptyGrouped();
     for (const p of (purchases || []) as Record<string, any>[]) {
       if (p?.['status'] !== 'ordered') continue;
+      if (throughDate && (!p['expectedDate'] || String(p['expectedDate']).slice(0,10)>throughDate)) continue;
       const c = String(p['category'] || '');
       const item = String(p['item'] || '');
       if (!g[c] || !item) continue;
@@ -367,7 +401,7 @@ export class InventoryStockService {
     const g = this.emptyGrouped();
     if (!start || !end || start > end) return g;
     for (const p of (purchases || []) as Record<string, any>[]) {
-      if (p?.['status'] === 'ordered') continue;
+      if (p?.['status'] !== 'arrived' && p?.['status']) continue;
       const raw = typeof p?.['date'] === 'string' ? (p['date'] as string) : '';
       const day = raw.substring(0, 10);
       if (!day || day < start || day > end) continue;
@@ -386,15 +420,14 @@ export class InventoryStockService {
   /**
    * 推估庫存 = 盤點量 + arrivedBetween(盤點日, asOf) − consumptionBetween(盤點日, asOf)。
    *
-   * **盤點量視為盤點日開始前的數量**：盤點日當天的到貨與消耗都算在盤點之後
-   * （亦即區間含盤點日當天）。這是刻意的保守估計——寧可低估庫存也不要缺料。
+   * 新盤點依 cutoff；舊盤點維持原日初解讀。缺少品項數量不建立零庫存基準。
    */
   async estimateStock(
     countDoc: CountDoc | null | undefined,
     asOf: string,
     purchases: unknown[],
   ): Promise<StockEstimate> {
-    const stock = this.normalizeGrouped(countDoc?.counts);
+    const stock = this.normalizeGrouped(countDoc?.countDate && countDoc.countDate <= asOf ? countDoc.counts : undefined);
     const countDate = countDoc?.countDate || '';
     if (!countDate || countDate > asOf) {
       return {
@@ -407,11 +440,13 @@ export class InventoryStockService {
       };
     }
 
-    const arrivals = this.arrivedBetween(purchases, countDate, asOf);
-    const consumption = await this.consumptionBetween(countDate, asOf);
-
-    this.addGrouped(stock, arrivals, 1);
-    this.addGrouped(stock, consumption.grouped, -1);
+    const start = anchorStart(countDoc!);
+    const arrivals = this.arrivedBetween(purchases, start, asOf);
+    const consumption = await this.consumptionBetween(start, asOf);
+    for (const category of STOCK_CATEGORIES) for (const item of Object.keys(stock[category])) {
+      if (consumption.warnings?.some(w=>w.startsWith(category) && w.includes('數量未知'))) { delete stock[category][item]; continue; }
+      stock[category][item] += this.value(arrivals,category,item)-this.value(consumption.grouped,category,item);
+    }
 
     return {
       stock,
@@ -421,6 +456,61 @@ export class InventoryStockService {
       estimatedDays: consumption.estimatedDays,
       countDate,
     };
+  }
+
+  /** Shared item read model: unknown count stays null, receipts are booked on their own day. */
+  async itemTimeline(category:string,item:string,asOf:string,end:string,countDocs:CountDoc[],purchases:unknown[]) {
+    const anchor=itemAnchor(countDocs,category,item,asOf);
+    const ranges=await this.ensureActualRanges();
+    const start=anchor ? anchorStart(anchor) : asOf;
+    const used=await this.consumptionBetween(start,asOf,ranges);
+    const warnings=[...this.sourceWarnings,...(used.categorySources?.[category]?.warnings || [])];
+    if (!anchor) warnings.push('尚無此品項實盤基準');
+    else if (!anchor.cutoff) warnings.push('舊盤點沿用開班前基準，時點未核實');
+    const unknown=used.warnings?.some(w=>w.startsWith(category) && w.includes('數量未知'));
+    let current=anchor && !unknown ? anchor.counts[category][item]+this.value(this.arrivedBetween(purchases,start,asOf),category,item)-this.value(used.grouped,category,item) : null;
+    if(unknown) warnings.push('排程推估載入失敗，數量未知');
+    const orders=(purchases as Record<string,unknown>[]).filter(p=>p['category']===category && p['item']===item);
+    const deliveryDate=(p:Record<string,unknown>)=>String(p['status']==='ordered' ? p['expectedDate'] || '' : p['date'] || '').slice(0,10);
+    const pending=orders.filter(p=>p['status']==='ordered').map(p=>({date:deliveryDate(p),quantity:Number(p['quantity']) || 0})).filter(p=>p.date).sort((a,b)=>a.date.localeCompare(b.date));
+    if(pending.some(p=>p.date<=asOf)) warnings.push('有逾期未到貨；未計入現貨或未來預到貨');
+    if(pending.some(p=>p.date>asOf && p.date<=end)) warnings.push('預到貨按預計日期於當日耗用前計入；日內到貨時間尚未確認');
+    const daily=[];
+    for(const date of this.enumerateDays(addLocalDays(asOf,1),end)) {
+      let forecast:number|null=null;
+      try {
+        const result = await this.forecast(date, date);
+        if (result.unknownCategories?.includes(category)) warnings.push(`${date}：排程或用物設定不完整，數量未知`);
+        else forecast = this.value(result.grouped, category, item);
+      } catch { warnings.push(`${date}：排程推估載入失敗，數量未知`); }
+      const plan=consumptionPlan(date,date,ranges,category);
+      const actual=plan.accepted.length ? plan.accepted.reduce((sum,r)=>sum+this.value(r.grouped,category,item),0) : null;
+      const need=actual ?? forecast;
+      const dayAnchor = itemAnchor(countDocs, category, item, date);
+      const dayCount = dayAnchor?.countDate === date ? dayAnchor : null;
+      const closedIntervals = dayAnchor ? consumptionPlan(anchorStart(dayAnchor), date, ranges, category)
+        .accepted.filter(range => range.end === date && range.start !== range.end) : [];
+      let reconciledBalance: number | null | undefined;
+      if (dayAnchor && closedIntervals.length) {
+        const from = anchorStart(dayAnchor);
+        const cumulative = await this.consumptionBetween(from, date, ranges);
+        const incomplete = cumulative.warnings?.some(w => w.startsWith(category) && w.includes('數量未知'));
+        const expected = pending.filter(p => p.date > asOf && p.date >= from && p.date <= date)
+          .reduce((sum, p) => sum + p.quantity, 0);
+        reconciledBalance = incomplete ? null : dayAnchor.counts[category][item]
+          + this.value(this.arrivedBetween(purchases, from, date), category, item)
+          + expected - this.value(cumulative.grouped, category, item);
+        warnings.push(`${date}：HIS 區間合計於結束日核對餘量，未拆成每日實耗`);
+      }
+      daily.push({date,need,forecast,actual,difference:actual!==null && forecast!==null ? actual-forecast : null,source:actual!==null?'HIS 單日實耗':'排程推估',arrivals:orders.filter(p=>deliveryDate(p)===date && (p['status']==='ordered' || p['status']==='arrived')).reduce((sum,p)=>sum+(Number(p['quantity']) || 0),0),
+        openingCount: dayCount && dayCount.cutoff !== 'end-of-day' ? dayCount.counts[category][item] : undefined,
+        closingCount: dayCount?.cutoff === 'end-of-day' ? dayCount.counts[category][item] : undefined,
+        reconciledBalance, intervalRanges: closedIntervals,
+      });
+    }
+    const balances=projectBalances(current,daily);
+    const days=daily.map((day,i)=>({...day,intervalAdjustment:balances[i].intervalAdjustment,projectedBalance:balances[i].projectedBalance}));
+    return {asOf,start,current,anchor,days,firstDeficitDate:current!==null && current<0 ? asOf : days.find(d=>d.projectedBalance!==null && d.projectedBalance<0)?.date ?? null,warnings:[...new Set(warnings)].map(w=>w.replaceAll('artificialKidney','AK').replaceAll('dialysateCa','A 液').replaceAll('bicarbonateType','B 液')),nextDelivery:pending[0] || null,actualRanges:used.categorySources?.[category]?.ranges || [],provenance:used.categorySources?.[category]};
   }
 
   // =========================================================================
