@@ -38,7 +38,7 @@ import { extractVersionConflict, formatVersionConflictMessage } from '@/utils/ve
 @Component({
   selector: 'app-weekly',
   standalone: true,
-  imports: [PeriodNavigationComponent, 
+  imports: [PeriodNavigationComponent,
     FormsModule,
     AlertDialogComponent,
     ConfirmDialogComponent,

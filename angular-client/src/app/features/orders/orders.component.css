@@ -407,3 +407,51 @@ input[type='file'] {
   min-height: 0;
   padding: 0;
 }
+
+/* The query list wraps clinical text; only the comparison matrix scrolls sideways. */
+.query-panel, .order-results { min-width: 0; }
+.order-results { overflow: hidden; gap: .75rem; }
+.order-results > :not(.order-list):not(.order-comparison) { flex-shrink: 0; }
+.order-result-heading h2 { margin: 0; font-size: 1.15rem; overflow-wrap: anywhere; }
+.order-result-heading p { margin: .35rem 0 0; font-size: .85rem; }
+.order-display-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+.order-display-controls > span { color: #495057; font-size: .85rem; }
+.query-status, .query-error { padding: .75rem; border-radius: 6px; }
+.query-status { background: #eef5ff; color: #234c75; }
+.query-error { background: #fff1f0; color: #8a2420; border: 1px solid #e8b4b0; }
+.query-error button { margin-left: .75rem; }
+.patient-choices { display: grid; gap: .5rem; }
+.patient-choices button { padding: .75rem; text-align: left; background: #f6faff; border: 1px solid #abc5df; border-radius: 6px; overflow-wrap: anywhere; }
+.order-list { display: grid; gap: .75rem; overflow: auto; min-height: 0; }
+.order-card { border: 1px solid #dce3eb; border-radius: 8px; padding: 1rem; }
+.order-card h3 { margin: 0; font-size: 1.05rem; overflow-wrap: anywhere; }
+.order-card header p { margin: .35rem 0; overflow-wrap: anywhere; }
+.order-card dl { margin: .5rem 0 0; }
+.order-list-item { display: grid; grid-template-columns: minmax(130px, 22%) minmax(0, 1fr); gap: 1rem; padding: .6rem 0; border-top: 1px solid #edf0f3; }
+.order-list-item dt { font-weight: 600; overflow-wrap: anywhere; }
+.order-list-item dd { margin: 0; min-width: 0; }
+.order-entry + .order-entry { margin-top: .65rem; }
+.order-entry span { white-space: pre-wrap; overflow-wrap: anywhere; }
+.order-entry small, .order-list-item dt small, .order-comparison small { display: block; font-size: .8rem; color: #586778; font-weight: 400; white-space: normal; overflow-wrap: anywhere; }
+.no-order-records { color: #687582; font-size: .9rem; }
+.order-comparison { flex: 1 1 0; min-height: 0; }
+.order-comparison td { white-space: normal; min-width: 150px; max-width: 320px; overflow-wrap: anywhere; }
+.order-comparison .order-identity { min-width: 180px; max-width: 240px; white-space: normal; overflow-wrap: anywhere; }
+.order-comparison tbody th { top: auto; z-index: 10; background: #fff; }
+.order-comparison thead .order-identity { z-index: 30; }
+.order-query-summary, .order-mobile-caption { display: none; }
+.query-expand-btn { padding: .5rem .85rem; border: 1px solid #a8b7c5; border-radius: 6px; background: #fff; color: #234c75; min-height: 40px; }
+@media (max-width: 700px) {
+  .order-query-summary { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem; flex-shrink: 0; }
+  .order-filters-collapsed { display: none; }
+  .order-result-caption { display: none; }
+  .order-mobile-caption { display: block; }
+  .query-panel { padding: .75rem; gap: .75rem; }
+  .group-filters, .individual-filters { flex-wrap: wrap; min-width: 0; max-width: 100%; }
+  .individual-filters input { width: 100%; min-width: 0; }
+  .tabs-navigation button { padding: .65rem .7rem; font-size: 1rem; }
+  .search-controls { gap: .65rem; padding-bottom: .75rem; }
+  .order-display-controls { align-items: flex-start; }
+  .order-list-item { grid-template-columns: 1fr; gap: .35rem; }
+  .order-comparison .order-identity { min-width: 140px; max-width: 160px; }
+}

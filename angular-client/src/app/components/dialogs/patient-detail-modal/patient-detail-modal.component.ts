@@ -16,7 +16,7 @@ import { LabMedCorrelationViewComponent } from '../../lab-med-correlation-view/l
 @Component({
   selector: 'app-patient-detail-modal',
   standalone: true,
-  imports: [ModalFocusDirective, 
+  imports: [ModalFocusDirective,
     FormsModule,
     ConditionRecordPanelComponent,
     MemoPanelComponent,

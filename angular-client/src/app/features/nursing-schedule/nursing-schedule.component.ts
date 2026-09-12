@@ -37,7 +37,7 @@ import { NursingGroupConfigDialogComponent } from '@app/components/dialogs/nursi
 @Component({
   selector: 'app-nursing-schedule',
   standalone: true,
-  imports: [OperationStatusComponent, PeriodNavigationComponent, 
+  imports: [OperationStatusComponent, PeriodNavigationComponent,
     CommonModule,
     FormsModule,
     AlertDialogComponent,

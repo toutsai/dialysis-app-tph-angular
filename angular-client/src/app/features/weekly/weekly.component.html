@@ -6,7 +6,7 @@
           <h1 class="page-title">週排班表</h1>
           <app-period-navigation period="week" navigationLabel="週排班期間" [label]="weekDisplay()" [disabled]="isSaving()" (previous)="changeWeek(-7)" (next)="changeWeek(7)" (current)="goToToday()" />
           <div class="main-actions">
-            
+
             <button class="btn btn-warning" (click)="runScheduleCheck()">排程檢視</button>
             <button
               class="btn btn-info"

@@ -22,7 +22,15 @@
     <!-- (A) 藥囑查詢頁籤 -->
     <div class="tab-panel query-panel" [style.display]="activeTab() === 'query' ? 'flex' : 'none'">
       <!-- 1. 搜尋控制項 -->
-      <div class="search-controls">
+      @if (resultQuery()) {
+        <div class="order-query-summary">
+          <button class="query-expand-btn" (click)="toggleQueryFilters()" [attr.aria-expanded]="queryFiltersExpanded()" aria-controls="order-query-filters">{{ queryFiltersExpanded() ? '收合查詢條件' : '更改查詢條件' }}</button>
+          @if (!queryFiltersExpanded()) {
+            <button class="export-btn" (click)="exportOrdersToExcel()" [disabled]="isLoading() || !orderRows().length">匯出 Excel</button>
+          }
+        </div>
+      }
+      <div id="order-query-filters" class="search-controls" [class.order-filters-collapsed]="!queryFiltersExpanded()">
         <div class="search-type-toggle">
           <button [class.active]="searchType() === 'group'" (click)="searchType.set('group')">
             群組搜尋
@@ -35,17 +43,17 @@
         <!-- 群組搜尋條件 -->
         @if (searchType() === 'group') {
           <div class="group-filters">
-            <select [(ngModel)]="groupSearchParams.freq">
+            <select aria-label="查詢頻率" [(ngModel)]="groupSearchParams.freq">
               <option value="一三五">一三五</option>
               <option value="二四六">二四六</option>
               <option value="other">其他</option>
             </select>
-            <select [(ngModel)]="groupSearchParams.shift">
+            <select aria-label="查詢班別" [(ngModel)]="groupSearchParams.shift">
               <option value="early">早班</option>
               <option value="noon">午班</option>
               <option value="late">晚班</option>
             </select>
-            <input type="month" [(ngModel)]="groupSearchParams.month" />
+            <input type="month" aria-label="查詢月份" [(ngModel)]="groupSearchParams.month" />
           </div>
         }
 
@@ -55,7 +63,8 @@
             <input
               type="text"
               [ngModel]="individualSearchTerm()"
-              (ngModelChange)="individualSearchTerm.set($event)"
+              (ngModelChange)="setIndividualTerm($event)"
+              aria-label="患者姓名或病歷號"
               placeholder="輸入姓名或病歷號..."
               (keyup.enter)="handleSearch()"
               />
@@ -80,81 +89,95 @@
           </button>
         </div>
 
-        <!-- 2. 查詢結果顯示區 -->
-        <div class="results-display">
-          @if (isLoading()) {
-            <div class="loading-state">
-              <div class="loading-spinner"></div>
-              正在查詢藥囑資料...
+        <div class="results-display order-results" [attr.aria-busy]="isLoading()">
+          @if (isLoading()) { <div class="query-status" role="status">正在查詢藥囑資料…</div> }
+          @if (searchError()) {
+            <div class="query-error" role="alert">{{ searchError() }} <button (click)="retrySearch()" [disabled]="isLoading()">重試</button></div>
+          }
+          @if (searchNotice()) { <p role="status">{{ searchNotice() }}</p> }
+          @if (patientChoices().length) {
+            <div class="patient-choices" aria-label="選擇查詢患者">
+              @for (patient of patientChoices(); track patient.id) {
+                <button (click)="selectOrderPatient(patient)">{{ patient.name }} · 病歷號 {{ patient.medicalRecordNumber }}</button>
+              }
             </div>
           }
-          @if (!isLoading() && !searchPerformed()) {
+          @if (!resultQuery() && !isLoading() && !searchError() && !searchNotice()) {
             <div class="placeholder-text">請選擇條件並點擊查詢。</div>
           }
-          @if (!isLoading() && searchPerformed() && searchResult().length === 0) {
-            <div class="empty-state">
-              查無符合條件的藥囑資料。
+          @if (resultQuery()) {
+            <div class="order-result-heading">
+              <h2>{{ resultTitle() }}</h2>
+              <p class="order-result-caption">{{ searchError() ? '本次查詢失敗，保留上次成功查詢的結果。' : '依上方標題顯示查詢結果；調整條件後請重新查詢。' }} 匯出包含所有品項。</p>
+              <p class="order-mobile-caption">{{ searchError() ? '保留上次成功結果。' : '' }}匯出包含所有品項。</p>
             </div>
-          }
-          @if (!isLoading() && searchPerformed() && searchResult().length > 0) {
-            <div class="table-container">
-              <!-- 群組搜尋結果表格 -->
-              @if (searchType() === 'group') {
-                <table>
-                  <thead>
-                    <tr>
-                      <th class="sticky-col col-freq">頻率</th>
-                      <th class="sticky-col col-shift">班別</th>
-                      <th class="sticky-col col-bed">床號</th>
-                      <th class="sticky-col col-name">姓名</th>
-                      @for (med of allMedications(); track med) {
-                        <th>{{ med.tradeName }}</th>
-                      }
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @for (patientRow of searchResult(); track patientRow) {
-                      <tr>
-                        <td class="sticky-col col-freq">{{ $any(patientRow).freq }}</td>
-                        <td class="sticky-col col-shift">{{ formatShift($any(patientRow).shiftIndex) }}</td>
-                        <td class="sticky-col col-bed">{{ $any(patientRow).bedNum }}</td>
-                        <td class="sticky-col col-name">{{ $any(patientRow).patientName }}</td>
-                        @for (med of allMedications(); track med) {
-                          <td>
-                            {{ formatOrderCell($any(patientRow).orders[med.code], groupSearchParams.month) }}
-                          </td>
+            <div class="order-display-controls">
+              <div class="search-type-toggle" aria-label="結果顯示方式">
+                <button [class.active]="orderView() === 'list'" [attr.aria-pressed]="orderView() === 'list'" (click)="orderView.set('list')">清單</button>
+                <button [class.active]="orderView() === 'table'" [attr.aria-pressed]="orderView() === 'table'" (click)="orderView.set('table')">{{ resultQuery()!.type === 'group' ? '表格對照' : '月份對照' }}</button>
+              </div>
+              <div class="search-type-toggle" aria-label="顯示品項">
+                <button [class.active]="!showAllItems()" [attr.aria-pressed]="!showAllItems()" (click)="showAllItems.set(false)">有資料品項</button>
+                <button [class.active]="showAllItems()" [attr.aria-pressed]="showAllItems()" (click)="showAllItems.set(true)">所有品項</button>
+              </div>
+              <span>{{ visibleMedications().length }} / {{ allMedications().length }} 品項 · {{ displayedOrderRows().length }} {{ resultQuery()!.type === 'group' ? '位患者' : '個月份' }}</span>
+            </div>
+            @if (!displayedOrderRows().length) { <div class="empty-state">此群組沒有符合排班條件的患者。</div> }
+            @if (orderView() === 'list') {
+              <div class="order-list">
+                @for (row of displayedOrderRows(); track row.key) {
+                  <section class="order-card">
+                    <header>
+                      @if (resultQuery()!.type === 'group') {
+                        <h3>{{ row.bedNum }} 床 · {{ row.patientName }}</h3>
+                        <p>病歷號 {{ row.medicalRecordNumber }} · {{ row.freq }} · {{ row.shift }}</p>
+                      } @else { <h3>{{ row.month }}</h3> }
+                    </header>
+                    @if (!row.hasRecords) { <p class="no-order-records">{{ resultQuery()!.type === 'group' ? '此患者本月無藥囑資料' : '本月無藥囑資料' }}</p> }
+                    <dl>
+                      @for (cell of row.cells; track $index) {
+                        @if (cell.hasRecords || showAllItems()) {
+                          <div class="order-list-item">
+                            <dt>{{ cell.medication.tradeName }} <small>{{ cell.code }}</small></dt>
+                            <dd>
+                              @for (entry of cell.entries; track $index) {
+                                <div class="order-entry"><span>{{ entry.text === '-' ? '劑量欄顯示：－' : entry.text }}</span>
+                                  @if (entry.frequency || entry.note) { <small>頻率 {{ entry.frequency || '未提供' }} · 備註 {{ entry.note || '未提供' }}</small> }
+                                  @if (entry.startDate || entry.endDate) { <small>開始／異動 {{ entry.startDate || '未提供' }} · 停止 {{ entry.endDate || '未提供' }}</small> }
+                                </div>
+                              } @empty { <span class="no-order-records">無資料</span> }
+                            </dd>
+                          </div>
                         }
+                      }
+                    </dl>
+                  </section>
+                }
+              </div>
+            } @else {
+              <div class="table-container order-comparison" tabindex="0" aria-label="藥囑對照表，可水平捲動">
+                <table>
+                  <thead><tr>
+                    <th class="sticky-col order-identity">{{ resultQuery()!.type === 'group' ? '患者／排班' : '月份' }}</th>
+                    @for (med of visibleMedications(); track $index) { <th>{{ med.tradeName }}<small>{{ med.code }}</small></th> }
+                  </tr></thead>
+                  <tbody>
+                    @for (row of displayedOrderRows(); track row.key) {
+                      <tr>
+                        <th scope="row" class="sticky-col order-identity">
+                          @if (resultQuery()!.type === 'group') {
+                            <strong>{{ row.bedNum }} 床 · {{ row.patientName }}</strong>
+                            <small>病歷號 {{ row.medicalRecordNumber }}</small><small>{{ row.freq }} · {{ row.shift }}</small>
+                          } @else { {{ row.month }} }
+                          @if (!row.hasRecords) { <small class="no-order-records">無藥囑資料</small> }
+                        </th>
+                        @for (cell of row.cells; track $index) { <td>{{ cell.text }}</td> }
                       </tr>
                     }
                   </tbody>
                 </table>
-              }
-              <!-- 個人搜尋結果表格 -->
-              @if (searchType() === 'individual') {
-                <table>
-                  <thead>
-                    <tr>
-                      <th class="sticky-col col-month">月份</th>
-                      @for (med of allMedications(); track med) {
-                        <th>{{ med.tradeName }}</th>
-                      }
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @for (monthRow of searchResult(); track monthRow) {
-                      <tr>
-                        <td class="sticky-col col-month">{{ $any(monthRow).month }}</td>
-                        @for (med of allMedications(); track med) {
-                          <td>
-                            {{ formatOrderCell($any(monthRow).orders[med.code], $any(monthRow).month) }}
-                          </td>
-                        }
-                      </tr>
-                    }
-                  </tbody>
-                </table>
-              }
-            </div>
+              </div>
+            }
           }
         </div>
       </div>

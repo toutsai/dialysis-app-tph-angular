@@ -8,7 +8,8 @@ import {
   OnInit,
   Input,
   HostBinding,
-  ChangeDetectionStrategy
+  ChangeDetectionStrategy,
+  ElementRef,
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -22,6 +23,11 @@ import { PatientStoreService } from '@services/patient-store.service';
 import { MedicationStoreService } from '@services/medication-store.service';
 import { queryWithInChunks } from '@/utils/firestoreUtils';
 import { formatDateToYYYYMM } from '@/utils/dateUtils';
+import { medicationMetadataMap, medicationCell, individualOrderMonths, matchingOrderPatients, type PatientChoice } from './orders-view-model';
+
+interface GroupOrderQuery { type: 'group'; freq: string; shift: string; month: string }
+interface IndividualOrderQuery { type: 'individual'; year: number; patientId: string; patientName: string; medicalRecordNumber: string }
+type OrderQuery = GroupOrderQuery | IndividualOrderQuery;
 
 interface MedicationMaster {
   code: string;
@@ -46,6 +52,7 @@ interface OrderRecord extends FirestoreRecord {
 interface GroupSearchResult {
   patientId: string;
   patientName: string;
+  medicalRecordNumber: string;
   bedNum: string;
   freq: string;
   shiftIndex: number;
@@ -98,6 +105,7 @@ export class OrdersComponent implements OnInit {
   private readonly apiManagerService = inject(ApiManagerService);
   private readonly patientStore = inject(PatientStoreService);
   private readonly medicationStore = inject(MedicationStoreService);
+  private readonly hostElement = inject<ElementRef<HTMLElement>>(ElementRef);
 
   private readonly baseSchedulesApi: ApiManager<FirestoreRecord>;
   private readonly ordersApi: ApiManager<OrderRecord>;
@@ -117,6 +125,16 @@ export class OrdersComponent implements OnInit {
   readonly individualSearchTerm = signal('');
   readonly individualSearchYear = signal(new Date().getFullYear());
   readonly searchResult = signal<(GroupSearchResult | IndividualSearchResult)[]>([]);
+  readonly resultQuery = signal<OrderQuery | null>(null);
+  readonly searchError = signal('');
+  readonly searchNotice = signal('');
+  readonly patientChoices = signal<PatientChoice[]>([]);
+  readonly selectedOrderPatient = signal<PatientChoice | null>(null);
+  readonly orderView = signal<'list' | 'table'>('list');
+  readonly showAllItems = signal(false);
+  readonly queryFiltersExpanded = signal(true);
+  private searchRequest = 0;
+  private lastAttempt: OrderQuery | null = null;
 
   // --- Medication Master Data ---
   readonly INJECTION_MEDS_MASTER: MedicationMaster[] = [
@@ -153,6 +171,37 @@ export class OrdersComponent implements OnInit {
     ...this.ORAL_MEDS_MASTER,
     ...this.extraMeds(),
   ]);
+
+  private readonly medicationByCode = computed(() => medicationMetadataMap(this.allMedications()));
+  readonly orderRows = computed(() => {
+    const query = this.resultQuery();
+    const medications = this.allMedications();
+    const metadata = this.medicationByCode();
+    return this.searchResult().map(row => {
+      const patient = row as GroupSearchResult;
+      const month = query?.type === 'group' ? query.month : (row as IndividualSearchResult).month;
+      const cells = medications.map(med => ({ ...medicationCell(med.code, row.orders[med.code], metadata, month), medication: med }));
+      return { key: query?.type === 'group' ? patient.patientId : month, month,
+        patientName: patient.patientName || '', medicalRecordNumber: patient.medicalRecordNumber || '',
+        bedNum: patient.bedNum, freq: patient.freq, shift: this.formatShift(patient.shiftIndex),
+        cells, hasRecords: cells.some(cell => cell.hasRecords) };
+    });
+  });
+  readonly visibleMedications = computed(() => {
+    const codes = new Set(this.orderRows().flatMap(row => row.cells.filter(cell => cell.hasRecords).map(cell => cell.code)));
+    return this.allMedications().filter(med => this.showAllItems() || codes.has(med.code));
+  });
+  readonly displayedOrderRows = computed(() => {
+    const codes = new Set(this.visibleMedications().map(med => med.code));
+    return this.orderRows().map(row => ({ ...row, cells: row.cells.filter(cell => codes.has(cell.code)) }));
+  });
+  readonly resultTitle = computed(() => {
+    const query = this.resultQuery();
+    if (!query) return '';
+    return query.type === 'group'
+      ? `${query.month} · ${query.freq === 'other' ? '其他頻率' : query.freq}${query.freq === 'other' ? '' : ' · ' + this.formatShift(this.SHIFT_MAP[query.shift])}`
+      : `${query.patientName} · 病歷號 ${query.medicalRecordNumber} · ${query.year} 年`;
+  });
 
   /** 從查詢結果蒐集 master 清單外的藥碼，動態加欄 */
   private collectExtraMeds(orders: any[]): void {
@@ -259,7 +308,7 @@ export class OrdersComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.patientStore.fetchPatientsIfNeeded();
+    void this.patientStore.fetchPatientsIfNeeded().catch(() => this.searchError.set('患者資料載入失敗，請重新查詢。'));
   }
 
   // --- Helper Functions ---
@@ -268,219 +317,126 @@ export class OrdersComponent implements OnInit {
   }
 
   formatOrderCell(orders: OrderRecord[] | undefined, monthKey?: string): string {
-    if (!orders || orders.length === 0) return '-';
-    // 同藥同月多筆（不同頻率/開立日期）全部顯示，依開始日/開立日期排序。
-    // 不標日期：以各筆自帶的頻率/備註(formatSingleOrder 的括號內容)區分即可（例：NESP QW2 / QW4）
-    const parts = [...orders]
-      .sort(
-        (a, b) =>
-          new Date(a.startDate || a.changeDate || 0).getTime() -
-          new Date(b.startDate || b.changeDate || 0).getTime(),
-      )
-      .map((o) => this.formatSingleOrder(o, monthKey))
-      .filter((text) => text !== '-');
-    return parts.length ? parts.join('；') : '-';
+    return medicationCell('', orders, this.medicationByCode(), monthKey).text;
   }
 
-  private formatSingleOrder(order: OrderRecord, monthKey?: string): string {
-    const dose = order.dose || '';
-    if (!dose) return '-';
-    const masterMed = this.allMedications().find(
-      (med) => med.code === order.orderCode,
-    );
-    const unit = masterMed?.unit ? ` ${masterMed.unit}` : '';
-    const detailParts: string[] = [];
-    if (order.orderCode === 'XX88') {
-      // 自備藥：實際藥名在備註欄
-      if (order.note) detailParts.push(order.note);
-      if (order.frequency) detailParts.push(order.frequency);
-    } else if (order.orderType === 'injection') {
-      if (order.note) detailParts.push(order.note);
-    } else if (order.frequency) {
-      detailParts.push(order.frequency);
-    }
-    // 區間模型：處方在查詢月內（或之前）結束 → 標記停用日；仍持續中不標
-    if (order.endDate && monthKey && order.endDate <= `${monthKey}-31`) {
-      const [, m, d] = order.endDate.split('-');
-      detailParts.push(`至${Number(m)}/${Number(d)}止`);
-    }
-    if (detailParts.length) {
-      return `${dose}${unit} (${detailParts.join('，')})`;
-    }
-    return `${dose}${unit}`;
+  setIndividualTerm(term: string): void {
+    this.individualSearchTerm.set(term);
+    this.selectedOrderPatient.set(null);
+    this.patientChoices.set([]);
   }
 
-  // --- Core Search Logic ---
-  async handleSearch(): Promise<void> {
-    this.isLoading.set(true);
-    this.searchPerformed.set(true);
-    this.searchResult.set([]);
-    try {
-      if (this.searchType() === 'group') {
-        await this.searchGroupOrders();
-      } else {
-        await this.searchIndividualOrders();
-      }
-    } catch (error) {
-      console.error('查詢藥囑失敗:', error);
-      alert('查詢藥囑時發生錯誤，請稍後再試。');
-    } finally {
-      this.isLoading.set(false);
-    }
+  toggleQueryFilters(): void {
+    const expanded = !this.queryFiltersExpanded();
+    this.queryFiltersExpanded.set(expanded);
+    setTimeout(() => this.focusQueryControl(expanded ? '#order-query-filters input, #order-query-filters select' : '.query-expand-btn'));
   }
 
-  private async searchGroupOrders(): Promise<void> {
-    const masterScheduleDoc = await this.baseSchedulesApi.fetchById(
-      'MASTER_SCHEDULE'
-    );
-    const masterRules: Record<string, any> =
-      (masterScheduleDoc as any)?.schedule || {};
-    const shiftIndex = this.SHIFT_MAP[this.groupSearchParams.shift];
-    const regularFreqs = ['一三五', '二四六'];
-    const opdPatients = this.patientStore.opdPatients();
-
-    const patientList = opdPatients
-      .filter((p: any) => {
-        const rule = masterRules[p.id!];
-        if (!rule) return false;
-        const isOtherFreqSelected = this.groupSearchParams.freq === 'other';
-        const shiftCondition =
-          isOtherFreqSelected || rule.shiftIndex === shiftIndex;
-        const freqCondition = isOtherFreqSelected
-          ? !regularFreqs.includes(rule.freq)
-          : rule.freq === this.groupSearchParams.freq;
-        return shiftCondition && freqCondition;
-      })
-      .map((p: any) => ({
-        patientId: p.id!,
-        patientName: p.name,
-        bedNum: masterRules[p.id!]?.bedNum,
-        freq: masterRules[p.id!]?.freq,
-        shiftIndex: masterRules[p.id!]?.shiftIndex,
-      }));
-
-    // Build patient map first -- always show the patient list
-    const patientOrdersMap = new Map<string, GroupSearchResult>();
-    patientList.forEach((p: any) =>
-      patientOrdersMap.set(p.patientId, { ...p, orders: {} })
-    );
-
-    // Try to query medication orders and merge into patient map
-    if (patientList.length > 0) {
-      const [year, month] = this.groupSearchParams.month
-        .split('-')
-        .map(Number);
-      const effectiveMonth = `${year}-${String(month).padStart(2, '0')}`;
-
-      try {
-        // 使用 effectiveMonth：每位病人取 <= 該月份的「最新一次上傳月份」並只回該月資料。
-        // 院內流程：每月第一週抽血、第二週才依結果改藥，故當月尚未上傳時前兩週沿用上月藥物；
-        // 當月一旦有新上傳即改用當月。注意：每位病人只取單一月份，不會跨月混合（非「合併」）。
-        const params = new URLSearchParams({ effectiveMonth });
-        const res = await fetch(
-          `${this.firebaseService.apiBaseUrl}/orders/injection-orders?${params}`,
-          { headers: this.firebaseService.getHeaders() },
-        );
-        const data = res.ok ? await res.json() : [];
-        const allOrders: any[] = Array.isArray(data) ? data : data.data || [];
-        const patientIdSet = new Set(patientList.map((p: any) => p.patientId));
-        const filteredOrders = allOrders.filter((o: any) => patientIdSet.has(o.patientId));
-        // 動態欄位：master 清單外的藥碼也要呈現
-        this.collectExtraMeds(filteredOrders);
-        // 不整併：同一藥物同月的每一筆（含不同頻率/開立日期）全部保留
-        filteredOrders.forEach((order: any) => {
-          const patientData = patientOrdersMap.get(order.patientId);
-          if (patientData) {
-            if (!patientData.orders[order.orderCode]) {
-              patientData.orders[order.orderCode] = [];
-            }
-            patientData.orders[order.orderCode].push(order);
-          }
-        });
-      } catch (orderError) {
-        console.warn('查詢藥囑資料時發生錯誤 (可能需要建立 Firestore 索引):', orderError);
-      }
-    }
-
-    this.searchResult.set(
-      Array.from(patientOrdersMap.values()).sort((a, b) =>
-        String(a.bedNum).localeCompare(String(b.bedNum), undefined, {
-          numeric: true,
-        })
-      )
-    );
+  private focusQueryControl(selector: string): void {
+    const control = this.hostElement.nativeElement.querySelector<HTMLElement>(selector);
+    if (control?.getClientRects().length) control.focus();
   }
 
-  private async searchIndividualOrders(): Promise<void> {
-    const term = this.individualSearchTerm().trim().toLowerCase();
-    if (!term) {
-      alert('請輸入姓名或病歷號');
-      return;
-    }
+  selectOrderPatient(patient: PatientChoice): void {
+    this.selectedOrderPatient.set(patient);
+    this.individualSearchTerm.set(patient.medicalRecordNumber || patient.name || '');
+    this.patientChoices.set([]);
+    void this.handleSearch();
+  }
 
-    const opdPatients = this.patientStore.opdPatients();
-    const foundPatient = opdPatients.find(
-      (p: any) =>
-        p.name.toLowerCase().includes(term) ||
-        p.medicalRecordNumber.includes(term)
-    );
-
-    if (!foundPatient) {
-      this.searchResult.set([]);
-      return;
-    }
-
+  async handleSearch(retry?: OrderQuery): Promise<void> {
+    const request = ++this.searchRequest;
+    const type = retry?.type || this.searchType();
+    const group = { ...this.groupSearchParams };
+    const term = this.individualSearchTerm();
     const year = this.individualSearchYear();
-
-    // 2B 效能批次：已知 foundPatient.id，改帶 ?patientId= 讓後端 injection_orders 查詢
-    // 直接篩選（src/routes/orders.js:477-497，含 patientId-aware cache key），不再整表下載
-    // 再前端 filter。年份篩選仍在下方 monthlyOrdersMap 迴圈以 change_date 逐月比對，語意不變。
-    const patientOrders = await this.ordersApi.fetchWhere({
-      patientId: foundPatient.id,
-    });
-    this.collectExtraMeds(patientOrders);
-
-    const monthlyOrdersMap = new Map<string, IndividualSearchResult>();
-    for (let i = 1; i <= 12; i++) {
-      const monthKey = `${year}-${String(i).padStart(2, '0')}`;
-      monthlyOrdersMap.set(monthKey, { month: monthKey, orders: {} });
-    }
-
-    const pushToMonth = (monthKey: string, order: any) => {
-      const monthData = monthlyOrdersMap.get(monthKey);
-      if (!monthData) return;
-      if (!monthData.orders[order.orderCode]) {
-        monthData.orders[order.orderCode] = [];
-      }
-      monthData.orders[order.orderCode].push(order);
-    };
-
-    // 不整併：同一藥物同月的每一筆（含不同頻率/開立日期）全部保留
-    patientOrders.forEach((order: any) => {
-      if (order.startDate) {
-        // 區間模型：處方涵蓋的每個月都呈現（開始日 <= 月底，且未結束或結束日 >= 月初）
-        for (let i = 1; i <= 12; i++) {
-          const monthKey = `${year}-${String(i).padStart(2, '0')}`;
-          const activeInMonth =
-            order.startDate <= `${monthKey}-31` &&
-            (!order.endDate || order.endDate >= `${monthKey}-01`);
-          if (activeInMonth) pushToMonth(monthKey, order);
+    const selected = this.selectedOrderPatient();
+    this.isLoading.set(true);
+    this.searchError.set('');
+    this.searchNotice.set('');
+    this.patientChoices.set([]);
+    let query = retry;
+    this.lastAttempt = retry || null;
+    try {
+      await this.patientStore.fetchPatientsIfNeeded();
+      if (request !== this.searchRequest) return;
+      if (!query) {
+        if (type === 'group') {
+          if (!/^\d{4}-\d{2}$/.test(group.month)) {
+            this.searchNotice.set('請選擇查詢月份。');
+            return;
+          }
+          query = { type: 'group', ...group };
+        } else {
+          const matches = matchingOrderPatients(this.patientStore.opdPatients(), term);
+          const patient = selected && matches.find(candidate => candidate.id === selected.id)
+            || (matches.length === 1 ? matches[0] : undefined);
+          if (!patient?.id) {
+            this.patientChoices.set(matches);
+            this.searchNotice.set(!term.trim() ? '請輸入姓名或病歷號。' : matches.length ? '找到多位符合的患者，請選擇確切患者後查詢。' : '找不到符合的患者，請確認姓名或病歷號。');
+            return;
+          }
+          query = { type: 'individual', year, patientId: patient.id, patientName: patient.name || '', medicalRecordNumber: patient.medicalRecordNumber || '' };
         }
-      } else if (
-        order.uploadMonth >= `${year}-01` &&
-        order.uploadMonth <= `${year}-12`
-      ) {
-        // 舊月快照模型：依上傳月份歸檔
-        pushToMonth(order.uploadMonth, order);
       }
-    });
-
-    this.searchResult.set(
-      Array.from(monthlyOrdersMap.values()).sort((a, b) =>
-        b.month.localeCompare(a.month)
-      )
-    );
+      this.lastAttempt = query;
+      const { results, metadataOrders } = query.type === 'group'
+        ? await this.searchGroupOrders(query).then(results => ({ results, metadataOrders: results.flatMap(row => Object.values(row.orders).flat()) }))
+        : await this.searchIndividualOrders(query);
+      if (request !== this.searchRequest) return;
+      this.collectExtraMeds(metadataOrders);
+      this.searchResult.set(results);
+      this.resultQuery.set(query);
+      this.searchPerformed.set(true);
+      this.queryFiltersExpanded.set(false);
+      setTimeout(() => {
+        if (request === this.searchRequest && !this.queryFiltersExpanded()) this.focusQueryControl('.query-expand-btn');
+      });
+    } catch (error) {
+      if (request !== this.searchRequest) return;
+      this.searchError.set('查詢失敗，無法確認本次藥囑資料。請重試。');
+    } finally {
+      if (request === this.searchRequest) this.isLoading.set(false);
+    }
   }
+
+  retrySearch(): void { void this.handleSearch(this.lastAttempt || undefined); }
+
+  private async searchGroupOrders(query: GroupOrderQuery): Promise<GroupSearchResult[]> {
+    const masterScheduleDoc = await this.baseSchedulesApi.fetchById('MASTER_SCHEDULE');
+    const masterRules: Record<string, any> = (masterScheduleDoc as any)?.schedule || {};
+    const shiftIndex = this.SHIFT_MAP[query.shift];
+    const regularFreqs = ['一三五', '二四六'];
+    const patients: GroupSearchResult[] = this.patientStore.opdPatients().filter(p => {
+      const rule = masterRules[p.id!];
+      if (!rule) return false;
+      return query.freq === 'other' ? !regularFreqs.includes(rule.freq) : rule.freq === query.freq && rule.shiftIndex === shiftIndex;
+    }).map(p => ({ patientId: p.id!, patientName: p.name, medicalRecordNumber: p.medicalRecordNumber,
+      bedNum: masterRules[p.id!].bedNum, freq: masterRules[p.id!].freq, shiftIndex: masterRules[p.id!].shiftIndex, orders: Object.create(null) }));
+    const byPatient = new Map(patients.map(patient => [patient.patientId, patient]));
+    if (patients.length) {
+      // Backend owns interval and legacy latest-upload-month selection.
+      const params = new URLSearchParams({ effectiveMonth: query.month });
+      const response = await fetch(`${this.firebaseService.apiBaseUrl}/orders/injection-orders?${params}`, { headers: this.firebaseService.getHeaders() });
+      if (!response.ok) throw new Error(`Orders request failed (${response.status})`);
+      const body = await response.json();
+      const orders = Array.isArray(body) ? body : body?.data;
+      if (!Array.isArray(orders)) throw new Error('Invalid orders response');
+      for (const order of orders) {
+        const patient = byPatient.get(order.patientId);
+        if (patient) (patient.orders[order.orderCode] ||= []).push(order);
+      }
+    }
+    return patients.sort((a, b) => String(a.bedNum).localeCompare(String(b.bedNum), undefined, { numeric: true }));
+  }
+
+  private async searchIndividualOrders(query: IndividualOrderQuery): Promise<{ results: IndividualSearchResult[]; metadataOrders: OrderRecord[] }> {
+    const patientOrders = await this.ordersApi.fetchWhere({ patientId: query.patientId });
+    // Export and "all items" retain this patient's known codes from all years,
+    // while active columns are derived only from the displayed year's records.
+    return { results: individualOrderMonths(patientOrders, query.year), metadataOrders: patientOrders };
+  }
+
 
   changeYear(offset: number): void {
     this.individualSearchYear.update((y) => y + offset);
@@ -491,24 +447,26 @@ export class OrdersComponent implements OnInit {
 
   // --- Excel Export ---
   async exportOrdersToExcel(): Promise<void> {
-    const XLSX = await loadXlsx();
-    const results = this.searchResult();
-    if (!results || results.length === 0) {
+    const query = this.resultQuery();
+    const rows = this.orderRows();
+    const medications = this.allMedications();
+    if (!query || rows.length === 0) {
       alert('沒有可匯出的資料。');
       return;
     }
 
     try {
+      const XLSX = await loadXlsx();
       let title = '藥囑查詢結果';
       let headers: string[] = [];
       let dataRows: string[][] = [];
       let sheetData: string[][] = [];
       let fileName = '藥囑查詢結果.xlsx';
 
-      const medHeaders = this.allMedications().map((med) => med.tradeName);
+      const medHeaders = medications.map((med) => med.tradeName);
 
-      if (this.searchType() === 'group') {
-        const { freq, shift, month } = this.groupSearchParams;
+      if (query.type === 'group') {
+        const { freq, shift, month } = query;
         const shiftNameMap: Record<string, string> = {
           early: '早班',
           noon: '午班',
@@ -520,35 +478,16 @@ export class OrdersComponent implements OnInit {
         fileName = `藥囑查詢_群組_${freq}_${shiftName}_${month}.xlsx`;
 
         headers = ['頻率', '班別', '床號', '姓名', ...medHeaders];
-        dataRows = (results as GroupSearchResult[]).map((patientRow) => {
-          const row = [
-            patientRow.freq,
-            this.formatShift(patientRow.shiftIndex),
-            patientRow.bedNum,
-            patientRow.patientName,
-          ];
-          this.allMedications().forEach((med) => {
-            const order = patientRow.orders[med.code];
-            row.push(this.formatOrderCell(order, month));
-          });
-          return row;
-        });
+        dataRows = rows.map(row => [row.freq, row.shift, row.bedNum, row.patientName, ...row.cells.map(cell => cell.text)]);
       } else {
-        const patientName = this.individualSearchTerm().trim();
-        const year = this.individualSearchYear();
+        const patientName = query.patientName;
+        const year = query.year;
 
         title = `藥囑查詢結果：個人 ${patientName} / ${year} 年`;
         fileName = `藥囑查詢_個人_${patientName}_${year}.xlsx`;
 
         headers = ['月份', ...medHeaders];
-        dataRows = (results as IndividualSearchResult[]).map((monthRow) => {
-          const row = [monthRow.month];
-          this.allMedications().forEach((med) => {
-            const order = monthRow.orders[med.code];
-            row.push(this.formatOrderCell(order, monthRow.month));
-          });
-          return row;
-        });
+        dataRows = rows.map(row => [row.month, ...row.cells.map(cell => cell.text)]);
       }
 
       sheetData = [[title], [], headers, ...dataRows];
@@ -562,8 +501,8 @@ export class OrdersComponent implements OnInit {
       });
 
       const colWidths = headers.map((_h, index) => {
-        if (index < 4 && this.searchType() === 'group') return { wch: 12 };
-        if (index === 0 && this.searchType() === 'individual')
+        if (index < 4 && query.type === 'group') return { wch: 12 };
+        if (index === 0 && query.type === 'individual')
           return { wch: 15 };
         return { wch: 20 };
       });

@@ -99,7 +99,7 @@ const dutyAssignments: Record<string, Record<string, string | string[]>> = {
 @Component({
   selector: 'app-stats',
   standalone: true,
-  imports: [OperationStatusComponent, PeriodNavigationComponent, 
+  imports: [OperationStatusComponent, PeriodNavigationComponent,
     CommonModule,
     FormsModule,
     BedChangeDialogComponent,
