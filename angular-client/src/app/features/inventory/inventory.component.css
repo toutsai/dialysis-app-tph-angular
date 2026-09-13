@@ -205,7 +205,18 @@ h1 {
   padding: 0.75rem 1rem 1rem;
 }
 
-/* === 作業行事曆：可收合的庫存總覽 === */
+/* === 庫存總覽頁籤 === */
+.overview-panel-header {
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.overview-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
 .overview-section {
   flex-shrink: 0;
   border: 1px solid #dee2e6;
@@ -248,8 +259,7 @@ h1 {
 }
 
 .overview-body {
-  padding: 0.75rem 1rem 1rem;
-  border-top: 1px solid #e9ecef;
+  padding: 0.5rem 0 1rem;
 }
 
 /* === 作業行事曆：日/週/月作業面板 === */
