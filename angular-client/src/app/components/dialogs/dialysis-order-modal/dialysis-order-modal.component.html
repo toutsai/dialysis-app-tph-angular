@@ -1,6 +1,5 @@
-<fieldset [disabled]="saving" [attr.inert]="saving ? '' : null" style="border:0;padding:0;margin:0">
 <div class="dialog-overlay">
-  <div class="dialog-content" [appModalFocus]="'透析醫囑：' + (patientData?.name || patient?.name || '')" (modalEscape)="handleClose()" [modalEscapeDisabled]="saving">
+  <div class="dialog-content">
     <div class="dialog-header">
       <h2>{{ patientData?.name }} - 透析醫囑</h2>
       <button (click)="handleClose()" class="close-btn">&times;</button>
@@ -289,6 +288,3 @@
   (confirm)="confirmDelete()"
   (cancel)="isConfirmDeleteVisible = false"
 ></app-confirm-dialog>
-
-</fieldset>
-@if (saving) { <div role="status" style="position:fixed;z-index:99999;top:1rem;left:50%;background:white;padding:1rem">醫囑儲存中…</div> }

@@ -1,4 +1,3 @@
-import { ModalFocusDirective } from '@app/core/directives/modal-focus.directive';
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -9,7 +8,7 @@ import { LabMedCorrelationViewComponent } from '../../lab-med-correlation-view/l
 @Component({
   selector: 'app-lab-alert-detail-modal',
   standalone: true,
-  imports: [ModalFocusDirective, FormsModule, PatientLabSummaryPanelComponent, LabMedCorrelationViewComponent],
+  imports: [FormsModule, PatientLabSummaryPanelComponent, LabMedCorrelationViewComponent],
   templateUrl: './lab-alert-detail-modal.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-alert-detail-modal.component.css'
@@ -18,8 +17,6 @@ export class LabAlertDetailModalComponent implements OnChanges {
   @Input() isVisible = true;
   @Input() patient: any = null;
   @Input() abnormalityKey = '';
-  @Input() saving = false;
-  @Input() saveError = '';
   @Input() initialAnalysis = '';
   @Input() initialSuggestion = '';
   @Output() close = new EventEmitter<void>();
@@ -109,7 +106,6 @@ export class LabAlertDetailModalComponent implements OnChanges {
   }
 
   handleConfirm(): void {
-    if (this.saving) return;
     const finalAnalysisText = [...this.selectedCauses, this.otherCauseText.trim()]
       .filter(Boolean)
       .join('; ');
@@ -121,11 +117,10 @@ export class LabAlertDetailModalComponent implements OnChanges {
       analysisText: finalAnalysisText,
       suggestionText: finalSuggestionText,
     });
-    // Parent closes only after the save succeeds.
+    this.handleClose();
   }
 
   handleClose(): void {
-    if (this.saving) return;
     this.close.emit();
   }
 }

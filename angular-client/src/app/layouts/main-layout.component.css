@@ -36,39 +36,36 @@
 /* --------------------------------------------------------------------------
    Main nav section
    -------------------------------------------------------------------------- */
-.sidebar-scroll-area {
-  flex: 1 1 0;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
 .main-nav-section {
-  padding: 0 0 6px;
+  padding: 10px 0 6px;
+  flex-shrink: 0;
 }
 
 /* --------------------------------------------------------------------------
    Notification area
    -------------------------------------------------------------------------- */
 .notification-area {
+  flex-grow: 1;
+  min-height: 0;
+  overflow-y: auto;
   padding: 8px;
   border-top: 1px solid #34495e;
 }
 
-.sidebar-scroll-area::-webkit-scrollbar {
+.notification-area::-webkit-scrollbar {
   width: 6px;
 }
 
-.sidebar-scroll-area::-webkit-scrollbar-track {
+.notification-area::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.sidebar-scroll-area::-webkit-scrollbar-thumb {
+.notification-area::-webkit-scrollbar-thumb {
   background-color: #5a6a7a;
   border-radius: 20px;
 }
 
-.sidebar-scroll-area::-webkit-scrollbar-thumb:hover {
+.notification-area::-webkit-scrollbar-thumb:hover {
   background-color: #4a5568;
 }
 
@@ -80,14 +77,14 @@
   border-top: 1px solid #34495e;
   display: flex;
   flex-direction: column;
+  max-height: 45vh;
 }
 
 /* --------------------------------------------------------------------------
    Sidebar header
    -------------------------------------------------------------------------- */
 .sidebar-header {
-  padding: 10px 12px;
-  flex-shrink: 0;
+  padding: 0 12px 10px;
   border-bottom: 1px solid #34495e;
   white-space: nowrap;
   display: flex;
@@ -269,7 +266,27 @@
    -------------------------------------------------------------------------- */
 .management-section {
   padding-top: 6px;
+  flex-shrink: 0;
+  max-height: 45vh;
+  overflow-y: auto;
   border-top: 1px solid #34495e;
+}
+
+.management-section::-webkit-scrollbar {
+  width: 6px;
+}
+
+.management-section::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.management-section::-webkit-scrollbar-thumb {
+  background-color: #5a6a7a;
+  border-radius: 20px;
+}
+
+.management-section::-webkit-scrollbar-thumb:hover {
+  background-color: #4a5568;
 }
 
 .management-section .sidebar-nav {
@@ -483,8 +500,6 @@
     left: 0;
     bottom: 0;
     transform: translateX(-100%);
-    visibility: hidden;
-    pointer-events: none;
     transition: transform 0.3s ease-in-out;
     z-index: 1000;
     box-shadow: 4px 0 15px rgba(0, 0, 0, 0.2);
@@ -492,8 +507,6 @@
 
   .sidebar.is-open {
     transform: translateX(0);
-    visibility: visible;
-    pointer-events: auto;
   }
 
   .content-area {
@@ -707,8 +720,3 @@
 .btn-logout-now:hover {
   background-color: #545b62;
 }
-
-button.section-title { width:100%; border:0; background:transparent; text-align:left; font:inherit; cursor:pointer; }
-
-.skip-main-content { position:fixed; z-index:10000; top:.5rem; left:.5rem; transform:translateY(-150%); padding:.65rem 1rem; background:white; color:#174ea6; border:2px solid currentColor; }
-.skip-main-content:focus { transform:none; }

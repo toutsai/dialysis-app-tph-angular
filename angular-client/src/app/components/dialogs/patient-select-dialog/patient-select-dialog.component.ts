@@ -1,12 +1,11 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ModalFocusDirective } from '@app/core/directives/modal-focus.directive';
 import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-patient-select-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, ModalFocusDirective],
+  imports: [CommonModule, FormsModule],
   templateUrl: './patient-select-dialog.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-select-dialog.component.css'

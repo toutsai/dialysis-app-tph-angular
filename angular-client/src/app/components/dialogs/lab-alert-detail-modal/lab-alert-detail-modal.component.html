@@ -1,12 +1,12 @@
 @if (isVisible) {
   <div class="modal-overlay" (click)="handleClose()">
-    <div class="modal-container large" [appModalFocus]="(patient?.name || '') + ' - 警示報告分析'" (modalEscape)="handleClose()" [modalEscapeDisabled]="saving" (click)="$event.stopPropagation()">
+    <div class="modal-container large" (click)="$event.stopPropagation()">
       <div class="modal-header">
         <div class="header-title">
           <h2>{{ patient?.name }} - 警示報告分析</h2>
           <span class="abnormality-tag">{{ labItemDisplayNames[abnormalityKey] || abnormalityKey }}</span>
         </div>
-        <button (click)="handleClose()" class="close-btn" aria-label="關閉分析視窗" [disabled]="saving">×</button>
+        <button (click)="handleClose()" class="close-btn">×</button>
       </div>
       <div class="tabs-navigation">
         <button [class.active]="activeTab === 'analysis'" (click)="activeTab = 'analysis'">病因分析</button>
@@ -14,7 +14,7 @@
         <button [class.active]="activeTab === 'labs'" (click)="activeTab = 'labs'">檢驗</button>
         <button [class.active]="activeTab === 'correlation'" (click)="activeTab = 'correlation'">開藥</button>
       </div>
-      <div class="modal-body" [attr.inert]="saving ? '' : null">
+      <div class="modal-body">
         <!-- Analysis tab -->
         <div [style.display]="activeTab === 'analysis' ? 'flex' : 'none'" class="tab-panel selection-panel">
           <h3>請勾選可能的病因：</h3>
@@ -75,10 +75,9 @@
           }
         </div>
       </div>
-      @if (saveError) { <p role="alert">{{ saveError }}</p> }
       <div class="modal-footer">
-        <button (click)="handleConfirm()" class="confirm-btn" [disabled]="saving">{{ saving ? '儲存中…' : saveError ? '重試存檔' : '確認並存檔' }}</button>
-        <button (click)="handleClose()" class="cancel-btn" [disabled]="saving">取消</button>
+        <button (click)="handleConfirm()" class="confirm-btn">確認並存檔</button>
+        <button (click)="handleClose()" class="cancel-btn">取消</button>
       </div>
     </div>
   </div>

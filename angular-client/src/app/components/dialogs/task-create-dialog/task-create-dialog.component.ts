@@ -1,4 +1,3 @@
-import { ModalFocusDirective } from '@app/core/directives/modal-focus.directive';
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -20,17 +19,13 @@ interface SupplyItem {
 @Component({
   selector: 'app-task-create-dialog',
   standalone: true,
-  imports: [ModalFocusDirective, FormsModule, PatientSelectDialogComponent],
+  imports: [FormsModule, PatientSelectDialogComponent],
   templateUrl: './task-create-dialog.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './task-create-dialog.component.css'
 })
 export class TaskCreateDialogComponent implements OnChanges, OnInit {
   @Input() isVisible = false;
-  @Input() externalBusy = false;
-  @Input() externalError = '';
-  submitError = '';
-  get busy(): boolean { return this.isSubmitting || this.externalBusy; }
   @Input() preselectedPatient: any = null;
   @Input() allPatients: any[] = [];
   @Input() initialData: any = null;
@@ -241,8 +236,6 @@ export class TaskCreateDialogComponent implements OnChanges, OnInit {
   }
 
   async handleSubmit() {
-    if (this.busy) return;
-    this.submitError = '';
     if (this.isClerkSupplyTask) {
       const parts = this.dynamicSupplyItems
         .filter(item => item.type && item.quantity > 0)
@@ -314,11 +307,9 @@ export class TaskCreateDialogComponent implements OnChanges, OnInit {
           notifType = 'task';
         }
         this.notificationService.createGlobalNotification(notifMessage, notifType);
-        this.isSubmitting = false;
         this.submit.emit({ ...dataToSave, id: savedDoc.id });
         this.handleClose();
       } catch (error) {
-        this.submitError = '送出失敗，內容已保留，請重試。';
         console.error('Failed to create:', error);
       } finally {
         this.isSubmitting = false;
@@ -339,8 +330,6 @@ export class TaskCreateDialogComponent implements OnChanges, OnInit {
   }
 
   handleClose(): void {
-    if (this.busy) return;
-    this.submitError = '';
     this.close.emit();
   }
 }

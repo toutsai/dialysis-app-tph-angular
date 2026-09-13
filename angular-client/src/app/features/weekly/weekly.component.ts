@@ -1,7 +1,6 @@
-import { PeriodNavigationComponent } from '@app/shared/period-navigation/period-navigation.component';
 import { loadXlsx } from '@/utils/xlsxLoader';
 // Standalone 版：已移除 Firebase
-import { Component, inject, signal, computed, OnInit, OnDestroy, DestroyRef, ChangeDetectionStrategy, HostListener } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, OnDestroy, DestroyRef, ChangeDetectionStrategy } from '@angular/core';
 
 import { nameWithModeFreq } from '@/utils/patientDisplay';
 import { FormsModule } from '@angular/forms';
@@ -38,7 +37,7 @@ import { extractVersionConflict, formatVersionConflictMessage } from '@/utils/ve
 @Component({
   selector: 'app-weekly',
   standalone: true,
-  imports: [PeriodNavigationComponent,
+  imports: [
     FormsModule,
     AlertDialogComponent,
     ConfirmDialogComponent,
@@ -89,14 +88,6 @@ export class WeeklyComponent implements OnInit, OnDestroy {
 
   weekScheduleRecords = signal<Map<string, any>>(new Map());
   currentWeekStartDate = signal<Date>(this.getStartOfWeek(new Date()));
-  canLeave(): boolean {
-    if (this.isSaving()) return false;
-    return !this.hasUnsavedChanges() || window.confirm('目前有未儲存變更，確定放棄並離開？');
-  }
-  @HostListener('window:beforeunload', ['$event'])
-  onBeforeUnload(event: BeforeUnloadEvent): void {
-    if (this.isSaving() || this.hasUnsavedChanges()) { event.preventDefault(); event.returnValue = ''; }
-  }
   hasUnsavedChanges = signal(false);
   readonly isSaving = signal(false);
   private readonly draft = new ScheduleDraft();
@@ -394,10 +385,6 @@ export class WeeklyComponent implements OnInit, OnDestroy {
     this.highlightedPatientId.set(null);
   }
 
-  onSearchFocusOut(event: FocusEvent): void {
-    if ((event.currentTarget as HTMLElement)?.closest('.search-container')?.contains(event.relatedTarget as Node)) return;
-    this.handleSearchBlur();
-  }
   handleSearchBlur(): void { setTimeout(() => this.isSearchFocused.set(false), 200); }
 
   showPatientMemos(patientId: string): void {

@@ -1,12 +1,11 @@
 @if (isVisible) {
   <div class="modal-overlay" (click)="handleClose()">
-    <div appModalFocus="交辦與留言" [modalEscapeDisabled]="busy" (modalEscape)="handleClose()" class="modal-container" (click)="$event.stopPropagation()">
+    <div class="modal-container" (click)="$event.stopPropagation()">
       <header class="modal-header">
         <h2>{{ isEditMode ? '修改交辦 / 留言' : '新增交辦 / 留言' }}</h2>
-        <button aria-label="關閉交辦視窗" class="close-btn" (click)="handleClose()">&times;</button>
+        <button class="close-btn" (click)="handleClose()">&times;</button>
       </header>
-      @if (submitError || externalError) { <p role="alert">{{ submitError || externalError }}</p> }
-      <fieldset [disabled]="busy" style="border:0;padding:0;margin:0;min-width:0"><main class="modal-body">
+      <main class="modal-body">
         <!-- Category -->
         <div class="form-group">
           <label class="form-label">類型</label>
@@ -174,17 +173,16 @@
           } @else {
             <textarea
               [(ngModel)]="formData.content"
-              aria-label="交辦或留言內容"
               rows="4"
               placeholder="請輸入詳細內容..."
               class="form-control"
             ></textarea>
           }
         </div>
-      </main></fieldset>
+      </main>
       <footer class="modal-footer">
-        <button class="btn btn-primary" (click)="handleSubmit()" [disabled]="!isFormValid || busy">
-          {{ busy ? '處理中...' : isEditMode ? '更新' : '送出' }}
+        <button class="btn btn-primary" (click)="handleSubmit()" [disabled]="!isFormValid || isSubmitting">
+          {{ isSubmitting ? '處理中...' : isEditMode ? '更新' : '送出' }}
         </button>
         <button class="btn btn-secondary" (click)="handleClose()">取消</button>
       </footer>

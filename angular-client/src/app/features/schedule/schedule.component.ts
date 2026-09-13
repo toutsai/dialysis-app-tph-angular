@@ -1,9 +1,7 @@
-import { PeriodNavigationComponent } from '@app/shared/period-navigation/period-navigation.component';
 import { loadXlsx } from '@/utils/xlsxLoader';
 // Standalone 版：已移除 Firebase
 import {
   Component,
-  HostListener,
   ChangeDetectionStrategy,
   OnInit,
   OnDestroy,
@@ -16,7 +14,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { Router } from '@angular/router';
 import { firstValueFrom, Subscription } from 'rxjs';
 
 import { AuthService } from '@app/core/services/auth.service';
@@ -240,7 +238,7 @@ const PERIPHERAL_BED_RANGE = Array.from({ length: PERIPHERAL_BED_COUNT }, (_, i)
 @Component({
   selector: 'app-schedule',
   standalone: true,
-  imports: [PeriodNavigationComponent, CommonModule, FormsModule, InpatientSidebarComponent, BedAssignmentDialogComponent, DailyStaffDisplayComponent, StatsToolbarComponent, WardNumberDialogComponent, InpatientRoundsDialogComponent, IcuOrdersDialogComponent, DialysisOrderModalComponent, CrrtOrderModalComponent, DailyRecordsSummaryDialogComponent, DailyInjectionListDialogComponent, PatientDetailModalComponent, PatientMessagesIconComponent, MemoDisplayDialogComponent, ConditionRecordDisplayDialogComponent, AutoAssignConfigDialogComponent, PatientSelectDialogComponent],
+  imports: [CommonModule, FormsModule, InpatientSidebarComponent, BedAssignmentDialogComponent, DailyStaffDisplayComponent, StatsToolbarComponent, WardNumberDialogComponent, InpatientRoundsDialogComponent, IcuOrdersDialogComponent, DialysisOrderModalComponent, CrrtOrderModalComponent, DailyRecordsSummaryDialogComponent, DailyInjectionListDialogComponent, PatientDetailModalComponent, PatientMessagesIconComponent, MemoDisplayDialogComponent, ConditionRecordDisplayDialogComponent, AutoAssignConfigDialogComponent, PatientSelectDialogComponent],
   templateUrl: './schedule.component.html',
   styleUrl: './schedule.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -260,7 +258,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   private readonly dateState = inject(DateStateService);
   private readonly userDirectory = inject(UserDirectoryService);
   private readonly router = inject(Router);
-  private readonly route = inject(ActivatedRoute);
   private readonly autoAssignConfig = inject(AutoAssignConfigService);
 
   // API managers (cached — avoid re-creating per call)
@@ -350,18 +347,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   readonly isIcuSaving = signal(false);
   readonly icuEffectiveOrders = signal<Record<string, any>>({});
   readonly isOrderModalVisible = signal(false);
-  readonly orderSaving = signal(false);
-  canLeave(): boolean {
-    if (this.orderSaving() || this.isSaving()) return false;
-    return !(this.hasUnsavedChanges() || this.hasUnsavedTeamChanges()) || window.confirm('目前有未儲存變更，確定放棄並離開？');
-  }
-  @HostListener('window:beforeunload', ['$event'])
-  beforeUnload(event: BeforeUnloadEvent): void {
-    if (this.orderSaving() || this.isSaving() || this.hasUnsavedChanges() || this.hasUnsavedTeamChanges()) {
-      event.preventDefault(); event.returnValue = '';
-    }
-  }
-  closeOrderModal(): void { if (!this.orderSaving()) this.isOrderModalVisible.set(false); }
   readonly isCRRTOrderModalVisible = signal(false);
 
   @ViewChild('datePickerInput') datePickerInput?: ElementRef<HTMLInputElement>;
@@ -668,9 +653,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   async ngOnInit(): Promise<void> {
     this.isLoading.set(true);
     // Restore shared date if available
-    const queryDate = this.route.snapshot.queryParamMap.get('date');
-    const parsed = queryDate && /^\d{4}-\d{2}-\d{2}$/.test(queryDate) ? new Date(queryDate + 'T00:00:00') : null;
-    const sharedDate = parsed && this.formatDate(parsed) === queryDate ? parsed.toISOString() : this.dateState.selectedDate;
+    const sharedDate = this.dateState.selectedDate;
     if (sharedDate) {
       this.currentDate.set(new Date(sharedDate));
     }
@@ -923,7 +906,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   async handleRetargetBedAssigned(event: any): Promise<void> {
-    if (this.isSaving() || this.orderSaving()) return;
     const conflict = this.retargetConflictRef;
     if (!conflict?.id || this.isResolvingConflict()) return;
     this.isRetargetPickerVisible.set(false);
@@ -956,7 +938,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   async resolveCellConflict(choice: 'keep_base' | 'keep_exception'): Promise<void> {
-    if (this.isSaving() || this.orderSaving()) return;
     const conflict = this.conflictForDialog();
     if (!conflict?.id || this.isResolvingConflict()) return;
     this.isResolvingConflict.set(true);
@@ -985,9 +966,8 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   goToExceptionManager(): void {
-    const patientId = this.conflictForDialog()?.patientId;
     this.closeConflictDialog();
-    this.router.navigate(['/exception-manager'], { queryParams: { date: this.currentDateDisplay(), patientId, from: '/schedule' } });
+    this.router.navigate(['/exception-manager']);
   }
 
   // ---------------------------------------------------------------------------
@@ -1077,10 +1057,8 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   changeDate(days: number): void {
-    if (this.orderSaving()) return;
     if (this.isSaving()) return;
     const performChange = () => {
-      if (this.isSaving() || this.orderSaving()) return;
       const newDate = new Date(this.currentDate());
       newDate.setDate(newDate.getDate() + days);
       this.currentDate.set(newDate);
@@ -1094,10 +1072,8 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   goToToday(): void {
-    if (this.orderSaving()) return;
     if (this.isSaving()) return;
     const performChange = () => {
-      if (this.isSaving() || this.orderSaving()) return;
       const today = new Date();
       this.currentDate.set(today);
       this.dateState.setDate(today.toISOString());
@@ -1110,7 +1086,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   openDatePicker(): void {
-    if (this.orderSaving()) return;
     if (this.isSaving()) return;
     const el = this.datePickerInput?.nativeElement;
     if (!el) return;
@@ -1127,12 +1102,10 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   onDatePicked(event: Event): void {
-    if (this.orderSaving()) return;
     if (this.isSaving()) return;
     const value = (event.target as HTMLInputElement).value;
     if (!value) return;
     const performChange = () => {
-      if (this.isSaving() || this.orderSaving()) return;
       const newDate = new Date(`${value}T00:00:00`);
       this.currentDate.set(newDate);
       this.dateState.setDate(newDate.toISOString());
@@ -1145,7 +1118,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   handleSlotClick(shiftId: string): void {
-    if (this.isSaving() || this.orderSaving()) return;
     const slotData = this.currentRecord.schedule[shiftId];
     if (this.isPageLocked()) return;
     if (!slotData?.patientId) {
@@ -1167,7 +1139,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   handleSimplifiedCellClick(shiftId: string): void {
-    if (this.isSaving() || this.orderSaving()) return;
     const patientId = this.currentRecord.schedule[shiftId]?.patientId;
     if (patientId) {
       this.openDetailModalForPatient(patientId, shiftId);
@@ -1175,7 +1146,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   async saveDataToCloud(): Promise<void> {
-    if (this.isSaving() || this.orderSaving()) return;
     if (this.isTeamEditLocked()) {
       this.showAlert('操作失敗', '操作被鎖定：權限不足或日期已過。');
       return;
@@ -1192,7 +1162,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
    *                        true＝409 對話框「仍要覆蓋」，同一 payload 但不帶 expectedVersion 重送。
    */
   private async attemptSaveDataToCloud(forceOverwrite: boolean): Promise<void> {
-    if (this.isSaving() || this.orderSaving()) return;
     if (this.isLoading()) return;
     const date = this.currentRecord.date;
     if (date !== this.currentDateDisplay()) {
@@ -1303,14 +1272,12 @@ export class ScheduleComponent implements OnInit, OnDestroy {
 
   /** 409 對話框：「重新載入最新資料」— 重跑當日載入流程，內部已會清空 dirty 狀態，不殘留本地未存變更 */
   async handleVersionConflictReload(): Promise<void> {
-    if (this.isSaving() || this.orderSaving()) return;
     this.isVersionConflictDialogVisible.set(false);
     await this.loadDataForDay(this.currentDate(), true);
   }
 
   /** 409 對話框：「仍要覆蓋」— 同一 payload 不帶 expectedVersion 重送一次 */
   async handleVersionConflictOverwrite(): Promise<void> {
-    if (this.isSaving() || this.orderSaving()) return;
     this.isVersionConflictDialogVisible.set(false);
     await this.attemptSaveDataToCloud(true);
   }
@@ -1401,7 +1368,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   updateNurseTeam(event: Event, shiftId: string, type: string): void {
-    if (this.isSaving() || this.orderSaving()) return;
     const target = event.target as HTMLSelectElement;
     if (this.isPageLocked()) {
       target.value = this.getNurseTeam(shiftId, type);
@@ -1440,7 +1406,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   updateNote(event: Event, shiftId: string): void {
-    if (this.isSaving() || this.orderSaving()) return;
     const target = event.target as HTMLElement;
     if (this.isPageLocked()) {
       target.textContent = this.getCombinedNote(shiftId);
@@ -1492,7 +1457,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   async handleWardNumberConfirm(value: string): Promise<void> {
-    if (this.isSaving() || this.orderSaving()) return;
     if (!this.currentEditingShiftId()) return;
     const slot = this.currentRecord.schedule[this.currentEditingShiftId()!];
     if (!slot?.patientId) return;
@@ -1510,7 +1474,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   async handleInpatientRoundsSave(patients: any[]): Promise<void> {
-    if (this.isSaving() || this.orderSaving()) return;
     if (this.isHistoryView()) {
       this.statusIndicator.set('歷史日期唯讀，接送方式未儲存');
       return;
@@ -1542,7 +1505,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   async handleIcuOrdersSaveAndPrint(data: { localNotes: Record<string, string>; crrtEmergencyData: Record<string, any> }): Promise<void> {
-    if (this.isSaving() || this.orderSaving()) return;
     try {
       const updates: Promise<void>[] = [];
       // Save ICU notes to patients
@@ -1584,7 +1546,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   handleIcuDateChange(dateString: string): void {
-    if (this.isSaving() || this.orderSaving()) return;
     const newDate = new Date(dateString + 'T00:00:00');
     if (!isNaN(newDate.getTime())) {
       this.currentDate.set(newDate);
@@ -1594,7 +1555,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   async handleIcuOrdersSave(payload: { localNotes: Record<string, string>; crrtEmergencyData: Record<string, any> }): Promise<void> {
-    if (this.isSaving() || this.orderSaving()) return;
     if (this.isHistoryView()) {
       this.showAlert('操作失敗', '歷史日期唯讀，無法修改ICU醫囑單資料。');
       return;
@@ -1640,8 +1600,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   openOrderModalFromIcu(patient: any): void {
-    if (this.isSaving()) return;
-    if (this.orderSaving()) return;
     if (patient && patient.id) {
       this.editingPatientForOrder.set(JSON.parse(JSON.stringify(patient)));
       this.isOrderModalVisible.set(true);
@@ -1656,8 +1614,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   async handleSaveOrder(orderData: any): Promise<void> {
-    if (this.isSaving()) return;
-    if (this.orderSaving()) return;
     if (this.isHistoryView()) {
       this.showAlert('操作失敗', '過去的排程無法修改。');
       return;
@@ -1668,29 +1624,19 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       return;
     }
     const patientName = patient.name || '（未命名病人）';
-    this.orderSaving.set(true);
-    const submitted = JSON.parse(JSON.stringify(orderData));
     try {
-      await createDialysisOrderAndUpdatePatient(patient.id, patient.name, submitted);
+      await createDialysisOrderAndUpdatePatient(patient.id, patient.name, orderData);
+      await this.patientStore.forceRefreshPatients();
+      await this.loadDataForDay(this.currentDate());
       this.isOrderModalVisible.set(false);
-      this.editingPatientForOrder.set(null);
-      try {
-        await this.patientStore.forceRefreshPatients();
-        if (!this.hasUnsavedChanges() && !this.hasUnsavedTeamChanges()) await this.loadDataForDay(this.currentDate(), false, true);
-      } catch (refreshError: any) {
-        console.error('醫囑已儲存，更新畫面失敗:', refreshError);
-        this.showAlert('已儲存，更新畫面失敗', `${patientName} 的醫囑已儲存，請稍後重新整理畫面，勿重複新增。${refreshError?.message ? '\n' + refreshError.message : ''}`);
-        return;
-      }
       this.showAlert('儲存成功', `已更新病人 ${patientName} 的醫囑。`);
     } catch (error: any) {
       console.error('儲存醫囑失敗:', error);
       this.showAlert('儲存失敗', `儲存醫囑發生錯誤: ${error.message}`);
-    } finally { this.orderSaving.set(false); }
+    }
   }
 
   async handleSaveCrrtOrder(orderData: any): Promise<void> {
-    if (this.isSaving() || this.orderSaving()) return;
     const patient = this.editingPatientForCRRT();
     if (!patient?.id) {
       this.showAlert('儲存失敗', '找不到目標病人資訊。');
@@ -1874,7 +1820,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   async autoAssignNurseTeams(): Promise<void> {
-    if (this.isSaving() || this.orderSaving()) return;
     if (this.isTeamEditLocked()) {
       this.showAlert('操作失敗', '歷史日期已鎖定，無法執行自動分組。');
       return;
@@ -1887,14 +1832,12 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   handleConfirm(): void {
-    if (this.isSaving() || this.orderSaving()) return;
     if (typeof this.onConfirmAction === 'function') this.onConfirmAction();
     this.isConfirmDialogVisible.set(false);
     this.onConfirmAction = null;
   }
 
   handleCancel(): void {
-    if (this.isSaving() || this.orderSaving()) return;
     this.isConfirmDialogVisible.set(false);
     this.onConfirmAction = null;
   }
@@ -1930,7 +1873,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   onDrop(event: DragEvent, targetShiftId: string): void {
-    if (this.isSaving() || this.orderSaving()) return;
     if (this.isPageLocked()) return;
     event.preventDefault();
     document.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'));
@@ -1996,7 +1938,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   onBedDragStart(event: DragEvent, sourceShiftId: string): void {
-    if (this.isSaving() || this.orderSaving()) return;
     if (this.isPageLocked()) {
       event.preventDefault();
       return;
@@ -2028,7 +1969,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   handlePatientSelect(data: { patientId: string }): void {
-    if (this.isSaving() || this.orderSaving()) return;
     if (!data.patientId || !this.currentSlotId()) return;
     this.isPatientSelectDialogVisible.set(false);
     if (this.scheduledPatientIds.has(data.patientId)) {
@@ -2042,7 +1982,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   handleAssignBed(data: { patientId: string; shiftId: string }): void {
-    if (this.isSaving() || this.orderSaving()) return;
     if (!data.patientId || !data.shiftId || this.isPageLocked()) return;
     if (this.scheduledPatientIds.has(data.patientId)) {
       const patient = this.patientMap().get(data.patientId) as Record<string, unknown>;
@@ -2060,7 +1999,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
 
   // Sidebar drag start
   onSidebarDragStart(event: DragEvent, patient: any): void {
-    if (this.isSaving() || this.orderSaving()) return;
     if (this.isPageLocked()) return;
     const slotData = { patientId: patient.id };
     event.dataTransfer?.setData('sourceShiftId', 'sidebar');
@@ -2123,7 +2061,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   private handleSlotUpdate(shiftId: string, patientId: string | null, fullSlotData?: ScheduleSlotData): void {
-    if (this.isSaving() || this.orderSaving()) return;
     if (this.isPageLocked()) return;
     if (patientId) {
       const patient = this.patientMap().get(patientId) as Record<string, unknown>;
@@ -2200,7 +2137,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     }
   }
 
-  private async loadDataForDay(date: Date, discardChanges = false, reportRefreshFailure = false): Promise<void> {
+  private async loadDataForDay(date: Date, discardChanges = false): Promise<void> {
     let dateStr: string;
     try {
       dateStr = this.formatDate(date);
@@ -2257,7 +2194,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       if (!this.draft.isUnchanged(request, this.currentDateDisplay())) return;
       console.error(`載入 ${dateStr} 資料失敗:`, error);
       this.statusIndicator.set('讀取失敗');
-      if (reportRefreshFailure) throw error;
     } finally {
       if (this.draft.isCurrent(request, this.currentDateDisplay())) this.isLoading.set(false);
     }
@@ -2354,7 +2290,6 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   }
 
   private executeAutoAssignment(useExperimentalLogic = false): void {
-    if (this.isSaving() || this.orderSaving()) return;
     // Clear existing teams
     const teamsRec = { ...this.currentTeamsRecord(), teams: {} as Record<string, any> };
 

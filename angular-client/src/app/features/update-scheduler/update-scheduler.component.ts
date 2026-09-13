@@ -48,7 +48,6 @@ export class UpdateSchedulerComponent implements OnInit, OnDestroy {
   isPageLocked = computed(() => !this.authService.canEditSchedules());
 
   scheduledUpdates = signal<any[]>([]);
-  readonly loadError = signal('');
   isLoading = signal(true);
 
   isConfirmDialogVisible = signal(false);
@@ -147,10 +146,9 @@ export class UpdateSchedulerComponent implements OnInit, OnDestroy {
   private isFetchingUpdates = false;
 
   /** Fetch all scheduled updates via REST API. */
-  async fetchScheduledUpdates(): Promise<void> {
+  private async fetchScheduledUpdates(): Promise<void> {
     if (this.isFetchingUpdates) return;
     this.isFetchingUpdates = true;
-    this.loadError.set('');
     try {
       const results = await this.scheduledUpdatesApi.fetchAll();
       // Sort by createdAt descending (matching original Firestore orderBy)
@@ -162,7 +160,6 @@ export class UpdateSchedulerComponent implements OnInit, OnDestroy {
       this.scheduledUpdates.set(sorted as any[]);
       this.isLoading.set(false);
     } catch (error) {
-      this.loadError.set('預約變更載入失敗，尚無法確認是否有記錄，請重試。');
       console.error('監聽預約變更時發生錯誤:', error);
       this.isLoading.set(false);
     } finally {

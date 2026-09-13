@@ -1,7 +1,7 @@
 // 重大傷病申請工作檯：初次/再次兩頁籤，選病人自動帶入基本資料與最近檢驗值，
 // 儲存至 catastrophic_illness_applications，並可依官方附表版面列印匯出
 // 權限：admin/contributor（醫師與專師）可寫表單；viewer（書記）僅進度總覽＋填送出日期/到期日
-import { Component, HostListener, HostBinding, Input, OnInit, computed, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, HostBinding, Input, OnInit, computed, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -100,14 +100,6 @@ const RENEWAL_PREP_PROPS: Record<RenewalPrepKey, 'renewalRegisteredDate' | 'rene
   styleUrls: ['./catastrophic-illness.component.css'],
 })
 export class CatastrophicIllnessComponent implements OnInit {
-  navigateSection(event: Event, id: string): void {
-    event.preventDefault();
-    const page = (event.currentTarget as HTMLElement | null)?.closest('.ci-page');
-    const section = page?.querySelector<HTMLElement>('#' + id);
-    section?.scrollIntoView({ block: 'start' });
-    section?.focus({ preventScroll: true });
-  }
-
   /** 內嵌於「書記專用」／「醫師專師專用」主頁籤時隱藏自帶標題並自行捲動（2026-09-05） */
   @HostBinding('class.embedded') @Input() embedded = false;
 
@@ -162,19 +154,6 @@ export class CatastrophicIllnessComponent implements OnInit {
   form: CatastrophicFormData = createEmptyFormData();
   formLoaded = false; // 是否有開啟中的表單（選了病人並新增/載入紀錄）
 
-  private owner = 0;
-  private pdOwner = 0;
-  private expiryOwner = 0;
-  private baseline = '';
-  hasUnsavedChanges(): boolean { return this.formLoaded && JSON.stringify(this.form) !== this.baseline; }
-  canLeave(): boolean {
-    if (this.saving || this.pdSaving || this.addingExpiry) return false;
-    return !this.hasUnsavedChanges() || confirm('申請表尚未儲存。確定放棄變更並離開？取消可留下儲存。');
-  }
-  @HostListener('window:beforeunload', ['$event']) beforeUnload(event: BeforeUnloadEvent): void {
-    if (this.saving || this.pdSaving || this.addingExpiry || this.hasUnsavedChanges()) { event.preventDefault(); event.returnValue = ''; }
-  }
-  ngOnDestroy(): void { ++this.owner; ++this.pdOwner; ++this.expiryOwner; }
   loading = false;
   saving = false;
   statusMessage = '';
@@ -252,7 +231,6 @@ export class CatastrophicIllnessComponent implements OnInit {
 
   /** 搜尋查無病人 → 「是否為 PD 病人」入口：以搜尋字串預填姓名或病歷號 */
   openPdDialog(target: 'select' | 'expiry'): void {
-    if (!this.canLeave()) return;
     const kw = (target === 'select' ? this.searchText : this.expirySearchText).trim();
     const looksLikeMrn = /^[0-9]+$/.test(kw);
     const looksLikeId = /^[A-Za-z][0-9]{9}$/.test(kw);
@@ -272,38 +250,31 @@ export class CatastrophicIllnessComponent implements OnInit {
   }
 
   closePdDialog(): void {
-    if (this.pdSaving) return;
     this.pdDialogOpen = false;
   }
 
   async savePdPatient(): Promise<void> {
-    if (this.pdSaving || this.saving || this.addingExpiry) return;
     if (!this.pdForm.name.trim()) {
       this.pdDialogError = '姓名為必填';
       return;
     }
     this.pdSaving = true;
-    const request = ++this.pdOwner;
-    const submitted = { ...this.pdForm };
-    const target = this.pdDialogTarget;
     this.pdDialogError = '';
     try {
-      const created = await firstValueFrom(this.api.post<CiPdPatient>('/catastrophic-illness/pd-patients', submitted));
-      if (request !== this.pdOwner) return;
+      const created = await firstValueFrom(this.api.post<CiPdPatient>('/catastrophic-illness/pd-patients', this.pdForm));
       const p = this.toPdPatient(created);
       this.pdPatients = [p, ...this.pdPatients];
       this.pdDialogOpen = false;
-      if (target === 'expiry') {
-        this.applyExpiryPatient(p);
+      if (this.pdDialogTarget === 'expiry') {
+        this.pickExpiryPatient(p);
       } else {
-        await this.loadSelectedPatient(p);
+        await this.selectPatient(p);
       }
     } catch (err) {
-      if (request !== this.pdOwner) return;
       console.error('建立 PD 病人失敗:', err);
       this.pdDialogError = (err as { error?: { message?: string } })?.error?.message || '建立失敗，請重試';
     } finally {
-      if (request === this.pdOwner) this.pdSaving = false;
+      this.pdSaving = false;
     }
   }
 
@@ -481,7 +452,6 @@ export class CatastrophicIllnessComponent implements OnInit {
       return;
     }
     await this.selectPatient(p);
-    if (this.selectedPatient()?.id !== p.id || this.loading || this.saving || this.hasUnsavedChanges()) return;
     const app = this.applications().find((a) => a.id === slot.id);
     if (!app) {
       alert('找不到該筆申請紀錄，請重新整理後再試');
@@ -541,11 +511,6 @@ export class CatastrophicIllnessComponent implements OnInit {
   }
 
   pickExpiryPatient(p: Patient): void {
-    if (this.addingExpiry || this.pdSaving || this.saving) return;
-    this.applyExpiryPatient(p);
-  }
-
-  private applyExpiryPatient(p: Patient): void {
     this.expiryPickedPatient = p;
     this.expirySearchText = this.patientLabel(p);
     this.expiryShowDropdown = false;
@@ -564,44 +529,38 @@ export class CatastrophicIllnessComponent implements OnInit {
 
   async addExpiry(): Promise<void> {
     const patient = this.expiryPickedPatient;
-    if (!patient || this.addingExpiry || this.pdSaving || this.saving || (!this.newExpiryDate && !this.newSentDate)) return;
-    const submitted = { date: this.newExpiryDate, sent: this.newSentDate, physician: this.newExpiryPhysician };
-    const request = ++this.expiryOwner;
+    if (!patient || (!this.newExpiryDate && !this.newSentDate)) return;
     const existing = this.overviewRows().find((r) => r.patientId === patient['id']);
     if (this.newExpiryDate && existing?.expiryDate && !confirm(`${patient['name']} 已有到期日 ${existing.expiryDate}，要改成 ${this.newExpiryDate} 嗎？`)) return;
     this.addingExpiry = true;
     try {
-      if (submitted.date) {
+      if (this.newExpiryDate) {
         await firstValueFrom(this.api.put(`/catastrophic-illness/expiry/${patient['id']}`, {
-          expiryDate: submitted.date,
-          physicianName: submitted.physician,
+          expiryDate: this.newExpiryDate,
+          physicianName: this.newExpiryPhysician,
         }));
       }
-      if (submitted.sent) {
+      if (this.newSentDate) {
         // 紙本送出日期：該病人尚無初次申請 → 記在初次欄；已有初次 → 接在再次之後
         const hasInitial = !!existing?.applications?.[0];
         await firstValueFrom(this.api.post('/catastrophic-illness/clerk-paper', {
           patientId: String(patient['id']),
           applicationType: hasInitial ? 'renewal' : 'initial',
-          clerkSentDate: submitted.sent,
-          physicianName: submitted.physician || undefined,
+          clerkSentDate: this.newSentDate,
+          physicianName: this.newExpiryPhysician || undefined,
         }));
       }
-      if (request !== this.expiryOwner) return;
-      if (this.expiryPickedPatient === patient && this.newExpiryDate === submitted.date && this.newSentDate === submitted.sent && this.newExpiryPhysician === submitted.physician) {
       this.expiryPickedPatient = null;
       this.expirySearchText = '';
       this.newExpiryDate = '';
       this.newSentDate = '';
       this.newExpiryPhysician = '';
-      }
       await this.loadOverview(); // 重新載入：新列與到期提醒卡立即出現
     } catch (err) {
-      if (request !== this.expiryOwner) return;
       console.error('新增重大傷病到期日失敗:', err);
       alert('新增到期日失敗，請重試');
     } finally {
-      if (request === this.expiryOwner) this.addingExpiry = false;
+      this.addingExpiry = false;
     }
   }
 
@@ -663,13 +622,6 @@ export class CatastrophicIllnessComponent implements OnInit {
   }
 
   async selectPatient(p: Patient): Promise<void> {
-    if (!this.canLeave()) return;
-    await this.loadSelectedPatient(p);
-  }
-
-  private async loadSelectedPatient(p: Patient): Promise<void> {
-    const owner = ++this.owner;
-    this.applications.set([]);
     this.selectedPatient.set(p);
     this.searchText = this.patientLabel(p);
     this.showDropdown = false;
@@ -679,16 +631,13 @@ export class CatastrophicIllnessComponent implements OnInit {
     this.loading = true;
     try {
       await Promise.all([this.loadApplications(), this.loadLatestLabs(), this.loadKiditProfile()]);
-    } catch {
-      if (owner === this.owner) this.statusMessage = '載入申請資料失敗，請重新選取重試';
     } finally {
-      if (owner === this.owner) this.loading = false;
+      this.loading = false;
     }
   }
 
   /** 查 KiDit 本院初透建檔基本資料（查無則為 null，欄位維持其他來源帶入＋手動填寫） */
   private async loadKiditProfile(): Promise<void> {
-    const owner = this.owner;
     const p = this.selectedPatient();
     this.kiditProfile = null;
     this.kiditHistory = null;
@@ -699,11 +648,9 @@ export class CatastrophicIllnessComponent implements OnInit {
           `/catastrophic-illness/kidit-profile/${String(p['id'])}`,
         ),
       );
-      if (owner !== this.owner) return;
       this.kiditProfile = resp?.found ? resp.profile : null;
       this.kiditHistory = resp?.found ? resp.history : null;
     } catch (err) {
-      if (owner !== this.owner) return;
       console.error('查詢 KiDit 建檔資料失敗:', err);
       this.kiditProfile = null;
       this.kiditHistory = null;
@@ -711,25 +658,21 @@ export class CatastrophicIllnessComponent implements OnInit {
   }
 
   private async loadApplications(): Promise<void> {
-    const owner = this.owner;
     const p = this.selectedPatient();
     if (!p) return;
     const rows = await firstValueFrom(
       this.api.get<CiApplication[]>('/catastrophic-illness', { patientId: String(p['id']) }),
     );
-    if (owner !== this.owner) return;
     this.applications.set(Array.isArray(rows) ? rows : []);
   }
 
   private async loadLatestLabs(): Promise<void> {
-    const owner = this.owner;
     const p = this.selectedPatient();
     this.latestLabs = {};
     this.latestLabDate = '';
     if (!p) return;
     try {
       const reports = await this.labsApi.fetchWhere({ patientId: String(p['id']) });
-      if (owner !== this.owner) return;
       const sorted = (reports || [])
         .filter((r) => r.reportDate)
         .sort((a, b) => String(a.reportDate).localeCompare(String(b.reportDate)));
@@ -744,7 +687,6 @@ export class CatastrophicIllnessComponent implements OnInit {
         this.latestLabDate = String(r.reportDate).slice(0, 10);
       }
     } catch (err) {
-      if (owner !== this.owner) return;
       console.error('載入檢驗報告失敗:', err);
     }
   }
@@ -754,7 +696,7 @@ export class CatastrophicIllnessComponent implements OnInit {
   // ---------------------------------------------------------------
 
   setTab(tab: AppType): void {
-    if (this.activeTab === tab || this.loading || !this.canLeave()) return;
+    if (this.activeTab === tab) return;
     this.activeTab = tab;
     this.currentId = null;
     this.formLoaded = false;
@@ -766,16 +708,14 @@ export class CatastrophicIllnessComponent implements OnInit {
   }
 
   openApplication(app: CiApplication): void {
-    if (this.loading || !this.canLeave() || app.patientId !== this.selectedPatient()?.id) return;
     this.currentId = app.id;
-    this.form = { ...createEmptyFormData(), ...JSON.parse(JSON.stringify(app.formData || {})) };
+    this.form = { ...createEmptyFormData(), ...(app.formData || {}) };
     // 陣列欄防呆（舊資料可能缺欄）
     this.form.symptoms = Array.isArray(this.form.symptoms) ? this.form.symptoms : [];
     this.form.comorbidities = Array.isArray(this.form.comorbidities) ? this.form.comorbidities : [];
     this.form.ultrasoundFindings = Array.isArray(this.form.ultrasoundFindings) ? this.form.ultrasoundFindings : [];
     this.form.restartReasons = Array.isArray(this.form.restartReasons) ? this.form.restartReasons : [];
     this.formLoaded = true;
-    this.baseline = JSON.stringify(this.form);
     this.statusMessage = '';
     this.kiditSource = '';
     this.overviewCollapsed = true;
@@ -783,7 +723,6 @@ export class CatastrophicIllnessComponent implements OnInit {
 
   /** 新增申請：以病人資料 + 最近檢驗值預填 */
   newApplication(): void {
-    if (this.loading || !this.canLeave()) return;
     const p = this.selectedPatient();
     if (!p) return;
     const f = createEmptyFormData();
@@ -920,7 +859,6 @@ export class CatastrophicIllnessComponent implements OnInit {
     this.form = f;
     this.currentId = null;
     this.formLoaded = true;
-    this.baseline = JSON.stringify(this.form);
     this.statusMessage = '';
     this.overviewCollapsed = true;
   }
@@ -962,19 +900,15 @@ export class CatastrophicIllnessComponent implements OnInit {
 
   async save(): Promise<void> {
     const p = this.selectedPatient();
-    if (!p || !this.formLoaded || this.saving || this.loading || !this.canWrite) return;
-    const owner = this.owner;
-    const submitted = JSON.parse(JSON.stringify(this.form));
-    const applicationType = this.activeTab;
-    const currentId = this.currentId;
+    if (!p || !this.formLoaded || this.saving) return;
     this.saving = true;
     this.statusMessage = '';
     try {
-      if (currentId) {
+      if (this.currentId) {
         await firstValueFrom(
-          this.api.put<CiApplication>(`/catastrophic-illness/${currentId}`, {
-            applicationType,
-            formData: submitted,
+          this.api.put<CiApplication>(`/catastrophic-illness/${this.currentId}`, {
+            applicationType: this.activeTab,
+            formData: this.form,
           }),
         );
       } else {
@@ -982,24 +916,19 @@ export class CatastrophicIllnessComponent implements OnInit {
           this.api.post<CiApplication>('/catastrophic-illness', {
             patientId: String(p['id']),
             patientName: String(p['name'] || ''),
-            applicationType,
-            formData: submitted,
+            applicationType: this.activeTab,
+            formData: this.form,
           }),
         );
-        if (owner !== this.owner || this.selectedPatient()?.id !== p.id) return;
         this.currentId = created?.id || null;
       }
-      if (owner !== this.owner || this.selectedPatient()?.id !== p.id) return;
-      this.baseline = JSON.stringify(submitted);
       await Promise.all([this.loadApplications(), this.loadOverview()]);
-      if (owner !== this.owner) return;
       this.statusMessage = '✅ 已儲存';
     } catch (err) {
-      if (owner !== this.owner) return;
       console.error('儲存重大傷病申請失敗:', err);
       this.statusMessage = '❌ 儲存失敗，請重試';
     } finally {
-      if (owner === this.owner) this.saving = false;
+      this.saving = false;
     }
   }
 
@@ -1033,7 +962,6 @@ export class CatastrophicIllnessComponent implements OnInit {
   }
 
   closeForm(): void {
-    if (!this.canLeave()) return;
     this.formLoaded = false;
     this.currentId = null;
     this.statusMessage = '';

@@ -194,25 +194,23 @@
       <!-- (B) 警示報告頁籤 -->
       <div [style.display]="activeTab() === 'alert' ? 'flex' : 'none'" class="tab-panel alert-panel">
         <div class="alert-controls">
-          <button (click)="changeAlertMonth(-1)" [disabled]="alertSaving()">&lt; 前三個月</button>
+          <button (click)="changeAlertMonth(-1)">&lt; 前三個月</button>
           <span class="month-range-display"
             >{{ alertMonthRange().start }} ~ {{ alertMonthRange().end }}</span
             >
-            <button (click)="changeAlertMonth(1)" [disabled]="alertSaving()">後三個月 &gt;</button>
+            <button (click)="changeAlertMonth(1)">後三個月 &gt;</button>
             <button (click)="exportAlertToExcel()" class="export-btn" [disabled]="groupedAlerts().length === 0">
               匯出 Excel
             </button>
             <button
               (click)="saveAlertAnalyses()"
               class="save-btn"
-              [disabled]="isLoadingAlerts() || alertSaving() || groupedAlerts().length === 0"
+              [disabled]="isLoadingAlerts() || groupedAlerts().length === 0"
               >
               儲存分析
             </button>
-            <span role="status">{{ alertSaving() ? '儲存中…' : '單筆確認會立即存檔；儲存全部只送出尚未儲存的分析。' }}</span>
-            @if (alertSaveError()) { <p role="alert">{{ alertSaveError() }} <button type="button" (click)="retryFailedAlertSaves()" [disabled]="alertSaving()">重試失敗項目（{{ failedAlertSaves().length }}）</button></p> }
             @if (alertSaveToast()) {
-              <span class="alert-save-toast" role="status">{{ failedAlertSaves().length ? '⚠' : '✓' }} {{ alertSaveToast() }}</span>
+              <span class="alert-save-toast">✓ {{ alertSaveToast() }}</span>
             }
           </div>
 
@@ -229,10 +227,8 @@
               </div>
             }
             @if (!isLoadingAlerts() && groupedAlerts().length > 0) {
-              <label class="alert-display-filter">顯示項目 <select aria-label="檢驗處理狀態" [ngModel]="alertDisplayFilter()" (ngModelChange)="alertDisplayFilter.set($event)"><option value="all">全部</option><option value="pending">尚未填寫或未儲存</option><option value="failed">儲存失敗</option></select></label>
-              @if (!visibleAlertGroups().length) { <p role="status">目前篩選沒有符合項目。</p> }
               <div class="grouped-tables-container">
-                @for (group of visibleAlertGroups(); track group.key) {
+                @for (group of groupedAlerts(); track group) {
                   <div class="alert-group">
                     <h3 class="group-title">
                       {{ labItemDisplayNames[group.key] || group.key }} - 不合格名單
@@ -407,12 +403,11 @@
           <!-- Alert Detail Modal -->
           <app-lab-alert-detail-modal
             [isVisible]="isAlertDetailModalVisible()"
-            [saving]="alertSaving()" [saveError]="alertDetailError()"
             [patient]="$safeNavigationMigration(selectedAlertItem()?.patient)"
             [abnormalityKey]="selectedAlertItem()?.key || ''"
             [initialAnalysis]="selectedAlertItem()?.analysisText || ''"
             [initialSuggestion]="selectedAlertItem()?.suggestionText || ''"
-            (close)="!alertSaving() && isAlertDetailModalVisible.set(false)"
+            (close)="isAlertDetailModalVisible.set(false)"
             (confirm)="handleAlertUpdate($event)"
           ></app-lab-alert-detail-modal>
         </div>

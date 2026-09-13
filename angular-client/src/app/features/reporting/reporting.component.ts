@@ -1,5 +1,4 @@
 import { loadXlsx } from '@/utils/xlsxLoader';
-import { LatestRequest } from '@app/core/utils/latest-request';
 // Standalone 版：已移除 Firebase
 import { Component, inject, signal, computed, ViewChild, ElementRef, AfterViewInit, ChangeDetectionStrategy } from '@angular/core';
 
@@ -94,9 +93,6 @@ export class ReportingComponent implements AfterViewInit {
   selectedYear = signal<number>(new Date().getFullYear());
 
   isLoading = signal<boolean>(false);
-  reportError = signal('');
-  reportWarning = signal('');
-  private reportRequests = new LatestRequest();
   hasGenerated = signal<boolean>(false);
   showTable = signal<boolean>(false);
   chartMode = signal<'absolute' | 'percent'>('absolute');
@@ -497,20 +493,7 @@ export class ReportingComponent implements AfterViewInit {
     return formatter.format(today);
   }
 
-  ngOnDestroy(): void {
-    this.reportRequests.invalidate();
-    this.chartInstance?.destroy();
-    this.staffingCharts.forEach(chart => chart.destroy());
-  }
-
   async generateReport(): Promise<void> {
-    const request = this.reportRequests.begin();
-    const type = this.reportType();
-    const date = this.selectedDate();
-    const selectedMonth = this.selectedMonth();
-    const year = this.selectedYear();
-    this.reportError.set('');
-    this.reportWarning.set('');
     this.isLoading.set(true);
     this.hasGenerated.set(true);
     [this.dailyTableRows, this.monthlyTableRows, this.yearlyTableRows,
@@ -521,15 +504,15 @@ export class ReportingComponent implements AfterViewInit {
       let startDate: string | null = null;
       let endDate: string | null = null;
 
-      if (type === 'daily') {
-        if (!date) throw new Error('請選擇一個有效的日期。');
-        startDate = date;
-        endDate = date;
-      } else if (type === 'monthly' || type === 'staffing_monthly') {
-        if (!selectedMonth || selectedMonth.indexOf('-') === -1) {
+      if (this.reportType() === 'daily') {
+        if (!this.selectedDate()) throw new Error('請選擇一個有效的日期。');
+        startDate = this.selectedDate();
+        endDate = this.selectedDate();
+      } else if (this.reportType() === 'monthly' || this.reportType() === 'staffing_monthly') {
+        if (!this.selectedMonth() || this.selectedMonth().indexOf('-') === -1) {
           throw new Error('請選擇一個有效的月份。');
         }
-        const [year, month] = selectedMonth.split('-').map(Number);
+        const [year, month] = this.selectedMonth().split('-').map(Number);
         if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
           throw new Error('您選擇的月份格式不正確。');
         }
@@ -537,9 +520,9 @@ export class ReportingComponent implements AfterViewInit {
         const lastDay = new Date(year, month, 0);
         startDate = formatDateToYYYYMMDD(firstDay);
         endDate = formatDateToYYYYMMDD(lastDay);
-      } else if (type === 'yearly') {
-        const validYear = Number(year);
-        if (!validYear || isNaN(validYear) || validYear < 1900 || validYear > 2100) {
+      } else if (this.reportType() === 'yearly') {
+        const year = Number(this.selectedYear());
+        if (!year || isNaN(year) || year < 1900 || year > 2100) {
           throw new Error('請選擇一個有效的年份。');
         }
         startDate = formatDateToYYYYMMDD(new Date(year, 0, 1));
@@ -552,20 +535,18 @@ export class ReportingComponent implements AfterViewInit {
 
       this.reportDateRange.set({ start: startDate, end: endDate });
 
-      if (type === 'staffing_monthly') {
-        const allDailyLogs = await this.dailyLogsApi.fetchWhere({ startDate, endDate });
-        if (!this.reportRequests.isCurrent(request)) return;
+      if (this.reportType() === 'staffing_monthly') {
+        const allDailyLogs = await this.dailyLogsApi.fetchAll();
         const dailyLogsData = allDailyLogs.filter((d: any) => d.date >= startDate && d.date <= endDate);
         this.processStaffingReport(dailyLogsData);
       } else {
         // 同時抓 schedules 與 archived_schedules：歸檔可能不完整,過去日期可能仍只在 schedules
         // 同日期兩表都有時,歸檔(archived)為真理之源,後寫覆蓋前者
         const [schedAll, expiredAll, patientsData] = await Promise.all([
-          this.schedulesApi.fetchWhere({ startDate, endDate }),
-          this.expiredSchedulesApi.fetchWhere({ start: startDate, end: endDate }),
+          this.schedulesApi.fetchAll(),
+          this.expiredSchedulesApi.fetchAll(),
           this.patientsApi.fetchAll(),
         ]);
-        if (!this.reportRequests.isCurrent(request)) return;
         const patientMap = new Map(patientsData.map((p: any) => [p.id, p]));
         const inRange = (d: any) => d.date >= startDate! && d.date <= endDate!;
         const byDate = new Map<string, any>();
@@ -573,28 +554,25 @@ export class ReportingComponent implements AfterViewInit {
         for (const r of expiredAll as any[]) if (inRange(r)) byDate.set(r.date, r);
         const allSchedules = Array.from(byDate.values());
 
-        if (type === 'daily') {
+        if (this.reportType() === 'daily') {
           this.processDailyReport(allSchedules, patientMap);
-        } else if (type === 'monthly') {
+        } else if (this.reportType() === 'monthly') {
           this.processMonthlyReport(allSchedules, patientMap, startDate);
-        } else if (type === 'yearly') {
+        } else if (this.reportType() === 'yearly') {
           // 每月月底常規門診病人數：後端每晚快照（cron）＋歷史倒推（backfill 估算），取不到不影響人次表
           let census: (MonthlyCensusCell | null)[] = [];
           try {
-            const resp: any = await localApi.get(`/system/patient-census?year=${year}`);
-            if (!this.reportRequests.isCurrent(request)) return;
+            const resp: any = await localApi.get(`/system/patient-census?year=${this.selectedYear()}`);
             census = Array.isArray(resp?.months) ? resp.months : [];
             // 當月尚無快照（23:45 才記）→ 以即時人數補上「截至今天」
             const t = resp?.today;
-            if (t?.date && String(t.date).slice(0, 4) === String(year)) {
+            if (t?.date && String(t.date).slice(0, 4) === String(this.selectedYear())) {
               const mi = Number(String(t.date).slice(5, 7)) - 1;
               if (mi >= 0 && mi < 12 && !census[mi]) {
                 census[mi] = { date: t.date, opdRegular: t.opdRegular, opd: t.opd, ipd: t.ipd, er: t.er, source: 'live' };
               }
             }
           } catch (e) {
-            if (!this.reportRequests.isCurrent(request)) return;
-            this.reportWarning.set('月底病人數來源讀取失敗；目前僅呈現人次報表，請重試以補齊來源。');
             console.warn('取得月底病人數快照失敗（年度報表略過此列）:', e);
           }
           this.processYearlyReport(allSchedules, patientMap, census);
@@ -602,20 +580,19 @@ export class ReportingComponent implements AfterViewInit {
       }
 
       // Render chart after data is ready (use setTimeout to ensure canvas is visible)
-      setTimeout(() => { if (this.reportRequests.isCurrent(request)) this.renderChart(); }, 50);
+      setTimeout(() => this.renderChart(), 50);
     } catch (error: any) {
-      if (!this.reportRequests.isCurrent(request)) return;
-      this.reportError.set('報表讀取失敗，請重試。');
       console.error('生成報表失敗:', error);
     } finally {
-      if (this.reportRequests.isCurrent(request)) this.isLoading.set(false);
+      this.isLoading.set(false);
     }
   }
 
   // --- Excel Export ---
 
   async exportToExcel(): Promise<void> {
-    if (this.isLoading() || this.reportError() || this.noData()) return;
+    const XLSX = await loadXlsx();
+    if (this.noData()) return;
     let headers!: string[];
     let dataRows!: any[][];
     let filename!: string;
@@ -656,13 +633,9 @@ export class ReportingComponent implements AfterViewInit {
       return;
     }
 
-    // Capture the complete displayed report before loading the optional exporter.
     const titleRow = [excelTitle];
     const emptyRow: string[] = [];
-    const data = structuredClone([titleRow, emptyRow, headers, ...dataRows]);
-    const warning = this.reportWarning();
-    if (warning) data.push([warning]);
-    const XLSX = await loadXlsx();
+    const data = [titleRow, emptyRow, headers, ...dataRows];
     const workbook = XLSX.utils.book_new();
     const worksheet = XLSX.utils.aoa_to_sheet(data);
     const merge = { s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } };

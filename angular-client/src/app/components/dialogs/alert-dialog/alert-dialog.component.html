@@ -1,6 +1,6 @@
 @if (isVisible) {
   <div class="dialog-backdrop">
-    <dialog class="alert-dialog" [appModalFocus]="title || '提示'" (modalEscape)="handleConfirm()">
+    <dialog [open]="true" class="alert-dialog">
       @if (title) {
         <header class="dialog-header">
           <h3>{{ title }}</h3>

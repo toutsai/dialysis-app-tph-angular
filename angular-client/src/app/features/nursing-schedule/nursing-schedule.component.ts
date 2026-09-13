@@ -1,6 +1,3 @@
-import { OperationStatusComponent } from '@app/shared/operation-status/operation-status.component';
-import { PeriodNavigationComponent } from '@app/shared/period-navigation/period-navigation.component';
-import { LatestRequest } from '@app/core/utils/latest-request';
 import { loadXlsx } from '@/utils/xlsxLoader';
 import {
   Component,
@@ -37,7 +34,7 @@ import { NursingGroupConfigDialogComponent } from '@app/components/dialogs/nursi
 @Component({
   selector: 'app-nursing-schedule',
   standalone: true,
-  imports: [OperationStatusComponent, PeriodNavigationComponent,
+  imports: [
     CommonModule,
     FormsModule,
     AlertDialogComponent,
@@ -377,7 +374,6 @@ export class NursingScheduleComponent implements OnInit {
 
   /** 點擊週次頁籤 */
   onWeekTabClick(weekIndex: number): void {
-    if (this.isUploading() || this.isSavingDuties()) return;
     this.activeWeekTab.set(weekIndex + 1);
   }
 
@@ -720,7 +716,6 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   handleGroupChange(nurseId: string, dayIndex: number, event: Event): void {
-    if (this.isUploading() || this.isSavingDuties()) return;
     this.groupEditStatsVersion.update((v) => v + 1); // 累積欄即時重算（含清空選擇）
     const newGroup = (event.target as HTMLSelectElement).value;
     if (!newGroup || !this.tempScheduleWithGroups) return;
@@ -899,19 +894,11 @@ export class NursingScheduleComponent implements OnInit {
 
   // --- 儲存邏輯 ---
   async executeShiftSave(): Promise<void> {
-    if (!this.canSaveLoadedMonth()) return;
-    const owner = this.monthlySchedule;
-    const month = this.selectedMonth;
-    const week = this.activeWeekTab();
-    const editOwner = this.tempScheduleWithGroups;
-    const draft = JSON.stringify(owner.scheduleByNurse);
-    this.monthRequest.invalidate();
-    this.groupConfigRequest.invalidate();
     this.isUploading.set(true);
     this.uploadStatus.set('正在儲存班別變更...');
     try {
-      const documentId = month;
-      const scheduleDataToSave = JSON.parse(JSON.stringify(owner.scheduleByNurse));
+      const documentId = this.selectedMonth;
+      const scheduleDataToSave = this.monthlySchedule.scheduleByNurse;
       const adminName =
         this.auth.currentUser()?.name || '未知管理員';
 
@@ -922,11 +909,6 @@ export class NursingScheduleComponent implements OnInit {
       };
 
       await this.nursingSchedulesApi.update(documentId, dataWithAdmin);
-      if (this.monthlySchedule !== owner || this.selectedMonth !== month || this.activeWeekTab() !== week) return;
-      if (draft !== JSON.stringify(owner.scheduleByNurse)) {
-        this.uploadStatus.set('已儲存提交內容，後續變更尚未儲存');
-        return;
-      }
       this.uploadStatus.set(
         `班別變更成功儲存！(由 ${adminName} 確認)`
       );
@@ -936,7 +918,7 @@ export class NursingScheduleComponent implements OnInit {
       );
       this.isShiftEditMode.set(false);
       this.hasUnsavedShiftChanges.set(false);
-      this._scheduleVersion.update(v => v + 1);
+      await this.loadMonthlySchedule(true);
     } catch (error: any) {
       console.error('儲存護理班別失敗:', error);
       this.uploadStatus.set(`儲存失敗：${error.message}`);
@@ -946,19 +928,11 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   async executeWeekSave(): Promise<void> {
-    if (!this.canSaveLoadedMonth()) return;
-    const owner = this.monthlySchedule;
-    const month = this.selectedMonth;
-    const week = this.activeWeekTab();
-    const editOwner = this.tempScheduleWithGroups;
-    const draft = JSON.stringify(editOwner);
-    this.monthRequest.invalidate();
-    this.groupConfigRequest.invalidate();
     this.isUploading.set(true);
-    this.uploadStatus.set(`正在儲存第${week}週分組...`);
+    this.uploadStatus.set(`正在儲存第${this.activeWeekTab()}週分組...`);
 
     try {
-      const weekData = this.weeklyData[week - 1];
+      const weekData = this.weeklyData[this.activeWeekTab() - 1];
       if (!weekData) throw new Error('無法取得週次資料');
 
       const weekDays = weekData.days.filter((d: any) => d.isCurrentMonth);
@@ -1010,38 +984,33 @@ export class NursingScheduleComponent implements OnInit {
         );
       });
 
-      const documentId = month;
+      const documentId = this.selectedMonth;
       const adminName =
         this.auth.currentUser()?.name || '未知管理員';
       const dataToSave = {
         scheduleByNurse: partialUpdate,
         weekConfirmed: {
           ...(this.monthlySchedule.weekConfirmed || {}),
-          [`week${week}`]: true,
+          [`week${this.activeWeekTab()}`]: true,
         },
         lastModifiedBy: adminName,
         lastModifiedAt: new Date(),
       };
 
-      await this.nursingSchedulesApi.update(documentId, JSON.parse(JSON.stringify(dataToSave)));
-      if (this.monthlySchedule !== owner || this.selectedMonth !== month || this.activeWeekTab() !== week) return;
-      if (draft !== JSON.stringify(this.tempScheduleWithGroups)) {
-        this.uploadStatus.set('已儲存提交內容，後續變更尚未儲存');
-        return;
-      }
+      await this.nursingSchedulesApi.update(documentId, dataToSave);
 
       if (!this.tempScheduleWithGroups.weekConfirmed) {
         this.tempScheduleWithGroups.weekConfirmed = {};
       }
       this.tempScheduleWithGroups.weekConfirmed[
-        `week${week}`
+        `week${this.activeWeekTab()}`
       ] = true;
 
       this.uploadStatus.set(
-        `第${week}週分組已儲存！(由 ${adminName} 確認)`
+        `第${this.activeWeekTab()}週分組已儲存！(由 ${adminName} 確認)`
       );
       this.notificationService.createGlobalNotification(
-        `第${week}週分組已成功儲存 (管理員：${adminName})`,
+        `第${this.activeWeekTab()}週分組已成功儲存 (管理員：${adminName})`,
         'success'
       );
 
@@ -1057,18 +1026,10 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   async executeMonthSave(): Promise<void> {
-    if (!this.canSaveLoadedMonth()) return;
-    const owner = this.monthlySchedule;
-    const month = this.selectedMonth;
-    const week = this.activeWeekTab();
-    const editOwner = this.tempScheduleWithGroups;
-    const draft = JSON.stringify(editOwner);
-    this.monthRequest.invalidate();
-    this.groupConfigRequest.invalidate();
     this.isUploading.set(true);
     this.uploadStatus.set('正在儲存分組結果...');
     try {
-      const documentId = month;
+      const documentId = this.selectedMonth;
       const adminName =
         this.auth.currentUser()?.name || '未知管理員';
       const dataToSave = {
@@ -1079,22 +1040,15 @@ export class NursingScheduleComponent implements OnInit {
         lastModifiedBy: adminName,
         lastModifiedAt: new Date(),
       };
-      await this.nursingSchedulesApi.update(documentId, JSON.parse(JSON.stringify(dataToSave)));
-      if (this.monthlySchedule !== owner || this.selectedMonth !== month || this.activeWeekTab() !== week) return;
-      if (draft !== JSON.stringify(this.tempScheduleWithGroups)) {
-        this.uploadStatus.set('已儲存提交內容，後續變更尚未儲存');
-        return;
-      }
+      await this.nursingSchedulesApi.update(documentId, dataToSave);
       this.uploadStatus.set(`分組成功儲存！(由 ${adminName} 確認)`);
       this.notificationService.createGlobalNotification(
         `整月分組已成功儲存 (管理員：${adminName})`,
         'success'
       );
-      owner.scheduleByNurse = JSON.parse(JSON.stringify(dataToSave.scheduleByNurse));
-      owner.weekConfirmed = JSON.parse(JSON.stringify(dataToSave.weekConfirmed));
       this.isGroupEditMode.set(false);
       this.tempScheduleWithGroups = null;
-      this._scheduleVersion.update(v => v + 1);
+      await this.loadMonthlySchedule(true);
     } catch (error: any) {
       console.error('儲存護理分組失敗:', error);
       this.uploadStatus.set(`儲存失敗：${error.message}`);
@@ -1105,7 +1059,6 @@ export class NursingScheduleComponent implements OnInit {
 
   // --- 班別與分組管理 ---
   toggleStandby75(nurseId: string, dayIndex: number): void {
-    if (this.isUploading() || this.isSavingDuties()) return;
     if (!this.isGroupEditMode() || !this.tempScheduleWithGroups) return;
     this.groupEditStatsVersion.update((v) => v + 1); // 累積欄即時重算
 
@@ -1144,7 +1097,6 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   async saveCurrentWeek(): Promise<void> {
-    if (this.isUploading() || this.isSavingDuties()) return;
     if (!this.tempScheduleWithGroups || this.activeWeekTab() === 0) return;
 
     const weekData = this.weeklyData[this.activeWeekTab() - 1];
@@ -1161,7 +1113,6 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   async saveShiftChanges(): Promise<void> {
-    if (this.isUploading() || this.isSavingDuties()) return;
     if (!this.hasUnsavedShiftChanges()) {
       alert('沒有偵測到任何變更。');
       return;
@@ -1170,13 +1121,11 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   async saveGroupAssignments(): Promise<void> {
-    if (this.isUploading() || this.isSavingDuties()) return;
     if (!this.tempScheduleWithGroups) return;
     await this.executeMonthSave();
   }
 
   redistributeRemainingWeeks(): void {
-    if (this.isUploading() || this.isSavingDuties()) return;
     if (!this.tempScheduleWithGroups) return;
     // 只會重新分配「未確認」的週次；先算清單，全部已確認就直接說明，避免看起來沒反應
     const confirmed = this.tempScheduleWithGroups.weekConfirmed || {};
@@ -1203,7 +1152,6 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   enterShiftEditMode(): void {
-    if (this.isUploading() || this.isSavingDuties()) return;
     if (!this.monthlySchedule) {
       alert('請先載入月班表資料！');
       return;
@@ -1214,7 +1162,6 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   cancelShiftEditMode(): void {
-    if (this.isUploading() || this.isSavingDuties()) return;
     if (this.hasUnsavedShiftChanges()) {
       if (confirm('您有未儲存的班別修改，確定要放棄嗎？')) {
         this.isShiftEditMode.set(false);
@@ -1227,7 +1174,6 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   enterGroupEditMode(): void {
-    if (this.isUploading() || this.isSavingDuties()) return;
     if (!this.monthlySchedule) {
       alert('請先載入月班表資料！');
       return;
@@ -1264,7 +1210,6 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   cancelGroupEditMode(): void {
-    if (this.isUploading() || this.isSavingDuties()) return;
     this.isGroupEditMode.set(false);
     this.tempScheduleWithGroups = null;
     this.uploadStatus.set('');
@@ -1273,7 +1218,6 @@ export class NursingScheduleComponent implements OnInit {
 
   // --- 檔案處理 ---
   handleFileUpload(event: Event): void {
-    if (this.isUploading() || this.isSavingDuties()) return;
     const target = event.target as HTMLInputElement;
     this.selectedFile = target.files?.[0] || null;
     this.uploadStatus.set('');
@@ -1290,7 +1234,6 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   async processAndUpload(): Promise<void> {
-    if (this.isUploading() || this.isSavingDuties()) return;
     if (!this.selectedFile) {
       this.uploadStatus.set('請先選擇一個 Excel 檔案');
       return;
@@ -1316,7 +1259,7 @@ export class NursingScheduleComponent implements OnInit {
       if (resultData.stats?.month) {
         this.selectedMonth = resultData.stats.month;
       }
-      await this.loadMonthlySchedule(false, true);
+      await this.loadMonthlySchedule();
     } catch (error: any) {
       console.error('上傳失敗:', error);
       this.uploadStatus.set(
@@ -1343,41 +1286,15 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   /** @param preserveWeek 存檔/取消後的重載傳 true：停留在原本檢視的週，不跳回第 1 週 */
-  private readonly monthRequest = new LatestRequest();
-  private readonly adjacentRequest = new LatestRequest();
-  private readonly groupConfigRequest = new LatestRequest();
-  private loadedMonth = '';
-  readonly scheduleLoadError = signal('');
-  readonly adjacentLoadError = signal('');
-  private canSaveLoadedMonth(): boolean {
-    if (this.isUploading() || this.isLoadingSchedule() || this.loadedMonth !== this.selectedMonth || !this.monthlySchedule) {
-      this.uploadStatus.set('月份資料尚未核對完成，請重新載入後再儲存。');
-      return false;
-    }
-    return true;
-  }
-  async loadMonthlySchedule(preserveWeek = false, afterUpload = false): Promise<void> {
-    if ((this.isUploading() && !afterUpload) || this.isSavingDuties()) return;
-    const request = this.monthRequest.begin();
-    const documentId = this.selectedMonth;
-    this.adjacentRequest.invalidate();
-    this.loadedMonth = '';
-    this.scheduleLoadError.set('');
-    this.adjacentLoadError.set('');
-    this.prevMonthSchedule = null;
-    this.nextMonthSchedule = null;
-    this.adjacentMonthsLoading.set(false);
+  async loadMonthlySchedule(preserveWeek = false): Promise<void> {
     this.isLoadingSchedule.set(true);
     this.uploadStatus.set('');
-    // This accepted load also runs after an import while the upload lock is held.
-    this.isGroupEditMode.set(false);
-    this.tempScheduleWithGroups = null;
+    this.cancelGroupEditMode();
     this.isShiftEditMode.set(false);
     this.hasUnsavedShiftChanges.set(false);
     try {
+      const documentId = this.selectedMonth;
       const schedule = await this.nursingSchedulesApi.fetchById(documentId);
-      if (!this.monthRequest.isCurrent(request) || documentId !== this.selectedMonth) return;
-      this.loadedMonth = documentId;
       this.monthlySchedule = schedule || null;
       this._scheduleVersion.update(v => v + 1);
       if (!preserveWeek || this.activeWeekTab() > this.weeklyData.length) {
@@ -1390,21 +1307,17 @@ export class NursingScheduleComponent implements OnInit {
 
       this.loadAdjacentMonthSchedules(documentId);
     } catch (error) {
-      if (!this.monthRequest.isCurrent(request) || documentId !== this.selectedMonth) return;
-      this.scheduleLoadError.set('無法確認本月班表，請重試；這不代表沒有班表。');
       console.error('載入月班表失敗:', error);
       this.monthlySchedule = null;
       this._scheduleVersion.update(v => v + 1);
     } finally {
-      if (this.monthRequest.isCurrent(request) && documentId === this.selectedMonth) this.isLoadingSchedule.set(false);
+      this.isLoadingSchedule.set(false);
     }
   }
 
   private async loadAdjacentMonthSchedules(
     currentYearMonth: string
   ): Promise<void> {
-    const request = this.adjacentRequest.begin();
-    this.adjacentLoadError.set('');
     this.adjacentMonthsLoading.set(true);
     this.prevMonthSchedule = null;
     this.nextMonthSchedule = null;
@@ -1415,20 +1328,19 @@ export class NursingScheduleComponent implements OnInit {
 
       const [prevSchedule, nextSchedule] = await Promise.all([
         this.nursingSchedulesApi
-          .fetchById(prevYearMonth),
+          .fetchById(prevYearMonth)
+          .catch(() => null),
         this.nursingSchedulesApi
-          .fetchById(nextYearMonth),
+          .fetchById(nextYearMonth)
+          .catch(() => null),
       ]);
 
-      if (!this.adjacentRequest.isCurrent(request) || currentYearMonth !== this.selectedMonth) return;
       this.prevMonthSchedule = prevSchedule || null;
       this.nextMonthSchedule = nextSchedule || null;
     } catch (error) {
-      if (!this.adjacentRequest.isCurrent(request) || currentYearMonth !== this.selectedMonth) return;
-      this.adjacentLoadError.set('相鄰月份尚未載入，跨月班表資訊可能不完整，請重新載入。');
       console.error('載入相鄰月份班表失敗:', error);
     } finally {
-      if (this.adjacentRequest.isCurrent(request) && currentYearMonth === this.selectedMonth) this.adjacentMonthsLoading.set(false);
+      this.adjacentMonthsLoading.set(false);
     }
   }
 
@@ -1482,7 +1394,6 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   enterEditMode(type: string, rowIndex: number, field: string): void {
-    if (this.isUploading() || this.isSavingDuties()) return;
     if (!this.auth.isAdmin() || this.isLoadingDuties() || this.isSavingDuties()) return;
     this.editingCell = { type, rowIndex, field };
     setTimeout(() => {
@@ -1607,11 +1518,8 @@ export class NursingScheduleComponent implements OnInit {
 
   // --- 護理組別配置 ---
   async loadGroupConfig(): Promise<void> {
-    const request = this.groupConfigRequest.begin();
-    const month = this.selectedMonth;
     try {
-      const result = await fetchNursingGroupConfig(month);
-      if (!this.groupConfigRequest.isCurrent(request) || month !== this.selectedMonth) return;
+      const result = await fetchNursingGroupConfig(this.selectedMonth);
       this.groupConfig = {
         ...getDefaultConfig(),
         ...result.config,
@@ -1621,7 +1529,6 @@ export class NursingScheduleComponent implements OnInit {
         `護理組別配置已載入 (來源: ${result.sourceMonth || '預設值'})`
       );
     } catch (error) {
-      if (!this.groupConfigRequest.isCurrent(request) || month !== this.selectedMonth) return;
       console.error('載入護理組別配置失敗:', error);
       this.groupConfig = getDefaultConfig();
       this.configSourceMonth = null;
@@ -1629,8 +1536,6 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   onGroupConfigSaved(newConfig: any): void {
-    if (this.isUploading() || this.isSavingDuties()) return;
-    this.groupConfigRequest.invalidate();
     this.groupConfig = newConfig;
     this.configSourceMonth = this.selectedMonth;
     this.groupEditStatsVersion.update((v) => v + 1); // groupConfig 非 signal，累積欄需手動重算
@@ -1638,7 +1543,6 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   onMonthChange(newMonth?: string, input?: HTMLInputElement): void {
-    if (this.isUploading() || this.isSavingDuties()) return;
     if (newMonth !== undefined) {
       if (!this.confirmDiscardEditsForNav()) {
         if (input) input.value = this.selectedMonth;
@@ -1651,7 +1555,6 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   reloadMonthlySchedule(): void {
-    if (this.isUploading() || this.isSavingDuties()) return;
     if (!this.confirmDiscardEditsForNav()) return;
     this.loadMonthlySchedule();
   }
@@ -1677,7 +1580,6 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   shiftMonth(delta: number): void {
-    if (this.isUploading() || this.isSavingDuties()) return;
     if (!this.confirmDiscardEditsForNav()) return;
     this.selectedMonth = this.addMonths(this.selectedMonth, delta);
     this.onMonthChange();
@@ -1685,7 +1587,6 @@ export class NursingScheduleComponent implements OnInit {
 
   /** 上一週/下一週：跨出本月自動接到上月最後一週／下月第 1 週 */
   shiftWeek(delta: number): void {
-    if (this.isUploading() || this.isSavingDuties()) return;
     const weeks = this.weeklyData.length;
     const cur = this.activeWeekTab();
     if (cur === 0) {
@@ -1705,7 +1606,6 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   onTabChange(tab: 'master' | 'weekly' | 'responsibilities'): void {
-    if (this.isUploading() || this.isSavingDuties()) return;
     this.activeTab.set(tab);
     if (tab !== 'weekly') {
       this.shiftFilter.set('all');
@@ -1713,12 +1613,10 @@ export class NursingScheduleComponent implements OnInit {
   }
 
   markUnsaved(): void {
-    if (this.isUploading() || this.isSavingDuties()) return;
     this.hasChanges.set(true);
   }
 
   markShiftUnsaved(): void {
-    if (this.isUploading() || this.isSavingDuties()) return;
     if (this.isShiftEditMode()) {
       this.hasUnsavedShiftChanges.set(true);
     }

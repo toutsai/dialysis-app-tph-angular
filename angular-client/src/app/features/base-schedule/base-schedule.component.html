@@ -16,14 +16,14 @@
             class="patient-search-input"
             placeholder="搜尋病人姓名/病歷號..."
             (focus)="isSearchFocused.set(true)"
-            (focusout)="onSearchFocusOut($event)"
+            (blur)="handleSearchBlur()"
           />
           @if (searchResults().length > 0 && isSearchFocused()) {
           <ul class="search-results">
             @for (patient of searchResults(); track patient.id) {
-              <li><button type="button" class="search-result-button" (click)="locatePatientOnGrid(patient.id)">
+              <li (click)="locatePatientOnGrid(patient.id)">
                 {{ patient.name }} - {{ patient.medicalRecordNumber }}
-              </button></li>
+              </li>
             }
           </ul>
         }
@@ -36,13 +36,11 @@
       </div>
       <div class="toolbar-right">
         <span class="status-text">{{ statusText() }}</span>
-        @if (partialSuccessDate()) { <button class="btn btn-warning" (click)="reviewNursingGroups()">核對護理分組（{{ partialSuccessDate() }}）</button> }
         <button class="btn btn-secondary" (click)="exportBaseScheduleToExcel()">匯出總表</button>
       </div>
     </div>
   </header>
 
-  @if (loadError()) { <p role="alert">{{ loadError() }} <button (click)="loadAllData()">重試載入</button></p> }
   <main class="page-main-content">
     <div class="schedule-area">
       <div class="stats-toolbar-wrapper" [style.paddingLeft.px]="leftOffset()">
@@ -54,7 +52,7 @@
           [showPatientNumbers]="true"
         ></app-stats-toolbar>
       </div>
-      @if (masterRecord() && !loadError()) {
+      @if (masterRecord()) {
         <app-schedule-table
           class="schedule-table-component"
           [layout]="bedLayout"
@@ -76,7 +74,7 @@
           (leftOffsetChange)="updateLeftOffset($event)"
         ></app-schedule-table>
       } @else {
-        @if (!loadError()) { <div class="loading-state">正在載入總床位表資料...</div> }
+        <div class="loading-state">正在載入總床位表資料...</div>
       }
     </div>
   </main>

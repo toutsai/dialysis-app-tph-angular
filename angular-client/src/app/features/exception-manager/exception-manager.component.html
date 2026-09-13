@@ -1,11 +1,8 @@
 <div class="page-container">
-  @if (loadError()) { <p role="alert">{{ loadError() }} <button (click)="initializePageData()">重試載入</button></p> }
   <div class="page-header">
     <div class="header-toolbar">
       <div class="toolbar-left">
         <h1 class="page-title">調班管理(單次或區間調整班別)</h1>
-        @if (returnPath) { <button type="button" (click)="returnToSchedule()">返回 {{ contextDate }} 排程</button> }
-        @if (contextPatientId()) { <p role="status">目前只顯示指定病人的調班 <button type="button" (click)="contextPatientId.set('')">顯示所有病人</button></p> }
         <button
           class="btn btn-primary desktop-only"
           (click)="openCreateDialog()"
@@ -41,7 +38,7 @@
       @if (isLoading()) {
         <div class="loading-state">正在載入調班申請資料...</div>
       }
-      @if (!isLoading() && !loadError()) {
+      @if (!isLoading()) {
         <div class="calendar-wrapper">
           <full-calendar #fullCalendar [options]="calendarOptions()"></full-calendar>
           @if (!isLoading() && exceptions().length === 0) {
