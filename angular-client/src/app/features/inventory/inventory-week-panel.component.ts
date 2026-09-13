@@ -28,12 +28,14 @@ import {
   type CountDoc,
   type Grouped,
 } from './inventory-stock.service';
+import {
+  INVENTORY_CATEGORY_NAMES,
+  emptyGroupedByCategory,
+  emptyItemLists,
+  isConsumptionTracked,
+} from './inventory-categories';
 
-const CATEGORY_NAMES: Record<string, string> = {
-  artificialKidney: '人工腎臟',
-  dialysateCa: '透析藥水CA',
-  bicarbonateType: 'B液種類',
-};
+const CATEGORY_NAMES = INVENTORY_CATEGORY_NAMES;
 
 /** 每週訂單建議表的一列 */
 export interface WeeklyOrderRow {
@@ -88,11 +90,7 @@ export class InventoryWeekPanelComponent implements OnChanges {
   @Input() weekStart = '';
   @Input() weekEnd = '';
   @Input() inventoryItems: any[] = [];
-  @Input() knownItems: Record<string, string[]> = {
-    artificialKidney: [],
-    dialysateCa: [],
-    bicarbonateType: [],
-  };
+  @Input() knownItems: Record<string, string[]> = emptyItemLists();
   @Input() purchases: any[] = [];
   @Input() unitsPerBoxFn: (category: string, item: string) => number = () => 1;
 
@@ -114,16 +112,8 @@ export class InventoryWeekPanelComponent implements OnChanges {
   weeklyDataLoaded = signal(false);
   /** 盤點日（預設該週週二，可在面板內改成該週其他日） */
   countDate = '';
-  weeklyCount: Record<string, Record<string, number>> = {
-    artificialKidney: {},
-    dialysateCa: {},
-    bicarbonateType: {},
-  };
-  weeklyCountBoxes: Record<string, Record<string, number>> = {
-    artificialKidney: {},
-    dialysateCa: {},
-    bicarbonateType: {},
-  };
+  weeklyCount: Record<string, Record<string, number>> = emptyGroupedByCategory();
+  weeklyCountBoxes: Record<string, Record<string, number>> = emptyGroupedByCategory();
   weeklyRows = signal<WeeklyOrderRow[]>([]);
   weeklyConsumptionNote = signal('');
   weeklyStockNote = signal('');
@@ -203,6 +193,12 @@ export class InventoryWeekPanelComponent implements OnChanges {
     return found?.hospitalCode || '';
   }
 
+  /** 品項設定的手動安全庫存（個） */
+  private manualSafeLevel(category: string, itemName: string): number {
+    const found = (this.inventoryItems || []).find((i: any) => i.category === category && i.name === itemName);
+    return Number(found?.safeInventoryLevel) || 0;
+  }
+
   getItemsForCategory(category: string): string[] {
     return this.knownItems?.[category] || [];
   }
@@ -242,7 +238,7 @@ export class InventoryWeekPanelComponent implements OnChanges {
   }
 
   private buildGroupedCopy(src: Record<string, Record<string, number>>): Grouped {
-    const out: Grouped = { artificialKidney: {}, dialysateCa: {}, bicarbonateType: {} };
+    const out: Grouped = emptyGroupedByCategory();
     for (const category of this.categoryKeys) {
       for (const [item, value] of Object.entries(src[category] || {})) {
         out[category][item] = Number(value) || 0;
@@ -319,7 +315,8 @@ export class InventoryWeekPanelComponent implements OnChanges {
       );
 
       const rows: WeeklyCompareRow[] = [];
-      for (const category of this.categoryKeys) {
+      // 其他耗材沒有排程推估也不在 HIS 上傳裡，對照表不列
+      for (const category of this.categoryKeys.filter(isConsumptionTracked)) {
         const items = new Set<string>([
           ...Object.keys(estimated[category] || {}),
           ...Object.keys(actual[category] || {}),
@@ -484,7 +481,9 @@ export class InventoryWeekPanelComponent implements OnChanges {
       ]);
       for (const item of [...items].sort()) {
         const lastWeekConsumption = this.stock.value(ctx.lastWeek, category, item);
-        const safetyStock = this.stock.safetyStock(lastWeekConsumption);
+        // 安全庫存 = max(日均×9 天, 品項設定的手動安全庫存)；與庫存總覽同規則。
+        // 其他耗材沒有消耗來源（日均恆為 0），全靠手動安全庫存才會產生訂購建議。
+        const safetyStock = Math.max(this.stock.safetyStock(lastWeekConsumption), this.manualSafeLevel(category, item));
         const countUnits = Number(this.weeklyCount[category]?.[item]) || 0;
         const arrivedSinceCount = this.stock.value(ctx.arrivals, category, item);
         const consumedSinceCount = this.stock.value(ctx.consumption, category, item);

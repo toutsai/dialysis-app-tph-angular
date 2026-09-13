@@ -9,7 +9,7 @@ import { PatientStoreService } from './patient-store.service';
 // ---------------------------------------------------------------------------
 
 export interface ConsumptionItem {
-  category: 'artificialKidney' | 'dialysateCa' | 'bicarbonateType';
+  category: 'artificialKidney' | 'dialysateCa' | 'bicarbonateType' | 'otherSupplies';
   itemName: string;
   count: number;
 }
@@ -41,10 +41,12 @@ export class ConsumptionEngineService {
   ): Promise<ConsumptionResult> {
     const byDate = await this.calculateDailyTheoreticalConsumption(startDate, endDate);
 
+    // otherSupplies（其他耗材）沒有排程推估來源，固定空物件讓 Grouped 形狀一致
     const grouped: Record<string, Record<string, number>> = {
       artificialKidney: {},
       dialysateCa: {},
       bicarbonateType: {},
+      otherSupplies: {},
     };
     let totalSlots = 0;
     for (const day of byDate.values()) {
@@ -114,7 +116,7 @@ export class ConsumptionEngineService {
       const dateKey = String(scheduleDoc['date'] || '').substring(0, 10) || startDate;
       let bucket = byDate.get(dateKey);
       if (!bucket) {
-        bucket = { grouped: { artificialKidney: {}, dialysateCa: {}, bicarbonateType: {} }, totalSlots: 0 };
+        bucket = { grouped: { artificialKidney: {}, dialysateCa: {}, bicarbonateType: {}, otherSupplies: {} }, totalSlots: 0 };
         byDate.set(dateKey, bucket);
       }
       const grouped = bucket.grouped;

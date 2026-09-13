@@ -545,6 +545,13 @@ tbody tr:hover {
   margin-bottom: 1rem;
 }
 
+.form-hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.82rem;
+  color: #b45309;
+  line-height: 1.4;
+}
+
 .form-field label {
   display: block;
   margin-bottom: 0.5rem;

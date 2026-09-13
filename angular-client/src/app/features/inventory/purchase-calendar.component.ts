@@ -9,6 +9,7 @@ import { ApiService } from '@services/api.service';
 import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@services/api-manager.service';
 import { AuthService } from '@services/auth.service';
 import { shiftMonthString, shiftDateString } from '@/utils/dateStep';
+import { INVENTORY_CATEGORY_NAMES, INVENTORY_CATEGORY_SHORT, emptyItemLists } from './inventory-categories';
 
 export type PurchaseStatus = 'ordered' | 'arrived';
 
@@ -92,16 +93,8 @@ interface CalendarWeek {
 /** 每日排程推估消耗：ymd → 類別 → 品項 → 個數 */
 export type CalendarDailyForecast = Record<string, Record<string, Record<string, number>>>;
 
-const CATEGORY_SHORT: Record<string, string> = {
-  artificialKidney: 'AK',
-  dialysateCa: 'A液',
-  bicarbonateType: 'B液',
-};
-const CATEGORY_NAMES: Record<string, string> = {
-  artificialKidney: '人工腎臟',
-  dialysateCa: '透析藥水CA',
-  bicarbonateType: 'B液種類',
-};
+const CATEGORY_SHORT = INVENTORY_CATEGORY_SHORT;
+const CATEGORY_NAMES = INVENTORY_CATEGORY_NAMES;
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 const ymdOf = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -137,7 +130,7 @@ export class PurchaseCalendarComponent implements OnInit {
   private readonly purchasesApi: ApiManager<FirestoreRecord>;
 
   /** 各類別可選品項（由父元件的 knownItems 提供） */
-  @Input() knownItems: Record<string, string[]> = { artificialKidney: [], dialysateCa: [], bicarbonateType: [] };
+  @Input() knownItems: Record<string, string[]> = emptyItemLists();
   /** 每箱個數（由父元件的品項設定提供） */
   @Input() unitsPerBoxFn: (category: string, item: string) => number = () => 1;
   /** 資料異動後通知父元件（重新載入列表/盤點） */
