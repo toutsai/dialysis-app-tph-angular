@@ -8,7 +8,6 @@ import { authenticate, isContributor, isEditor, logAudit, requireAnyRole } from 
 import { getTaipeiMonthString, getTaipeiTodayString } from '../utils/dateUtils.js'
 import { normalizeDialysisMode, normalizeDialysisOrdersMode } from '../utils/dialysisMode.js'
 import { FREQ_MAP_TO_DAY_INDEX } from '../utils/scheduleUtils.js'
-import { snapshotPatientScheduleChange, applyPatientModeChange } from '../services/patientOrderEffects.js'
 import { saveDialysisOrder } from '../services/dialysisOrderService.js'
 
 const router = Router()
@@ -2580,7 +2579,6 @@ router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
     `)
 
     const afterCommit = []
-    const options = { strict: true, afterCommit }
     db.transaction(() => {
       for (const r of rowsToUpsert) {
         upsert.run(uuidv4(), r.patientId, r.patientName, r.mrn, r.effectiveDate, JSON.stringify(r.orders), fileName)
@@ -2609,9 +2607,7 @@ router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
           continue
         }
         patientUpdate.run(JSON.stringify(merged), r.patient_id)
-        const updated = db.prepare('SELECT * FROM patients WHERE id = ?').get(r.patient_id)
-        snapshotPatientScheduleChange(db, patient, updated, {}, req.user, options)
-        applyPatientModeChange(db, patient, updated, req.user, options)
+        // 刻意不做當日快照 / 「更改模式」動態 / CVVHDF 取消調班：模式連動只掛病人清單 PUT（2026-09-03 裁定）
         historyInsert.run(uuidv4(), r.patient_id, r.patient_name || patient.name || '', JSON.stringify(merged))
         writtenBackCount++
       }

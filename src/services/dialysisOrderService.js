@@ -1,7 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../db/init.js'
 import { normalizeDialysisOrdersMode } from '../utils/dialysisMode.js'
-import { applyPatientModeChange, snapshotPatientScheduleChange } from './patientOrderEffects.js'
 
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 
@@ -30,7 +29,11 @@ export function mergeDialysisOrders(existing, patch) {
   return normalizeDialysisOrdersMode({ ...existing, ...patch })
 }
 
-/** 單一儲存入口：目前醫囑、完整歷史、必要病人連動皆在同步交易內。 */
+/**
+ * 單一儲存入口：目前醫囑 + 完整歷史在同一個同步交易內。
+ * 刻意不做病人連動（當日快照 / 「更改模式」動態 / CVVHDF 取消未來調班）：
+ * 2026-09-03 使用者裁定該連動只掛病人清單 PUT /api/patients/:id，醫囑視窗與 Excel 批次上傳不連動。
+ */
 export function saveDialysisOrder(data, user) {
   if (!isObject(data) || typeof data.patientId !== 'string' || !data.patientId.trim()) {
     throw invalid('病人 ID 為必填')
@@ -50,19 +53,16 @@ export function saveDialysisOrder(data, user) {
     const id = uuidv4()
     const operationType = data.operationType || 'CREATE'
     const patientName = existing.name
-    const options = { strict: true, afterCommit }
 
     db.prepare(`UPDATE patients SET dialysis_orders = ?, last_modified_by = ?,
       updated_at = datetime('now', 'localtime') WHERE id = ?`).run(
       serialized, JSON.stringify({ uid: user.id, name: user.name }), existing.id,
     )
-    const updated = db.prepare('SELECT * FROM patients WHERE id = ?').get(existing.id)
-    snapshotPatientScheduleChange(db, existing, updated, data, user, options)
-    const deletedFutureExceptions = applyPatientModeChange(db, existing, updated, user, options)
     db.prepare(`INSERT INTO dialysis_orders_history (id, patient_id, patient_name, operation_type, orders)
       VALUES (?, ?, ?, ?, ?)`).run(id, existing.id, patientName, operationType, serialized)
 
-    return { id, patientId: existing.id, patientName, operationType, orders, deletedFutureExceptions }
+    // deletedFutureExceptions 固定空陣列：保留回應形狀，醫囑路徑不取消調班
+    return { id, patientId: existing.id, patientName, operationType, orders, deletedFutureExceptions: [] }
   })()
 
   // SSE 與既有 KiDit 同步只能看到已提交的狀態。

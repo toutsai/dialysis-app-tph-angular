@@ -128,7 +128,8 @@ test('invalid orders or absent patients return 400/404 with no database writes',
   assert.equal(databaseSnapshot(), before)
 })
 
-for (const target of ['patients', 'dialysis_orders_history', 'patient_history', 'daily_logs']) {
+// 醫囑路徑只寫 patients.dialysis_orders 與 dialysis_orders_history（不寫 patient_history / daily_logs，見下方連動說明）
+for (const target of ['patients', 'dialysis_orders_history']) {
   test(`failure writing ${target} rolls back current orders, history and related changes`, async () => {
     const id = patient({ memo: 'Keep' })
     const operation = target === 'patients' ? 'UPDATE OF dialysis_orders' : 'INSERT'
@@ -144,7 +145,9 @@ for (const target of ['patients', 'dialysis_orders_history', 'patient_history', 
   })
 }
 
-test('mode saves normalize SLED, retain today snapshots, record one movement and exclude it from KiDit', async () => {
+// 醫囑路徑（POST /orders/history、Excel 批次上傳）刻意不做病人連動：
+// 當日快照、「更改模式」動態、MODE_CHANGE 歷史、CVVHDF 取消未來調班都只掛病人清單 PUT /api/patients/:id（2026-09-03 裁定）。
+test('mode saves normalize SLED but do not snapshot today, log a movement or record MODE_CHANGE history', async () => {
   const id = patient()
   db.prepare('INSERT OR REPLACE INTO schedules (id, date, schedule) VALUES (?, ?, ?)')
     .run(today, today, JSON.stringify({ '1-early': { patientId: id, shiftId: 'early' } }))
@@ -152,21 +155,19 @@ test('mode saves normalize SLED, retain today snapshots, record one movement and
   assert.equal(result.status, 201)
   assert.equal(current(id).mode, 'SLED')
   assert.equal(JSON.parse(histories(id)[0].orders).mode, 'SLED')
-  const snapshot = JSON.parse(db.prepare('SELECT schedule FROM schedules WHERE date = ?').get(today).schedule)['1-early'].archivedPatientInfo
-  assert.equal(snapshot.mode, 'HD')
-  assert.equal(snapshot.wardNumber, 'SYN-101')
-  const eventsForPatient = db.prepare('SELECT * FROM patient_history WHERE patient_id = ?').all(id)
-  assert.equal(eventsForPatient.length, 1)
-  assert.equal(eventsForPatient[0].event_type, 'MODE_CHANGE')
-  const movements = JSON.parse(db.prepare('SELECT patient_movements FROM daily_logs WHERE date = ?').get(today).patient_movements)
-  assert.equal(movements.filter(item => item.patientId === id && item.type === '更改模式').length, 1)
+  const slot = JSON.parse(db.prepare('SELECT schedule FROM schedules WHERE date = ?').get(today).schedule)['1-early']
+  assert.equal(slot.archivedPatientInfo, undefined)
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM patient_history WHERE patient_id = ?').get(id).n, 0)
+  const log = db.prepare('SELECT patient_movements FROM daily_logs WHERE date = ?').get(today)
+  const movements = log ? JSON.parse(log.patient_movements || '[]') : []
+  assert.equal(movements.filter(item => item.patientId === id && item.type === '更改模式').length, 0)
   const kidit = JSON.stringify(db.prepare('SELECT * FROM kidit_logbook').all())
   assert.ok(!kidit.includes(id))
   await saveOrder(id, { bloodFlow: 300 })
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM patient_history WHERE patient_id = ?').get(id).n, 1)
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM patient_history WHERE patient_id = ?').get(id).n, 0)
 })
 
-test('CVVHDF mode save cancels future exceptions and rebuilds their schedule in the same transaction', async () => {
+test('CVVHDF mode save through orders rolls back on failure and keeps future exceptions untouched on success', async () => {
   const id = patient()
   const future = '2026-09-16'
   const exceptionId = randomUUID()
@@ -185,11 +186,13 @@ test('CVVHDF mode save cancels future exceptions and rebuilds their schedule in 
     assert.equal(databaseSnapshot(), before)
     assert.equal(events.length, eventsBefore)
   } finally { db.exec('DROP TRIGGER fail_cvvhdf') }
-  assert.equal((await saveOrder(id, { mode: 'cvvhdf' })).status, 201)
+  const response = await saveOrder(id, { mode: 'cvvhdf' })
+  assert.equal(response.status, 201)
+  assert.deepEqual(response.data.deletedFutureExceptions, [])
   assert.equal(current(id).mode, 'CVVHDF')
-  assert.equal(db.prepare('SELECT id FROM schedule_exceptions WHERE id = ?').get(exceptionId), undefined)
-  assert.deepEqual(JSON.parse(db.prepare('SELECT schedule FROM schedules WHERE date = ?').get(future).schedule), {})
-  assert.deepEqual(JSON.parse(db.prepare('SELECT patient_movements FROM daily_logs WHERE date = ?').get(future).patient_movements), [])
+  assert.equal(db.prepare('SELECT id FROM schedule_exceptions WHERE id = ?').get(exceptionId).id, exceptionId)
+  assert.deepEqual(JSON.parse(db.prepare('SELECT schedule FROM schedules WHERE date = ?').get(future).schedule), { '2-early': { patientId: id, shiftId: 'early' } })
+  assert.equal(JSON.parse(db.prepare('SELECT patient_movements FROM daily_logs WHERE date = ?').get(future).patient_movements).length, 1)
 })
 
 test('contributor/viewer cannot delete or restore through PUT, PATCH, DELETE or restore endpoint', async () => {
