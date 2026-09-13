@@ -1,7 +1,7 @@
 // 護理相關路由
 import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
-import XLSX from '../utils/spreadsheet.js'
+import { parseFirstSheet } from '../services/spreadsheetParser.js'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isEditor, isAdmin, isContributor, logAudit } from '../middleware/auth.js'
 import { getTaipeiTodayString } from '../utils/dateUtils.js'
@@ -526,9 +526,7 @@ async function handleNursingScheduleUpload(req, res) {
 
     // 1. 解析 Excel
     const fileBuffer = Buffer.from(fileContentBase64, 'base64')
-    const workbook = XLSX.read(fileBuffer, { type: 'buffer' })
-    const worksheet = workbook.Sheets[workbook.SheetNames[0]]
-    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+    const jsonData = await parseFirstSheet(fileBuffer, { header: 1 })
 
     console.log(`📊 Excel 解析完成，共 ${jsonData.length} 行資料`)
 
@@ -815,7 +813,7 @@ async function handleNursingScheduleUpload(req, res) {
     })
   } catch (error) {
     console.error('上傳護理班表錯誤:', error)
-    res.status(500).json({
+    res.status(error.status || 500).json({
       error: true,
       message: error.message || '上傳班表時發生錯誤',
     })
