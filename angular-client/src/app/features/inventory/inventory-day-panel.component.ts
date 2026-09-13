@@ -16,9 +16,11 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { firstValueFrom } from 'rxjs';
+import { ApiService } from '@services/api.service';
 import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@services/api-manager.service';
 import { ConsumptionEngineService } from '@services/consumption-engine.service';
-import { InventoryStockService, type CountDoc, type Grouped } from './inventory-stock.service';
+import { InventoryStockService, type CountDoc, type CountVersion, type Grouped } from './inventory-stock.service';
 import type { PurchaseEntry } from './purchase-calendar.component';
 import { INVENTORY_CATEGORY_NAMES, emptyGroupedByCategory, emptyItemLists } from './inventory-categories';
 
@@ -33,6 +35,7 @@ const CATEGORY_NAMES = INVENTORY_CATEGORY_NAMES;
 })
 export class InventoryDayPanelComponent implements OnInit, OnChanges {
   private readonly apiManagerService = inject(ApiManagerService);
+  private readonly api = inject(ApiService);
   private readonly consumptionEngine = inject(ConsumptionEngineService);
   private readonly stock = inject(InventoryStockService);
   private readonly countsApi: ApiManager<FirestoreRecord>;
@@ -125,6 +128,14 @@ export class InventoryDayPanelComponent implements OnInit, OnChanges {
   countDocInfo = signal<{ createdBy: string; updatedBy: string; updatedAt: string } | null>(null);
   /** 盤點紀錄列表（最近 30 筆） */
   countRecords = signal<{ countDate: string; by: string; updatedAt: string }[]>([]);
+  /** 目前載入的盤點文件版本號（存檔時帶 expectedRevision；null = 尚無文件） */
+  private countRevision: number | null = null;
+  /** 存檔/刪除撞到別人先存 → 顯示衝突橫幅，保留使用者輸入 */
+  countConflict = signal<{ message: string; by: string; at: string; currentRevision: number } | null>(null);
+  /** 此日版本歷史（每次儲存/刪除一版） */
+  showHistory = signal(false);
+  historyLoading = signal(false);
+  countHistory = signal<CountVersion[]>([]);
 
   /** 品項清單：優先用父元件的 knownItems；缺項時從 inventoryItems 補（同等邏輯，不另算單位） */
   getItemsForCategory(category: string): string[] {
@@ -164,6 +175,8 @@ export class InventoryDayPanelComponent implements OnInit, OnChanges {
     this.countsLoading.set(true);
     this.countDocInfo.set(null);
     this.countDocExists.set(false);
+    this.countConflict.set(null);
+    this.countRevision = null;
     this.resetCountInputs();
     this.countNotes = '';
 
@@ -171,6 +184,7 @@ export class InventoryDayPanelComponent implements OnInit, OnChanges {
       const doc = (await this.countsApi.fetchById(date)) as CountDoc | null;
       if (doc) {
         this.countDocExists.set(true);
+        this.countRevision = Number(doc.revision) || 1;
         this.countNotes = doc.notes || '';
         for (const category of this.categoryKeys) {
           const units = doc.counts?.[category] || {};
@@ -204,6 +218,71 @@ export class InventoryDayPanelComponent implements OnInit, OnChanges {
     } finally {
       this.countsLoading.set(false);
     }
+    if (this.showHistory()) void this.loadCountHistory();
+  }
+
+  /** 409：別人先存了 → 不覆蓋、不清輸入，顯示橫幅讓使用者決定重新載入 */
+  private handleCountConflict(error: any): boolean {
+    if (error?.status !== 409) return false;
+    const body = error?.error || {};
+    this.countConflict.set({
+      message: body.message || '此日盤點已被他人更新',
+      by: body.updatedBy?.name || '他人',
+      at: body.updatedAt || '',
+      currentRevision: Number(body.currentRevision) || 0,
+    });
+    return true;
+  }
+
+  /** 衝突橫幅「載入最新盤點」：捨棄本機輸入，重讀伺服器版本 */
+  reloadLatestCount(): void {
+    void this.loadCountDoc();
+  }
+
+  // ==================== 版本歷史 ====================
+
+  toggleHistory(): void {
+    this.showHistory.set(!this.showHistory());
+    if (this.showHistory()) void this.loadCountHistory();
+  }
+
+  async loadCountHistory(): Promise<void> {
+    const date = this.date;
+    if (!date) return;
+    this.historyLoading.set(true);
+    try {
+      const list = await firstValueFrom(this.api.get<CountVersion[]>(`/system/inventory/counts/${date}/history`));
+      this.countHistory.set(Array.isArray(list) ? list : []);
+    } catch (error) {
+      console.warn('載入盤點版本歷史失敗:', error);
+      this.countHistory.set([]);
+    } finally {
+      this.historyLoading.set(false);
+    }
+  }
+
+  /** 把某一版的數量帶進輸入格（不寫入；按「儲存盤點」才會成為新版本） */
+  applyVersion(v: CountVersion): void {
+    this.resetCountInputs();
+    for (const category of this.categoryKeys) {
+      for (const [item, value] of Object.entries(v.counts?.[category] || {})) this.countUnits[category][item] = Number(value) || 0;
+      for (const [item, value] of Object.entries(v.countBoxes?.[category] || {})) this.countBoxes[category][item] = Number(value) || 0;
+      for (const [item, value] of Object.entries(v.counts?.[category] || {})) {
+        if (!this.countBoxes[category][item]) {
+          const n = Number(value) || 0;
+          const perBox = this.unitsPerBoxFn(category, item);
+          this.countBoxes[category][item] = perBox > 1 ? Math.round(n / perBox) : n;
+        }
+      }
+    }
+    this.countNotes = v.notes || '';
+    this.alert.emit({ title: '已帶入歷史版本', message: `已把第 ${v.revision} 版（${v.actor?.name || '未知'} ${v.createdAt}）的數量帶入輸入格，按「儲存盤點」才會寫入成新版本。` });
+  }
+
+  historyTotal(v: CountVersion): number {
+    let n = 0;
+    for (const category of this.categoryKeys) for (const value of Object.values(v.counts?.[category] || {})) n += Number(value) || 0;
+    return n;
   }
 
   private buildGroupedCopy(src: Record<string, Record<string, number>>): Grouped {
@@ -230,18 +309,24 @@ export class InventoryDayPanelComponent implements OnInit, OnChanges {
         counts: this.buildGroupedCopy(this.countUnits),
         countBoxes: this.buildGroupedCopy(this.countBoxes),
         notes: this.countNotes || '',
+        // 樂觀鎖：已有文件時帶目前版本，別人先存過會被 409 擋下（新文件不帶）
+        ...(this.countDocExists() && this.countRevision ? { expectedRevision: this.countRevision } : {}),
       } as any)) as CountDoc;
 
       this.countDocExists.set(true);
+      this.countRevision = Number(doc?.revision) || (this.countRevision || 0) + 1;
+      this.countConflict.set(null);
       this.countDocInfo.set({
         createdBy: doc?.createdBy?.name || '未知',
         updatedBy: doc?.updatedBy?.name || doc?.createdBy?.name || '未知',
         updatedAt: doc?.updatedAt || doc?.createdAt || '',
       });
       await this.loadCountRecords();
+      if (this.showHistory()) void this.loadCountHistory();
       this.changed.emit();
-      this.alert.emit({ title: '操作成功', message: `${date} 盤點已儲存` });
+      this.alert.emit({ title: '操作成功', message: `${date} 盤點已儲存（第 ${this.countRevision} 版）` });
     } catch (error: any) {
+      if (this.handleCountConflict(error)) return;
       console.error('儲存盤點失敗:', error);
       this.alert.emit({ title: '儲存失敗', message: error?.error?.message || error?.message || String(error) });
     } finally {
@@ -256,15 +341,21 @@ export class InventoryDayPanelComponent implements OnInit, OnChanges {
     if (!confirm(`確定要刪除 ${date} 的盤點紀錄嗎？此動作無法復原。`)) return;
 
     try {
-      await this.countsApi.delete(date);
+      // DELETE 沒有 body → 版本號走 query；後端不符回 409
+      const q = this.countRevision ? `?expectedRevision=${this.countRevision}` : '';
+      await firstValueFrom(this.api.delete(`/system/inventory/counts/${date}${q}`));
       this.countDocExists.set(false);
       this.countDocInfo.set(null);
+      this.countRevision = null;
+      this.countConflict.set(null);
       this.resetCountInputs();
       this.countNotes = '';
       await this.loadCountRecords();
+      if (this.showHistory()) void this.loadCountHistory();
       this.changed.emit();
-      this.alert.emit({ title: '操作成功', message: `${date} 盤點紀錄已刪除` });
+      this.alert.emit({ title: '操作成功', message: `${date} 盤點紀錄已刪除（版本歷史保留，可從歷史帶回）` });
     } catch (error: any) {
+      if (this.handleCountConflict(error)) return;
       console.error('刪除盤點失敗:', error);
       this.alert.emit({ title: '刪除失敗', message: error?.error?.message || error?.message || String(error) });
     }

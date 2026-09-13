@@ -72,6 +72,19 @@
   background: #fff3cd;
   color: #856404;
 }
+.count-info-banner.conflict {
+  background: #fdecec;
+  color: #842029;
+  border: 1px solid #f1aeb5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.history-delete td {
+  color: #842029;
+  background: #fff5f5;
+}
 
 /* === 盤點輸入 === */
 .weekly-section {

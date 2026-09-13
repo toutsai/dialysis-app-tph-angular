@@ -1107,6 +1107,38 @@ export function runMigrations() {
       migrationsApplied++
     }
 
+    // ========================================
+    // 盤點文件版本號 + 版本歷史（2026-09-14，Codex 分支 ledger 概念第 1、2 項）
+    // revision：每次 PUT +1；前端帶 expectedRevision 存檔，不符回 409（兩人同時盤同一天不互相覆蓋）。
+    // inventory_count_versions：每次儲存/刪除都留一版（誰、何時、改前改後可追）。
+    // ========================================
+    if (columnExists(db, 'inventory_count_docs', 'counts') && !columnExists(db, 'inventory_count_docs', 'revision')) {
+      console.log('📋 inventory_count_docs 加 revision 欄位...')
+      db.exec("ALTER TABLE inventory_count_docs ADD COLUMN revision INTEGER NOT NULL DEFAULT 1")
+      migrationsApplied++
+    }
+    const countVersionsExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='inventory_count_versions'")
+      .get()
+    if (!countVersionsExists) {
+      console.log('📋 建立 inventory_count_versions 表格...')
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS inventory_count_versions (
+          id TEXT PRIMARY KEY,
+          count_date TEXT NOT NULL,
+          revision INTEGER NOT NULL,
+          action TEXT NOT NULL,
+          counts TEXT NOT NULL DEFAULT '{}',
+          count_boxes TEXT NOT NULL DEFAULT '{}',
+          notes TEXT,
+          actor TEXT DEFAULT '{}',
+          created_at TEXT DEFAULT (datetime('now', 'localtime'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_inventory_count_versions_date ON inventory_count_versions(count_date, revision);
+      `)
+      migrationsApplied++
+    }
+
     if (migrationsApplied > 0) {
       console.log(`✅ 已完成 ${migrationsApplied} 項遷移`)
     } else {

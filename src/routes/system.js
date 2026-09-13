@@ -1086,7 +1086,35 @@ function mapCountDocRow(row) {
     updatedBy: parseActor(row.updated_by),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    revision: Number(row.revision) || 1,
   }
+}
+
+/** body/query 的 expectedRevision → 正整數或 null（沒帶 = 舊行為，不檢查） */
+function parseExpectedRevision(value) {
+  if (value === undefined || value === null || value === '') return null
+  const n = Number(value)
+  return Number.isInteger(n) && n > 0 ? n : null
+}
+
+/** 盤點版本歷史：每次儲存/刪除留一版 */
+function recordCountVersion(db, { countDate, revision, action, counts, countBoxes, notes, actor }) {
+  db.prepare(`
+    INSERT INTO inventory_count_versions (id, count_date, revision, action, counts, count_boxes, notes, actor)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(uuidv4(), countDate, revision, action, JSON.stringify(counts || {}), JSON.stringify(countBoxes || {}), notes || '', actor)
+}
+
+function countConflictResponse(res, date, row) {
+  const doc = mapCountDocRow(row)
+  return res.status(409).json({
+    error: true,
+    code: 'COUNT_REVISION_CONFLICT',
+    message: `${date} 的盤點已被 ${doc.updatedBy?.name || doc.createdBy?.name || '他人'} 於 ${doc.updatedAt || ''} 更新，請重新載入後再儲存`,
+    currentRevision: doc.revision,
+    updatedBy: doc.updatedBy || doc.createdBy || null,
+    updatedAt: doc.updatedAt,
+  })
 }
 
 /**
@@ -1194,8 +1222,40 @@ router.get('/inventory/counts/:date', ...isInventoryRole, (req, res) => {
 })
 
 /**
+ * GET /api/system/inventory/counts/:date/history
+ * 該盤點日的版本歷史（新→舊）：每次儲存/刪除一版，含當時內容與操作者
+ */
+router.get('/inventory/counts/:date/history', ...isInventoryRole, (req, res) => {
+  try {
+    const { date } = req.params
+    if (!isValidCountDate(date)) {
+      return res.status(400).json({ error: true, message: '盤點日格式須為 YYYY-MM-DD' })
+    }
+    const db = getDatabase()
+    const rows = db
+      .prepare('SELECT * FROM inventory_count_versions WHERE count_date = ? ORDER BY revision DESC, created_at DESC LIMIT 200')
+      .all(date)
+    res.json(rows.map((r) => ({
+      id: r.id,
+      countDate: r.count_date,
+      revision: r.revision,
+      action: r.action,
+      counts: parseJsonObject(r.counts),
+      countBoxes: parseJsonObject(r.count_boxes),
+      notes: r.notes || '',
+      actor: parseJsonObject(r.actor),
+      createdAt: r.created_at,
+    })))
+  } catch (error) {
+    console.error('取得盤點歷史錯誤:', error)
+    res.status(500).json({ error: true, message: '取得盤點歷史失敗' })
+  }
+})
+
+/**
  * PUT /api/system/inventory/counts/:date
- * 新增/覆寫該盤點日文件。body: { counts:{category:{item:個數}}, countBoxes:{category:{item:箱數}}, notes }
+ * 新增/覆寫該盤點日文件。body: { counts:{category:{item:個數}}, countBoxes:{category:{item:箱數}}, notes,
+ *   expectedRevision? }（帶了且與現況不符 → 409 COUNT_REVISION_CONFLICT；沒帶 = 直接覆寫）
  * 同交易內：重寫 inventory_counts 該日流水；若此日是（含）最新盤點，套用到 inventory_items.current_quantity。
  */
 router.put('/inventory/counts/:date', ...isInventoryRole, async (req, res) => {
@@ -1208,21 +1268,30 @@ router.put('/inventory/counts/:date', ...isInventoryRole, async (req, res) => {
     const counts = sanitizeCountMap(body.counts)
     const countBoxes = sanitizeCountMap(body.countBoxes)
     const notes = typeof body.notes === 'string' ? body.notes.trim() : ''
+    const expectedRevision = parseExpectedRevision(body.expectedRevision)
     const actor = JSON.stringify({ uid: req.user.id, name: req.user.name })
     const db = getDatabase()
+
+    // 樂觀鎖：有帶 expectedRevision 且與現況不符 → 409（沒帶 = 舊行為，直接覆寫）
+    const existing = db.prepare('SELECT * FROM inventory_count_docs WHERE count_date = ?').get(date)
+    if (existing && expectedRevision !== null && (Number(existing.revision) || 1) !== expectedRevision) {
+      return countConflictResponse(res, date, existing)
+    }
+    const nextRevision = existing ? (Number(existing.revision) || 1) + 1 : 1
 
     const latest = db.prepare('SELECT MAX(count_date) AS d FROM inventory_count_docs').get()
     const isLatest = !latest?.d || date >= latest.d
 
     const upsert = db.prepare(`
-      INSERT INTO inventory_count_docs (count_date, counts, count_boxes, notes, created_by, updated_by)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO inventory_count_docs (count_date, counts, count_boxes, notes, created_by, updated_by, revision)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(count_date) DO UPDATE SET
         counts = excluded.counts,
         count_boxes = excluded.count_boxes,
         notes = excluded.notes,
         updated_by = excluded.updated_by,
-        updated_at = datetime('now', 'localtime')
+        updated_at = datetime('now', 'localtime'),
+        revision = excluded.revision
     `)
     const deleteRows = db.prepare('DELETE FROM inventory_counts WHERE count_date = ?')
     const insertRow = db.prepare(`
@@ -1231,7 +1300,8 @@ router.put('/inventory/counts/:date', ...isInventoryRole, async (req, res) => {
     `)
 
     db.transaction(() => {
-      upsert.run(date, JSON.stringify(counts), JSON.stringify(countBoxes), notes, actor, actor)
+      upsert.run(date, JSON.stringify(counts), JSON.stringify(countBoxes), notes, actor, actor, nextRevision)
+      recordCountVersion(db, { countDate: date, revision: nextRevision, action: 'save', counts, countBoxes, notes, actor })
       deleteRows.run(date)
       const itemMap = buildInventoryItemIdMap(db)
       for (const category of Object.keys(counts)) {
@@ -1268,14 +1338,30 @@ router.delete('/inventory/counts/:date', ...isInventoryRole, async (req, res) =>
       return res.status(400).json({ error: true, message: '盤點日格式須為 YYYY-MM-DD' })
     }
     const db = getDatabase()
-    const existing = db.prepare('SELECT count_date FROM inventory_count_docs WHERE count_date = ?').get(date)
+    const existing = db.prepare('SELECT * FROM inventory_count_docs WHERE count_date = ?').get(date)
     if (!existing) {
       return res.status(404).json({ error: true, message: `${date} 沒有盤點紀錄` })
     }
+    // 樂觀鎖（DELETE 沒有 body，走 query ?expectedRevision=）
+    const expectedRevision = parseExpectedRevision(req.query.expectedRevision)
+    if (expectedRevision !== null && (Number(existing.revision) || 1) !== expectedRevision) {
+      return countConflictResponse(res, date, existing)
+    }
     const latest = db.prepare('SELECT MAX(count_date) AS d FROM inventory_count_docs').get()
     const wasLatest = latest?.d === date
+    const actor = JSON.stringify({ uid: req.user.id, name: req.user.name })
 
     db.transaction(() => {
+      // 刪除也留一版（內容 = 刪除前的最後狀態），之後可從歷史「帶入」還原
+      recordCountVersion(db, {
+        countDate: date,
+        revision: (Number(existing.revision) || 1) + 1,
+        action: 'delete',
+        counts: parseJsonObject(existing.counts),
+        countBoxes: parseJsonObject(existing.count_boxes),
+        notes: existing.notes || '',
+        actor,
+      })
       db.prepare('DELETE FROM inventory_count_docs WHERE count_date = ?').run(date)
       db.prepare('DELETE FROM inventory_counts WHERE count_date = ?').run(date)
       if (wasLatest) {

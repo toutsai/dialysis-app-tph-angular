@@ -44,6 +44,7 @@ app.use('/api/patients', (await import('../../src/routes/patients.js')).default)
 app.use('/api/auth', (await import('../../src/routes/auth.js')).default)
 app.use('/api/aki', (await import('../../src/routes/aki.js')).default)
 app.use('/api/schedules', (await import('../../src/routes/schedules.js')).default)
+app.use('/api/system', (await import('../../src/routes/system.js')).default)
 
 const { subscribeEvents } = await import('../../src/services/eventBus.js')
 const unsubscribe = subscribeEvents((topic, payload) => process.send?.({ type: 'event', topic, payload }))
