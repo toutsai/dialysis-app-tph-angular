@@ -1,0 +1,170 @@
+<div class="day-panel">
+  <!-- ① 當日叫貨/到貨明細（唯讀） -->
+  <div class="panel-block">
+    <div class="section-header">
+      <h4>{{ date }} 叫貨/到貨明細</h4>
+    </div>
+    @if (sortedEntries.length === 0) {
+      <div class="placeholder-text">當天無叫貨/到貨紀錄。</div>
+    } @else {
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>類別</th>
+              <th>品項</th>
+              <th>箱數</th>
+              <th>個數</th>
+              <th>狀態</th>
+              <th>備註</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (e of sortedEntries; track e.id) {
+              <tr>
+                <td>{{ CATEGORY_NAMES[e.category] || e.category }}</td>
+                <td>{{ e.item }}</td>
+                <td>{{ e.boxQuantity }}</td>
+                <td>{{ e.quantity }}</td>
+                <td><span class="status-badge {{ entryStatus(e) }}">{{ entryStatusLabel(e) }}</span></td>
+                <td>{{ e.notes || '-' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+
+  <!-- ② 當日排程預估消耗 -->
+  <div class="panel-block">
+    <div class="section-header">
+      <h4>當日排程預估消耗</h4>
+    </div>
+    @if (forecastLoading()) {
+      <div class="loading-state">計算中...</div>
+    } @else {
+      <div class="forecast-card">
+        @for (category of categoryKeys; track category) {
+          @for (entry of (forecast()[category] || {} | keyvalue); track entry.key) {
+            <div class="forecast-row">
+              <span class="forecast-label">{{ CATEGORY_NAMES[category] }} - {{ entry.key }}</span>
+              <span class="forecast-value">{{ entry.value }}</span>
+            </div>
+          }
+        }
+        @if (isForecastEmpty()) {
+          <p class="placeholder-text small">當日無排程。</p>
+        }
+      </div>
+    }
+  </div>
+
+  <!-- ③ 盤點 -->
+  <div class="panel-block">
+    <div class="panel-header">
+      <div>
+        <h3>盤點</h3>
+        <p class="panel-description">
+          一天一份盤點紀錄。庫存總覽、每週訂單、月報表都以「最近一次盤點」為基準自動推算。
+        </p>
+      </div>
+      <div class="count-actions">
+        <button class="btn-primary" (click)="saveCountDoc()" [disabled]="countsSaving() || countsLoading()">
+          {{ countsSaving() ? '儲存中...' : '儲存盤點' }}
+        </button>
+        <button class="btn-secondary" (click)="deleteCountDoc()" [disabled]="!countDocExists() || countsSaving()">
+          刪除此日盤點
+        </button>
+      </div>
+    </div>
+
+    @if (countsLoading()) {
+      <div class="loading-state">載入盤點紀錄中...</div>
+    } @else {
+      @if (countDocInfo(); as info) {
+        <div class="count-info-banner exists">
+          📋 已有 {{ date }} 的盤點 — 建檔者：{{ info.createdBy }}｜最後更新：{{ info.updatedBy }} {{ info.updatedAt }}
+        </div>
+      } @else {
+        <div class="count-info-banner missing">
+          {{ date }} 尚無盤點紀錄，輸入箱數後按「儲存盤點」即可新增。
+        </div>
+      }
+
+      <div class="weekly-section">
+        <div class="section-header">
+          <h4>盤點數量輸入</h4>
+          <span class="unit-hint">每箱個數依「品項設定」；每箱 1 個者箱數即個數</span>
+        </div>
+        <div class="inventory-grid">
+          @for (category of categoryKeys; track category) {
+            <div class="category-section">
+              <h5>{{ CATEGORY_NAMES[category] }}</h5>
+              <div class="item-inputs">
+                @for (item of getItemsForCategory(category); track item) {
+                  <div class="item-row">
+                    <label>{{ item }}</label>
+                    <div class="box-input-group">
+                      <input
+                        type="number"
+                        [(ngModel)]="countBoxes[category][item]"
+                        (ngModelChange)="syncCountUnits()"
+                        placeholder="箱數"
+                        min="0"
+                        class="box-input"
+                      />
+                      <span class="box-unit">箱</span>
+                      @if (countBoxes[category]?.[item]) {
+                        <span class="unit-hint">= {{ countUnits[category][item] }} 個</span>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+        <div class="item-row notes-row">
+          <label>備註</label>
+          <input type="text" [(ngModel)]="countNotes" placeholder="例如：每週訂單盤點 / 月底盤點" class="notes-input" />
+        </div>
+      </div>
+
+      <div class="weekly-section">
+        <div class="section-header">
+          <h4>盤點紀錄（最近 30 筆）</h4>
+          <button class="btn-sm btn-primary" (click)="loadCountRecords()">重新整理</button>
+        </div>
+        @if (countRecords().length === 0) {
+          <div class="placeholder-text">尚無任何盤點紀錄。</div>
+        } @else {
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>盤點日</th>
+                  <th>盤點人</th>
+                  <th>更新時間</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (rec of countRecords(); track rec.countDate) {
+                  <tr [class.result-cell]="rec.countDate === date">
+                    <td>{{ rec.countDate }}</td>
+                    <td>{{ rec.by }}</td>
+                    <td>{{ rec.updatedAt }}</td>
+                    <td>
+                      <button class="btn-sm btn-secondary" (click)="selectCountRecord(rec.countDate)">切換</button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    }
+  </div>
+</div>

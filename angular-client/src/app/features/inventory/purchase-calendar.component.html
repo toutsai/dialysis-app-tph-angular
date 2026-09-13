@@ -1,12 +1,29 @@
 <div class="pc-root">
   <!-- 工具列 -->
   <div class="pc-toolbar">
-    <div class="pc-month-nav">
-      <button type="button" class="pc-nav-btn" (click)="stepMonth(-1)" title="上個月">‹</button>
-      <span class="pc-month-label">{{ month() }}</span>
-      <button type="button" class="pc-nav-btn" (click)="stepMonth(1)" title="下個月">›</button>
-      <button type="button" class="pc-today-btn" (click)="goToday()">今天</button>
+    <div class="pc-view-switch">
+      <button type="button" class="pc-view-btn" [class.on]="view() === 'month'" (click)="setView('month')">月</button>
+      <button type="button" class="pc-view-btn" [class.on]="view() === 'week'" (click)="setView('week')">週</button>
     </div>
+    @if (view() === 'month') {
+      <div class="pc-month-nav">
+        <button type="button" class="pc-nav-btn" (click)="stepMonth(-1)" title="上個月">‹</button>
+        <button type="button" class="pc-month-label" (click)="selectMonth()" title="點一下切換到這個月的月作業面板">{{ month() }}</button>
+        <button type="button" class="pc-nav-btn" (click)="stepMonth(1)" title="下個月">›</button>
+        <button type="button" class="pc-today-btn" (click)="goToday()">今天</button>
+      </div>
+    } @else {
+      <div class="pc-month-nav">
+        <button type="button" class="pc-nav-btn" (click)="stepWeek(-1)" title="上一週">‹</button>
+        @if (currentWeek(); as w) {
+          <button type="button" class="pc-month-label pc-week-label" (click)="selectWeek(w)" title="點一下切換到這一週的週作業面板">
+            {{ weekTitle(w) }}
+          </button>
+        }
+        <button type="button" class="pc-nav-btn" (click)="stepWeek(1)" title="下一週">›</button>
+        <button type="button" class="pc-today-btn" (click)="goThisWeek()">本週</button>
+      </div>
+    }
     <div class="pc-filters">
       <select [ngModel]="filterCategory()" (ngModelChange)="setFilterCategory($event)" title="篩選類別">
         <option value="">全部類別</option>
@@ -63,22 +80,39 @@
   @if (loading()) {
     <div class="pc-loading">載入中...</div>
   }
-  <div class="pc-grid">
+  <div class="pc-grid" [class.pc-grid-month]="view() === 'month'" [class.pc-grid-week]="view() === 'week'">
+    @if (view() === 'month') {
+      <div class="pc-head pc-week-head" title="週次"></div>
+    }
     @for (label of weekdayLabels; track label) {
       <div class="pc-head">週{{ label }}</div>
     }
-    @for (week of weeks(); track $index) {
-      @for (cell of week; track cell.ymd) {
+    @for (week of weeks(); track week.start) {
+      @if (view() === 'month') {
+        <div class="pc-week-col" [class.week-selected]="week.start === selectedWeekStartValue()">
+          <button type="button" class="pc-week-btn" (click)="selectWeek(week)" [title]="'切換到 ' + weekTitle(week) + ' 的週作業面板'">
+            {{ weekShort(week) }}
+          </button>
+        </div>
+      }
+      @for (cell of week.cells; track cell.ymd) {
         <div
           class="pc-cell"
           [class.out]="!cell.inMonth"
           [class.today]="cell.isToday"
-          (click)="openNew(cell.ymd)"
-          [title]="'點一下新增 ' + cell.ymd + ' 的叫貨'"
+          [class.selected]="cell.ymd === selectedDateValue()"
+          [class.week-selected]="week.start === selectedWeekStartValue()"
+          (click)="selectDay(cell)"
+          [title]="'點一下選取 ' + cell.ymd + '（＋ 可新增叫貨）'"
         >
           <div class="pc-cell-head">
             <span class="pc-day">{{ cell.day }}</span>
-            <span class="pc-add">＋</span>
+            <span class="pc-cell-badges">
+              @if (cell.hasCount) {
+                <span class="pc-count-badge" title="這天有盤點紀錄">盤</span>
+              }
+              <button type="button" class="pc-add" (click)="openNewAt(cell.ymd, $event)" [title]="'新增 ' + cell.ymd + ' 的叫貨'">＋</button>
+            </span>
           </div>
           <div class="pc-entries">
             @for (e of cell.entries; track e.id) {
@@ -87,6 +121,14 @@
               </button>
             }
           </div>
+          @if (cell.uploadLabel) {
+            <div
+              class="pc-upload-bar"
+              [class.s]="cell.uploadStart"
+              [class.e]="cell.uploadEnd"
+              [title]="'已上傳實際消耗：' + cell.uploadLabel"
+            ></div>
+          }
         </div>
       }
     }

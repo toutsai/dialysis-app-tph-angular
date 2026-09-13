@@ -1,0 +1,62 @@
+<div class="modal-overlay" (click)="onOverlayClick($event)">
+  <div class="modal-content upload-modal-content">
+    <div class="modal-header">
+      <h3>批次上傳每月耗材 Excel</h3>
+      <button type="button" class="modal-close" aria-label="關閉" (click)="close.emit()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="upload-core-panel">
+        <div
+          class="upload-drop-zone"
+          [class.is-dragover]="isDragOver()"
+          (dragover)="onDragOver($event)"
+          (dragleave)="onDragLeave($event)"
+          (drop)="onDrop($event)"
+        >
+          <div class="upload-icon"><i class="fas fa-boxes"></i></div>
+          @if (!selectedFile()) {
+            <h3>拖曳 Excel 檔案至此，或點擊按鈕選擇</h3>
+          } @else {
+            <h3>已選擇檔案：<strong>{{ selectedFile()!.name }}</strong></h3>
+          }
+          <p class="upload-hint">
+            支援 .xlsx, .xls 格式。請確保標題行包含 '人工腎臟', '透析藥水CA', 或 'B液種類'。
+          </p>
+          <input
+            id="inventory-upload-file-input"
+            type="file"
+            (change)="onFileSelect($event)"
+            accept=".xlsx, .xls"
+            [disabled]="isUploading()"
+          />
+          <label for="inventory-upload-file-input" class="file-input-label">
+            {{ selectedFile() ? '重新選擇檔案' : '選擇檔案' }}
+          </label>
+        </div>
+        <button class="btn-primary upload-btn-main" (click)="handleUpload()" [disabled]="!selectedFile() || isUploading()">
+          {{ isUploading() ? '處理中...' : '開始上傳' }}
+        </button>
+        @if (uploadResult()) {
+          <div
+            class="upload-result-toast"
+            [class.has-error]="!uploadResult()!.cancelled && uploadResult()!.errorCount > 0"
+            [class.is-success]="!uploadResult()!.cancelled && uploadResult()!.errorCount === 0"
+            [class.is-cancelled]="uploadResult()!.cancelled"
+          >
+            {{ uploadResult()!.message }}
+          </div>
+        }
+        <p class="upload-hint" style="margin-top: 0.75rem;">
+          上傳品名會對照「品項設定」的品項（品項設定為準）；找不到的品項會先跳出確認視窗，未確認前不會寫入。
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 消耗紀錄上傳：品名對不上品項設定時的對照確認視窗 -->
+<app-consumable-item-mapping-dialog
+  [request]="itemMappingRequest()"
+  (confirm)="onItemMappingConfirm($event)"
+  (cancel)="onItemMappingCancel()"
+></app-consumable-item-mapping-dialog>

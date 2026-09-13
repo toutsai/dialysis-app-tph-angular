@@ -1,0 +1,289 @@
+/* inventory-month-panel：樣式規則從 inventory.component.css 複製（契約要求各元件自帶 css，允許重複） */
+
+.month-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* === 面板標頭 === */
+.panel-description {
+  font-size: 0.9rem;
+  color: #6c757d;
+  margin: 0.25rem 0 0 0;
+}
+
+.report-note {
+  padding: 0.5rem 1rem;
+  background: #fff3cd;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+  color: #856404;
+}
+
+/* === 篩選/搜尋列 === */
+.search-controls,
+.filter-bar {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.search-field,
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.search-field label,
+.filter-field label {
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: #495057;
+}
+
+.search-field input,
+.search-field select,
+.filter-field input,
+.filter-field select {
+  padding: 0.5rem;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  min-width: 120px;
+  height: 38px;
+}
+
+/* === 日期導航「‹ ›」 === */
+.date-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.date-nav input {
+  min-width: 0;
+}
+.date-nav .date-nav-btn {
+  height: 38px;
+  width: 30px;
+  padding: 0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #f8f9fa;
+  color: #495057;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.date-nav .date-nav-btn:hover {
+  background: #e9ecef;
+  color: #212529;
+}
+
+/* === 按鈕 === */
+.btn-primary {
+  padding: 0.5rem 1.5rem;
+  border-radius: 4px;
+  border: none;
+  background-color: #007bff;
+  color: white;
+  cursor: pointer;
+  height: 38px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+.btn-primary:hover {
+  background-color: #0056b3;
+}
+.btn-primary:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}
+
+.btn-success {
+  padding: 0.5rem 1.5rem;
+  border-radius: 4px;
+  border: none;
+  background-color: #198754;
+  color: white;
+  cursor: pointer;
+  height: 38px;
+  font-weight: 500;
+}
+.btn-success:hover {
+  background-color: #157347;
+}
+.btn-success:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  padding: 0.5rem 1.5rem;
+  border-radius: 4px;
+  border: 1px solid #6c757d;
+  background-color: #fff;
+  color: #6c757d;
+  cursor: pointer;
+  height: 38px;
+}
+
+.btn-sm {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.875rem;
+  border-radius: 4px;
+  height: 36px;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+/* === 表格 === */
+.table-container {
+  flex-grow: 1;
+  overflow: auto;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 0.75rem;
+  border: 1px solid #e9ecef;
+  text-align: center;
+  white-space: nowrap;
+}
+
+th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+tbody tr:nth-child(even) {
+  background-color: #f8f9fa;
+}
+
+tbody tr:hover {
+  background-color: #e9ecef;
+}
+
+.empty-hint {
+  color: #6c757d;
+  white-space: normal;
+}
+
+/* === 狀態顯示 === */
+.loading-state,
+.placeholder-text,
+.empty-state {
+  text-align: center;
+  color: #6c757d;
+  padding: 3rem;
+  font-size: 1.1rem;
+}
+
+.report-display {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* === 月報表 / 每月消耗量 / 排程推算 共用區塊 === */
+.weekly-section {
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e9ecef;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.section-header h4 {
+  margin: 0;
+}
+
+.section-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.collapsible-header {
+  cursor: pointer;
+  user-select: none;
+}
+
+.collapse-caret {
+  margin-left: 0.5rem;
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+.unit-hint {
+  font-size: 0.85rem;
+  color: #6c757d;
+}
+
+.need-order {
+  background-color: #fff3cd;
+  font-weight: bold;
+  color: #856404;
+}
+
+.box-cell {
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+.positive {
+  color: #198754;
+}
+
+.negative {
+  color: #dc3545;
+}
+
+.result-cell {
+  font-weight: bold;
+  background-color: #fff3cd;
+}
+
+/* === 當月消耗量表格 === */
+.summary-total-row {
+  background-color: #e9ecef;
+}
+
+.category-total {
+  background-color: #f8f9fa;
+}
+
+.category-total td {
+  font-weight: 500;
+}
+
+tfoot tr:first-child td {
+  border-top: 2px solid #dee2e6;
+}

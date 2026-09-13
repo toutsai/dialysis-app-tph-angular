@@ -1,0 +1,201 @@
+<div class="month-panel">
+  <!-- ① 月報表 -->
+  <div class="weekly-section">
+    <div class="section-header">
+      <h4>月報表 ({{ month }})</h4>
+      <div class="section-header-actions">
+        <span class="unit-hint">期初 = 該月月初前最近一次盤點推估到月初；消耗為實際優先、缺的日子以排程推估</span>
+        <button class="btn-secondary btn-sm" (click)="loadCountMonthReport()" [disabled]="countReportLoading()">
+          {{ countReportLoading() ? '計算中...' : '重新整理' }}
+        </button>
+      </div>
+    </div>
+
+    @if (countReportNote()) {
+      <div class="report-note">{{ countReportNote() }}</div>
+    }
+
+    @if (countReportLoading()) {
+      <div class="loading-state">計算月報表中...</div>
+    } @else if (!countReportLoaded()) {
+      <div class="placeholder-text">尚未載入月報表。</div>
+    } @else if (countReportRows().length === 0) {
+      <div class="placeholder-text">該月沒有任何盤點、到貨或消耗資料。</div>
+    } @else {
+      <p class="panel-description">
+        期初基準盤點：{{ countReportBaseDate() || '—' }}
+        @if (countReportLastCountDate()) {
+          ｜當月最後一次盤點：{{ countReportLastCountDate() }}（差異 = 盤點量 − 推估到該日的庫存）
+        }
+      </p>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>類別</th>
+              <th>品項</th>
+              <th>期初</th>
+              <th>當月到貨</th>
+              <th>當月消耗</th>
+              <th>期末推估</th>
+              <th>當月盤點量</th>
+              <th>差異</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of countReportRows(); track row.category + '|' + row.item) {
+              <tr>
+                <td>{{ row.categoryName }}</td>
+                <td>{{ row.item }}</td>
+                <td>{{ row.opening != null ? row.opening : '—' }}</td>
+                <td class="positive">+{{ row.arrived }}</td>
+                <td class="negative">
+                  -{{ row.consumed }}
+                  <span class="unit-hint">（{{ row.daysLabel }}）</span>
+                </td>
+                <td class="result-cell">{{ row.closing != null ? row.closing : '—' }}</td>
+                <td>{{ row.counted != null ? row.counted : '—' }}</td>
+                <td [class.need-order]="row.diff != null && row.diff !== 0">
+                  {{ row.diff != null ? row.diff : '—' }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+
+  <!-- ② 每月消耗量 -->
+  <div class="weekly-section">
+    <div class="section-header">
+      <h4>每月消耗量</h4>
+      <div class="section-header-actions">
+        <button class="btn-secondary btn-sm" (click)="loadMonthlySummary()" [disabled]="summaryLoading()">
+          {{ summaryLoading() ? '載入中...' : '重新整理' }}
+        </button>
+        <button
+          (click)="exportMonthlySummary()"
+          [disabled]="summaryLoading() || !summaryLoaded()"
+          class="btn-success btn-sm"
+        >匯出 Excel</button>
+      </div>
+    </div>
+
+    <div class="report-display">
+      @if (summaryLoading()) {
+        <div class="loading-state">正在計算當月消耗總量...</div>
+      } @else if (!summaryLoaded()) {
+        <div class="placeholder-text">尚未載入每月消耗量。</div>
+      } @else {
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>類別</th>
+                <th>品項</th>
+                <th>每箱數量</th>
+                <th>當月消耗(個)</th>
+                <th>當月消耗(箱)</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (category of categoryKeys; track category) {
+                @for (item of getSummaryItemKeys(category); track item) {
+                  <tr>
+                    <td>{{ CATEGORY_NAMES[category] }}</td>
+                    <td>{{ item }}</td>
+                    <td>{{ getUnitsPerBox(category, item) }}</td>
+                    <td>{{ monthlySummaryData[category][item] }}</td>
+                    <td class="box-cell">{{ calculateBoxes(category, item, monthlySummaryData[category][item]) }}</td>
+                  </tr>
+                }
+              }
+            </tbody>
+            <tfoot>
+              <tr class="summary-total-row">
+                <td colspan="3"><strong>各類別小計</strong></td>
+                <td colspan="2"></td>
+              </tr>
+              @for (category of categoryKeys; track category) {
+                <tr class="category-total">
+                  <td>{{ CATEGORY_NAMES[category] }}</td>
+                  <td colspan="2">合計</td>
+                  <td><strong>{{ getCategoryTotal(category) }}</strong></td>
+                  <td class="box-cell">-</td>
+                </tr>
+              }
+            </tfoot>
+          </table>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- ③ 自訂區間排程推算（可收合，預設收合） -->
+  <div class="weekly-section">
+    <div class="section-header collapsible-header" (click)="toggleTheoretical()">
+      <h4>自訂區間排程推算<span class="collapse-caret">{{ theoreticalCollapsed() ? '▸' : '▾' }}</span></h4>
+    </div>
+
+    @if (!theoreticalCollapsed()) {
+      <div class="search-controls">
+        <div class="search-field">
+          <label>起始日期</label>
+          <div class="date-nav">
+            <button type="button" class="date-nav-btn" title="前一天" (click)="stepDate(theoreticalFilter, 'startDate', -1, 'date')">‹</button>
+            <input type="date" [(ngModel)]="theoreticalFilter.startDate" />
+            <button type="button" class="date-nav-btn" title="後一天" (click)="stepDate(theoreticalFilter, 'startDate', 1, 'date')">›</button>
+          </div>
+        </div>
+        <div class="search-field">
+          <label>結束日期</label>
+          <div class="date-nav">
+            <button type="button" class="date-nav-btn" title="前一天" (click)="stepDate(theoreticalFilter, 'endDate', -1, 'date')">‹</button>
+            <input type="date" [(ngModel)]="theoreticalFilter.endDate" />
+            <button type="button" class="date-nav-btn" title="後一天" (click)="stepDate(theoreticalFilter, 'endDate', 1, 'date')">›</button>
+          </div>
+        </div>
+        <button class="btn-primary" (click)="runTheoreticalConsumption()" [disabled]="theoreticalLoading()">
+          {{ theoreticalLoading() ? '推算中...' : '開始推算' }}
+        </button>
+      </div>
+
+      @if (theoreticalResult()) {
+        <p class="panel-description">
+          查詢期間：{{ theoreticalResult()!.period.start }} ～ {{ theoreticalResult()!.period.end }}，
+          共處理 {{ theoreticalResult()!.totalSlots }} 筆排程。
+        </p>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>類別</th>
+                <th>品項</th>
+                <th>理論消耗數量</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (category of categoryKeys; track category) {
+                @for (entry of (theoreticalResult()!.grouped[category] | keyvalue); track entry.key) {
+                  <tr>
+                    <td>{{ CATEGORY_NAMES[category] }}</td>
+                    <td>{{ entry.key }}</td>
+                    <td><strong>{{ entry.value }}</strong></td>
+                  </tr>
+                }
+              }
+              @if (theoreticalResult()!.items.length === 0) {
+                <tr>
+                  <td colspan="3" class="empty-hint">查無消耗紀錄（可能該期間沒有排程或病人醫囑為空）</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else if (!theoreticalLoading()) {
+        <div class="empty-state">選擇日期範圍後，點擊「開始推算」來計算理論消耗量。</div>
+      }
+    }
+  </div>
+</div>
