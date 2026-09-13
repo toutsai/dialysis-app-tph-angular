@@ -85,6 +85,9 @@
   align-items: center;
   gap: 10px;
   flex: 1;
+  /* 圖例變多後空間不夠時整項換行，不要把中文一字一字直排 */
+  flex-wrap: wrap;
+  row-gap: 4px;
 }
 .pc-filters select {
   height: 32px;
@@ -124,6 +127,8 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .pc-legend .dot {
   display: inline-block;
