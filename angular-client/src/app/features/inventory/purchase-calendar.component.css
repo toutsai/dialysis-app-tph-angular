@@ -21,6 +21,44 @@
   font-weight: 600;
   min-width: 90px;
   text-align: center;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.pc-month-label:hover {
+  border-color: #ccc;
+  background: #f1f3f5;
+}
+.pc-week-label {
+  min-width: 210px;
+  font-size: 1.02rem;
+}
+
+/* 月 / 週檢視切換 */
+.pc-view-switch {
+  display: inline-flex;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.pc-view-btn {
+  height: 38px;
+  width: 40px;
+  border: none;
+  background: #f8f9fa;
+  color: #495057;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+.pc-view-btn + .pc-view-btn {
+  border-left: 1px solid #ccc;
+}
+.pc-view-btn.on {
+  background: #007bff;
+  color: #fff;
 }
 .pc-nav-btn,
 .pc-today-btn {
@@ -133,6 +171,40 @@
   border-left: 1px solid #dee2e6;
   border-top: 1px solid #dee2e6;
 }
+/* 月檢視最左多一個窄欄放週次鈕 */
+.pc-grid-month {
+  grid-template-columns: 38px repeat(7, minmax(0, 1fr));
+}
+.pc-week-head {
+  padding: 6px 0;
+}
+.pc-week-col {
+  border-right: 1px solid #dee2e6;
+  border-bottom: 1px solid #dee2e6;
+  background: #f8f9fa;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 4px;
+}
+.pc-week-col.week-selected {
+  background: #e3f0ff;
+}
+.pc-week-btn {
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  background: #fff;
+  color: #495057;
+  font-size: 0.74rem;
+  padding: 2px 4px;
+  cursor: pointer;
+  line-height: 1.2;
+}
+.pc-week-btn:hover {
+  background: #007bff;
+  border-color: #007bff;
+  color: #fff;
+}
 .pc-head {
   background: #f1f3f5;
   border-right: 1px solid #dee2e6;
@@ -168,6 +240,18 @@
   color: #fff;
   border-radius: 50%;
 }
+/* 高亮：選取的週列 / 選取的日期格 */
+.pc-cell.week-selected {
+  background: #f2f8ff;
+}
+.pc-cell.week-selected.out {
+  background: #eef2f6;
+}
+.pc-cell.selected {
+  outline: 2px solid #007bff;
+  outline-offset: -2px;
+  background: #e8f2ff;
+}
 .pc-cell-head {
   display: flex;
   justify-content: space-between;
@@ -180,18 +264,64 @@
   line-height: 22px;
   text-align: center;
 }
+.pc-cell-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
 .pc-add {
-  color: #bbb;
+  color: #999;
   font-size: 0.9rem;
-  opacity: 0;
+  opacity: 0.28;
+  border: none;
+  background: none;
+  padding: 0 2px;
+  cursor: pointer;
+  line-height: 1;
 }
 .pc-cell:hover .pc-add {
   opacity: 1;
+}
+.pc-add:hover {
+  color: #007bff;
+}
+/* 盤點日徽章 */
+.pc-count-badge {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  border-radius: 50%;
+  background: #6f42c1;
+  color: #fff;
+  font-size: 0.62rem;
+  text-align: center;
 }
 .pc-entries {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+/* 實際消耗上傳覆蓋條（相鄰格子視覺上連成一條） */
+.pc-upload-bar {
+  margin: 2px -4px -4px -4px;
+  height: 5px;
+  background: #17a2b8;
+  opacity: 0.85;
+  margin-top: auto;
+}
+.pc-upload-bar.s {
+  border-top-left-radius: 3px;
+  border-bottom-left-radius: 3px;
+  margin-left: 0;
+}
+.pc-upload-bar.e {
+  border-top-right-radius: 3px;
+  border-bottom-right-radius: 3px;
+  margin-right: 0;
+}
+.pc-upload-bar:hover {
+  opacity: 1;
 }
 
 /* 條目 chip */
@@ -217,6 +347,35 @@
   display: inline-block;
   margin: 0 4px 2px 0;
   vertical-align: middle;
+}
+
+/* 週檢視：格子放大、chip 顯示完整品名 */
+.pc-grid-week .pc-cell {
+  min-height: 260px;
+  padding: 6px;
+}
+.pc-grid-week .pc-day {
+  font-size: 0.95rem;
+  width: 26px;
+  height: 26px;
+  line-height: 26px;
+}
+.pc-grid-week .pc-add {
+  opacity: 0.5;
+  font-size: 1.05rem;
+}
+.pc-grid-week .pc-chip {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  font-size: 0.82rem;
+  padding: 4px 6px;
+  line-height: 1.45;
+}
+.pc-grid-week .pc-upload-bar {
+  height: 7px;
+  margin: 4px -6px -6px -6px;
+  margin-top: auto;
 }
 
 /* modal */

@@ -1,0 +1,261 @@
+<div class="week-panel">
+  <div class="panel-header">
+    <div>
+      <h3>週作業（{{ isoWeek }}）</h3>
+      <p class="panel-description">{{ weekStart }} ~ {{ weekEnd }}</p>
+      <p class="panel-description">
+        訂購量 = 安全庫存(日均 × 9 天) − 目前推估庫存 − 已叫貨待到貨
+      </p>
+      @if (weeklyConsumptionNote()) {
+        <p class="panel-description">{{ weeklyConsumptionNote() }}</p>
+      }
+      @if (weeklyStockNote()) {
+        <p class="panel-description">{{ weeklyStockNote() }}</p>
+      }
+    </div>
+    <button class="btn-primary" (click)="recalculate()" [disabled]="weeklyLoading()">
+      {{ weeklyLoading() ? '計算中...' : '重新計算' }}
+    </button>
+  </div>
+
+  <!-- ① 本週 實際 vs 推估 -->
+  <div class="weekly-section">
+    <div class="section-header">
+      <h4>本週 實際 vs 推估</h4>
+      <span class="coverage-badge" [class.coverage-none]="compareCoverDays() === 0">
+        本週實際上傳覆蓋 {{ compareCoverDays() }}/7 天
+      </span>
+    </div>
+    @if (compareNote()) {
+      <p class="panel-description">{{ compareNote() }}</p>
+    }
+    @if (compareRows().length > 0) {
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>類別</th>
+              <th>品項</th>
+              <th>排程推估(個)</th>
+              <th>實際上傳(個)</th>
+              <th>差異(實際−推估)</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of compareRows(); track row.category + '|' + row.item) {
+              <tr>
+                <td>{{ row.categoryName }}</td>
+                <td>{{ row.item }}</td>
+                <td>{{ row.estimated }}</td>
+                <td>
+                  @if (row.hasActual) {
+                    {{ row.actual }}
+                  } @else {
+                    <span class="unit-hint">未上傳</span>
+                  }
+                </td>
+                <td
+                  [class.positive]="row.hasActual && row.diff > 0"
+                  [class.negative]="row.hasActual && row.diff < 0"
+                >
+                  @if (row.hasActual) {
+                    {{ row.diff > 0 ? '+' : '' }}{{ row.diff }}
+                  } @else {
+                    -
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <div class="placeholder-text">本週沒有推估或實際消耗資料。</div>
+    }
+  </div>
+
+  <!-- ② 每週訂單 -->
+  @if (weeklyDataLoaded()) {
+    <div class="weekly-content">
+      <!-- 盤點輸入區（與日面板同一份文件，key = 盤點日） -->
+      <div class="weekly-section">
+        <div class="section-header">
+          <h4>盤點輸入 ({{ countDate }})</h4>
+          <button class="btn-sm btn-primary" (click)="saveWeeklyCount()" [disabled]="weeklyLoading()">
+            儲存盤點
+          </button>
+        </div>
+        <div class="filter-bar">
+          <div class="filter-field">
+            <label>盤點日（預設週二，可改本週其他日）</label>
+            <div class="date-nav">
+              <button type="button" class="date-nav-btn" title="前一天" (click)="stepCountDate(-1)">‹</button>
+              <input type="date" [ngModel]="countDate" (ngModelChange)="onCountDateInput($event)" [min]="weekStart" [max]="weekEnd" />
+              <button type="button" class="date-nav-btn" title="後一天" (click)="stepCountDate(1)">›</button>
+            </div>
+          </div>
+          <button class="btn-secondary" (click)="loadWeeklyData()" [disabled]="weeklyLoading()">
+            載入該日盤點
+          </button>
+        </div>
+        @if (weeklyCountSavedInfo()) {
+          <p class="panel-description">{{ weeklyCountSavedInfo() }}</p>
+        }
+        <div class="inventory-grid">
+          @for (category of categoryKeys; track category) {
+            <div class="category-section">
+              <h5>{{ CATEGORY_NAMES[category] }}</h5>
+              <div class="item-inputs">
+                @for (item of getItemsForCategory(category); track item) {
+                  <div class="item-row">
+                    <label>{{ item }}</label>
+                    <div class="box-input-group">
+                      <input
+                        type="number"
+                        [(ngModel)]="weeklyCountBoxes[category][item]"
+                        (ngModelChange)="syncWeeklyCount()"
+                        placeholder="箱數"
+                        min="0"
+                        class="box-input"
+                      />
+                      <span class="box-unit">箱</span>
+                      @if (weeklyCountBoxes[category]?.[item]) {
+                        <span class="unit-hint">
+                          = {{ weeklyCount[category][item] }} 個
+                        </span>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- 訂購建議表 -->
+      <div class="weekly-section">
+        <div class="section-header">
+          <h4>訂購建議</h4>
+          <button class="btn-success" (click)="exportWeeklyOrder()" [disabled]="!hasOrderData">
+            匯出訂單 (以箱為單位)
+          </button>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>類別</th>
+                <th>品項</th>
+                <th>每箱數量</th>
+                <th>上週消耗(個)</th>
+                <th>日均消耗</th>
+                <th>安全庫存(9天)</th>
+                <th>盤點量</th>
+                <th>盤點後到貨</th>
+                <th>盤點後消耗</th>
+                <th>目前推估</th>
+                <th>待到貨</th>
+                <th>建議訂購(個)</th>
+                <th>建議訂購(箱)</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of weeklyRows(); track row.category + '|' + row.item) {
+                <tr>
+                  <td>{{ row.categoryName }}</td>
+                  <td>{{ row.item }}</td>
+                  <td>{{ row.unitsPerBox }}</td>
+                  <td>
+                    {{ row.lastWeekConsumption }}
+                    <span class="unit-hint">({{ row.sourceLabel }})</span>
+                  </td>
+                  <td>{{ row.dailyAvg }}</td>
+                  <td>{{ row.safetyStock }}</td>
+                  <td>{{ row.countUnits }}</td>
+                  <td class="positive">+{{ row.arrivedSinceCount }}</td>
+                  <td class="negative">-{{ row.consumedSinceCount }}</td>
+                  <td class="result-cell">{{ row.estimatedStock }}</td>
+                  <td>{{ row.pending }}</td>
+                  <td [class.need-order]="row.orderQuantity > 0">{{ row.orderQuantity }}</td>
+                  <td [class.need-order]="row.orderQuantity > 0" class="box-cell">{{ row.orderBoxes }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  } @else {
+    <div class="placeholder-text">
+      {{ weeklyLoading() ? '計算中...' : '請在行事曆選取週次，或點「重新計算」。' }}
+    </div>
+  }
+</div>
+
+<!-- 訂單預覽 Modal -->
+@if (showOrderPreview()) {
+<div class="modal-overlay" (click)="showOrderPreview.set(false)">
+  <div class="modal-content modal-wide" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>訂單預覽</h3>
+      <button class="modal-close" (click)="showOrderPreview.set(false)">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="order-info-row">
+        <span><strong>訂購日期：</strong>{{ orderDate }}</span>
+        <span><strong>訂單使用日期：</strong>{{ orderPreviewDayLabels[0] }} ~ {{ orderPreviewDayLabels[5] }}</span>
+      </div>
+      <div class="table-container" style="margin-top: 0.75rem;">
+        <table>
+          <thead>
+            <tr>
+              <th style="min-width: 100px;">院內代碼</th>
+              <th style="min-width: 200px;">品項</th>
+              @for (label of orderPreviewDayLabels; track label) {
+                <th style="min-width: 90px; text-align: center;">{{ label }}</th>
+              }
+              <th style="text-align: center;">合計</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (entry of orderPreviewItems; track entry.label) {
+              <tr>
+                <td>{{ entry.hospitalCode || '-' }}</td>
+                <td>{{ entry.label }}</td>
+                @for (dayIdx of [0, 1, 2, 3, 4, 5]; track dayIdx) {
+                  <td style="text-align: center;">
+                    <input type="number" min="0"
+                      [(ngModel)]="orderPreviewGrid[entry.category + '|' + entry.item][dayIdx]"
+                      style="width: 70px; text-align: center;"
+                      class="order-cell-input"
+                    />
+                  </td>
+                }
+                <td style="text-align: center; font-weight: 600;">
+                  {{ getOrderRowTotal(entry.category, entry.item) }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p style="color: #6c757d; font-size: 0.85rem; margin-top: 0.5rem;">
+        💡 預設到貨日為週一、週三。可手動調整各日數量（單位：個）。
+      </p>
+      <label style="display: flex; align-items: center; gap: 6px; font-size: 0.9rem; margin-top: 0.25rem;">
+        <input type="checkbox" [(ngModel)]="createCalendarOrdersOnExport" />
+        同時建立行事曆叫貨（每個有數量的日期一筆「待到貨」，以整箱計、無條件進位；到貨時在行事曆點選入庫）
+      </label>
+      <div class="order-signature-row">
+        <span><strong>製表人：</strong>{{ authService.currentUser()?.name || '' }}</span>
+        <span><strong>洗腎室護理長：</strong>_______________</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" (click)="showOrderPreview.set(false)">取消</button>
+      <button class="btn-success" (click)="confirmExportOrder()">{{ createCalendarOrdersOnExport ? '確認匯出 Excel 並建立叫貨' : '確認匯出 Excel' }}</button>
+    </div>
+  </div>
+</div>
+}

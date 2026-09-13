@@ -23,12 +23,6 @@ h1 {
   margin: 0;
 }
 
-.page-description {
-  font-size: 1rem;
-  color: #6c757d;
-  margin: 0.5rem 0 0 0;
-}
-
 /* === 書記專用主頁籤（與標題同一列，2026-09-05） === */
 .main-tabs {
   display: flex;
@@ -149,63 +143,86 @@ h1 {
   margin: 0.25rem 0 0 0;
 }
 
-/* === 篩選列 === */
-.filter-bar {
+/* === 作業行事曆：工具列 === */
+.cal-toolbar {
   display: flex;
-  gap: 1rem;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  margin-bottom: 1.5rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid #e9ecef;
-}
-
-.filter-field {
-  display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  margin-bottom: 0.75rem;
 }
 
-.filter-field label {
-  font-weight: 500;
-  font-size: 0.9rem;
-  color: #495057;
-}
-
-.filter-field input,
-.filter-field select {
-  padding: 0.5rem;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-  min-width: 150px;
-  height: 38px;
-}
-
-/* === 月份/日期/週次輸入欄的「‹ ›」導航 === */
-.date-nav {
+.cal-toolbar .toolbar-link {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-}
-.date-nav input {
-  min-width: 0;
-}
-.date-nav .date-nav-btn {
-  height: 38px;
-  width: 30px;
-  padding: 0;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  background: #f8f9fa;
-  color: #495057;
-  font-size: 1.2rem;
+  text-decoration: none;
   line-height: 1;
-  cursor: pointer;
-  flex-shrink: 0;
 }
-.date-nav .date-nav-btn:hover {
-  background: #e9ecef;
+
+/* === 作業行事曆：可收合的庫存總覽 === */
+.overview-section {
+  flex-shrink: 0;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.overview-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.6rem 1rem;
+  border: none;
+  background-color: #f8f9fa;
+  cursor: pointer;
+  text-align: left;
+}
+
+.overview-head:hover {
+  background-color: #e9ecef;
+}
+
+.overview-caret {
+  color: #6c757d;
+  font-size: 0.9rem;
+  width: 1rem;
+}
+
+.overview-title {
+  font-weight: 600;
+  font-size: 1.05rem;
   color: #212529;
+}
+
+.overview-sub {
+  font-size: 0.85rem;
+  color: #6c757d;
+}
+
+.overview-body {
+  padding: 0.75rem 1rem 1rem;
+  border-top: 1px solid #e9ecef;
+}
+
+/* === 作業行事曆：日/週/月作業面板 === */
+.work-panel {
+  flex-shrink: 0;
+  margin-top: 1rem;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.work-panel-title {
+  padding: 0.6rem 1rem;
+  background-color: #e7f1ff;
+  border-bottom: 1px solid #dee2e6;
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: #0b5ed7;
 }
 
 /* === 類別篩選按鈕列 === */
@@ -358,7 +375,7 @@ tbody tr:hover {
   font-size: 1.1rem;
 }
 
-/* === 消耗紀錄子頁籤 === */
+/* === 設定頁子頁籤 === */
 .sub-tabs {
   display: flex;
   gap: 0.5rem;
@@ -385,197 +402,6 @@ tbody tr:hover {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.search-controls {
-  display: flex;
-  gap: 1rem;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  margin-bottom: 1rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid #e9ecef;
-}
-
-.group-filters {
-  display: flex;
-  gap: 1rem;
-}
-
-.search-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.search-field label {
-  font-weight: 500;
-  font-size: 0.9rem;
-  color: #495057;
-}
-
-.search-field input,
-.search-field select {
-  padding: 0.5rem;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-  min-width: 120px;
-  height: 38px;
-}
-
-.report-display {
-  flex: 1;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.consumption-table {
-  flex: 1;
-  overflow: auto;
-}
-
-/* === 消耗表格 Sticky 欄位 === */
-.sticky-col {
-  position: sticky;
-  background-color: #f8f9fa;
-  z-index: 5;
-}
-
-.sticky-col.col-freq {
-  left: 0;
-  min-width: 70px;
-}
-
-.sticky-col.col-shift {
-  left: 70px;
-  min-width: 70px;
-}
-
-.sticky-col.col-bed {
-  left: 140px;
-  min-width: 70px;
-}
-
-.sticky-col.col-mrn {
-  left: 210px;
-  min-width: 100px;
-}
-
-.sticky-col.col-name {
-  left: 310px;
-  min-width: 100px;
-}
-
-tbody .sticky-col {
-  background-color: #fff;
-}
-
-tbody tr:nth-child(even) .sticky-col {
-  background-color: #f8f9fa;
-}
-
-/* === 上傳區域 === */
-.upload-panel {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding-top: 2rem;
-}
-
-.upload-core-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  align-items: center;
-  padding: 2rem;
-  width: 100%;
-  max-width: 600px;
-}
-
-.upload-drop-zone {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 2.5rem;
-  border: 2px dashed #adb5bd;
-  border-radius: 12px;
-  background-color: #f8f9fa;
-  width: 100%;
-  text-align: center;
-  transition: all 0.2s ease-in-out;
-}
-
-.upload-drop-zone.is-dragover {
-  border-color: #007bff;
-  background-color: #e7f1ff;
-}
-
-.upload-icon {
-  font-size: 3rem;
-  color: #007bff;
-  margin-bottom: 1rem;
-}
-
-.upload-drop-zone h3 {
-  margin: 0 0 0.5rem 0;
-  color: #495057;
-}
-
-.upload-hint {
-  color: #6c757d;
-  margin: 0 0 1.5rem 0;
-}
-
-input[type='file'] {
-  display: none;
-}
-
-.file-input-label {
-  display: inline-block;
-  padding: 0.6rem 1.2rem;
-  background-color: #fff;
-  border: 1px solid #6c757d;
-  color: #495057;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.file-input-label:hover {
-  background-color: #e9ecef;
-}
-
-.upload-btn-main {
-  padding: 0.75rem 2rem;
-  font-size: 1.1rem;
-}
-
-.upload-result-toast {
-  width: 100%;
-  padding: 1rem;
-  border-radius: 6px;
-  font-weight: 500;
-  text-align: center;
-}
-
-.upload-result-toast.is-success {
-  color: #155724;
-  background-color: #d4edda;
-  border: 1px solid #c3e6cb;
-}
-
-.upload-result-toast.has-error {
-  color: #721c24;
-  background-color: #f8d7da;
-  border: 1px solid #f5c6cb;
-}
-
-.upload-result-toast.is-cancelled {
-  color: #495057;
-  background-color: #e9ecef;
-  border: 1px solid #ced4da;
 }
 
 /* === 品項設定：消耗紀錄別名 chips === */
@@ -612,66 +438,7 @@ input[type='file'] {
   color: #c92a2a;
 }
 
-/* === 每月盤點 === */
-.monthly-summary {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-  flex-wrap: wrap;
-}
-
-.summary-card {
-  flex: 1;
-  min-width: 150px;
-  padding: 1rem;
-  background-color: #f8f9fa;
-  border-radius: 8px;
-  text-align: center;
-  position: relative;
-}
-
-.summary-card h4 {
-  margin: 0 0 0.5rem 0;
-  color: #495057;
-}
-
-.summary-card p {
-  margin: 0;
-  font-size: 0.9rem;
-  color: #6c757d;
-}
-
-.summary-card .operator {
-  position: absolute;
-  left: -1rem;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: #6c757d;
-}
-
-.summary-card.result {
-  background-color: #d4edda;
-}
-
-.summary-card.result h4 {
-  color: #155724;
-}
-
-.positive {
-  color: #198754;
-}
-
-.negative {
-  color: #dc3545;
-}
-
-.result-cell {
-  font-weight: bold;
-  background-color: #fff3cd;
-}
-
+/* === 床位設定的下拉 === */
 .adjustment-input {
   width: 80px;
   padding: 0.25rem;
@@ -680,133 +447,6 @@ input[type='file'] {
   text-align: center;
   height: 36px;
   vertical-align: middle;
-}
-
-/* === 每週訂單 === */
-.weekly-content {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
-
-.weekly-section {
-  border: 1px solid #dee2e6;
-  border-radius: 8px;
-  padding: 1rem;
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid #e9ecef;
-}
-
-.section-header h4 {
-  margin: 0;
-}
-
-.inventory-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
-}
-
-.category-section {
-  background-color: #f8f9fa;
-  padding: 1rem;
-  border-radius: 8px;
-}
-
-.category-section h5 {
-  margin: 0 0 1rem 0;
-  color: #495057;
-  border-bottom: 1px solid #dee2e6;
-  padding-bottom: 0.5rem;
-}
-
-.item-inputs {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.item-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-}
-
-.item-row label {
-  flex: 1;
-  font-size: 0.9rem;
-}
-
-.item-row input {
-  width: 100px;
-  padding: 0.375rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  text-align: center;
-}
-
-/* === 箱數輸入群組 === */
-.box-input-group {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.box-input {
-  width: 70px !important;
-}
-
-.box-unit {
-  font-size: 0.9rem;
-  color: #495057;
-}
-
-.unit-hint {
-  font-size: 0.85rem;
-  color: #6c757d;
-}
-
-.need-order {
-  background-color: #fff3cd;
-  font-weight: bold;
-  color: #856404;
-}
-
-.box-cell {
-  color: #6c757d;
-  font-size: 0.9rem;
-}
-
-.field-hint {
-  display: block;
-  margin-top: 0.25rem;
-  font-size: 0.85rem;
-  color: #6c757d;
-}
-
-/* === 當月總量表格 === */
-.summary-total-row {
-  background-color: #e9ecef;
-}
-
-.category-total {
-  background-color: #f8f9fa;
-}
-
-.category-total td {
-  font-weight: 500;
-}
-
-tfoot tr:first-child td {
-  border-top: 2px solid #dee2e6;
 }
 
 /* === Modal === */
@@ -984,79 +624,7 @@ tfoot tr:first-child td {
   margin-top: 0.15rem;
 }
 
-/* === Inline Add Row === */
-.inline-add-row {
-  background-color: #e8f4fd !important;
-}
-
-.inline-add-row td {
-  padding: 0.4rem 0.5rem !important;
-  vertical-align: middle;
-}
-
-.inline-add-row input,
-.inline-add-row select {
-  padding: 0.35rem 0.5rem;
-  border: 1px solid #adb5bd;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  height: 32px;
-  box-sizing: border-box;
-}
-
-.btn-save {
-  background: #198754;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.btn-save:hover {
-  background: #157347;
-}
-
-.btn-save:disabled {
-  background: #a3cfbb;
-  cursor: not-allowed;
-}
-
-/* === Order Preview Modal === */
-.modal-wide {
-  max-width: 900px !important;
-  width: 95vw;
-}
-
-.order-info-row {
-  display: flex;
-  gap: 2rem;
-  padding: 0.5rem 0;
-  font-size: 0.9rem;
-}
-
-.order-cell-input {
-  padding: 0.3rem;
-  border: 1px solid #dee2e6;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  height: 30px;
-  box-sizing: border-box;
-}
-
-.order-cell-input:focus {
-  border-color: #0d6efd;
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
-}
-
-.order-signature-row {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 1rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid #dee2e6;
-  font-size: 0.95rem;
-}
+/* === 狀態圓點 === */
 .status-dot {
   display: inline-block;
   width: 14px;
@@ -1087,45 +655,4 @@ tfoot tr:first-child td {
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
-}
-
-tr.dash-danger {
-  background-color: #f8d7da !important;
-}
-
-tr.dash-warning {
-  background-color: #fff3cd !important;
-}
-
-.forecast-card {
-  flex: 1;
-  min-width: 250px;
-  padding: 1rem;
-  background-color: #f8f9fa;
-  border-radius: 8px;
-  border: 1px solid #dee2e6;
-}
-
-.forecast-card h4 {
-  margin: 0 0 0.75rem 0;
-  color: #495057;
-  font-size: 1rem;
-  border-bottom: 1px solid #dee2e6;
-  padding-bottom: 0.5rem;
-}
-
-.forecast-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 0.25rem 0;
-  font-size: 0.9rem;
-}
-
-.forecast-label {
-  color: #495057;
-}
-
-.forecast-value {
-  font-weight: 600;
-  color: #212529;
 }

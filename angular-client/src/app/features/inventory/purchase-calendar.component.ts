@@ -29,12 +29,58 @@ export interface PurchaseEntry {
   arrivedBy?: { name?: string } | null;
 }
 
+/** 已上傳實際消耗的區間（格子底部畫覆蓋條） */
+export interface CalendarUploadRange {
+  start: string;
+  end: string;
+  label: string;
+}
+
+/** 點格子的日期數字 / 空白處 */
+export interface CalendarDaySelection {
+  ymd: string;
+  entries: PurchaseEntry[];
+}
+/** 點月檢視左側週次鈕 / 週檢視標題 */
+export interface CalendarWeekSelection {
+  /** 'YYYY-Www' */
+  isoWeek: string;
+  /** 週一 YYYY-MM-DD */
+  start: string;
+  /** 週日 YYYY-MM-DD */
+  end: string;
+}
+/** 點月份標題 */
+export interface CalendarMonthSelection {
+  /** 'YYYY-MM' */
+  month: string;
+}
+export type CalendarView = 'month' | 'week';
+
 interface CalendarCell {
   ymd: string;
   day: number;
   inMonth: boolean;
   isToday: boolean;
   entries: PurchaseEntry[];
+  /** 這天有盤點文件 → 右上「盤」徽章 */
+  hasCount: boolean;
+  /** 這天被實際消耗上傳區間涵蓋 → 底部覆蓋條的 hover 文字（null = 沒有） */
+  uploadLabel: string | null;
+  /** 覆蓋條左端（區間起日） */
+  uploadStart: boolean;
+  /** 覆蓋條右端（區間迄日） */
+  uploadEnd: boolean;
+}
+
+interface CalendarWeek {
+  /** 'YYYY-Www' */
+  isoWeek: string;
+  /** 該列週一（月檢視的列也是週一起算） */
+  start: string;
+  /** 該列週日 */
+  end: string;
+  cells: CalendarCell[];
 }
 
 const CATEGORY_SHORT: Record<string, string> = {
@@ -50,6 +96,14 @@ const CATEGORY_NAMES: Record<string, string> = {
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 const ymdOf = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+/** 該日期所在週的週一（YYYY-MM-DD，本地時區） */
+function mondayOfYmd(ymd: string): string {
+  const d = new Date(`${ymd}T00:00:00`);
+  if (isNaN(d.getTime())) return ymd;
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return ymdOf(d);
+}
 
 /** 'YYYY-MM-DD' 原樣；ISO/其他字串 → 本地日期 */
 export function toLocalYmd(value: string | null | undefined): string {
@@ -80,6 +134,52 @@ export class PurchaseCalendarComponent implements OnInit {
   /** 資料異動後通知父元件（重新載入列表/盤點） */
   @Output() changed = new EventEmitter<void>();
 
+  /** 有盤點文件的日期（YYYY-MM-DD）；格子右上顯示「盤」徽章 */
+  @Input() set countDates(value: string[] | null | undefined) {
+    this.countDateSet.set(new Set((value || []).map((d) => toLocalYmd(d)).filter(Boolean)));
+  }
+  /** 實際消耗已上傳的區間；格子底部畫覆蓋條 */
+  @Input() set uploadRanges(value: CalendarUploadRange[] | null | undefined) {
+    this.uploadRangeList.set(
+      (value || [])
+        .map((r) => ({ start: toLocalYmd(r?.start), end: toLocalYmd(r?.end), label: r?.label || '' }))
+        .filter((r) => r.start && r.end),
+    );
+  }
+  /** 高亮的日期格 */
+  @Input() set selectedDate(value: string | null | undefined) {
+    this.selectedDateValue.set(value ? toLocalYmd(value) : null);
+  }
+  /** 高亮的週列（該週週一 YYYY-MM-DD） */
+  @Input() set selectedWeekStart(value: string | null | undefined) {
+    this.selectedWeekStartValue.set(value ? toLocalYmd(value) : null);
+  }
+  /** 初始檢視（僅 ngOnInit 生效） */
+  @Input() initialView: CalendarView = 'month';
+  /** 父元件遞增此值 → 重新抓叫貨/到貨紀錄（面板建立叫貨、上傳後等外部異動） */
+  @Input() set refreshKey(value: number | null | undefined) {
+    const next = Number(value) || 0;
+    if (this.lastRefreshKey === next) return;
+    const first = this.lastRefreshKey === null;
+    this.lastRefreshKey = next;
+    if (!first) void this.load();
+  }
+  private lastRefreshKey: number | null = null;
+
+  /** 點格子的日期數字或空白處（點＋=新增叫貨、點 chip=條目操作，都不會觸發） */
+  @Output() daySelected = new EventEmitter<CalendarDaySelection>();
+  /** 月檢視左側週次鈕 / 週檢視標題 */
+  @Output() weekSelected = new EventEmitter<CalendarWeekSelection>();
+  /** 點月份標題 */
+  @Output() monthSelected = new EventEmitter<CalendarMonthSelection>();
+  /** 翻頁 / 切換檢視 / 初始化時，目前畫面可見的日期範圍 */
+  @Output() visibleRangeChanged = new EventEmitter<{ start: string; end: string }>();
+
+  protected readonly countDateSet = signal<Set<string>>(new Set<string>());
+  protected readonly uploadRangeList = signal<CalendarUploadRange[]>([]);
+  protected readonly selectedDateValue = signal<string | null>(null);
+  protected readonly selectedWeekStartValue = signal<string | null>(null);
+
   readonly CATEGORY_NAMES = CATEGORY_NAMES;
   readonly CATEGORY_SHORT = CATEGORY_SHORT;
   readonly categoryKeys = Object.keys(CATEGORY_NAMES);
@@ -87,6 +187,10 @@ export class PurchaseCalendarComponent implements OnInit {
   readonly today = ymdOf(new Date());
 
   month = signal(this.today.substring(0, 7));
+  /** 月 / 週檢視 */
+  view = signal<CalendarView>('month');
+  /** 週檢視目前這一週的週一 */
+  weekStart = signal(mondayOfYmd(this.today));
   loading = signal(false);
   all = signal<PurchaseEntry[]>([]);
   /** 篩選類別（空 = 全部） */
@@ -125,37 +229,65 @@ export class PurchaseCalendarComponent implements OnInit {
     return parts.join(' / ');
   });
 
-  /** 行事曆格子（週一起，6 列 × 7） */
-  readonly weeks = computed<CalendarCell[][]>(() => {
+  /** 行事曆格子：月檢視 = 週一起最多 6 列 × 7；週檢視 = 1 列 × 7 */
+  readonly weeks = computed<CalendarWeek[]>(() => {
+    if (this.view() === 'week') {
+      const gridStart = new Date(`${this.weekStart()}T00:00:00`);
+      return [this.buildWeek(gridStart, null)];
+    }
     const [y, m] = this.month().split('-').map(Number);
     const first = new Date(y, m - 1, 1);
     const startOffset = (first.getDay() + 6) % 7; // 週一=0
     const gridStart = new Date(y, m - 1, 1 - startOffset);
-    const byDate = this.entriesByDate();
-    const weeks: CalendarCell[][] = [];
+    const weeks: CalendarWeek[] = [];
     for (let w = 0; w < 6; w++) {
-      const row: CalendarCell[] = [];
-      for (let d = 0; d < 7; d++) {
-        const cur = new Date(gridStart);
-        cur.setDate(gridStart.getDate() + w * 7 + d);
-        const ymd = ymdOf(cur);
-        row.push({
-          ymd,
-          day: cur.getDate(),
-          inMonth: cur.getMonth() === m - 1,
-          isToday: ymd === this.today,
-          entries: byDate.get(ymd) || [],
-        });
-      }
-      weeks.push(row);
+      const rowStart = new Date(gridStart);
+      rowStart.setDate(gridStart.getDate() + w * 7);
+      weeks.push(this.buildWeek(rowStart, m - 1));
       // 最後一列全在下月就不顯示
-      if (w >= 4 && weeks[w].every((c) => !c.inMonth)) {
+      if (w >= 4 && weeks[w].cells.every((c) => !c.inMonth)) {
         weeks.pop();
         break;
       }
     }
     return weeks;
   });
+
+  /** 從週一 Date 生一列 7 格；monthIndex=null 表示週檢視（全部視為 inMonth） */
+  private buildWeek(rowStart: Date, monthIndex: number | null): CalendarWeek {
+    const byDate = this.entriesByDate();
+    const counts = this.countDateSet();
+    const ranges = this.uploadRangeList();
+    const cells: CalendarCell[] = [];
+    for (let d = 0; d < 7; d++) {
+      const cur = new Date(rowStart);
+      cur.setDate(rowStart.getDate() + d);
+      const ymd = ymdOf(cur);
+      const cover = ranges.filter((r) => r.start <= ymd && ymd <= r.end);
+      cells.push({
+        ymd,
+        day: cur.getDate(),
+        inMonth: monthIndex === null ? true : cur.getMonth() === monthIndex,
+        isToday: ymd === this.today,
+        entries: byDate.get(ymd) || [],
+        hasCount: counts.has(ymd),
+        uploadLabel: cover.length ? cover.map((r) => r.label || `${r.start}~${r.end}`).join('、') : null,
+        uploadStart: cover.some((r) => r.start === ymd),
+        uploadEnd: cover.some((r) => r.end === ymd),
+      });
+    }
+    return { isoWeek: this.getISOWeek(rowStart), start: cells[0].ymd, end: cells[6].ymd, cells };
+  }
+
+  /** ISO 週（照抄 inventory.component.ts getISOWeek） */
+  private getISOWeek(date: Date): string {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+    const yearStart = new Date(d.getFullYear(), 0, 1);
+    const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+    return `${d.getFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+  }
 
   /** 顯示日期 → 條目（叫貨看預計到貨日、已到貨看到貨日） */
   private readonly entriesByDate = computed(() => {
@@ -225,7 +357,13 @@ export class PurchaseCalendarComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    if (this.initialView === 'week') {
+      this.view.set('week');
+      this.weekStart.set(mondayOfYmd(this.selectedWeekStartValue() || this.selectedDateValue() || this.today));
+      this.month.set(this.weekStart().substring(0, 7));
+    }
     this.load();
+    this.emitVisibleRange();
   }
 
   async load(): Promise<void> {
@@ -246,9 +384,69 @@ export class PurchaseCalendarComponent implements OnInit {
 
   stepMonth(delta: number): void {
     this.month.set(shiftMonthString(this.month(), delta));
+    this.emitVisibleRange();
   }
   goToday(): void {
+    if (this.view() === 'week') {
+      this.goThisWeek();
+      return;
+    }
     this.month.set(this.today.substring(0, 7));
+    this.emitVisibleRange();
+  }
+
+  // ---------------- 月 / 週檢視 ----------------
+  setView(next: CalendarView): void {
+    if (this.view() === next) return;
+    if (next === 'week') {
+      const base = this.selectedDateValue() || (this.month() === this.today.substring(0, 7) ? this.today : `${this.month()}-01`);
+      this.weekStart.set(mondayOfYmd(this.selectedWeekStartValue() || base));
+      this.month.set(this.weekStart().substring(0, 7));
+    } else {
+      this.month.set(this.weekStart().substring(0, 7));
+    }
+    this.view.set(next);
+    this.emitVisibleRange();
+  }
+  stepWeek(delta: number): void {
+    this.weekStart.set(shiftDateString(this.weekStart(), delta * 7));
+    this.month.set(this.weekStart().substring(0, 7));
+    this.emitVisibleRange();
+  }
+  goThisWeek(): void {
+    this.weekStart.set(mondayOfYmd(this.today));
+    this.month.set(this.weekStart().substring(0, 7));
+    this.emitVisibleRange();
+  }
+  /** 目前週檢視標題：2026-W36（09/01～09/07） */
+  weekTitle(week: CalendarWeek): string {
+    return `${week.isoWeek}（${this.formatMd(week.start)}～${this.formatMd(week.end)}）`;
+  }
+  /** 月檢視左側週次鈕文字：W36 */
+  weekShort(week: CalendarWeek): string {
+    return `W${week.isoWeek.split('-W')[1] || ''}`;
+  }
+  /** 目前顯示的那一週（週檢視用；月檢視回傳第一列） */
+  currentWeek(): CalendarWeek | null {
+    return this.weeks()[0] || null;
+  }
+
+  // ---------------- 選取事件 ----------------
+  /** 點格子日期數字/空白處 */
+  selectDay(cell: CalendarCell): void {
+    this.daySelected.emit({ ymd: cell.ymd, entries: cell.entries });
+  }
+  selectWeek(week: CalendarWeek | null): void {
+    if (!week) return;
+    this.weekSelected.emit({ isoWeek: week.isoWeek, start: week.start, end: week.end });
+  }
+  selectMonth(): void {
+    this.monthSelected.emit({ month: this.view() === 'week' ? this.weekStart().substring(0, 7) : this.month() });
+  }
+  private emitVisibleRange(): void {
+    const rows = this.weeks();
+    if (!rows.length) return;
+    this.visibleRangeChanged.emit({ start: rows[0].start, end: rows[rows.length - 1].end });
   }
   /** 改類別篩選：目前選的品項若不屬於該類別就清掉 */
   setFilterCategory(cat: string): void {
@@ -349,6 +547,11 @@ export class PurchaseCalendarComponent implements OnInit {
     this.batchRows.set([]);
     this.touch();
     this.showNewModal.set(true);
+  }
+  /** 格子上的「＋」：只開新增叫貨，不觸發 daySelected */
+  openNewAt(ymd: string, event: Event): void {
+    event.stopPropagation();
+    this.openNew(ymd);
   }
   closeNew(): void {
     this.showNewModal.set(false);
