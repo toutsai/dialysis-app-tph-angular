@@ -566,8 +566,23 @@ CREATE TABLE IF NOT EXISTS inventory_count_docs (
     created_by TEXT DEFAULT '{}',
     updated_by TEXT DEFAULT '{}',
     created_at TEXT DEFAULT (datetime('now', 'localtime')),
-    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+    updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+    revision INTEGER NOT NULL DEFAULT 1     -- 每次 PUT +1；前端帶 expectedRevision，不符回 409（2026-09-14）
 );
+
+-- 盤點文件版本歷史：每次儲存/刪除留一版（誰、何時、內容），2026-09-14
+CREATE TABLE IF NOT EXISTS inventory_count_versions (
+    id TEXT PRIMARY KEY,
+    count_date TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    action TEXT NOT NULL,                   -- save / delete
+    counts TEXT NOT NULL DEFAULT '{}',
+    count_boxes TEXT NOT NULL DEFAULT '{}',
+    notes TEXT,
+    actor TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_inventory_count_versions_date ON inventory_count_versions(count_date, revision);
 
 -- ========================================
 -- 藥物訂單

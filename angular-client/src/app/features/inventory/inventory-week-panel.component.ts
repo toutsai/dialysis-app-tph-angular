@@ -120,6 +120,8 @@ export class InventoryWeekPanelComponent implements OnChanges {
   weeklyCountSavedInfo = signal<string>('');
 
   private weeklyLastWeekDays = { actual: 0, estimated: 0 };
+  /** 目前載入的盤點文件版本號（存檔帶 expectedRevision）；null = 尚無文件 */
+  private weeklyCountRevision: number | null = null;
   private weeklyCtx: {
     lastWeek: Grouped;
     arrivals: Grouped;
@@ -396,10 +398,11 @@ export class InventoryWeekPanelComponent implements OnChanges {
           }
         }
       }
+      this.weeklyCountRevision = countDoc ? Number(countDoc.revision) || 1 : null;
       if (countDoc) {
         const who = countDoc.updatedBy?.name || countDoc.createdBy?.name || '未知';
         this.weeklyCountSavedInfo.set(
-          `已載入 ${countDate} 盤點（${who}，${countDoc.updatedAt || countDoc.createdAt || ''}）`,
+          `已載入 ${countDate} 盤點（${who}，${countDoc.updatedAt || countDoc.createdAt || ''}，第 ${this.weeklyCountRevision} 版）`,
         );
       } else {
         this.weeklyCountSavedInfo.set(`${countDate} 尚無盤點紀錄，請輸入後按「儲存盤點」`);
@@ -533,14 +536,26 @@ export class InventoryWeekPanelComponent implements OnChanges {
         counts: this.buildGroupedCopy(this.weeklyCount),
         countBoxes: this.buildGroupedCopy(this.weeklyCountBoxes),
         notes: `每週訂單 ${this.isoWeek}`,
+        // 樂觀鎖：與日面板同一份文件，帶載入時的版本號；別人先存過會被 409 擋下
+        ...(this.weeklyCountRevision ? { expectedRevision: this.weeklyCountRevision } : {}),
       } as any)) as CountDoc;
 
+      this.weeklyCountRevision = Number(doc?.revision) || (this.weeklyCountRevision || 0) + 1;
       const who = doc?.updatedBy?.name || doc?.createdBy?.name || '未知';
-      this.weeklyCountSavedInfo.set(`已儲存 ${countDate} 盤點（${who}，${doc?.updatedAt || ''}）`);
+      this.weeklyCountSavedInfo.set(`已儲存 ${countDate} 盤點（${who}，${doc?.updatedAt || ''}，第 ${this.weeklyCountRevision} 版）`);
       this.recomputeWeeklyRows();
       this.changed.emit();
       this.showAlert('操作成功', `${countDate} 盤點已儲存`);
     } catch (error: any) {
+      if (error?.status === 409) {
+        const body = error?.error || {};
+        this.showAlert(
+          '盤點已被他人更新',
+          `${body.message || `${countDate} 的盤點已被他人更新`}。\n已重新載入最新盤點量，請核對後再按「儲存盤點」。`,
+        );
+        void this.loadWeeklyData();
+        return;
+      }
       console.error('儲存盤點失敗:', error);
       this.showAlert('儲存失敗', error?.error?.message || error?.message || String(error));
     }

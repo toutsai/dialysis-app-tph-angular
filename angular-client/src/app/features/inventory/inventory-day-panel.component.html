@@ -84,6 +84,13 @@
     @if (countsLoading()) {
       <div class="loading-state">載入盤點紀錄中...</div>
     } @else {
+      @if (countConflict(); as c) {
+        <div class="count-info-banner conflict">
+          ⚠️ {{ c.message }}（{{ c.by }} {{ c.at }}）。您的輸入尚未寫入，也未被清除：
+          <button type="button" class="btn-sm btn-primary" (click)="reloadLatestCount()">載入最新盤點（捨棄我的輸入）</button>
+          <span class="unit-hint">或先記下您的數字，載入後再填一次儲存。</span>
+        </div>
+      }
       @if (countDocInfo(); as info) {
         <div class="count-info-banner exists">
           📋 已有 {{ date }} 的盤點 — 建檔者：{{ info.createdBy }}｜最後更新：{{ info.updatedBy }} {{ info.updatedAt }}
@@ -131,6 +138,49 @@
           <label>備註</label>
           <input type="text" [(ngModel)]="countNotes" placeholder="例如：每週訂單盤點 / 月底盤點" class="notes-input" />
         </div>
+      </div>
+
+      <div class="weekly-section">
+        <div class="section-header">
+          <h4>{{ date }} 版本歷史</h4>
+          <button class="btn-sm btn-secondary" (click)="toggleHistory()">{{ showHistory() ? '收起' : '展開' }}</button>
+        </div>
+        @if (showHistory()) {
+          @if (historyLoading()) {
+            <div class="loading-state">載入版本歷史中...</div>
+          } @else if (countHistory().length === 0) {
+            <div class="placeholder-text">此日尚無版本紀錄（2026-09-14 起每次儲存/刪除留一版）。</div>
+          } @else {
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>版本</th>
+                    <th>動作</th>
+                    <th>操作者</th>
+                    <th>時間</th>
+                    <th>品項數 / 合計個數</th>
+                    <th>備註</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (v of countHistory(); track v.id) {
+                    <tr [class.history-delete]="v.action === 'delete'">
+                      <td>第 {{ v.revision }} 版</td>
+                      <td>{{ v.action === 'delete' ? '刪除' : '儲存' }}</td>
+                      <td>{{ v.actor?.name || '未知' }}</td>
+                      <td>{{ v.createdAt }}</td>
+                      <td>{{ historyTotal(v) }} 個</td>
+                      <td>{{ v.notes || '-' }}</td>
+                      <td><button class="btn-sm btn-secondary" (click)="applyVersion(v)" title="把這一版的數量帶進上方輸入格，按儲存才會寫入">帶入</button></td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        }
       </div>
 
       <div class="weekly-section">

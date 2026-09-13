@@ -51,6 +51,21 @@ export interface CountDoc extends FirestoreRecord {
   updatedBy?: { uid?: string; name?: string } | null;
   createdAt?: string;
   updatedAt?: string;
+  /** 版本號（每次儲存 +1）；存檔帶 expectedRevision，不符後端回 409 */
+  revision?: number;
+}
+
+/** 盤點文件版本歷史的一筆（GET /system/inventory/counts/:date/history） */
+export interface CountVersion {
+  id: string;
+  countDate: string;
+  revision: number;
+  action: 'save' | 'delete';
+  counts: Grouped;
+  countBoxes: Grouped;
+  notes: string;
+  actor: { uid?: string; name?: string };
+  createdAt: string;
 }
 
 /** itemTimeline 的一天 */
