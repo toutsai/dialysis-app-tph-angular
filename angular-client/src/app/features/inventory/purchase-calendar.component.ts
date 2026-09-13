@@ -71,6 +71,10 @@ interface CalendarCell {
   uploadStart: boolean;
   /** 覆蓋條右端（區間迄日） */
   uploadEnd: boolean;
+  /** 該日排程推估消耗摘要（AK 12 · A液 8 · B液 5）；null = 無排程/未載入 */
+  forecast: string | null;
+  /** 摘要的 hover 明細（逐品項） */
+  forecastTitle: string;
 }
 
 interface CalendarWeek {
@@ -81,7 +85,12 @@ interface CalendarWeek {
   /** 該列週日 */
   end: string;
   cells: CalendarCell[];
+  /** 整週已過、卻沒有任何一天被實際消耗上傳區間涵蓋 → 週次鈕灰色提醒 */
+  noUpload: boolean;
 }
+
+/** 每日排程推估消耗：ymd → 類別 → 品項 → 個數 */
+export type CalendarDailyForecast = Record<string, Record<string, Record<string, number>>>;
 
 const CATEGORY_SHORT: Record<string, string> = {
   artificialKidney: 'AK',
@@ -146,6 +155,10 @@ export class PurchaseCalendarComponent implements OnInit {
         .filter((r) => r.start && r.end),
     );
   }
+  /** 每日排程推估消耗（父元件依可見範圍載入）；格子底部顯示「AK 12 · A液 8」小字，hover 看逐品項 */
+  @Input() set dailyForecast(value: CalendarDailyForecast | null | undefined) {
+    this.dailyForecastMap.set(value || {});
+  }
   /** 高亮的日期格 */
   @Input() set selectedDate(value: string | null | undefined) {
     this.selectedDateValue.set(value ? toLocalYmd(value) : null);
@@ -177,6 +190,7 @@ export class PurchaseCalendarComponent implements OnInit {
 
   protected readonly countDateSet = signal<Set<string>>(new Set<string>());
   protected readonly uploadRangeList = signal<CalendarUploadRange[]>([]);
+  protected readonly dailyForecastMap = signal<CalendarDailyForecast>({});
   protected readonly selectedDateValue = signal<string | null>(null);
   protected readonly selectedWeekStartValue = signal<string | null>(null);
 
@@ -258,12 +272,14 @@ export class PurchaseCalendarComponent implements OnInit {
     const byDate = this.entriesByDate();
     const counts = this.countDateSet();
     const ranges = this.uploadRangeList();
+    const forecasts = this.dailyForecastMap();
     const cells: CalendarCell[] = [];
     for (let d = 0; d < 7; d++) {
       const cur = new Date(rowStart);
       cur.setDate(rowStart.getDate() + d);
       const ymd = ymdOf(cur);
       const cover = ranges.filter((r) => r.start <= ymd && ymd <= r.end);
+      const fc = this.summarizeForecast(forecasts[ymd]);
       cells.push({
         ymd,
         day: cur.getDate(),
@@ -274,9 +290,38 @@ export class PurchaseCalendarComponent implements OnInit {
         uploadLabel: cover.length ? cover.map((r) => r.label || `${r.start}~${r.end}`).join('、') : null,
         uploadStart: cover.some((r) => r.start === ymd),
         uploadEnd: cover.some((r) => r.end === ymd),
+        forecast: fc.summary,
+        forecastTitle: fc.title,
       });
     }
-    return { isoWeek: this.getISOWeek(rowStart), start: cells[0].ymd, end: cells[6].ymd, cells };
+    const end = cells[6].ymd;
+    // 整週已過（週日 < 今天）且沒有任何一天被上傳區間涵蓋 → 提醒書記補上傳 HIS 消耗
+    const noUpload = end < this.today && !cells.some((c) => c.uploadLabel);
+    return { isoWeek: this.getISOWeek(rowStart), start: cells[0].ymd, end, cells, noUpload };
+  }
+
+  /** 每日推估消耗 → 格子小字「AK 12 · A液 8 · B液 5」+ hover 逐品項 */
+  private summarizeForecast(
+    grouped: Record<string, Record<string, number>> | undefined,
+  ): { summary: string | null; title: string } {
+    if (!grouped) return { summary: null, title: '' };
+    const parts: string[] = [];
+    const lines: string[] = [];
+    for (const category of this.categoryKeys) {
+      const items = Object.entries(grouped[category] || {}).filter(([, n]) => Number(n) > 0);
+      if (!items.length) continue;
+      const total = items.reduce((s, [, n]) => s + Number(n), 0);
+      parts.push(`${CATEGORY_SHORT[category] || category} ${total}`);
+      lines.push(
+        `${CATEGORY_NAMES[category]}：` +
+          items
+            .sort((a, b) => b[1] - a[1])
+            .map(([name, n]) => `${name} ${n}`)
+            .join('、'),
+      );
+    }
+    if (!parts.length) return { summary: null, title: '' };
+    return { summary: parts.join(' · '), title: `排程推估消耗（個）\n${lines.join('\n')}` };
   }
 
   /** ISO 週（照抄 inventory.component.ts getISOWeek） */

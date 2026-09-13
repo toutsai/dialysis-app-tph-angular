@@ -22,6 +22,9 @@
         }
         <button type="button" class="pc-nav-btn" (click)="stepWeek(1)" title="下一週">›</button>
         <button type="button" class="pc-today-btn" (click)="goThisWeek()">本週</button>
+        @if (currentWeek()?.noUpload) {
+          <span class="pc-noupload-badge" title="這一週已過，但還沒有上傳 HIS 實際消耗 Excel；週統計與安全庫存會以排程推估代替">尚未上傳實際消耗</span>
+        }
       </div>
     }
     <div class="pc-filters">
@@ -47,6 +50,10 @@
       <span class="pc-legend"><i class="dot ordered"></i>待到貨</span>
       <span class="pc-legend"><i class="dot overdue"></i>逾期未到</span>
       <span class="pc-legend"><i class="dot arrived"></i>已到貨</span>
+      <span class="pc-legend" title="這天有盤點紀錄"><i class="badge-sample">盤</i>盤點</span>
+      <span class="pc-legend" title="格子底部的藍條 = 該區間已上傳 HIS 實際消耗"><i class="bar-sample"></i>已上傳實際消耗</span>
+      <span class="pc-legend" title="週次鈕灰底 = 該週已過但尚未上傳實際消耗"><i class="nou-sample">W</i>週未上傳</span>
+      <span class="pc-legend" title="格子底部小字 = 該日排程推估消耗（AK 人工腎臟 / A液 透析藥水 / B液），滑過看逐品項">小字＝每日推估消耗</span>
     </div>
     <button type="button" class="btn-primary" (click)="openNew()">+ 新增叫貨</button>
   </div>
@@ -90,7 +97,13 @@
     @for (week of weeks(); track week.start) {
       @if (view() === 'month') {
         <div class="pc-week-col" [class.week-selected]="week.start === selectedWeekStartValue()">
-          <button type="button" class="pc-week-btn" (click)="selectWeek(week)" [title]="'切換到 ' + weekTitle(week) + ' 的週作業面板'">
+          <button
+            type="button"
+            class="pc-week-btn"
+            [class.no-upload]="week.noUpload"
+            (click)="selectWeek(week)"
+            [title]="'切換到 ' + weekTitle(week) + ' 的週作業面板' + (week.noUpload ? '（這週已過，尚未上傳實際消耗）' : '')"
+          >
             {{ weekShort(week) }}
           </button>
         </div>
@@ -121,6 +134,9 @@
               </button>
             }
           </div>
+          @if (cell.forecast) {
+            <div class="pc-forecast" [title]="cell.forecastTitle">{{ cell.forecast }}</div>
+          }
           @if (cell.uploadLabel) {
             <div
               class="pc-upload-bar"

@@ -219,8 +219,26 @@ export class InventoryWeekPanelComponent implements OnChanges {
 
   /** 日期輸入框改盤點日 → 立即載入該日文件（避免把畫面上舊日期的數字存到新日期） */
   onCountDateInput(value: string): void {
-    this.countDate = value || '';
-    if (this.countDate) void this.loadWeeklyData();
+    const next = value || '';
+    if (!next) {
+      this.countDate = '';
+      return;
+    }
+    // [min]/[max] 只是 UI 提示，鍵盤輸入仍可跨出本週 → 這裡才是真正的守門
+    if (!this.isWithinWeek(next)) {
+      this.showAlert('盤點日超出本週', `盤點日須在 ${this.weekStart} ~ ${this.weekEnd} 之間，已改回 ${this.defaultCountDate()}。`);
+      this.countDate = this.defaultCountDate();
+    } else {
+      this.countDate = next;
+    }
+    void this.loadWeeklyData();
+  }
+
+  private isWithinWeek(ymd: string): boolean {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return false;
+    if (this.weekStart && ymd < this.weekStart) return false;
+    if (this.weekEnd && ymd > this.weekEnd) return false;
+    return true;
   }
 
   private buildGroupedCopy(src: Record<string, Record<string, number>>): Grouped {
@@ -354,6 +372,8 @@ export class InventoryWeekPanelComponent implements OnChanges {
     }
 
     try {
+      // 盤點日一律限制在本週內（週次由 Input 決定；超出就退回預設週二）
+      if (this.countDate && !this.isWithinWeek(this.countDate)) this.countDate = this.defaultCountDate();
       const countDate = this.countDate;
 
       // 1. 載入盤點日的盤點文件（以「盤點日」為 key，與日面板同一份資料）

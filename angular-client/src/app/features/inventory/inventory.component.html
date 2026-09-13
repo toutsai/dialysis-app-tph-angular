@@ -56,6 +56,7 @@
       <!-- 工具列 -->
       <div class="cal-toolbar">
         <button class="btn-primary" (click)="showUpload.set(true)">⬆ 上傳消耗 Excel</button>
+        <button class="btn-secondary" (click)="goTodayCount()" title="切到今天的日面板並捲到盤點輸入區">📋 今日盤點</button>
         <a class="btn-secondary toolbar-link" routerLink="/consumables">病人耗材查詢</a>
         <button class="btn-secondary" (click)="loadDashboard()" [disabled]="dashboardLoading()">
           {{ dashboardLoading() ? '計算中...' : '重新計算庫存' }}
@@ -136,6 +137,7 @@
         [unitsPerBoxFn]="unitsPerBoxFn"
         [countDates]="countDates()"
         [uploadRanges]="uploadRanges()"
+        [dailyForecast]="dailyForecast()"
         [selectedDate]="selectedDate()"
         [selectedWeekStart]="selectedWeekStart()"
         [refreshKey]="calendarRefresh()"

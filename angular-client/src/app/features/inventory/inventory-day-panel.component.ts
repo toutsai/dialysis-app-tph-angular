@@ -5,12 +5,14 @@
 // 只把 date 改成 @Input、showAlert 改成 alert.emit、盤點紀錄列點擊改成 dateSelected.emit。
 import {
   Component,
+  ElementRef,
   EventEmitter,
   Input,
   OnChanges,
   OnInit,
   Output,
   SimpleChanges,
+  ViewChild,
   inject,
   signal,
 } from '@angular/core';
@@ -53,6 +55,27 @@ export class InventoryDayPanelComponent implements OnInit, OnChanges {
   @Output() changed = new EventEmitter<void>();
   @Output() alert = new EventEmitter<{ title: string; message: string }>();
   @Output() dateSelected = new EventEmitter<string>();
+
+  @ViewChild('countBlock') private countBlock?: ElementRef<HTMLElement>;
+
+  /** 工具列「今日盤點」→ 捲到盤點輸入區並聚焦第一個箱數欄 */
+  focusCount(): void {
+    const el = this.countBlock?.nativeElement;
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'auto', block: 'start' });
+    // 箱數欄要等該日盤點文件載完才會渲染；載入中的區塊很矮，捲動會被內容高度卡住 →
+    // 等輸入格出現後再捲一次、再聚焦
+    const tryFocus = (attempt: number) => {
+      const input = el.querySelector<HTMLInputElement>('input.box-input');
+      if (input) {
+        el.scrollIntoView({ behavior: 'auto', block: 'start' });
+        input.focus({ preventScroll: true });
+        return;
+      }
+      if (attempt < 3) setTimeout(() => tryFocus(attempt + 1), 600);
+    };
+    setTimeout(() => tryFocus(0), 300);
+  }
 
   readonly CATEGORY_NAMES = CATEGORY_NAMES;
   readonly categoryKeys = Object.keys(CATEGORY_NAMES);
