@@ -53,27 +53,31 @@
     <!-- ========== 作業行事曆 ========== -->
     @if (activeTab() === 'calendar') {
     <div class="tab-panel">
-      <!-- 工具列 -->
+      <!-- 工具列（捲動時固定在頂端；三顆鈕都以視窗開啟，不離開行事曆） -->
       <div class="cal-toolbar">
-        <button class="btn-primary" (click)="showUpload.set(true)">⬆ 上傳消耗 Excel</button>
-        <button class="btn-secondary" (click)="goTodayCount()" title="切到今天的日面板並捲到盤點輸入區">📋 今日盤點</button>
-        <a class="btn-secondary toolbar-link" routerLink="/consumables">病人耗材查詢</a>
-        <button class="btn-secondary" (click)="loadDashboard()" [disabled]="dashboardLoading()">
-          {{ dashboardLoading() ? '計算中...' : '重新計算庫存' }}
-        </button>
+        <span class="toolbar-label">常用作業</span>
+        <button class="btn-primary" (click)="showUpload.set(true)" title="上傳 HIS 匯出的每月耗材 Excel（視窗）">⬆ 上傳消耗 Excel</button>
+        <button class="btn-secondary" (click)="openTodayCount()" title="開今天的盤點輸入視窗">📋 今日盤點</button>
+        <button class="btn-secondary" (click)="showConsumables.set(true)" title="查詢病人每月耗材用量（視窗）">🔍 病人耗材查詢</button>
+        <span class="toolbar-hint">三個都是視窗，關閉後回到原位</span>
       </div>
 
-      <!-- 庫存總覽（可收合） -->
+      <!-- 庫存總覽（可收合；重新計算只影響這區的卡片，鈕就放在這） -->
       <section class="overview-section">
-        <button type="button" class="overview-head" (click)="overviewCollapsed.set(!overviewCollapsed())">
-          <span class="overview-caret">{{ overviewCollapsed() ? '▸' : '▾' }}</span>
-          <span class="overview-title">庫存總覽</span>
-          @if (dashboardHasCount()) {
-            <span class="overview-sub">
-              盤點基礎：{{ dashboardLastCountDate() }}（{{ dashboardCountAgeDays() }} 天前）
-            </span>
-          }
-        </button>
+        <div class="overview-head-row">
+          <button type="button" class="overview-head" (click)="overviewCollapsed.set(!overviewCollapsed())">
+            <span class="overview-caret">{{ overviewCollapsed() ? '▸' : '▾' }}</span>
+            <span class="overview-title">庫存總覽</span>
+            @if (dashboardHasCount()) {
+              <span class="overview-sub">
+                盤點基礎：{{ dashboardLastCountDate() }}（{{ dashboardCountAgeDays() }} 天前）
+              </span>
+            }
+          </button>
+          <button type="button" class="btn-sm btn-secondary overview-recalc" (click)="loadDashboard()" [disabled]="dashboardLoading()" title="盤點或到貨後重新推估卡片數字">
+            {{ dashboardLoading() ? '計算中...' : '↻ 重新計算' }}
+          </button>
+        </div>
 
         @if (!overviewCollapsed()) {
           <div class="overview-body">
@@ -355,6 +359,46 @@
       (alert)="onPanelAlert($event)"
       (close)="showUpload.set(false)"
     ></app-inventory-upload>
+  }
+
+  <!-- 今日盤點視窗：日面板只顯示盤點區，與行事曆日面板/週面板共用同一份 counts 文件 -->
+  @if (showCountModal()) {
+  <div class="modal-overlay" (click)="closeOnOverlay($event, 'count')">
+    <div class="modal-content count-modal-content">
+      <div class="modal-header">
+        <h3>盤點輸入 {{ countModalDate() }}</h3>
+        <button type="button" class="modal-close" aria-label="關閉" (click)="showCountModal.set(false)">&times;</button>
+      </div>
+      <div class="modal-body modal-body-tight">
+        <app-inventory-day-panel
+          [date]="countModalDate()"
+          [entries]="[]"
+          [countOnly]="true"
+          [inventoryItems]="inventoryItems()"
+          [knownItems]="knownItems"
+          [unitsPerBoxFn]="unitsPerBoxFn"
+          (changed)="onInventoryChanged()"
+          (alert)="onPanelAlert($event)"
+          (dateSelected)="onCountModalDateSelected($event)"
+        ></app-inventory-day-panel>
+      </div>
+    </div>
+  </div>
+  }
+
+  <!-- 病人耗材查詢視窗：嵌入 /consumables 頁（隱藏頁首與上傳頁籤），關閉即回行事曆 -->
+  @if (showConsumables()) {
+  <div class="modal-overlay" (click)="closeOnOverlay($event, 'consumables')">
+    <div class="modal-content consumables-modal-content">
+      <div class="modal-header">
+        <h3>病人耗材查詢</h3>
+        <button type="button" class="modal-close" aria-label="關閉" (click)="showConsumables.set(false)">&times;</button>
+      </div>
+      <div class="modal-body modal-body-tight">
+        <app-consumables [embedded]="true"></app-consumables>
+      </div>
+    </div>
+  </div>
   }
 
   <!-- 品項設定 Modal -->

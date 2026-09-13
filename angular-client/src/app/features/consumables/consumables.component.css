@@ -5,6 +5,16 @@
   padding: 0.5rem;
   background-color: #f8f9fa;
 }
+/* 嵌入庫存頁的視窗：高度交給視窗、去掉頁面底色與圓角接縫 */
+.page-container.embedded {
+  height: 76vh;
+  padding: 0;
+  background-color: transparent;
+}
+.page-container.embedded .page-main-content {
+  border: none;
+  border-radius: 0;
+}
 .page-header {
   flex-shrink: 0;
   padding-bottom: 1rem;

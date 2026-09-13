@@ -151,13 +151,58 @@ h1 {
   flex-wrap: wrap;
   flex-shrink: 0;
   margin-bottom: 0.75rem;
+  /* 往下捲到週/月面板時工具列仍貼在捲動容器（.tab-panel）頂端 */
+  position: sticky;
+  top: -1.5rem; /* 抵掉 .tab-panel 的 1.5rem 內距，貼齊捲動容器真正的頂邊 */
+  z-index: 20;
+  padding: 0.35rem 0 0.5rem;
+  background-color: #fff;
+  border-bottom: 1px solid #e9ecef;
 }
 
-.cal-toolbar .toolbar-link {
-  display: inline-flex;
-  align-items: center;
-  text-decoration: none;
-  line-height: 1;
+.cal-toolbar .toolbar-label {
+  font-weight: 600;
+  color: #495057;
+  margin-right: 0.25rem;
+}
+
+.cal-toolbar .toolbar-hint {
+  font-size: 0.8rem;
+  color: #868e96;
+  margin-left: 0.25rem;
+}
+
+/* 庫存總覽標頭列：左邊收合鈕、右邊重新計算 */
+.overview-head-row {
+  display: flex;
+  align-items: stretch;
+  background-color: #f8f9fa;
+}
+
+.overview-head-row .overview-head {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+.overview-recalc {
+  flex-shrink: 0;
+  margin: 0.35rem 0.75rem;
+  white-space: nowrap;
+}
+
+/* 今日盤點 / 病人耗材查詢 視窗尺寸（比 .modal-content 的 500px 上限高一階優先權） */
+.modal-content.count-modal-content {
+  max-width: 1120px;
+  width: 95%;
+}
+
+.modal-content.consumables-modal-content {
+  max-width: 1500px;
+  width: 96%;
+}
+
+.modal-body-tight {
+  padding: 0.75rem 1rem 1rem;
 }
 
 /* === 作業行事曆：可收合的庫存總覽 === */

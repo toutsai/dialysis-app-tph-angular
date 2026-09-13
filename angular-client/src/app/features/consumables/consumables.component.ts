@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, Input, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiConfigService } from '@services/api-config.service';
@@ -38,6 +38,9 @@ export class ConsumablesComponent implements OnInit {
   private patientStore = inject(PatientStoreService);
   private apiManagerService = inject(ApiManagerService);
   private consumablesReportsApi: ApiManager<FirestoreRecord>;
+
+  /** 嵌入模式（書記專用 > 庫存管理「病人耗材查詢」視窗）：隱藏頁首與資料上傳頁籤，上傳已在庫存頁工具列 */
+  @Input() embedded = false;
 
   // --- Tab state ---
   activeTab = signal<string>('query');
