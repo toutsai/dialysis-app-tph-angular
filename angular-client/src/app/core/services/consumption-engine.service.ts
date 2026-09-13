@@ -39,6 +39,46 @@ export class ConsumptionEngineService {
     startDate: string,
     endDate: string,
   ): Promise<ConsumptionResult> {
+    const byDate = await this.calculateDailyTheoreticalConsumption(startDate, endDate);
+
+    const grouped: Record<string, Record<string, number>> = {
+      artificialKidney: {},
+      dialysateCa: {},
+      bicarbonateType: {},
+    };
+    let totalSlots = 0;
+    for (const day of byDate.values()) {
+      totalSlots += day.totalSlots;
+      for (const [category, itemMap] of Object.entries(day.grouped)) {
+        for (const [itemName, count] of Object.entries(itemMap)) {
+          grouped[category][itemName] = (grouped[category][itemName] || 0) + count;
+        }
+      }
+    }
+
+    // Flatten to items list
+    const items: ConsumptionItem[] = [];
+    for (const [category, itemMap] of Object.entries(grouped)) {
+      for (const [itemName, count] of Object.entries(itemMap)) {
+        items.push({
+          category: category as ConsumptionItem['category'],
+          itemName,
+          count,
+        });
+      }
+    }
+
+    return { period: { start: startDate, end: endDate }, items, grouped, totalSlots };
+  }
+
+  /**
+   * 逐日的排程推估消耗（key = YYYY-MM-DD）。
+   * 病人/床位設定/排程只抓一次，供行事曆格子顯示每日預估用；區間總量版 calculateTheoreticalConsumption 由此彙總。
+   */
+  async calculateDailyTheoreticalConsumption(
+    startDate: string,
+    endDate: string,
+  ): Promise<Map<string, { grouped: Record<string, Record<string, number>>; totalSlots: number }>> {
     // 1. Load patients if not yet loaded
     await this.patientStore.fetchPatientsIfNeeded();
     const patientMap = this.patientStore.patientMap();
@@ -66,22 +106,24 @@ export class ConsumptionEngineService {
     // 3. Fetch schedule documents in the date range via REST API
     const schedulesDocs = await this.fetchSchedulesInRange(startDate, endDate);
 
-    // 4. Process each schedule
-    const grouped: Record<string, Record<string, number>> = {
-      artificialKidney: {},
-      dialysateCa: {},
-      bicarbonateType: {},
-    };
-    let totalSlots = 0;
+    // 4. Process each schedule, bucketed by date
+    const byDate = new Map<string, { grouped: Record<string, Record<string, number>>; totalSlots: number }>();
 
     for (const scheduleDoc of schedulesDocs) {
       const schedule = (scheduleDoc['schedule'] as Record<string, Record<string, unknown>>) || {};
+      const dateKey = String(scheduleDoc['date'] || '').substring(0, 10) || startDate;
+      let bucket = byDate.get(dateKey);
+      if (!bucket) {
+        bucket = { grouped: { artificialKidney: {}, dialysateCa: {}, bicarbonateType: {} }, totalSlots: 0 };
+        byDate.set(dateKey, bucket);
+      }
+      const grouped = bucket.grouped;
 
       for (const [slotKey, slotData] of Object.entries(schedule)) {
         const patientId = slotData?.['patientId'] as string;
         if (!patientId) continue;
 
-        totalSlots++;
+        bucket.totalSlots++;
         const patient = patientMap.get(patientId);
         if (!patient) continue;
 
@@ -112,19 +154,7 @@ export class ConsumptionEngineService {
       }
     }
 
-    // 5. Flatten to items list
-    const items: ConsumptionItem[] = [];
-    for (const [category, itemMap] of Object.entries(grouped)) {
-      for (const [itemName, count] of Object.entries(itemMap)) {
-        items.push({
-          category: category as ConsumptionItem['category'],
-          itemName,
-          count,
-        });
-      }
-    }
-
-    return { period: { start: startDate, end: endDate }, items, grouped, totalSlots };
+    return byDate;
   }
 
   // -------------------------------------------------------------------------
@@ -182,8 +212,10 @@ export class ConsumptionEngineService {
     const dates: string[] = [];
     const current = new Date(startDate + 'T00:00:00');
     const end = new Date(endDate + 'T00:00:00');
+    const pad = (n: number) => String(n).padStart(2, '0');
     while (current <= end) {
-      dates.push(current.toISOString().split('T')[0]);
+      // 本地日期字串（不可用 toISOString：UTC+8 會退回前一天）
+      dates.push(`${current.getFullYear()}-${pad(current.getMonth() + 1)}-${pad(current.getDate())}`);
       current.setDate(current.getDate() + 1);
     }
     return dates;

@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, ViewChild, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -19,6 +19,7 @@ import {
   type CalendarWeekSelection,
   type CalendarMonthSelection,
   type CalendarUploadRange,
+  type CalendarDailyForecast,
 } from './purchase-calendar.component';
 import { InventoryDayPanelComponent } from './inventory-day-panel.component';
 import { InventoryWeekPanelComponent } from './inventory-week-panel.component';
@@ -110,6 +111,11 @@ export class InventoryComponent implements OnInit {
   countDates = signal<string[]>([]);
   /** 行事曆：實際消耗已上傳的區間覆蓋條 */
   uploadRanges = signal<CalendarUploadRange[]>([]);
+  /** 行事曆：可見範圍的每日排程推估消耗（格子小字） */
+  dailyForecast = signal<CalendarDailyForecast>({});
+  private dailyForecastSeq = 0;
+  /** 日面板（@if 內，只有 kind='day' 時存在）；工具列「今日盤點」用來捲到盤點區 */
+  @ViewChild(InventoryDayPanelComponent) private dayPanelCmp?: InventoryDayPanelComponent;
   /** 行事曆高亮 */
   selectedDate = signal<string | null>(null);
   selectedWeekStart = signal<string | null>(null);
@@ -289,10 +295,36 @@ export class InventoryComponent implements OnInit {
     this.panel.set({ kind: 'month', month: e.month });
   }
 
-  /** 行事曆翻頁/切換檢視 → 重載可見範圍的盤點日徽章 */
+  /** 行事曆翻頁/切換檢視 → 重載可見範圍的盤點日徽章 + 每日推估消耗 */
   async onVisibleRangeChanged(range: { start: string; end: string }): Promise<void> {
     this.visibleRange = { start: range.start, end: range.end };
+    void this.loadDailyForecast();
     await this.loadCountDates();
+  }
+
+  /** 可見範圍的每日排程推估消耗（一次抓整段排程；翻頁很快時只採用最後一次的結果） */
+  private async loadDailyForecast(): Promise<void> {
+    const { start, end } = this.visibleRange;
+    if (!start || !end) return;
+    const seq = ++this.dailyForecastSeq;
+    try {
+      const byDate = await this.consumptionEngine.calculateDailyTheoreticalConsumption(start, end);
+      if (seq !== this.dailyForecastSeq) return;
+      const out: CalendarDailyForecast = {};
+      for (const [ymd, day] of byDate) out[ymd] = day.grouped;
+      this.dailyForecast.set(out);
+    } catch (error) {
+      console.warn('載入每日推估消耗失敗:', error);
+      if (seq === this.dailyForecastSeq) this.dailyForecast.set({});
+    }
+  }
+
+  /** 工具列「今日盤點」：切到今天的日面板並捲到盤點輸入區 */
+  goTodayCount(): void {
+    const today = this.stock.todayString();
+    this.onDaySelected({ ymd: today, entries: [] });
+    // 日面板在 @if 內，等 change detection 建好元件再捲動
+    setTimeout(() => this.dayPanelCmp?.focusCount(), 0);
   }
 
   /** 行事曆/面板改了資料 → 盤點日、叫貨紀錄、總覽全部重載 */
