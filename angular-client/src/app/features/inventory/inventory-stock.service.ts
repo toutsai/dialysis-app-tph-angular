@@ -14,7 +14,7 @@ import {
   type FirestoreRecord,
 } from '@services/api-manager.service';
 
-import { INVENTORY_CATEGORIES } from './inventory-categories';
+import { INVENTORY_CATEGORIES, isConsumptionTracked } from './inventory-categories';
 
 /** category → itemName → 數量 */
 export type Grouped = Record<string, Record<string, number>>;
@@ -51,6 +51,45 @@ export interface CountDoc extends FirestoreRecord {
   updatedBy?: { uid?: string; name?: string } | null;
   createdAt?: string;
   updatedAt?: string;
+}
+
+/** itemTimeline 的一天 */
+export interface ItemTimelineDay {
+  date: string;
+  kind: 'past' | 'today' | 'future';
+  /** 當日消耗（實際區間按日均攤 / 排程推估；其他耗材為 0），1 位小數 */
+  consumption: number;
+  source: '實際' | '推估' | '無';
+  /** 當日已到貨 */
+  arrivals: number;
+  /** 當日待到貨（只在未來日計入） */
+  pendingArrivals: number;
+  /** 日末餘量；沒有盤點基準時為 null */
+  balance: number | null;
+  isCountDate: boolean;
+}
+
+/** 單一品項逐日投影（庫存總覽 → 品項明細） */
+export interface ItemTimeline {
+  category: string;
+  item: string;
+  countDate: string;
+  countBy: string;
+  baseline: number | null;
+  /** 最近盤點是否有填這個品項（沒填以 0 起算並警示） */
+  itemInCount: boolean;
+  days: ItemTimelineDay[];
+  firstDeficitDate: string | null;
+  /** 盤點日起至今天的已到貨 */
+  receipts: { date: string; quantity: number; boxQuantity: number; notes: string }[];
+  /** 全部待到貨（含逾期） */
+  pending: { date: string; quantity: number; boxQuantity: number; overdue: boolean; notes: string }[];
+  /** 投影期間內用到的實際消耗上傳區間 */
+  usedRanges: { key: string; start: string; end: string; quantity: number }[];
+  actualDays: number;
+  estimatedDays: number;
+  horizonEnd: string;
+  warnings: string[];
 }
 
 export interface StockEstimate {
@@ -423,6 +462,137 @@ export class InventoryStockService {
       actualDays: consumption.actualDays,
       estimatedDays: consumption.estimatedDays,
       countDate,
+    };
+  }
+
+  // =========================================================================
+  // 單一品項逐日投影（庫存總覽卡片 → 品項明細視窗）
+  // =========================================================================
+
+  /**
+   * 從最近盤點日起逐日推到 today + horizonDays − 1：
+   *   過去/今天：消耗 = 該日被實際區間涵蓋 → 區間總量按日均攤；否則排程推估（與 consumptionBetween 同規則）
+   *   未來：消耗 = 排程推估；待到貨依預計到貨日於當日計入（逾期未到不計）
+   *   餘量 = 前一日餘量 + 當日到貨 + 當日待到貨 − 當日消耗；第一個餘量 < 0 的日期 = 預計不足日
+   * 其他耗材（無消耗來源）消耗一律 0。數字為顯示用逐日拆解；卡片上的推估庫存仍以 estimateStock 為準。
+   */
+  async itemTimeline(
+    category: string,
+    item: string,
+    countDoc: CountDoc | null | undefined,
+    purchases: unknown[],
+    today: string = this.todayString(),
+    horizonDays = 14,
+  ): Promise<ItemTimeline> {
+    const warnings: string[] = [];
+    const tracked = isConsumptionTracked(category);
+    const countDate = countDoc?.countDate && countDoc.countDate <= today ? countDoc.countDate : '';
+    const rawBaseline = countDoc?.counts?.[category]?.[item];
+    const itemInCount = !!countDate && rawBaseline !== undefined && rawBaseline !== null && rawBaseline !== ('' as unknown);
+    const baseline = countDate ? Number(rawBaseline) || 0 : null;
+    const start = countDate || today;
+    const horizonEnd = this.addDays(today, Math.max(1, horizonDays) - 1);
+
+    if (!countDate) warnings.push('尚無盤點基準，餘量無法推算；請先盤點。');
+    else if (!itemInCount) warnings.push(`最近一次盤點（${countDate}）未填此品項，以 0 起算。`);
+    if (!tracked) warnings.push('其他耗材沒有排程推估與 HIS 消耗來源，消耗一律以 0 計，餘量 = 盤點 + 到貨。');
+
+    const ranges: ActualRange[] = tracked ? await this.ensureActualRanges() : [];
+    const forecastByDate = new Map<string, number>();
+    if (tracked) {
+      try {
+        const byDate = await this.engine.calculateDailyTheoreticalConsumption(start, horizonEnd);
+        for (const [date, day] of byDate) forecastByDate.set(date, this.value(day.grouped as Grouped, category, item));
+      } catch (error) {
+        console.warn('[InventoryStock] itemTimeline 排程推估失敗:', error);
+        warnings.push('排程推估載入失敗，未被實際區間涵蓋的日子消耗以 0 計。');
+      }
+    }
+
+    const rows = ((purchases || []) as Record<string, any>[]).filter(
+      (p) => String(p?.['category'] || '') === category && String(p?.['item'] || '') === item,
+    );
+    const dayOf = (v: unknown) => (typeof v === 'string' ? v.substring(0, 10) : '');
+    const arrivedByDate = new Map<string, number>();
+    const pendingByDate = new Map<string, number>();
+    const receipts: ItemTimeline['receipts'] = [];
+    const pending: ItemTimeline['pending'] = [];
+    for (const p of rows) {
+      const qty = Number(p['quantity']) || 0;
+      if (p['status'] === 'ordered') {
+        const date = dayOf(p['expectedDate']);
+        if (!date) continue;
+        pendingByDate.set(date, (pendingByDate.get(date) || 0) + qty);
+        pending.push({ date, quantity: qty, boxQuantity: Number(p['boxQuantity']) || 0, overdue: date < today, notes: String(p['notes'] || '') });
+      } else {
+        const date = dayOf(p['date']) || dayOf(p['expectedDate']);
+        if (!date) continue;
+        arrivedByDate.set(date, (arrivedByDate.get(date) || 0) + qty);
+        if (date >= start && date <= today) {
+          receipts.push({ date, quantity: qty, boxQuantity: Number(p['boxQuantity']) || 0, notes: String(p['notes'] || '') });
+        }
+      }
+    }
+    receipts.sort((a, b) => a.date.localeCompare(b.date));
+    pending.sort((a, b) => a.date.localeCompare(b.date));
+    const overdue = pending.filter((p) => p.overdue);
+    if (overdue.length) warnings.push(`有 ${overdue.length} 筆逾期未到貨（最早 ${overdue[0].date}），未計入餘量；請到行事曆標記到貨或改預計日。`);
+
+    const days: ItemTimelineDay[] = [];
+    let balance: number | null = baseline;
+    let actualDays = 0;
+    let estimatedDays = 0;
+    for (const date of this.enumerateDays(start, horizonEnd)) {
+      const kind: ItemTimelineDay['kind'] = date < today ? 'past' : date === today ? 'today' : 'future';
+      let consumption = 0;
+      let source: ItemTimelineDay['source'] = '無';
+      if (tracked) {
+        const r = ranges.find((x) => x.start <= date && date <= x.end);
+        if (r) {
+          consumption = this.value(r.grouped, category, item) / Math.max(1, this.daysInclusive(r.start, r.end));
+          source = '實際';
+          if (kind !== 'future') actualDays++;
+        } else {
+          consumption = forecastByDate.get(date) ?? 0;
+          source = '推估';
+          if (kind !== 'future') estimatedDays++;
+        }
+      }
+      const arrivals = arrivedByDate.get(date) || 0;
+      const pendingArrivals = kind === 'future' ? pendingByDate.get(date) || 0 : 0;
+      if (balance !== null) balance = balance + arrivals + pendingArrivals - consumption;
+      days.push({
+        date,
+        kind,
+        consumption: Math.round(consumption * 10) / 10,
+        source,
+        arrivals,
+        pendingArrivals,
+        balance: balance === null ? null : Math.round(balance * 10) / 10,
+        isCountDate: date === countDate,
+      });
+    }
+
+    const usedRanges = ranges
+      .filter((r) => r.end >= start && r.start <= horizonEnd)
+      .map((r) => ({ key: r.key, start: r.start, end: r.end, quantity: this.value(r.grouped, category, item) }));
+
+    return {
+      category,
+      item,
+      countDate,
+      countBy: countDoc?.updatedBy?.name || countDoc?.createdBy?.name || '',
+      baseline,
+      itemInCount,
+      days,
+      firstDeficitDate: days.find((d) => d.balance !== null && d.balance < 0)?.date ?? null,
+      receipts,
+      pending,
+      usedRanges,
+      actualDays,
+      estimatedDays,
+      horizonEnd,
+      warnings,
     };
   }
 

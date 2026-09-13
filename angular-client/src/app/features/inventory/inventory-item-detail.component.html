@@ -1,0 +1,154 @@
+<div class="modal-overlay" (click)="onOverlayClick($event)">
+  <div class="modal-content item-detail-modal">
+    <div class="modal-header">
+      <div>
+        <p class="eyebrow">{{ CATEGORY_NAMES[dashItem.category] || dashItem.category }} · 品項庫存明細</p>
+        <h3>{{ dashItem.itemName }}
+          <span class="status-chip status-{{ dashItem.status }}">{{ dashItem.statusLabel }}</span>
+        </h3>
+      </div>
+      <button type="button" class="modal-close" aria-label="關閉" (click)="close.emit()">&times;</button>
+    </div>
+
+    <div class="modal-body">
+      <!-- 摘要（數字與總覽卡片同一份） -->
+      <div class="summary-grid">
+        <section>
+          <h4>最近盤點</h4>
+          <strong>{{ timeline() ? fmt(timeline()!.baseline) : '…' }}</strong>
+          <p>{{ timeline()?.countDate || '尚無盤點' }}</p>
+          <small>{{ timeline()?.countBy ? '盤點人：' + timeline()!.countBy : '盤點量視為盤點日開始前' }}</small>
+        </section>
+        <section>
+          <h4>目前推估庫存</h4>
+          <strong [class.negative]="dashItem.estimatedStock < 0">{{ fmt(dashItem.estimatedStock) }}</strong>
+          <p>今日消耗前 {{ boxes(dashItem.estimatedStock) }}</p>
+          <small>盤點 + 盤後到貨 − 盤後至昨日消耗</small>
+        </section>
+        <section>
+          <h4>今日預估消耗 → 餘</h4>
+          <strong [class.negative]="dashItem.remainingAfterToday < 0">{{ fmt(dashItem.todayConsumption) }} → {{ fmt(dashItem.remainingAfterToday) }}</strong>
+          <p>日均 {{ fmt(dashItem.dailyUsage) }}／天，{{ daysOfStock }}</p>
+          <small>日均依上一個完整週消耗</small>
+        </section>
+        <section>
+          <h4>安全庫存 / 建議訂購</h4>
+          <strong>{{ dashItem.safeLevel > 0 ? fmt(dashItem.safeLevel) : '—' }} / <span [class.negative]="orderQuantity > 0">{{ fmt(orderQuantity) }}</span></strong>
+          <p>{{ orderQuantity > 0 ? '建議訂購 ' + orderQuantity + ' 個 ' + boxes(orderQuantity) : '目前不需訂購' }}</p>
+          <small>安全庫存 = max(日均×9 天 {{ fmt(dashItem.autoSafeLevel) }}, 手動設定)；已扣待到貨 {{ fmt(dashItem.pending) }}</small>
+        </section>
+        <section>
+          <h4>首次預計不足</h4>
+          <strong class="date" [class.negative]="!!timeline()?.firstDeficitDate">{{ loading() ? '…' : deficitLabel }}</strong>
+          <p>依下方逐日餘量推算</p>
+          <small>未來 14 天，待到貨按預計日計入</small>
+        </section>
+        <section>
+          <h4>下一筆待到貨</h4>
+          <strong>{{ nextDelivery ? fmt(nextDelivery.quantity) : '尚無' }}</strong>
+          <p>{{ nextDelivery?.date || '目前沒有已叫貨' }}</p>
+          <small>待到貨合計 {{ fmt(dashItem.pending) }}，尚未計入現貨</small>
+        </section>
+      </div>
+
+      @if (loading()) {
+        <div class="loading-state">整理盤點、到貨與逐日消耗中…</div>
+      } @else if (error()) {
+        <div class="notice error">{{ error() }}</div>
+      } @else {
+        @if (timeline(); as t) {
+        @if (t.warnings.length) {
+          <div class="notice">
+            <strong>本次推估需留意</strong>
+            <ul>@for (w of t.warnings; track $index) { <li>{{ w }}</li> }</ul>
+          </div>
+        }
+
+        <div class="section-title">
+          <h4>逐日消耗與餘量</h4>
+          <span>{{ t.countDate || '今天' }} 起至 {{ t.horizonEnd }}；消耗來源：實際 {{ t.actualDays }} 天／推估 {{ t.estimatedDays }} 天（至今天）</span>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>日期</th>
+                <th>來源</th>
+                <th>消耗</th>
+                <th>到貨</th>
+                <th>待到貨</th>
+                <th>日末餘量</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (d of t.days; track d.date) {
+                <tr [class.row-today]="d.kind === 'today'" [class.row-future]="d.kind === 'future'" [class.row-count]="d.isCountDate">
+                  <td class="date-cell">
+                    {{ d.date }}
+                    @if (d.isCountDate) { <span class="tag tag-count">盤點</span> }
+                    @if (d.kind === 'today') { <span class="tag tag-today">今天</span> }
+                  </td>
+                  <td><span class="src src-{{ d.source }}">{{ d.source === '無' ? '—' : d.source }}</span></td>
+                  <td>{{ d.consumption ? '−' + fmt(d.consumption) : '0' }}</td>
+                  <td>{{ d.arrivals ? '+' + fmt(d.arrivals) : '' }}</td>
+                  <td class="pending-cell">{{ d.pendingArrivals ? '+' + fmt(d.pendingArrivals) : '' }}</td>
+                  <td class="balance-cell" [class.negative]="d.balance !== null && d.balance < 0"><strong>{{ fmt(d.balance) }}</strong></td>
+                </tr>
+              } @empty {
+                <tr><td colspan="6">沒有可投影的日期。</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <p class="caption">「實際」= 該日被 HIS 消耗上傳區間涵蓋，區間總量按天均攤；「推估」= 依排程與病人醫囑推算。待到貨只在未來日按預計到貨日加入，逾期未到不計。逐日數字為拆解顯示，卡片上的推估庫存以整段推算為準，可能有 ±1 的四捨五入差。</p>
+
+        <details>
+          <summary>查看依據 <span>盤後已到貨、待到貨、HIS 上傳區間</span></summary>
+          <div class="evidence">
+            <h5>盤後已到貨（{{ t.countDate || '—' }} ～ 今天）</h5>
+            @if (t.receipts.length === 0) {
+              <p class="muted">此期間沒有已到貨紀錄。</p>
+            } @else {
+              <ul class="records">
+                @for (r of t.receipts; track $index) {
+                  <li><span>{{ r.date }} <small>已到貨</small>@if (r.notes) { <small>｜{{ r.notes }}</small> }</span><strong>+{{ fmt(r.quantity) }} <small>{{ boxes(r.quantity) }}</small></strong></li>
+                }
+              </ul>
+            }
+            <h5>待到貨</h5>
+            @if (t.pending.length === 0) {
+              <p class="muted">目前沒有已叫貨待到貨。</p>
+            } @else {
+              <ul class="records">
+                @for (p of t.pending; track $index) {
+                  <li [class.overdue]="p.overdue"><span>{{ p.date }} <small>{{ p.overdue ? '逾期未到' : '預計到貨' }}</small>@if (p.notes) { <small>｜{{ p.notes }}</small> }</span><strong>+{{ fmt(p.quantity) }} <small>{{ boxes(p.quantity) }}</small></strong></li>
+                }
+              </ul>
+            }
+            @if (tracked) {
+              <h5>HIS 實際消耗上傳區間（投影期間內）</h5>
+              @if (t.usedRanges.length === 0) {
+                <p class="muted">投影期間內沒有實際消耗上傳，消耗全部採排程推估。</p>
+              } @else {
+                <ul class="records">
+                  @for (r of t.usedRanges; track r.key) {
+                    <li><span>{{ r.start }} ～ {{ r.end }}</span><strong>{{ fmt(r.quantity) }} <small>本品項區間合計</small></strong></li>
+                  }
+                </ul>
+              }
+            }
+            @if (item) {
+              <h5>品項設定</h5>
+              <p class="muted">每箱 {{ unitsPerBox }} 個｜院內代碼 {{ item.hospitalCode || '—' }}｜手動安全庫存 {{ fmt(item.safeInventoryLevel || 0) }}｜廠牌 {{ item.brand || '—' }}</p>
+            }
+          </div>
+        </details>
+        }
+      }
+    </div>
+
+    <div class="modal-footer">
+      <button type="button" class="btn-secondary" (click)="close.emit()">關閉</button>
+    </div>
+  </div>
+</div>
