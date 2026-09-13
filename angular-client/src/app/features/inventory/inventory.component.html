@@ -233,6 +233,12 @@
             [class.active]="itemFilter.category === 'bicarbonateType'"
             (click)="itemFilter.category = 'bicarbonateType'; fetchInventoryItems()"
           >B液種類</button>
+          <button
+            class="category-btn"
+            [class.active]="itemFilter.category === 'otherSupplies'"
+            (click)="itemFilter.category = 'otherSupplies'; fetchInventoryItems()"
+            title="IV set、輸血 set、迴路管等；沒有排程推估與 HIS 消耗，訂購只看手動安全庫存"
+          >其他耗材</button>
         </div>
 
         <div class="table-container">
@@ -417,7 +423,11 @@
             <option value="artificialKidney">人工腎臟</option>
             <option value="dialysateCa">透析藥水CA</option>
             <option value="bicarbonateType">B液種類</option>
+            <option value="otherSupplies">其他耗材（IV set / 輸血 set / 迴路管…）</option>
           </select>
+          @if (itemForm.category === 'otherSupplies') {
+            <p class="form-hint">其他耗材沒有排程推估與 HIS 消耗紀錄：庫存 = 盤點 + 到貨，訂購建議只依「安全庫存」欄位，請務必填寫。</p>
+          }
         </div>
         <div class="form-field">
           <label>品項名稱 *</label>

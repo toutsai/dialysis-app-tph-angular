@@ -20,12 +20,9 @@ import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@servi
 import { ConsumptionEngineService } from '@services/consumption-engine.service';
 import { InventoryStockService, type CountDoc, type Grouped } from './inventory-stock.service';
 import type { PurchaseEntry } from './purchase-calendar.component';
+import { INVENTORY_CATEGORY_NAMES, emptyGroupedByCategory, emptyItemLists } from './inventory-categories';
 
-const CATEGORY_NAMES: Record<string, string> = {
-  artificialKidney: '人工腎臟',
-  dialysateCa: '透析藥水CA',
-  bicarbonateType: 'B液種類',
-};
+const CATEGORY_NAMES = INVENTORY_CATEGORY_NAMES;
 
 @Component({
   selector: 'app-inventory-day-panel',
@@ -43,11 +40,7 @@ export class InventoryDayPanelComponent implements OnInit, OnChanges {
   @Input() date!: string;
   @Input() entries: PurchaseEntry[] = [];
   @Input() inventoryItems: any[] = [];
-  @Input() knownItems: Record<string, string[]> = {
-    artificialKidney: [],
-    dialysateCa: [],
-    bicarbonateType: [],
-  };
+  @Input() knownItems: Record<string, string[]> = emptyItemLists();
   @Input() unitsPerBoxFn: (category: string, item: string) => number = () => 1;
 
   /** 只顯示 ③ 盤點區（工具列「今日盤點」視窗用；隱藏叫貨明細與預估消耗） */
@@ -100,7 +93,7 @@ export class InventoryDayPanelComponent implements OnInit, OnChanges {
   // ==================== ② 當日排程預估消耗 ====================
 
   forecastLoading = signal(false);
-  forecast = signal<Grouped>({ artificialKidney: {}, dialysateCa: {}, bicarbonateType: {} });
+  forecast = signal<Grouped>(emptyGroupedByCategory());
 
   async loadForecast(): Promise<void> {
     if (!this.date) return;
@@ -110,7 +103,7 @@ export class InventoryDayPanelComponent implements OnInit, OnChanges {
       this.forecast.set(result.grouped as Grouped);
     } catch (error) {
       console.warn('當日預估消耗載入失敗:', error);
-      this.forecast.set({ artificialKidney: {}, dialysateCa: {}, bicarbonateType: {} });
+      this.forecast.set(emptyGroupedByCategory());
     } finally {
       this.forecastLoading.set(false);
     }
@@ -124,16 +117,8 @@ export class InventoryDayPanelComponent implements OnInit, OnChanges {
 
   countsLoading = signal(false);
   countsSaving = signal(false);
-  countBoxes: Record<string, Record<string, number>> = {
-    artificialKidney: {},
-    dialysateCa: {},
-    bicarbonateType: {},
-  };
-  countUnits: Record<string, Record<string, number>> = {
-    artificialKidney: {},
-    dialysateCa: {},
-    bicarbonateType: {},
-  };
+  countBoxes: Record<string, Record<string, number>> = emptyGroupedByCategory();
+  countUnits: Record<string, Record<string, number>> = emptyGroupedByCategory();
   countNotes = '';
   /** 目前日期在後端是否已有盤點文件（決定「刪除」鈕是否可用） */
   countDocExists = signal(false);
@@ -222,7 +207,7 @@ export class InventoryDayPanelComponent implements OnInit, OnChanges {
   }
 
   private buildGroupedCopy(src: Record<string, Record<string, number>>): Grouped {
-    const out: Grouped = { artificialKidney: {}, dialysateCa: {}, bicarbonateType: {} };
+    const out: Grouped = emptyGroupedByCategory();
     for (const category of this.categoryKeys) {
       for (const [item, value] of Object.entries(src[category] || {})) {
         out[category][item] = Number(value) || 0;

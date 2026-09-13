@@ -32,17 +32,16 @@ import {
 } from '@services/api-manager.service';
 import { formatRangeKey } from '@/utils/consumablesReport';
 import { InventoryStockService, type CountDoc } from './inventory-stock.service';
+import { INVENTORY_CATEGORY_NAMES, emptyItemLists } from './inventory-categories';
 
-const CATEGORY_NAMES: Record<string, string> = {
-  artificialKidney: '人工腎臟',
-  dialysateCa: '透析藥水CA',
-  bicarbonateType: 'B液種類',
-};
+const CATEGORY_NAMES = INVENTORY_CATEGORY_NAMES;
 
 const DEFAULT_ITEMS: Record<string, string[]> = {
   artificialKidney: ['15S', '17UX', '25H', '34', 'APS21S', 'BG1.8', 'CAT/2000', 'FX80', 'HI:23'],
   dialysateCa: ['2.5', '3.0', '3.5'],
   bicarbonateType: ['0_袋裝Bicarbonate 500mg', '1_瓶裝Bicarbonate 500mg', '2_Hemodialysis 5L B液'],
+  // 其他耗材（IV set / 輸血 set / 迴路管…）由書記在品項設定自行建立，不預設
+  otherSupplies: [],
 };
 
 const WEEKDAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'];
@@ -217,11 +216,7 @@ export class InventoryComponent implements OnInit {
   /** 給行事曆/面板子元件用：每箱個數 */
   readonly unitsPerBoxFn = (category: string, item: string) => this.getUnitsPerBox(category, item);
 
-  knownItems: Record<string, string[]> = {
-    artificialKidney: [],
-    dialysateCa: [],
-    bicarbonateType: [],
-  };
+  knownItems: Record<string, string[]> = emptyItemLists();
 
   constructor() {
     this.machineConfigApi = this.apiManagerService.create<FirestoreRecord>('machine_bicarbonate_config');

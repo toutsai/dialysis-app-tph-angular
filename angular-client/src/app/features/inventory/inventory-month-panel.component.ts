@@ -12,12 +12,9 @@ import { ConsumptionEngineService, type ConsumptionResult } from '@services/cons
 import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@services/api-manager.service';
 import { shiftDateLike, type DateStepKind } from '@/utils/dateStep';
 import { InventoryStockService, type CountDoc } from './inventory-stock.service';
+import { INVENTORY_CATEGORY_NAMES, emptyGroupedByCategory } from './inventory-categories';
 
-const CATEGORY_NAMES: Record<string, string> = {
-  artificialKidney: '人工腎臟',
-  dialysateCa: '透析藥水CA',
-  bicarbonateType: 'B液種類',
-};
+const CATEGORY_NAMES = INVENTORY_CATEGORY_NAMES;
 
 interface CountReportRow {
   category: string;
@@ -237,11 +234,7 @@ export class InventoryMonthPanelComponent implements OnChanges {
 
   summaryLoading = signal(false);
   summaryLoaded = signal(false);
-  monthlySummaryData: Record<string, Record<string, number>> = {
-    artificialKidney: {},
-    dialysateCa: {},
-    bicarbonateType: {},
-  };
+  monthlySummaryData: Record<string, Record<string, number>> = emptyGroupedByCategory();
 
   async loadMonthlySummary(): Promise<void> {
     if (!this.month) return;
@@ -276,11 +269,7 @@ export class InventoryMonthPanelComponent implements OnChanges {
   }
 
   private async getMonthlyConsumption(month: string): Promise<Record<string, Record<string, number>>> {
-    const result: Record<string, Record<string, number>> = {
-      artificialKidney: {},
-      dialysateCa: {},
-      bicarbonateType: {},
-    };
+    const result: Record<string, Record<string, number>> = emptyGroupedByCategory();
 
     try {
       const allReports = await this.consumablesReportsApi.fetchAll();

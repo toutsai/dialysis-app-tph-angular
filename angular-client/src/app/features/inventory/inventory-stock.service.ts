@@ -14,10 +14,13 @@ import {
   type FirestoreRecord,
 } from '@services/api-manager.service';
 
+import { INVENTORY_CATEGORIES } from './inventory-categories';
+
 /** category → itemName → 數量 */
 export type Grouped = Record<string, Record<string, number>>;
 
-export const STOCK_CATEGORIES = ['artificialKidney', 'dialysateCa', 'bicarbonateType'] as const;
+/** 類別清單以 inventory-categories.ts 為準（含「其他耗材」：無消耗來源，推算時消耗為 0） */
+export const STOCK_CATEGORIES = INVENTORY_CATEGORIES;
 
 /** consumables_reports 的一段實際消耗區間（跨病人已加總） */
 export interface ActualRange {

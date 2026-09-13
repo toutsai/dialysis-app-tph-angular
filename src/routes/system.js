@@ -1032,7 +1032,9 @@ router.delete('/inventory/purchases/:id', ...isInventoryRole, async (req, res) =
 // 讀寫的是 Vue 時代 report_data 扁平格式（row.consumableCounts），與現行 ranges 格式不符且前端無人呼叫，已於同日移除。
 // ========================================
 
-const COUNT_CATEGORIES = ['artificialKidney', 'dialysateCa', 'bicarbonateType']
+// 與前端 angular-client/src/app/features/inventory/inventory-categories.ts 同步；
+// otherSupplies = 其他耗材（IV set / 輸血 set / 迴路管…，2026-09-14 新增，無消耗來源、只盤點與叫貨）
+const COUNT_CATEGORIES = ['artificialKidney', 'dialysateCa', 'bicarbonateType', 'otherSupplies']
 const COUNT_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 function parseJsonObject(text) {
