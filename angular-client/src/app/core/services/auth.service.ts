@@ -247,24 +247,25 @@ export class AuthService implements OnDestroy {
    *               有值時帶 queryParam 給登入頁顯示提示。使用者主動登出則不帶。
    */
   async logout(reason?: 'idle' | UnauthorizedReason): Promise<void> {
+    if (this.sessionEnding) return;
     this.sessionEnding = true;
+    const headers = this.firebase.getHeaders();
+    // Invalidate local reads immediately; a slow logout endpoint must not leave
+    // the previous user's cache or credentials available to new requests.
+    this.clearInMemoryCaches();
+    this.currentUser.set(null);
+    this.claims.set(null);
+    if (this.refreshTimer) clearInterval(this.refreshTimer);
+    this.refreshTimer = null;
+    this.stopSessionTimeoutCheck();
+    const cleanup = this.clearBrowserStorage();
+    void fetch(`${this.firebase.apiBaseUrl}/auth/logout`, {
+      method: 'POST', headers,
+    }).catch(() => {});
     try {
-      // 通知 server
-      await fetch(`${this.firebase.apiBaseUrl}/auth/logout`, {
-        method: 'POST',
-        headers: this.firebase.getHeaders(),
-      }).catch(() => {});
+      await cleanup;
+      await this.router.navigate(['/login'], reason ? { queryParams: { reason } } : {});
     } finally {
-      await this.clearBrowserStorage();
-      this.clearInMemoryCaches();
-      this.currentUser.set(null);
-      this.claims.set(null);
-      if (this.refreshTimer) {
-        clearInterval(this.refreshTimer);
-        this.refreshTimer = null;
-      }
-      this.stopSessionTimeoutCheck();
-      this.router.navigate(['/login'], reason ? { queryParams: { reason } } : {});
       this.sessionEnding = false;
     }
   }

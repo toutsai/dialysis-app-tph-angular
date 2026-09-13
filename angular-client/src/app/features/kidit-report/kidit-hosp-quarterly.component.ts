@@ -1,10 +1,11 @@
-import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { quarterSaveQueue } from '@/services/quarterSaveQueue';
+import { Component, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PatientStoreService } from '@services/patient-store.service';
 import { localApi } from '@/services/localApiClient';
 import { quarterRange, currentQuarter } from '@/services/kiditVascularCsvService';
-import { fetchQuarterRecords, saveQuarterRecord } from '@/services/kiditQuarterInputService';
+import { fetchQuarterRecords } from '@/services/kiditQuarterInputService';
 import { HospEpisodeOverride, HospExportRow, downloadHospCsv } from '@/services/kiditHospService';
 import {
   HOSP_CATEGORY_CODES,
@@ -66,14 +67,25 @@ export class KiditHospQuarterlyComponent implements OnInit, OnDestroy {
   readonly rows = signal<HospRow[]>([]);
   readonly saveState = signal<'' | 'saving' | 'saved' | 'error'>('');
 
-  private saveTimer: ReturnType<typeof setTimeout> | null = null;
-  private pendingSaves = new Set<string>();
+  private readonly saveQueue = quarterSaveQueue('hosp');
+  private loadGeneration = 0;
 
   ngOnInit(): void {
+    this.saveQueue.listen((state) => this.saveState.set(state));
     this.load();
   }
 
+  @HostListener('window:beforeunload', ['$event'])
+  beforeUnload(event: BeforeUnloadEvent): void {
+    if (this.saveQueue.hasPending()) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+  }
+
   ngOnDestroy(): void {
+    ++this.loadGeneration;
+    this.saveQueue.listen(null);
     this.flushPendingSaves();
   }
 
@@ -102,16 +114,20 @@ export class KiditHospQuarterlyComponent implements OnInit, OnDestroy {
   }
 
   async load(): Promise<void> {
+    const generation = ++this.loadGeneration;
+    const quarter = this.quarter();
     this.isLoading.set(true);
     this.rows.set([]);
-    this.saveState.set('');
     try {
       const { startDate, endDate } = quarterRange(this.year(), this.q());
+      await this.saveQueue.flush();
+      if (generation !== this.loadGeneration) return;
       await this.patientStore.fetchPatientsIfNeeded();
       const [logsRes, records] = await Promise.all([
         localApi.get(`/nursing/daily-logs?startDate=${startDate}&endDate=${endDate}`),
-        fetchQuarterRecords(this.quarter()),
+        fetchQuarterRecords(quarter),
       ]);
+      if (generation !== this.loadGeneration) return;
       const logs: any[] = Array.isArray(logsRes) ? logsRes : (logsRes?.data || []);
 
       const hospByPatient = new Map<string, Record<string, HospEpisodeOverride>>();
@@ -144,7 +160,7 @@ export class KiditHospQuarterlyComponent implements OnInit, OnDestroy {
       const built: HospRow[] = [];
       for (const [patientId, entry] of byPatient) {
         entry.movements.sort((a, b) => a.date.localeCompare(b.date));
-        const overrides = hospByPatient.get(patientId) || {};
+        const overrides = (this.saveQueue.get(quarter, patientId) as any)?.hosp || hospByPatient.get(patientId) || {};
         for (const episode of this.splitEpisodes(entry.movements)) {
           const autoAdmit = episode.find((m) => m.admissionDate)?.admissionDate || '';
           const autoDischarge = [...episode].reverse().find((m) => m.dischargeDate)?.dischargeDate || '';
@@ -177,10 +193,11 @@ export class KiditHospQuarterlyComponent implements OnInit, OnDestroy {
       );
       this.rows.set(built);
     } catch (error) {
+      if (generation !== this.loadGeneration) return;
       console.error('載入住出院季度資料失敗:', error);
       alert('載入住出院季度資料失敗，請稍後再試。');
     } finally {
-      this.isLoading.set(false);
+      if (generation === this.loadGeneration) this.isLoading.set(false);
     }
   }
 
@@ -231,46 +248,25 @@ export class KiditHospQuarterlyComponent implements OnInit, OnDestroy {
   }
 
   private scheduleSave(patientId: string): void {
-    this.pendingSaves.add(patientId);
-    this.saveState.set('saving');
-    if (this.saveTimer) clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => this.doSave(), 800);
+    if (this.isLoading()) return;
+    const hosp: Record<string, HospEpisodeOverride> = {};
+    for (const r of this.rows()) {
+      if (r.patientId !== patientId) continue;
+      const ov: HospEpisodeOverride = {};
+      if (r.admitDate !== r.autoAdmit) ov.admitDate = r.admitDate;
+      if (r.dischargeDate !== r.autoDischarge) ov.dischargeDate = r.dischargeDate;
+      if (r.cat) ov.cat = r.cat;
+      if (r.sub) ov.sub = r.sub;
+      if (r.excluded) ov.excluded = true;
+      if (Object.keys(ov).length) hosp[r.episodeKey] = ov;
+    }
+    const data = { hosp };
+    this.saveQueue.enqueue(this.quarter(), patientId, data);
   }
 
-  private async doSave(): Promise<void> {
-    const ids = [...this.pendingSaves];
-    this.pendingSaves.clear();
-    try {
-      for (const pid of ids) {
-        // 該病人全部段落的人工欄整包存（只存與自動配對不同的日期＋原因碼＋排除）
-        const hosp: Record<string, HospEpisodeOverride> = {};
-        for (const r of this.rows()) {
-          if (r.patientId !== pid) continue;
-          const ov: HospEpisodeOverride = {};
-          if (r.admitDate !== r.autoAdmit) ov.admitDate = r.admitDate;
-          if (r.dischargeDate !== r.autoDischarge) ov.dischargeDate = r.dischargeDate;
-          if (r.cat) ov.cat = r.cat;
-          if (r.sub) ov.sub = r.sub;
-          if (r.excluded) ov.excluded = true;
-          if (Object.keys(ov).length) hosp[r.episodeKey] = ov;
-        }
-        await saveQuarterRecord(this.quarter(), pid, { hosp } as any);
-      }
-      this.saveState.set('saved');
-    } catch (error) {
-      console.error('儲存住出院資料失敗:', error);
-      ids.forEach((id) => this.pendingSaves.add(id));
-      this.saveState.set('error');
-    }
-  }
+  retrySave(): void { void this.saveQueue.flush(); }
 
-  private flushPendingSaves(): void {
-    if (this.saveTimer) {
-      clearTimeout(this.saveTimer);
-      this.saveTimer = null;
-    }
-    if (this.pendingSaves.size) void this.doSave();
-  }
+  private flushPendingSaves(): void { void this.saveQueue.flush(); }
 
   exportCsv(): void {
     const rows = this.rows().filter((r) => !r.excluded);

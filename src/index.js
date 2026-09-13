@@ -2,7 +2,7 @@
 import 'dotenv/config'   // 讀取 .env 檔案到 process.env（PM2 env_file 不可靠，改用 dotenv）
 import express from 'express'
 import cors from 'cors'
-import morgan from 'morgan'
+import { requestLogger } from './middleware/requestLogger.js'
 import { existsSync, statSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
@@ -83,7 +83,7 @@ app.use(cors({
 }))
 
 // 請求日誌
-app.use(morgan('dev'))
+app.use(requestLogger)
 
 // JSON 解析
 app.use(express.json({ limit: '10mb' }))

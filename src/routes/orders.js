@@ -1,12 +1,14 @@
 // 醫囑與相關資料路由
 import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
-import XLSX from 'xlsx'
+import XLSX from '../utils/spreadsheet.js'
+import { parseFirstSheet } from '../services/spreadsheetParser.js'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isContributor, isEditor, logAudit, requireAnyRole } from '../middleware/auth.js'
 import { getTaipeiMonthString, getTaipeiTodayString } from '../utils/dateUtils.js'
 import { normalizeDialysisMode, normalizeDialysisOrdersMode } from '../utils/dialysisMode.js'
 import { FREQ_MAP_TO_DAY_INDEX } from '../utils/scheduleUtils.js'
+import { saveDialysisOrder } from '../services/dialysisOrderService.js'
 
 const router = Router()
 const isDoctorRole = isContributor
@@ -562,37 +564,8 @@ router.post('/history/batch', authenticate, (req, res) => {
  */
 router.post('/history', ...isDoctorRole, async (req, res) => {
   try {
-    const { patientId, patientName, operationType, orders } = req.body
-
-    if (!patientId) {
-      return res.status(400).json({
-        error: true,
-        message: '病人 ID 為必填',
-      })
-    }
-
-    const id = uuidv4()
-    const db = getDatabase()
-
-    // 正規化透析模式拼法（統一 SLED / CVVHDF 等），歷史與當前醫囑一致
-    const normalizedOrders = normalizeDialysisOrdersMode({ ...(orders || {}) })
-
-    db.prepare(
-      `
-      INSERT INTO dialysis_orders_history (id, patient_id, patient_name, operation_type, orders)
-      VALUES (?, ?, ?, ?, ?)
-    `,
-    ).run(id, patientId, patientName || '', operationType || 'CREATE', JSON.stringify(normalizedOrders))
-
-    // 同時更新病人的當前醫囑
-    db.prepare(
-      `
-      UPDATE patients
-      SET dialysis_orders = ?, updated_at = datetime('now', 'localtime')
-      WHERE id = ?
-    `,
-    ).run(JSON.stringify(normalizedOrders), patientId)
-
+    const result = saveDialysisOrder(req.body, req.user)
+    const { id, patientId, patientName, deletedFutureExceptions } = result
 
     await logAudit(
       'DIALYSIS_ORDER_CREATE',
@@ -603,21 +576,16 @@ router.post('/history', ...isDoctorRole, async (req, res) => {
       {
         patientId,
         patientName,
+        deletedFutureExceptions,
       },
     )
 
-    res.status(201).json({
-      id,
-      patientId,
-      patientName,
-      operationType,
-      orders,
-    })
+    res.status(201).json(result)
   } catch (error) {
     console.error('新增醫囑記錄錯誤:', error)
-    res.status(500).json({
+    res.status(error.status || 500).json({
       error: true,
-      message: '新增醫囑記錄失敗',
+      message: error.status ? error.message : '新增醫囑記錄失敗',
     })
   }
 })
@@ -1457,10 +1425,7 @@ router.post('/lab-reports/upload', ...isDoctorRole, async (req, res) => {
     console.log(`[LabReport] 接收到檔案 ${fileName}，開始解析...`)
 
     const buffer = Buffer.from(fileContent, 'base64')
-    const workbook = XLSX.read(buffer, { type: 'buffer' })
-    const sheetName = workbook.SheetNames[0]
-    const worksheet = workbook.Sheets[sheetName]
-    const sheetAsArray = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+    const sheetAsArray = await parseFirstSheet(buffer, { header: 1 })
 
     if (sheetAsArray.length < 2) {
       return res.status(400).json({
@@ -1692,7 +1657,7 @@ router.post('/lab-reports/upload', ...isDoctorRole, async (req, res) => {
     })
   } catch (error) {
     console.error('[LabReport] 處理檔案時發生錯誤:', error)
-    res.status(500).json({
+    res.status(error.status || 500).json({
       error: true,
       message: `處理 Excel 檔案時發生錯誤: ${error.message}`,
     })
@@ -2090,10 +2055,7 @@ router.post('/medications/upload', ...isDoctorRole, async (req, res) => {
     console.log(`[ProcessOrders] 接收到檔案 ${fileName}，開始解析...`)
 
     const buffer = Buffer.from(fileContent, 'base64')
-    const workbook = XLSX.read(buffer, { type: 'buffer' })
-    const sheetName = workbook.SheetNames[0]
-    const worksheet = workbook.Sheets[sheetName]
-    const dataRows = XLSX.utils.sheet_to_json(worksheet, {
+    const dataRows = await parseFirstSheet(buffer, {
       header: 1,
       defval: '',
       raw: false,
@@ -2358,7 +2320,7 @@ router.post('/medications/upload', ...isDoctorRole, async (req, res) => {
     })
   } catch (error) {
     console.error('[ProcessOrders] 處理檔案時發生錯誤:', error)
-    res.status(500).json({
+    res.status(error.status || 500).json({
       error: true,
       message: `處理 Excel 檔案時發生錯誤: ${error.message}`,
     })
@@ -2386,9 +2348,7 @@ router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
     console.log(`[DialysisOrders] 接收到檔案 ${fileName}，開始解析...`)
 
     const buffer = Buffer.from(fileContent, 'base64')
-    const workbook = XLSX.read(buffer, { type: 'buffer' })
-    const worksheet = workbook.Sheets[workbook.SheetNames[0]]
-    const dataRows = XLSX.utils.sheet_to_json(worksheet, {
+    const dataRows = await parseFirstSheet(buffer, {
       header: 1,
       defval: '',
       raw: false,
@@ -2589,14 +2549,6 @@ router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
         source_file = excluded.source_file,
         updated_at = datetime('now', 'localtime')
     `)
-    db.transaction(() => {
-      for (const r of rowsToUpsert) {
-        upsert.run(uuidv4(), r.patientId, r.patientName, r.mrn, r.effectiveDate, JSON.stringify(r.orders), fileName)
-        if (existingKeys.has(`${r.mrn}|${r.effectiveDate}`)) updatedCount++
-        else insertedCount++
-      }
-    })()
-
     // 回寫病人現行醫囑：本次上傳觸及的病人，各取全表最新一筆
     const stableStringify = (obj) =>
       JSON.stringify(
@@ -2626,7 +2578,14 @@ router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
       UPDATE patients SET dialysis_orders = ?, updated_at = datetime('now', 'localtime') WHERE id = ?
     `)
 
+    const afterCommit = []
     db.transaction(() => {
+      for (const r of rowsToUpsert) {
+        upsert.run(uuidv4(), r.patientId, r.patientName, r.mrn, r.effectiveDate, JSON.stringify(r.orders), fileName)
+        if (existingKeys.has(`${r.mrn}|${r.effectiveDate}`)) updatedCount++
+        else insertedCount++
+      }
+
       for (const r of latestStmt.all()) {
         if (!touchedPatientIds.has(r.patient_id)) continue
         const patient = patientsById.get(r.patient_id)
@@ -2648,11 +2607,15 @@ router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
           continue
         }
         patientUpdate.run(JSON.stringify(merged), r.patient_id)
+        // 刻意不做當日快照 / 「更改模式」動態 / CVVHDF 取消調班：模式連動只掛病人清單 PUT（2026-09-03 裁定）
         historyInsert.run(uuidv4(), r.patient_id, r.patient_name || patient.name || '', JSON.stringify(merged))
         writtenBackCount++
       }
     })()
 
+    for (const notify of afterCommit) {
+      try { notify() } catch (error) { console.warn('[DialysisOrders] 通知失敗:', error.message) }
+    }
     invalidateListCache()
 
     await logAudit('DIALYSIS_ORDERS_UPLOAD', req.user.id, req.user.name, 'dialysis_order_uploads', fileName, {
@@ -2687,7 +2650,7 @@ router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
     })
   } catch (error) {
     console.error('[DialysisOrders] 處理檔案時發生錯誤:', error)
-    res.status(500).json({
+    res.status(error.status || 500).json({
       error: true,
       message: `處理 Excel 檔案時發生錯誤: ${error.message}`,
     })
@@ -3019,7 +2982,7 @@ router.get('/bed-settings', authenticate, (req, res) => {
  * PUT /api/orders/bed-settings/:id
  * 更新單一床位的設備設定（upsert；:id 為床位編號如 38、外1）
  */
-router.put('/bed-settings/:id', authenticate, async (req, res) => {
+router.put('/bed-settings/:id', ...isInventoryRole, async (req, res) => {
   try {
     const { id } = req.params
     const db = getDatabase()
@@ -3040,7 +3003,7 @@ router.put('/bed-settings/:id', authenticate, async (req, res) => {
  * PUT /api/orders/bed-settings
  * 整包覆寫床位設備設定（相容既有介面；接受 map 或陣列）
  */
-router.put('/bed-settings', authenticate, async (req, res) => {
+router.put('/bed-settings', ...isInventoryRole, async (req, res) => {
   try {
     const db = getDatabase()
     const body = req.body
@@ -3084,7 +3047,7 @@ router.get('/machine-bicarbonate-config', authenticate, (req, res) => {
  * POST /api/orders/machine-bicarbonate-config
  * 新增一筆洗腎機 Bicarbonate 設定
  */
-router.post('/machine-bicarbonate-config', authenticate, async (req, res) => {
+router.post('/machine-bicarbonate-config', ...isInventoryRole, async (req, res) => {
   try {
     const db = getDatabase()
     const id = uuidv4()
@@ -3105,7 +3068,7 @@ router.post('/machine-bicarbonate-config', authenticate, async (req, res) => {
  * PUT /api/orders/machine-bicarbonate-config/:id（前端送 PATCH，由 index.js 全域轉為 PUT）
  * 更新單筆洗腎機 Bicarbonate 設定
  */
-router.put('/machine-bicarbonate-config/:id', authenticate, async (req, res) => {
+router.put('/machine-bicarbonate-config/:id', ...isInventoryRole, async (req, res) => {
   try {
     const { id } = req.params
     const db = getDatabase()
@@ -3129,7 +3092,7 @@ router.put('/machine-bicarbonate-config/:id', authenticate, async (req, res) => 
  * DELETE /api/orders/machine-bicarbonate-config/:id
  * 刪除單筆洗腎機 Bicarbonate 設定
  */
-router.delete('/machine-bicarbonate-config/:id', authenticate, async (req, res) => {
+router.delete('/machine-bicarbonate-config/:id', ...isInventoryRole, async (req, res) => {
   try {
     const { id } = req.params
     const db = getDatabase()

@@ -28,13 +28,17 @@ export function setUnauthorizedHandler(fn: (reason: UnauthorizedReason) => void)
   onUnauthorized = fn;
 }
 
+export function notifyUnauthorized(reason: UnauthorizedReason): void {
+  onUnauthorized?.(reason);
+}
+
 /**
  * 收到 401 時判斷原因並通知 AuthService。
  * 後端對「已被加入黑名單」的 token 回 code: 'TOKEN_BLACKLISTED'（含 duplicate_login=他處登入）；
  * 對使用中的 session 而言，被黑名單幾乎都是「同帳號在他處登入把這台踢掉」。其餘 401 視為登入逾期。
  */
-async function notifyIfUnauthorized(res: Response): Promise<void> {
-  if (res.status !== 401) return;
+async function notifyIfUnauthorized(res: Response, requestAuthorization?: string): Promise<void> {
+  if (res.status !== 401 || !requestAuthorization || requestAuthorization !== getAuthHeaders()['Authorization']) return;
   let code = '';
   try {
     const body = await res.clone().json();
@@ -43,7 +47,15 @@ async function notifyIfUnauthorized(res: Response): Promise<void> {
     /* 非 JSON 回應，忽略 */
   }
   const reason: UnauthorizedReason = code === 'TOKEN_BLACKLISTED' ? 'another_device' : 'expired';
-  onUnauthorized?.(reason);
+  // Parsing a response body also yields: a different login may have completed meanwhile.
+  if (requestAuthorization === getAuthHeaders()['Authorization']) notifyUnauthorized(reason);
+}
+
+async function authenticatedFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const headers = getAuthHeaders();
+  const res = await fetch(url, { ...options, headers });
+  await notifyIfUnauthorized(res, headers['Authorization']);
+  return res;
 }
 
 /**
@@ -80,35 +92,33 @@ export const localApi = {
   get headers() { return getAuthHeaders(); },
 
   async get(path: string): Promise<any> {
-    const res = await fetch(`${getApiBaseUrl()}${path}`, {
+    const res = await authenticatedFetch(`${getApiBaseUrl()}${path}`, {
       headers: getAuthHeaders(),
     });
     if (!res.ok) {
       if (res.status === 404) return null;
-      await notifyIfUnauthorized(res);
       throw new Error(`HTTP ${res.status}: ${res.statusText}`);
     }
     return res.json();
   },
 
   async post(path: string, body: any): Promise<any> {
-    const res = await fetch(`${getApiBaseUrl()}${path}`, {
+    const res = await authenticatedFetch(`${getApiBaseUrl()}${path}`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(body),
     });
-    if (!res.ok) { await notifyIfUnauthorized(res); throw new Error(`HTTP ${res.status}: ${res.statusText}`); }
+    if (!res.ok) { throw new Error(`HTTP ${res.status}: ${res.statusText}`); }
     return res.json();
   },
 
   async put(path: string, body: any): Promise<any> {
-    const res = await fetch(`${getApiBaseUrl()}${path}`, {
+    const res = await authenticatedFetch(`${getApiBaseUrl()}${path}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(body),
     });
     if (!res.ok) {
-      await notifyIfUnauthorized(res);
       const errBody = await parseErrorBody(res);
       throw new ApiRequestError(res.status, errBody, errBody?.message || `HTTP ${res.status}: ${res.statusText}`);
     }
@@ -116,13 +126,12 @@ export const localApi = {
   },
 
   async patch(path: string, body: any): Promise<any> {
-    const res = await fetch(`${getApiBaseUrl()}${path}`, {
+    const res = await authenticatedFetch(`${getApiBaseUrl()}${path}`, {
       method: 'PATCH',
       headers: getAuthHeaders(),
       body: JSON.stringify(body),
     });
     if (!res.ok) {
-      await notifyIfUnauthorized(res);
       const errBody = await parseErrorBody(res);
       throw new ApiRequestError(res.status, errBody, errBody?.message || `HTTP ${res.status}: ${res.statusText}`);
     }
@@ -130,11 +139,11 @@ export const localApi = {
   },
 
   async delete(path: string): Promise<any> {
-    const res = await fetch(`${getApiBaseUrl()}${path}`, {
+    const res = await authenticatedFetch(`${getApiBaseUrl()}${path}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
     });
-    if (!res.ok) { await notifyIfUnauthorized(res); throw new Error(`HTTP ${res.status}: ${res.statusText}`); }
+    if (!res.ok) { throw new Error(`HTTP ${res.status}: ${res.statusText}`); }
     return { success: true };
   },
 };

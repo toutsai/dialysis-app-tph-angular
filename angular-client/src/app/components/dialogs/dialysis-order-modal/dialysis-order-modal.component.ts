@@ -24,6 +24,7 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
 
   orderHistory: any[] = [];
   isLoadingHistory = false;
+  private historyRequest = 0;
   isConfirmDeleteVisible = false;
   orderToDelete: any = null;
 
@@ -123,6 +124,7 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.historyRequest++;
     document.body.classList.remove('modal-open');
   }
 
@@ -434,10 +436,14 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
 
   private async fetchOrderHistory(patientId: string): Promise<void> {
     if (!patientId) return;
+    const request = ++this.historyRequest;
     this.isLoadingHistory = true;
     this.orderHistory = [];
     try {
-      const allOrders = await this.ordersHistoryApi.fetchAll();
+      // Server orders by createdAt. Keep the existing updatedAt ranking before
+      // slicing; a server limit could omit an older record edited recently.
+      const allOrders = await this.ordersHistoryApi.fetchWhere({ patientId });
+      if (request !== this.historyRequest) return;
       this.orderHistory = (allOrders as any[]).filter(
         (o: any) => o.patientId === patientId
       ).sort((a: any, b: any) => {
@@ -448,7 +454,7 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
     } catch (error) {
       console.error('讀取醫囑歷史失敗:', error);
     } finally {
-      this.isLoadingHistory = false;
+      if (request === this.historyRequest) this.isLoadingHistory = false;
     }
   }
 }

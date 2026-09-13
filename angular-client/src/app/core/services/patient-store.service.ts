@@ -106,6 +106,7 @@ export class PatientStoreService {
    * Add a single patient to the local store without re-fetching everything.
    */
   addPatientInStore(patient: Patient): void {
+    this.invalidateLoad();
     this.allPatients.update((current) => [...current, patient]);
     this.bumpVersion();
   }
@@ -114,6 +115,7 @@ export class PatientStoreService {
    * Update a single patient in the local store by merging new fields.
    */
   updatePatientInStore(patientId: string, changes: Partial<Patient>): void {
+    this.invalidateLoad();
     this.allPatients.update((current) =>
       current.map((p) =>
         p.id === patientId ? { ...p, ...changes } : p,
@@ -126,6 +128,7 @@ export class PatientStoreService {
    * Remove a single patient from the local store.
    */
   removePatientInStore(patientId: string): void {
+    this.invalidateLoad();
     this.allPatients.update((current) =>
       current.filter((p) => p.id !== patientId),
     );
@@ -137,9 +140,11 @@ export class PatientStoreService {
    * and update the local store accordingly.
    */
   async removeRuleFromMasterSchedule(patientId: string): Promise<void> {
+    const session = this.sessionGeneration;
     try {
       // 1. 取得 MASTER_SCHEDULE
       const masterDoc = await this.baseScheduleApi.fetchById('MASTER_SCHEDULE');
+      if (session !== this.sessionGeneration) return;
       if (masterDoc) {
         const schedule = { ...((masterDoc as any)['schedule'] as Record<string, unknown> || {}) };
         delete schedule[patientId];
@@ -147,6 +152,7 @@ export class PatientStoreService {
         await this.baseScheduleApi.update('MASTER_SCHEDULE', { schedule } as any);
       }
 
+      if (session !== this.sessionGeneration) return;
       // Update local store: clear the patient's scheduleRule
       this.masterScheduleRules.update((rules) => {
         const next = { ...rules };
@@ -172,14 +178,17 @@ export class PatientStoreService {
     patientId: string,
     ruleData: Record<string, unknown>,
   ): Promise<void> {
+    const session = this.sessionGeneration;
     try {
       const masterDoc = await this.baseScheduleApi.fetchById('MASTER_SCHEDULE');
+      if (session !== this.sessionGeneration) return;
       const schedule = { ...((masterDoc as any)?.['schedule'] as Record<string, unknown> || {}) };
       const existing = (schedule[patientId] as Record<string, unknown>) || {};
       const newRule = { ...existing, ...ruleData };
       schedule[patientId] = newRule;
       await this.baseScheduleApi.update('MASTER_SCHEDULE', { schedule } as any);
 
+      if (session !== this.sessionGeneration) return;
       this.masterScheduleRules.update((rules) => ({ ...rules, [patientId]: newRule }));
       this.updatePatientInStore(patientId, { scheduleRule: newRule as any });
     } catch (error) {
@@ -195,6 +204,8 @@ export class PatientStoreService {
    * Reset all state to defaults.
    */
   reset(): void {
+    ++this.sessionGeneration;
+    this.invalidateLoad();
     this.allPatients.set([]);
     this.isLoading.set(false);
     this.error.set(null);
@@ -210,16 +221,26 @@ export class PatientStoreService {
   /** 進行中的載入請求；併發呼叫共用同一個 Promise，避免第二個呼叫者不等資料就繼續執行 */
   private inFlightLoad: Promise<void> | null = null;
 
+  private loadGeneration = 0;
+  private sessionGeneration = 0;
+
+  private invalidateLoad(): void {
+    ++this.loadGeneration;
+    this.inFlightLoad = null;
+    this.isLoading.set(false);
+  }
+
   private loadPatients(): Promise<void> {
     if (!this.inFlightLoad) {
-      this.inFlightLoad = this.doLoadPatients().finally(() => {
-        this.inFlightLoad = null;
+      const generation = this.loadGeneration;
+      this.inFlightLoad = this.doLoadPatients(generation).finally(() => {
+        if (generation === this.loadGeneration) this.inFlightLoad = null;
       });
     }
     return this.inFlightLoad;
   }
 
-  private async doLoadPatients(): Promise<void> {
+  private async doLoadPatients(generation: number): Promise<void> {
     try {
       this.isLoading.set(true);
       this.error.set(null);
@@ -229,6 +250,8 @@ export class PatientStoreService {
         this.patientApi.fetchWhere({ includeDeleted: 'true' }),
         this.baseScheduleApi.fetchById('MASTER_SCHEDULE'),
       ]);
+
+      if (generation !== this.loadGeneration) return;
 
       // Build a map of patient-id -> schedule-rule
       const masterRules: Record<string, unknown> =
@@ -256,13 +279,14 @@ export class PatientStoreService {
         `[PatientStoreService] Loaded ${patientsWithRules.length} patients`,
       );
     } catch (error) {
+      if (generation !== this.loadGeneration) return;
       const message =
         error instanceof Error ? error.message : 'Failed to load patients';
       this.error.set(message);
       console.error('[PatientStoreService] loadPatients error:', error);
       throw error;
     } finally {
-      this.isLoading.set(false);
+      if (generation === this.loadGeneration) this.isLoading.set(false);
     }
   }
 

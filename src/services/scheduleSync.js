@@ -433,22 +433,9 @@ export async function initializeFutureSchedules(modifiedBy = {}) {
 
     // 創建缺少的排程
     let createdCount = 0
-    for (const dateStr of datesToCheck) {
-      if (!existingDates.has(dateStr)) {
-        const dailySchedule = generateDailyScheduleFromRules(masterRules, dateStr, patientsMap)
-
-        db.prepare(`
-          INSERT INTO schedules (id, date, schedule, sync_method, last_modified_by, created_at, updated_at)
-          VALUES (?, ?, ?, 'initialize_future', ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
-        `).run(
-          dateStr,
-          dateStr,
-          JSON.stringify(dailySchedule),
-          JSON.stringify(modifiedBy)
-        )
-        createdCount++
-      }
-    }
+    const missingDates = datesToCheck.filter(date => !existingDates.has(date) && !isTodayScheduleFrozen(date))
+    const rebuilt = rebuildAndSaveSchedules(missingDates, masterRules, patientsMap, modifiedBy, 'initialize_future')
+    createdCount = missingDates.filter(date => rebuilt.has(date)).length
 
     console.log(`✅ [ScheduleSync] 初始化完成！創建 ${createdCount} 份排程`)
 
@@ -629,41 +616,9 @@ function applySingleException(schedule, ex, dateStr) {
     }
   } catch (error) {
     console.error(`[Engine] 套用調班 ${ex.id} 時錯誤:`, error)
+    throw error
   }
   return 'ok'
-}
-
-/**
- * 重新計算某一天的排程（含調班整合）
- * @param {string} dateStr - 目標日期
- * @param {object} masterRules - 總表規則
- * @param {Array} todaysExceptions - 當天的調班列表
- * @param {Map} patientsMap - 病人資料
- * @returns {object} - { finalSchedule, conflictingExceptions }
- */
-function recalculateDailySchedule(dateStr, masterRules, todaysExceptions, patientsMap = null) {
-  let finalSchedule = generateDailyScheduleFromRules(masterRules, dateStr, patientsMap)
-
-  // 多輪收斂重播：連環讓位（甲讓床給乙、乙再讓給丙）若只按建立順序單輪重播，
-  // 讓位者還沒重播到就會誤判「目標床被佔」，一筆誤判整串連鎖。
-  // 失敗的調班留到下一輪重試（失敗路徑不動 schedule，重試安全），
-  // 直到一輪內沒有任何新成功；此時仍失敗的才是真衝突。
-  let pending = todaysExceptions
-  while (pending.length > 0) {
-    const failed = []
-    for (const ex of pending) {
-      const result = applySingleException(finalSchedule, ex, dateStr)
-      if (result !== 'ok') {
-        failed.push({ ex, reason: result.reason })
-      }
-    }
-    if (failed.length === pending.length) {
-      return { finalSchedule, conflictingExceptions: failed }
-    }
-    pending = failed.map(({ ex }) => ex)
-  }
-
-  return { finalSchedule, conflictingExceptions: [] }
 }
 
 /**
@@ -693,62 +648,9 @@ function exceptionShiftsOnDate(ex, dateStr) {
   return [...shifts]
 }
 
-/**
- * 重建單一天的排程（含調班整合）
- * @param {string} dateStr - 目標日期
- * @param {object} masterRules - 總表規則
- * @param {Map} patientsMap - 病人資料
- * @returns {object} - 最終排程
- */
-function rebuildSingleDaySchedule(dateStr, masterRules, patientsMap) {
+/** 根據整批運算的結果更新單日例外旗標，沿用已開始班次的失效規則。 */
+function updateRebuiltExceptionStatuses(dateStr, todaysExceptions, conflictingExceptions) {
   const db = getDatabase()
-  // 取得「可能影響這一天」的已生效調班（SQL 粗篩超集合；下方 JS 才是精確判定）
-  const allExceptions = loadActiveExceptionsForDate(db, dateStr)
-
-  const todaysExceptions = []
-  allExceptions.forEach((row) => {
-    const ex = {
-      id: row.id,
-      type: row.type,
-      status: row.status,
-      patientId: row.patient_id,
-      patientName: row.patient_name,
-      from: JSON.parse(row.from_data || '{}'),
-      to: JSON.parse(row.to_data || '{}'),
-      patient1: JSON.parse(row.patient1 || '{}'),
-      patient2: JSON.parse(row.patient2 || '{}'),
-      startDate: row.start_date,
-      endDate: row.end_date,
-      date: row.date,
-      createdAt: row.created_at,
-    }
-
-    // 判斷此調班是否影響這一天
-    if (ex.type === 'SUSPEND' && ex.startDate && ex.endDate) {
-      const start = new Date(ex.startDate + 'T00:00:00Z')
-      const end = new Date(ex.endDate + 'T00:00:00Z')
-      const current = new Date(dateStr + 'T00:00:00Z')
-      if (current >= start && current <= end) todaysExceptions.push(ex)
-    } else {
-      const exDates = [ex.date, ex.startDate, ex.from?.sourceDate, ex.to?.goalDate].filter(Boolean)
-      if (exDates.includes(dateStr)) todaysExceptions.push(ex)
-    }
-  })
-
-  // 按創建時間排序
-  todaysExceptions.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
-
-  // 計算最終排程
-  const { finalSchedule, conflictingExceptions } = recalculateDailySchedule(
-    dateStr,
-    masterRules,
-    todaysExceptions,
-    patientsMap
-  )
-
-  // 重建是從總表憑空重生 slots，不帶 transportMethod（住院趴趴走接送方式），
-  // 未來日期已登記的接送方式會被總表異動觸發的重建洗掉，這裡從舊排程貼回
-  preserveTransportMethods(db, dateStr, finalSchedule)
 
   // 標記衝突的調班（含目標床位被佔、來源床位已不再是該病人 等等）
   if (conflictingExceptions.length > 0) {
@@ -813,7 +715,129 @@ function rebuildSingleDaySchedule(dateStr, masterRules, patientsMap) {
     })
   }
 
-  return finalSchedule
+}
+
+function parseActiveException(row) {
+  return {
+    id: row.id, type: row.type, status: row.status,
+    patientId: row.patient_id, patientName: row.patient_name,
+    from: JSON.parse(row.from_data || '{}'), to: JSON.parse(row.to_data || '{}'),
+    patient1: JSON.parse(row.patient1 || '{}'), patient2: JSON.parse(row.patient2 || '{}'),
+    startDate: row.start_date, endDate: row.end_date, date: row.date, createdAt: row.created_at,
+  }
+}
+
+function affectsDate(ex, date) {
+  if (ex.type === 'SUSPEND') return ex.startDate <= date && ex.endDate >= date
+  return [ex.date, ex.startDate, ex.from?.sourceDate, ex.to?.goalDate].includes(date)
+}
+
+// 跨日 MOVE 必須整筆重播：來源刪除與目標加入同時成功，衝突時兩日都維持未套用狀態。
+// 對連動的未來日擴展範圍，但絕不越過呼叫端的起日、歷史日或今日凍結界線。
+function calculateScheduleBatch(dateStrings, masterRules, patientsMap, minimumDate = getTaipeiTodayString()) {
+  const db = getDatabase()
+  const today = getTaipeiTodayString()
+  const canRebuild = date => date && date >= today && date >= minimumDate && !isTodayScheduleFrozen(date)
+  const dates = new Set(dateStrings.filter(canRebuild))
+  const exceptions = new Map()
+  for (const date of dates) {
+    for (const row of loadActiveExceptionsForDate(db, date)) {
+      const ex = parseActiveException(row)
+      exceptions.set(ex.id, ex)
+      if (ex.type === 'MOVE') {
+        for (const peer of [ex.from?.sourceDate, ex.to?.goalDate]) {
+          if (canRebuild(peer)) dates.add(peer)
+        }
+      }
+    }
+  }
+  const schedules = new Map([...dates].map(date => [date, generateDailyScheduleFromRules(masterRules, date, patientsMap)]))
+  const ordered = [...exceptions.values()].sort((a, b) =>
+    String(a.createdAt || '').localeCompare(String(b.createdAt || '')) || a.id.localeCompare(b.id))
+  let pending = ordered
+  let conflicts = []
+  // 多輪讓位重播；每一筆先試算其所有日期，僅在全部成功後交付變更。
+  while (pending.length > 0) {
+    const failed = []
+    for (const ex of pending) {
+      const affected = [...dates].filter(date => affectsDate(ex, date))
+      const crossDay = ex.type === 'MOVE' && ex.from?.sourceDate !== ex.to?.goalDate
+      // 歷史/凍結端不能改寫，尚未成功的跨日單不得僅套用另一端。
+      if (crossDay && ex.status === 'conflict_requires_resolution' &&
+          (!dates.has(ex.from?.sourceDate) || !dates.has(ex.to?.goalDate))) {
+        failed.push({ ex, reason: '跨日調班另一端已凍結或不在可修改範圍，請由現場確認原場次。' })
+        continue
+      }
+      const changes = new Map()
+      let conflict = null
+      for (const date of affected) {
+        const candidate = { ...schedules.get(date) }
+        const result = applySingleException(candidate, ex, date)
+        if (result !== 'ok') { conflict = result; break }
+        changes.set(date, candidate)
+      }
+      if (conflict) failed.push({ ex, reason: conflict.reason })
+      else for (const [date, schedule] of changes) schedules.set(date, schedule)
+    }
+    conflicts = failed
+    if (failed.length === pending.length) break
+    pending = failed.map(({ ex }) => ex)
+  }
+  // 已套用的跨日單若只剩一端可重建，發生新衝突時無法把另一端還原。
+  // 必須保留原本兩日與帳本，讓外層總表/預約交易一起回滾，避免場次兩端都消失。
+  // 等多輪讓位重播結束才判定，允許其他有效調班先騰出目標床位。
+  for (const { ex, reason } of conflicts) {
+    if (ex.type === 'MOVE' && ex.status === 'applied' && ex.from?.sourceDate !== ex.to?.goalDate &&
+        (!dates.has(ex.from?.sourceDate) || !dates.has(ex.to?.goalDate))) {
+      throw new Error(`跨日調班 ${ex.id} 的另一端已凍結或不在可修改範圍，無法安全重建，請由現場確認原場次：${reason}`)
+    }
+  }
+  for (const [date, schedule] of schedules) {
+    preserveTransportMethods(db, date, schedule)
+    updateRebuiltExceptionStatuses(date, ordered.filter(ex => affectsDate(ex, date)), conflicts.filter(({ ex }) => affectsDate(ex, date)))
+  }
+  const conflictIds = new Set(conflicts.map(({ ex }) => ex.id))
+  const oldSchedule = db.prepare('SELECT schedule FROM schedules WHERE date = ?')
+  for (const ex of ordered) {
+    const target = schedules.get(ex.to?.goalDate)?.[getScheduleKey(ex.to?.bedNum, ex.to?.shiftCode)]
+    if (ex.type === 'MOVE' && !conflictIds.has(ex.id) && target?.exceptionId === ex.id && !target.transportMethod) {
+      const source = JSON.parse(oldSchedule.get(ex.from?.sourceDate)?.schedule || '{}')
+      const sourceSlot = source[getScheduleKey(ex.from?.bedNum, ex.from?.shiftCode)]
+      if (sourceSlot?.patientId === ex.patientId && sourceSlot.transportMethod) target.transportMethod = sourceSlot.transportMethod
+    }
+    if (ex.type === 'MOVE' && ex.status === 'conflict_requires_resolution' && !conflictIds.has(ex.id) &&
+        dates.has(ex.from?.sourceDate) && dates.has(ex.to?.goalDate)) {
+      db.prepare(`UPDATE schedule_exceptions SET status = 'applied', error_message = NULL,
+        updated_at = datetime('now', 'localtime') WHERE id = ?`).run(ex.id)
+    }
+  }
+  return schedules
+}
+
+/** 重建並原子寫回整組連動日期；呼叫端的帳本異動可透過巢狀交易一起回滾。 */
+export function rebuildAndSaveSchedules(dateStrings, masterRules, patientsMap, modifiedBy = {}, syncMethod = 'merge_exceptions', minimumDate) {
+  const db = getDatabase()
+  return db.transaction(() => {
+    const schedules = calculateScheduleBatch(dateStrings, masterRules, patientsMap, minimumDate)
+    const save = db.prepare(`
+      INSERT INTO schedules (id, date, schedule, sync_method, last_modified_by)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(date) DO UPDATE SET schedule = excluded.schedule,
+        sync_method = excluded.sync_method, last_modified_by = excluded.last_modified_by,
+        updated_at = datetime('now', 'localtime')
+    `)
+    for (const [date, schedule] of schedules) {
+      save.run(date, date, JSON.stringify(schedule), syncMethod, JSON.stringify(modifiedBy))
+    }
+    return schedules
+  })()
+}
+
+// 相容外部的計算入口；正式寫入路徑應使用 rebuildAndSaveSchedules，讓跨日端點一起提交。
+function rebuildSingleDaySchedule(dateStr, masterRules, patientsMap) {
+  const db = getDatabase()
+  return db.transaction(() => calculateScheduleBatch([dateStr], masterRules, patientsMap).get(dateStr) ||
+    JSON.parse(db.prepare('SELECT schedule FROM schedules WHERE date = ?').get(dateStr)?.schedule || '{}'))()
 }
 
 /**
@@ -952,25 +976,9 @@ function mergeExceptionsIntoSchedulesSync(masterRules, futureDates, patientsMap,
 
     console.log(`📅 [ScheduleSync] 需要重新整合 ${datesToMerge.size} 個日期的排程`)
 
-    // 對每個需要整合的日期重新計算排程
-    let mergedCount = 0
-    for (const dateStr of datesToMerge) {
-      const finalSchedule = rebuildSingleDaySchedule(dateStr, masterRules, patientsMap)
-
-      db.prepare(`
-        UPDATE schedules
-        SET schedule = ?,
-            sync_method = 'merge_exceptions',
-            last_modified_by = ?,
-            updated_at = datetime('now', 'localtime')
-        WHERE date = ?
-      `).run(
-        JSON.stringify(finalSchedule),
-        JSON.stringify(modifiedBy),
-        dateStr
-      )
-      mergedCount++
-    }
+    const rebuilt = rebuildAndSaveSchedules([...datesToMerge], masterRules, patientsMap,
+      modifiedBy, 'merge_exceptions', sortedDates[0])
+    const mergedCount = rebuilt.size
 
     console.log(`✅ [ScheduleSync] 整合完成！已重新整合 ${mergedCount} 天的調班申請`)
 

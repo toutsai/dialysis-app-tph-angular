@@ -803,11 +803,12 @@ router.put('/users/:id', ...isAdmin, async (req, res) => {
       db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params)
     }
 
-    // 安全相關變更（停用、改角色、改密碼）立即作廢既有 token，
+    // 安全相關變更（停用、改角色、改職稱、改密碼）立即作廢既有 token，
     // 否則舊 JWT 在 24 小時內仍以舊權限有效
     const securityChanged =
       (is_active !== undefined && !is_active) ||
       (role !== undefined && role !== existing.role) ||
+      (title !== undefined && title !== existing.title) ||
       Boolean(password)
     if (securityChanged) {
       revokeUserSessions(id, 'admin_revoke')

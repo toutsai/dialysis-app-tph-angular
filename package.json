@@ -14,7 +14,10 @@
     "build:angular": "cd angular-client && npm run build",
     "install:angular": "cd angular-client && npm install",
     "dev:angular": "cd angular-client && npx ng serve --configuration development --port 5173",
-    "smoke:tph-angular": "node scripts/smoke-test-tph-angular.cjs"
+    "smoke:tph-angular": "node scripts/smoke-test-tph-angular.cjs",
+    "test": "node scripts/run-regression-tests.mjs",
+    "check:syntax": "node scripts/check-syntax.mjs",
+    "start:review": "node scripts/start-review-dev.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

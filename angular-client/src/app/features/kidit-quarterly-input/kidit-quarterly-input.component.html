@@ -25,7 +25,7 @@
       <span class="save-state" [ngSwitch]="saveState()">
         <span *ngSwitchCase="'saving'" class="st-saving"><i class="fas fa-circle-notch fa-spin"></i> 儲存中…</span>
         <span *ngSwitchCase="'saved'" class="st-saved"><i class="fas fa-check"></i> 已儲存</span>
-        <span *ngSwitchCase="'error'" class="st-error"><i class="fas fa-exclamation-triangle"></i> 儲存失敗</span>
+        <span *ngSwitchCase="'error'" class="st-error"><i class="fas fa-exclamation-triangle"></i> 儲存失敗，草稿已保留 <button type="button" (click)="retrySave()">重試儲存</button></span>
       </span>
 
       <select *ngIf="canPickNurse()" class="nurse-select" [ngModel]="targetNurseId()" (ngModelChange)="selectNurse($event)">
