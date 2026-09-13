@@ -45,11 +45,97 @@
   @if (mainTab() === 'inventory') {
 
   <div class="tabs-navigation">
+    <button [class.active]="activeTab() === 'overview'" (click)="activeTab.set('overview')">庫存總覽</button>
     <button [class.active]="activeTab() === 'calendar'" (click)="activeTab.set('calendar')">作業行事曆</button>
     <button [class.active]="activeTab() === 'settings'" (click)="activeTab.set('settings')">設定</button>
   </div>
 
   <main class="page-main-content">
+    <!-- ========== 庫存總覽（2026-09-14 自作業行事曆拉出成獨立頁籤） ========== -->
+    @if (activeTab() === 'overview') {
+    <div class="tab-panel">
+      <div class="panel-header overview-panel-header">
+        <div>
+          <h3>庫存總覽</h3>
+          <p class="panel-description">
+            @if (dashboardHasCount()) {
+              盤點基礎：{{ dashboardLastCountDate() }}（{{ dashboardCountAgeDays() }} 天前）。點卡片看該品項的盤點、到貨、逐日餘量與預計不足日。
+            } @else {
+              尚無盤點紀錄；按「今日盤點」建立第一筆盤點後才有推估。
+            }
+          </p>
+        </div>
+        <div class="overview-actions">
+          <button type="button" class="btn-secondary" (click)="openTodayCount()" title="開今天的盤點輸入視窗">📋 今日盤點</button>
+          <button type="button" class="btn-primary" (click)="loadDashboard()" [disabled]="dashboardLoading()" title="盤點或到貨後重新推估卡片數字">
+            {{ dashboardLoading() ? '計算中...' : '↻ 重新計算' }}
+          </button>
+        </div>
+      </div>
+
+      @if (dashboardHasCount()) {
+        <p class="panel-description">
+          卡片數字 = 今日消耗前的推估庫存（盤點量 + 盤點後到貨 − 盤點後至昨日消耗）；餘 = 再扣今日預估消耗
+        </p>
+        @if (dashboardConsumptionNote()) {
+          <p class="panel-description">安全庫存 = max(日均 × 9 天, 品項設定手動安全庫存)；{{ dashboardConsumptionNote() }}</p>
+        }
+        <p class="panel-description">狀態：今日不足（餘 &lt; 0）→ 撐不到 2 天（餘 &lt; 日均×2）→ 低於安全量（餘 &lt; 安全庫存）→ 充足</p>
+      }
+
+      <div class="overview-body">
+        @if (dashboardLoading()) {
+          <div class="loading-state">計算推估庫存中...</div>
+        } @else if (!dashboardLoaded()) {
+          <div class="empty-state">
+            <p>點擊「重新計算」載入庫存推估。</p>
+            <p style="color: #6c757d; font-size: 0.9rem;">需要先有盤點紀錄才能計算推估庫存。</p>
+          </div>
+        } @else {
+          @if (!dashboardHasCount()) {
+            <div class="empty-state">
+              <p>尚無盤點紀錄，請先按「今日盤點」建立盤點。</p>
+              <p style="color: #6c757d; font-size: 0.9rem;">推估庫存以最近一次盤點為基準，沒有盤點就無法推算。</p>
+            </div>
+          } @else if (dashboardItems().length === 0) {
+            <div class="empty-state">盤點紀錄中沒有任何品項數量。</div>
+          }
+
+          @for (category of categoryKeys; track category) {
+            @if (getDashboardItemsByCategory(category).length > 0) {
+              <div class="dash-category-section">
+                <h4 class="dash-category-title">{{ CATEGORY_NAMES[category] }}</h4>
+                <div class="dash-cards-grid">
+                  @for (item of getDashboardItemsByCategory(category); track item.itemName) {
+                    <div
+                      class="dash-card"
+                      role="button"
+                      tabindex="0"
+                      [attr.aria-label]="item.itemName + ' 庫存明細'"
+                      title="點一下看此品項的盤點基準、到貨、逐日餘量與預計不足日"
+                      (click)="openStockItem(item)"
+                      (keydown.enter)="openStockItem(item)"
+                      [class.dash-card-safe]="item.status === 'safe'" [class.dash-card-warning]="item.status === 'warning'" [class.dash-card-danger]="item.status === 'danger'" [class.dash-card-critical]="item.status === 'critical'">
+                      <div class="dash-card-header">
+                        <span class="dash-card-name">{{ item.itemName }}</span>
+                        <span class="status-dot" [class.dot-safe]="item.status === 'safe'" [class.dot-warning]="item.status === 'warning'" [class.dot-danger]="item.status === 'danger'" [class.dot-critical]="item.status === 'critical'"></span>
+                      </div>
+                      <div class="dash-card-stock">{{ item.estimatedStock }}</div>
+                      <div class="dash-card-safe-level">{{ item.statusLabel }} ｜ 安全庫存：{{ item.safeLevel > 0 ? item.safeLevel : '-' }}</div>
+                      @if (item.dailyUsage > 0 || item.todayConsumption > 0 || item.pending > 0) {
+                        <div class="dash-card-detail">日均：{{ item.dailyUsage }} ｜ 今消耗：{{ item.todayConsumption }} ｜ 餘：{{ item.remainingAfterToday }}@if (item.pending > 0) {<span> ｜ 待到貨：{{ item.pending }}</span>}</div>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          }
+        }
+      </div>
+    </div>
+    }
+
     <!-- ========== 作業行事曆 ========== -->
     @if (activeTab() === 'calendar') {
     <div class="tab-panel">
@@ -61,87 +147,6 @@
         <button class="btn-secondary" (click)="showConsumables.set(true)" title="查詢病人每月耗材用量（視窗）">🔍 病人耗材查詢</button>
         <span class="toolbar-hint">三個都是視窗，關閉後回到原位</span>
       </div>
-
-      <!-- 庫存總覽（可收合；重新計算只影響這區的卡片，鈕就放在這） -->
-      <section class="overview-section">
-        <div class="overview-head-row">
-          <button type="button" class="overview-head" (click)="overviewCollapsed.set(!overviewCollapsed())">
-            <span class="overview-caret">{{ overviewCollapsed() ? '▸' : '▾' }}</span>
-            <span class="overview-title">庫存總覽</span>
-            @if (dashboardHasCount()) {
-              <span class="overview-sub">
-                盤點基礎：{{ dashboardLastCountDate() }}（{{ dashboardCountAgeDays() }} 天前）
-              </span>
-            }
-          </button>
-          <button type="button" class="btn-sm btn-secondary overview-recalc" (click)="loadDashboard()" [disabled]="dashboardLoading()" title="盤點或到貨後重新推估卡片數字">
-            {{ dashboardLoading() ? '計算中...' : '↻ 重新計算' }}
-          </button>
-        </div>
-
-        @if (!overviewCollapsed()) {
-          <div class="overview-body">
-            @if (dashboardHasCount()) {
-              <p class="panel-description">
-                卡片數字 = 今日消耗前的推估庫存（盤點量 + 盤點後到貨 − 盤點後至昨日消耗）；餘 = 再扣今日預估消耗
-              </p>
-              @if (dashboardConsumptionNote()) {
-                <p class="panel-description">安全庫存 = 日均 × 9 天；{{ dashboardConsumptionNote() }}</p>
-              }
-              <p class="panel-description">狀態：今日不足（餘 &lt; 0）→ 撐不到 2 天（餘 &lt; 日均×2）→ 低於安全量（餘 &lt; 安全庫存）→ 充足</p>
-            }
-
-            @if (dashboardLoading()) {
-              <div class="loading-state">計算推估庫存中...</div>
-            } @else if (!dashboardLoaded()) {
-              <div class="empty-state">
-                <p>點擊「重新計算庫存」載入庫存推估。</p>
-                <p style="color: #6c757d; font-size: 0.9rem;">需要先有盤點紀錄才能計算推估庫存。</p>
-              </div>
-            } @else {
-              @if (!dashboardHasCount()) {
-                <div class="empty-state">
-                  <p>尚無盤點紀錄，請先在下方行事曆點選日期後盤點。</p>
-                  <p style="color: #6c757d; font-size: 0.9rem;">推估庫存以最近一次盤點為基準，沒有盤點就無法推算。</p>
-                </div>
-              } @else if (dashboardItems().length === 0) {
-                <div class="empty-state">盤點紀錄中沒有任何品項數量。</div>
-              }
-
-              @for (category of categoryKeys; track category) {
-                @if (getDashboardItemsByCategory(category).length > 0) {
-                  <div class="dash-category-section">
-                    <h4 class="dash-category-title">{{ CATEGORY_NAMES[category] }}</h4>
-                    <div class="dash-cards-grid">
-                      @for (item of getDashboardItemsByCategory(category); track item.itemName) {
-                        <div
-                          class="dash-card"
-                          role="button"
-                          tabindex="0"
-                          [attr.aria-label]="item.itemName + ' 庫存明細'"
-                          title="點一下看此品項的盤點基準、到貨、逐日餘量與預計不足日"
-                          (click)="openStockItem(item)"
-                          (keydown.enter)="openStockItem(item)"
-                          [class.dash-card-safe]="item.status === 'safe'" [class.dash-card-warning]="item.status === 'warning'" [class.dash-card-danger]="item.status === 'danger'" [class.dash-card-critical]="item.status === 'critical'">
-                          <div class="dash-card-header">
-                            <span class="dash-card-name">{{ item.itemName }}</span>
-                            <span class="status-dot" [class.dot-safe]="item.status === 'safe'" [class.dot-warning]="item.status === 'warning'" [class.dot-danger]="item.status === 'danger'" [class.dot-critical]="item.status === 'critical'"></span>
-                          </div>
-                          <div class="dash-card-stock">{{ item.estimatedStock }}</div>
-                          <div class="dash-card-safe-level">{{ item.statusLabel }} ｜ 安全庫存：{{ item.safeLevel > 0 ? item.safeLevel : '-' }}</div>
-                          @if (item.dailyUsage > 0 || item.todayConsumption > 0 || item.pending > 0) {
-                            <div class="dash-card-detail">日均：{{ item.dailyUsage }} ｜ 今消耗：{{ item.todayConsumption }} ｜ 餘：{{ item.remainingAfterToday }}@if (item.pending > 0) {<span> ｜ 待到貨：{{ item.pending }}</span>}</div>
-                          }
-                        </div>
-                      }
-                    </div>
-                  </div>
-                }
-              }
-            }
-          </div>
-        }
-      </section>
 
       <!-- 行事曆 -->
       <app-purchase-calendar

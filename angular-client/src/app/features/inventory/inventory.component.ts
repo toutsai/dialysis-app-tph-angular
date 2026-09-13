@@ -99,13 +99,11 @@ export class InventoryComponent implements OnInit {
   /** 書記專用主頁籤：醫師班表列印 / 常規病人掛號 / 針劑發放名單 / Gentamycin 開立清單 / 重大傷病申請 / 庫存管理 */
   mainTab = signal<'physician' | 'register' | 'injection' | 'gentamycin' | 'catastrophic' | 'inventory'>('physician');
 
-  /** 庫存管理內層：作業行事曆 / 設定 */
-  activeTab = signal<'calendar' | 'settings'>('calendar');
+  /** 庫存管理內層：庫存總覽 / 作業行事曆 / 設定（2026-09-14 總覽拉成獨立頁籤，預設落在總覽） */
+  activeTab = signal<'overview' | 'calendar' | 'settings'>('overview');
   settingsTab = signal<'items' | 'beds'>('items');
 
   // ==================== 作業行事曆 ====================
-  /** 庫存總覽可收合（預設展開） */
-  overviewCollapsed = signal(false);
   /** 上傳消耗 Excel 視窗 */
   showUpload = signal(false);
   /** 行事曆：有盤點文件的日期 */
