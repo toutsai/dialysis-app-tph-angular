@@ -1,4 +1,5 @@
 <div class="day-panel">
+  @if (!countOnly) {
   <!-- ① 當日叫貨/到貨明細（唯讀） -->
   <div class="panel-block">
     <div class="section-header">
@@ -59,9 +60,10 @@
       </div>
     }
   </div>
+  }
 
   <!-- ③ 盤點 -->
-  <div class="panel-block" #countBlock>
+  <div class="panel-block">
     <div class="panel-header">
       <div>
         <h3>盤點</h3>

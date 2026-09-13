@@ -1,7 +1,6 @@
-import { Component, OnInit, ViewChild, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 import { ApiConfigService } from '@services/api-config.service';
 import { AuthService } from '@services/auth.service';
 import { PatientStoreService } from '@services/patient-store.service';
@@ -12,6 +11,7 @@ import { ClerkRegistrationComponent } from './clerk-registration.component';
 import { ClerkInjectionPrintComponent } from './clerk-injection-print.component';
 import { ClerkGentamycinListComponent } from './clerk-gentamycin-list.component';
 import { CatastrophicIllnessComponent } from '../catastrophic-illness/catastrophic-illness.component';
+import { ConsumablesComponent } from '../consumables/consumables.component';
 import {
   PurchaseCalendarComponent,
   type PurchaseEntry,
@@ -59,8 +59,8 @@ type PanelState =
   imports: [
     CommonModule,
     FormsModule,
-    RouterLink,
     AlertDialogComponent,
+    ConsumablesComponent,
     ClerkPhysicianPrintComponent,
     ClerkRegistrationComponent,
     ClerkInjectionPrintComponent,
@@ -114,8 +114,14 @@ export class InventoryComponent implements OnInit {
   /** 行事曆：可見範圍的每日排程推估消耗（格子小字） */
   dailyForecast = signal<CalendarDailyForecast>({});
   private dailyForecastSeq = 0;
-  /** 日面板（@if 內，只有 kind='day' 時存在）；工具列「今日盤點」用來捲到盤點區 */
-  @ViewChild(InventoryDayPanelComponent) private dayPanelCmp?: InventoryDayPanelComponent;
+  /**
+   * 工具列三顆常駐鈕一律開視窗、不離開行事曆（2026-09-14 使用者反映往下捲/跳頁會找不到頁籤）：
+   * 上傳消耗 Excel（showUpload）、今日盤點（showCountModal）、病人耗材查詢（showConsumables）
+   */
+  showCountModal = signal(false);
+  /** 盤點視窗目前的盤點日（視窗內「盤點紀錄」列可切換） */
+  countModalDate = signal(this.stock.todayString());
+  showConsumables = signal(false);
   /** 行事曆高亮 */
   selectedDate = signal<string | null>(null);
   selectedWeekStart = signal<string | null>(null);
@@ -319,12 +325,22 @@ export class InventoryComponent implements OnInit {
     }
   }
 
-  /** 工具列「今日盤點」：切到今天的日面板並捲到盤點輸入區 */
-  goTodayCount(): void {
-    const today = this.stock.todayString();
-    this.onDaySelected({ ymd: today, entries: [] });
-    // 日面板在 @if 內，等 change detection 建好元件再捲動
-    setTimeout(() => this.dayPanelCmp?.focusCount(), 0);
+  /** 工具列「今日盤點」：以視窗開今天的盤點輸入（同一份 counts 文件，與日面板/週面板共用） */
+  openTodayCount(): void {
+    this.countModalDate.set(this.stock.todayString());
+    this.showCountModal.set(true);
+  }
+
+  /** 盤點視窗內點「盤點紀錄」列 → 視窗切到該日 */
+  onCountModalDateSelected(ymd: string): void {
+    if (ymd) this.countModalDate.set(ymd);
+  }
+
+  /** 視窗遮罩：點到遮罩本身才關（點內容不關） */
+  closeOnOverlay(event: MouseEvent, which: 'count' | 'consumables'): void {
+    if (event.target !== event.currentTarget) return;
+    if (which === 'count') this.showCountModal.set(false);
+    else this.showConsumables.set(false);
   }
 
   /** 行事曆/面板改了資料 → 盤點日、叫貨紀錄、總覽全部重載 */
