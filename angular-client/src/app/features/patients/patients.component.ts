@@ -884,7 +884,6 @@ export class PatientsComponent implements OnInit, OnDestroy {
   // --- Global Search ---
   readonly searchMatches = signal<Patient[]>([]);
   readonly searchPerformed = signal(false);
-  readonly showDetailedColumns = signal(false);
   readonly expandedRemarks = signal<Set<string>>(new Set());
   statusLabel(status: string): string { return ({opd:'門診',ipd:'住院',er:'急診',deleted:'已刪除'} as Record<string,string>)[status] || status; }
   patientSearchLabel(p: any): string { return p.name + '（' + p.medicalRecordNumber + '）'; }

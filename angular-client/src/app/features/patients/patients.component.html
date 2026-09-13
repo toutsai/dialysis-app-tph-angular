@@ -180,8 +180,7 @@
         </div>
       }
       <div class="table-wrapper">
-        <label class="detail-columns-toggle"><input type="checkbox" [ngModel]="showDetailedColumns()" (ngModelChange)="showDetailedColumns.set($event)" /> 顯示詳細欄位</label>
-        <div class="flex-table-wrapper" [class.compact-columns]="!showDetailedColumns()">
+        <div class="flex-table-wrapper">
           <div class="flex-table-header">
             <div class="flex-cell col-name" (click)="handleSort('name')">姓名</div>
             @if (activeTab() === 'ipd' || activeTab() === 'er') {
@@ -260,10 +259,12 @@
                       </div>
                     </div>
                     <div class="flex-cell col-actions">
-                      <div class="action-buttons"><button type="button" (click)="openPatientProfile(p.id)" [attr.aria-label]="'查看履歷：' + patientSearchLabel(p)">履歷</button><button type="button" (click)="openOrderModal(p)" [disabled]="isPageLocked()" [attr.aria-label]="'透析醫囑：' + patientSearchLabel(p)">醫囑</button><details class="patient-actions"><summary [attr.aria-label]="'更多操作：' + p.name">更多操作</summary><div class="more-actions">
+                      <div class="action-buttons">
                         <button class="btn-icon btn-edit" (click)="openEditPatientModal(p)" [disabled]="isPageLocked()" title="編輯">
                           <i class="fas fa-pencil-alt"></i>
-                        </button><button class="btn-icon btn-delete" (click)="deletePatient(p.id)" [disabled]="isDeleteLocked()" title="刪除">
+                        </button><button class="btn-icon btn-order" (click)="openOrderModal(p)" [disabled]="isPageLocked()" title="醫囑">
+                        <i class="fas fa-notes-medical"></i>
+                      </button><button class="btn-icon btn-delete" (click)="deletePatient(p.id)" [disabled]="isDeleteLocked()" title="刪除">
                       <i class="fas fa-trash-alt"></i>
                     </button>
                     <div class="action-divider"></div>
@@ -281,10 +282,12 @@
                       </button>
                     }
                     <div class="action-divider"></div>
-                    <button class="btn-icon btn-problem-list" (click)="openProblemList(p)" title="病史與問題列表">
+                    <button class="btn-icon btn-history" (click)="openPatientProfile(p.id)" title="病人履歷">
+                      <i class="fas fa-address-card"></i>
+                    </button><button class="btn-icon btn-problem-list" (click)="openProblemList(p)" title="病史與問題列表">
                     <i class="fas fa-clipboard-list"></i>
                   </button>
-                </div></details></div>
+                </div>
               </div>
               <div class="flex-cell col-hospital">
                 <div class="hospital-cell-content">
@@ -550,9 +553,6 @@
   </div>
 }
 </div>
-<div class="fixed-bottom-bar mobile-only">
-
-  </div>
 </div>
 <!-- Dialogs -->
 @if (isModalVisible()) {

@@ -52,12 +52,93 @@ test('patient save locks fields and duplicate submit and keeps failure draft edi
  }finally{release();}
 });
 
-test('compact patient list keeps full identifiers and expands notes with usable desktop and mobile bounds',async({page,app})=>{
- const p=await seed(app,'完整姓名十個中文字測試',{remarks:'長備註'.repeat(120)});await page.setViewportSize({width:1280,height:800});await app.authenticate(page);await page.goto(app.url+'/patients');
+test('patient list keeps direct actions, sortable dates, full identifiers and expandable notes on desktop and mobile',async({page,app},testInfo)=>{
+ const action=(row,name)=>name.startsWith('轉')?row.getByRole('button',{name:new RegExp(name+'$')}):row.getByTitle(name,{exact:true});
+ const p=await seed(app,'完整姓名十個中文字測試',{remarks:'長備註'.repeat(120)});
+ const cases=[{patient:p,tab:'門診',status:'opd'}];
+ for(const [status,tab] of [['ipd','住院'],['er','急診']]) cases.push({patient:await seed(app,tab+'合成病人',{status,wardNumber:'合成01'}),tab,status});
+ const earlier=await seed(app,'排序較早合成病人');
+ // Supply distinct synthetic response dates so sorting is deterministic without changing date persistence.
+ const setSyntheticDates=target=>target.route(/\/api\/patients(?:\?.*)?$/,async route=>{
+  if(route.request().method()!=='GET') return route.continue();
+  const response=await route.fetch(),patients=await response.json();
+  await route.fulfill({response,json:patients.map(patient=>({...patient,updatedAt:patient.id===earlier.id?'2026-08-01 12:00:00':'2026-09-12 12:00:00'}))});
+ });
+ await setSyntheticDates(page);
+ await page.setViewportSize({width:1280,height:800});await app.authenticate(page);await page.goto(app.url+'/patients');
  const row=page.locator('.flex-table-row').filter({hasText:p.medicalRecordNumber});await expect(row).toHaveCount(1);await expect(row.locator('.patient-name-text')).toHaveText(p.name);await expect(row.locator('.col-mrn')).toHaveText(p.medicalRecordNumber);
  const collapsed=await row.locator('.remarks-text').boundingBox();expect(collapsed.height).toBeLessThan(70);await row.getByRole('button',{name:'展開備註：'+p.name}).click();await expect.poll(async()=> (await row.locator('.remarks-text').boundingBox()).height).toBeGreaterThan(collapsed.height);await row.getByRole('button',{name:'收合備註：'+p.name}).click();
- const widths=await row.evaluate(el=>({row:el.getBoundingClientRect().width,remarks:el.querySelector('.col-remarks').getBoundingClientRect().width,name:el.querySelector('.patient-name-text').scrollWidth,visibleName:el.querySelector('.patient-name-text').clientWidth}));expect(widths.remarks).toBeGreaterThanOrEqual(150);expect(widths.row).toBeLessThan(1300);expect(widths.name).toBeLessThanOrEqual(widths.visibleName+1);
- await page.getByRole('checkbox',{name:'顯示詳細欄位'}).check();await expect(row.locator('.col-physician')).toBeVisible();await page.setViewportSize({width:390,height:844});const panel=page.getByRole('region',{name:'查詢病人'});await expect(panel).toBeVisible();const box=await panel.boundingBox();expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(391);await expect(page.locator('.mobile-only').getByText(p.medicalRecordNumber,{exact:true})).toBeVisible();
+ const widths=await row.evaluate(el=>({remarks:el.querySelector('.col-remarks').getBoundingClientRect().width,name:el.querySelector('.patient-name-text').scrollWidth,visibleName:el.querySelector('.patient-name-text').clientWidth}));expect(widths.remarks).toBeGreaterThanOrEqual(150);expect(widths.name).toBeLessThanOrEqual(widths.visibleName+1);
+ await expect(page.getByRole('checkbox',{name:'顯示詳細欄位'})).toHaveCount(0);
+ for(const {patient,tab,status} of cases){
+  await page.locator('.desktop-only .source-stats').getByRole('button',{name:new RegExp('^'+tab)}).click();
+  const current=page.locator('.flex-table-row').filter({hasText:patient.medicalRecordNumber});
+  for(const column of ['.col-physician','.col-hospital','.col-updated']) await expect(current.locator(column)).toBeVisible();
+  await expect(page.locator('.flex-table-header .col-updated')).toHaveText('異動日期');
+  await expect(current.locator('.col-updated')).toHaveText('2026-09-12');
+  await current.locator('.col-updated').scrollIntoViewIfNeeded();await expect(current.locator('.col-updated')).toBeInViewport();
+  await expect(current.locator('details')).toHaveCount(0);
+  for(const name of ['編輯','醫囑','刪除','病人履歷','病史與問題列表']){
+   const button=action(current,name);await expect(button).toBeVisible();await expect(button).toBeEnabled();
+  }
+  for(const [target,label] of [['opd','轉門診'],['ipd','轉住院'],['er','轉急診']]){
+   const button=action(current,label);
+   if(target===status) await expect(button).toHaveCount(0);else {await expect(button).toBeVisible();await expect(button).toBeEnabled();}
+  }
+ }
+ await page.locator('.desktop-only .source-stats').getByRole('button',{name:/^門診/}).click();
+ await page.locator('.flex-table-header .col-updated').click();
+ await expect(page.locator('.flex-table-row').first().locator('.col-mrn')).toHaveText(earlier.medicalRecordNumber);
+ await page.locator('.flex-table-header .col-updated').click();
+ await expect(page.locator('.flex-table-row').last().locator('.col-mrn')).toHaveText(earlier.medicalRecordNumber);
+ await page.setViewportSize({width:2200,height:900});await row.scrollIntoViewIfNeeded();
+ await row.screenshot({path:testInfo.outputPath('patient-list-desktop-row.png')});
+ await page.setViewportSize({width:390,height:844});const panel=page.getByRole('region',{name:'查詢病人'});await expect(panel).toBeVisible();const box=await panel.boundingBox();expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(391);await expect(page.locator('.mobile-only').getByText(p.medicalRecordNumber,{exact:true})).toBeVisible();
+ const mobileCard=page.locator('.mobile-only .patient-card').filter({hasText:p.medicalRecordNumber});
+ const patientWrites=[];
+ page.on('request',request=>{if(request.url().includes('/api/patients')&&!['GET','OPTIONS'].includes(request.method()))patientWrites.push(request.url());});
+ const lastTransfer=mobileCard.getByRole('button',{name:/轉急診$/});
+ await lastTransfer.scrollIntoViewIfNeeded();
+ expect(await lastTransfer.evaluate(button=>{
+  const rect=button.getBoundingClientRect(),x=rect.left+rect.width/2;
+  return [rect.top+rect.height/2,rect.bottom-2].every(y=>button.contains(document.elementFromPoint(x,y)));
+ }),'The last mobile action receives pointer hits at its center and lower edge').toBe(true);
+ await lastTransfer.click();
+ const transferDialog=page.getByRole('dialog',{name:'確認轉為急診',exact:true});
+ await expect(transferDialog).toContainText(p.name);
+ await transferDialog.getByRole('button',{name:'取消',exact:true}).click();
+ await expect(transferDialog).toBeHidden();expect(patientWrites).toEqual([]);
+ await page.setViewportSize({width:390,height:1200});
+ await mobileCard.scrollIntoViewIfNeeded();await mobileCard.screenshot({path:testInfo.outputPath('patient-list-mobile.png')});
+ for(const role of ['contributor','viewer']){
+  const context=await page.context().browser().newContext({viewport:{width:1280,height:800},timezoneId:'Asia/Taipei',locale:'zh-TW'});
+  const rolePage=await context.newPage(),errors=[],writes=[];
+  rolePage.on('pageerror',error=>errors.push(error.message));
+  rolePage.on('request',request=>{if(request.url().includes('/api/patients')&&!['GET','OPTIONS'].includes(request.method()))writes.push(request.url());});
+  await rolePage.route('**/*',route=>{const url=new URL(route.request().url());return url.origin===app.url||['data:','blob:'].includes(url.protocol)?route.continue():route.abort();});
+  await setSyntheticDates(rolePage);
+  try {
+  await app.authenticate(rolePage,role);await rolePage.goto(app.url+'/patients');
+  if(role==='viewer'){
+   await expect(rolePage).toHaveURL(app.url+'/schedule');
+   await expect(rolePage.locator('.flex-table-row')).toHaveCount(0);
+  } else {
+  for(const {patient,tab,status} of cases){
+   await rolePage.locator('.desktop-only .source-stats').getByRole('button',{name:new RegExp('^'+tab)}).click();
+   const current=rolePage.locator('.flex-table-row').filter({hasText:patient.medicalRecordNumber});
+   await expect(action(current,'刪除')).toBeDisabled();
+   for(const name of ['編輯','醫囑',...(status==='opd'?['轉住院','轉急診']:status==='ipd'?['轉門診','轉急診']:['轉門診','轉住院'])]){
+    const button=action(current,name);await expect(button).toBeVisible();
+    await expect(button).toBeEnabled();
+   }
+   for(const name of ['病人履歷','病史與問題列表']) await expect(action(current,name)).toBeEnabled();
+   await expect(current.locator('.col-updated')).toHaveText('2026-09-12');
+  }
+  }
+  expect(writes,'Role checks do not change patients').toEqual([]);
+  expect(errors,'No uncaught errors in the isolated role context').toEqual([]);
+  } finally { await context.close(); }
+ }
 });
 
 test('KiDit workstation cards support Enter and Space and render the chosen workflow',async({page,app})=>{
