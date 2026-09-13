@@ -114,7 +114,15 @@
                     <h4 class="dash-category-title">{{ CATEGORY_NAMES[category] }}</h4>
                     <div class="dash-cards-grid">
                       @for (item of getDashboardItemsByCategory(category); track item.itemName) {
-                        <div class="dash-card" [class.dash-card-safe]="item.status === 'safe'" [class.dash-card-warning]="item.status === 'warning'" [class.dash-card-danger]="item.status === 'danger'" [class.dash-card-critical]="item.status === 'critical'">
+                        <div
+                          class="dash-card"
+                          role="button"
+                          tabindex="0"
+                          [attr.aria-label]="item.itemName + ' 庫存明細'"
+                          title="點一下看此品項的盤點基準、到貨、逐日餘量與預計不足日"
+                          (click)="openStockItem(item)"
+                          (keydown.enter)="openStockItem(item)"
+                          [class.dash-card-safe]="item.status === 'safe'" [class.dash-card-warning]="item.status === 'warning'" [class.dash-card-danger]="item.status === 'danger'" [class.dash-card-critical]="item.status === 'critical'">
                           <div class="dash-card-header">
                             <span class="dash-card-name">{{ item.itemName }}</span>
                             <span class="status-dot" [class.dot-safe]="item.status === 'safe'" [class.dot-warning]="item.status === 'warning'" [class.dot-danger]="item.status === 'danger'" [class.dot-critical]="item.status === 'critical'"></span>
@@ -365,6 +373,16 @@
       (alert)="onPanelAlert($event)"
       (close)="showUpload.set(false)"
     ></app-inventory-upload>
+  }
+
+  <!-- 品項明細視窗（點庫存總覽卡片） -->
+  @if (selectedStockItem(); as sel) {
+    <app-inventory-item-detail
+      [dashItem]="sel"
+      [purchases]="purchases()"
+      [inventoryItems]="inventoryItems()"
+      (close)="selectedStockItem.set(null)"
+    ></app-inventory-item-detail>
   }
 
   <!-- 今日盤點視窗：日面板只顯示盤點區，與行事曆日面板/週面板共用同一份 counts 文件 -->

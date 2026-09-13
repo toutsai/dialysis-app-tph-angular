@@ -25,6 +25,7 @@ import { InventoryDayPanelComponent } from './inventory-day-panel.component';
 import { InventoryWeekPanelComponent } from './inventory-week-panel.component';
 import { InventoryMonthPanelComponent } from './inventory-month-panel.component';
 import { InventoryUploadComponent } from './inventory-upload.component';
+import { InventoryItemDetailComponent, type DashboardItemSummary } from './inventory-item-detail.component';
 import {
   ApiManagerService,
   type ApiManager,
@@ -70,6 +71,7 @@ type PanelState =
     InventoryWeekPanelComponent,
     InventoryMonthPanelComponent,
     InventoryUploadComponent,
+    InventoryItemDetailComponent,
   ],
   templateUrl: './inventory.component.html',
   styleUrl: './inventory.component.css',
@@ -156,7 +158,13 @@ export class InventoryComponent implements OnInit {
   // ==================== Dashboard ====================
   dashboardLoading = signal(false);
   dashboardLoaded = signal(false);
-  dashboardItems = signal<{ category: string; itemName: string; estimatedStock: number; safeLevel: number; autoSafeLevel: number; dailyUsage: number; todayConsumption: number; remainingAfterToday: number; pending: number; status: 'safe' | 'warning' | 'danger' | 'critical'; statusLabel: string }[]>([]);
+  dashboardItems = signal<DashboardItemSummary[]>([]);
+  /** 點總覽卡片 → 品項明細視窗（盤點基準、盤後到貨/消耗、未來 14 天逐日餘量、預計不足日） */
+  selectedStockItem = signal<DashboardItemSummary | null>(null);
+
+  openStockItem(item: DashboardItemSummary): void {
+    this.selectedStockItem.set(item);
+  }
   dashboardLastCountDate = signal('');
   /** 是否找得到任何盤點紀錄（false → 畫面顯示「請先盤點」而不是全 0） */
   dashboardHasCount = signal(false);
