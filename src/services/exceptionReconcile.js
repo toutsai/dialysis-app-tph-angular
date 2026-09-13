@@ -5,7 +5,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import { getTaipeiDayIndex, getTaipeiTodayString } from '../utils/dateUtils.js'
 import { SHIFTS, FREQ_MAP_TO_DAY_INDEX, getScheduleKey } from '../utils/scheduleUtils.js'
-import { rebuildSingleDaySchedule, isTodayScheduleFrozen, getStartedShiftsForToday } from './scheduleSync.js'
+import { rebuildAndSaveSchedules, isTodayScheduleFrozen, getStartedShiftsForToday } from './scheduleSync.js'
 import { removeAutoMovementFromDailyLog } from './dailyLogMovementSync.js'
 
 // 視為「已生效或待生效」的調班狀態（整併/鏡像偵測時需納入考量）
@@ -278,24 +278,9 @@ export function reconcileSingleDayMove(db, data, masterRules, patientsMap, creat
     }
 
     // 帳本已整併 → 從乾淨常規基準重算當日（含所有生效調班），確保排程正確
-    const finalSchedule = rebuildSingleDaySchedule(dateStr, masterRules, patientsMap)
+    const rebuilt = rebuildAndSaveSchedules([dateStr], masterRules, patientsMap, createdBy, 'reconcile_exception')
 
-    const existing = db.prepare(`SELECT id FROM schedules WHERE date = ?`).get(dateStr)
-    if (existing) {
-      db.prepare(`
-        UPDATE schedules
-        SET schedule = ?, sync_method = 'reconcile_exception',
-            last_modified_by = ?, updated_at = datetime('now', 'localtime')
-        WHERE date = ?
-      `).run(JSON.stringify(finalSchedule), JSON.stringify(createdBy), dateStr)
-    } else {
-      db.prepare(`
-        INSERT INTO schedules (id, date, schedule, sync_method, last_modified_by, created_at, updated_at)
-        VALUES (?, ?, ?, 'reconcile_exception', ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
-      `).run(dateStr, dateStr, JSON.stringify(finalSchedule), JSON.stringify(createdBy))
-    }
-
-    return { ...result, schedule: finalSchedule }
+    return { ...result, schedule: rebuilt.get(dateStr), affectedDates: [...rebuilt.keys()] }
   })
 
   return run()
@@ -317,6 +302,7 @@ export function resolveSourceConflict(db, exceptionId, choice, masterRules, pati
   const ex = parseExceptionRow(row)
   const dateStr = ex.to?.goalDate || ex.from?.sourceDate
   if (!dateStr) return { ok: false, message: '調班缺少日期資訊' }
+  let affectedDates = []
 
   const run = db.transaction(() => {
     if (choice === 'keep_base') {
@@ -335,9 +321,13 @@ export function resolveSourceConflict(db, exceptionId, choice, masterRules, pati
       cancelException(db, exceptionId)
     } else {
       // 維持調班後新床位 → 把 from 重新錨定到病人的新常規位置，再重新生效
-      const base = getPatientBasePosition(masterRules, ex.patientId, dateStr)
+      const sourceDate = ex.from?.sourceDate || dateStr
+      if (sourceDate < getTaipeiTodayString() || isTodayScheduleFrozen(sourceDate)) {
+        throw new Error('來源排程已結束或凍結，請由現場確認原場次。')
+      }
+      const base = getPatientBasePosition(masterRules, ex.patientId, sourceDate)
       const fromData = base
-        ? { sourceDate: dateStr, bedNum: base.bedNum, shiftCode: base.shiftCode }
+        ? { sourceDate, bedNum: base.bedNum, shiftCode: base.shiftCode }
         : ex.from
       db.prepare(`
         UPDATE schedule_exceptions
@@ -354,21 +344,14 @@ export function resolveSourceConflict(db, exceptionId, choice, masterRules, pati
     // 今日排程整天凍結（06:00 起）：只動帳本，不重算不寫回，今天由現場組長手動管理
     if (isTodayScheduleFrozen(dateStr)) return null
 
-    const finalSchedule = rebuildSingleDaySchedule(dateStr, masterRules, patientsMap)
-    const existing = db.prepare(`SELECT id FROM schedules WHERE date = ?`).get(dateStr)
-    if (existing) {
-      db.prepare(`
-        UPDATE schedules
-        SET schedule = ?, sync_method = 'reconcile_exception',
-            last_modified_by = ?, updated_at = datetime('now', 'localtime')
-        WHERE date = ?
-      `).run(JSON.stringify(finalSchedule), JSON.stringify(modifiedBy), dateStr)
-    }
-    return finalSchedule
+    const rebuilt = rebuildAndSaveSchedules([dateStr, ex.from?.sourceDate].filter(Boolean), masterRules,
+      patientsMap, modifiedBy, 'reconcile_exception')
+    affectedDates = [...rebuilt.keys()]
+    return rebuilt.get(dateStr)
   })
 
   const schedule = run()
-  return { ok: true, action: choice, schedule, dateStr, type: row.type }
+  return { ok: true, action: choice, schedule, dateStr, type: row.type, affectedDates }
 }
 
 /**
@@ -398,6 +381,10 @@ export function retargetConflict(db, exceptionId, to, masterRules, patientsMap, 
   if (isTodayScheduleFrozen(dateStr)) {
     return { ok: false, message: '今日排程已凍結，無法重新選床；今日床位請於排程頁直接調整。' }
   }
+  if (ex.type === 'MOVE' && ex.from?.sourceDate !== dateStr &&
+      (ex.from?.sourceDate < getTaipeiTodayString() || isTodayScheduleFrozen(ex.from?.sourceDate))) {
+    return { ok: false, message: '來源排程已結束或凍結，請由現場確認原場次。' }
+  }
 
   const newToData = { ...ex.to, goalDate: dateStr, bedNum: to.bedNum, shiftCode: to.shiftCode }
 
@@ -409,7 +396,8 @@ export function retargetConflict(db, exceptionId, to, masterRules, patientsMap, 
       WHERE id = ?
     `).run(JSON.stringify(newToData), exceptionId)
 
-    const finalSchedule = rebuildSingleDaySchedule(dateStr, masterRules, patientsMap)
+    const rebuilt = rebuildAndSaveSchedules([dateStr, ex.from?.sourceDate].filter(Boolean), masterRules,
+      patientsMap, modifiedBy, 'reconcile_exception')
 
     // 防禦：picker 只給空床，但併發下新床可能剛被佔走——重算後此筆仍衝突就回滾
     const after = db
@@ -419,21 +407,12 @@ export function retargetConflict(db, exceptionId, to, masterRules, patientsMap, 
       throw new Error(after.error_message || '新選的床位仍有衝突，請重新選擇')
     }
 
-    const existing = db.prepare(`SELECT id FROM schedules WHERE date = ?`).get(dateStr)
-    if (existing) {
-      db.prepare(`
-        UPDATE schedules
-        SET schedule = ?, sync_method = 'reconcile_exception',
-            last_modified_by = ?, updated_at = datetime('now', 'localtime')
-        WHERE date = ?
-      `).run(JSON.stringify(finalSchedule), JSON.stringify(modifiedBy), dateStr)
-    }
-    return finalSchedule
+    return { schedule: rebuilt.get(dateStr), affectedDates: [...rebuilt.keys()] }
   })
 
   try {
-    const schedule = run()
-    return { ok: true, action: 'retarget', schedule, dateStr, type: row.type }
+    const result = run()
+    return { ok: true, action: 'retarget', ...result, dateStr, type: row.type }
   } catch (error) {
     return { ok: false, message: error?.message || '重新選床失敗' }
   }

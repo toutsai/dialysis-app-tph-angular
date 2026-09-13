@@ -1,7 +1,7 @@
 // 護理相關路由
 import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
-import XLSX from 'xlsx'
+import XLSX from '../utils/spreadsheet.js'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isEditor, isAdmin, isContributor, logAudit } from '../middleware/auth.js'
 import { getTaipeiTodayString } from '../utils/dateUtils.js'

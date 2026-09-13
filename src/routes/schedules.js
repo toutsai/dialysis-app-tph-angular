@@ -3,7 +3,7 @@ import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isEditor, logAudit } from '../middleware/auth.js'
-import { syncMasterScheduleToFuture, syncMasterScheduleToFutureSync, initializeFutureSchedules, mergeExceptionsIntoSchedules, generateDailyScheduleFromRules, rebuildSingleDaySchedule, isTodayScheduleFrozen } from '../services/scheduleSync.js'
+import { syncMasterScheduleToFuture, syncMasterScheduleToFutureSync, initializeFutureSchedules, mergeExceptionsIntoSchedules, generateDailyScheduleFromRules, rebuildAndSaveSchedules, isTodayScheduleFrozen } from '../services/scheduleSync.js'
 import { processScheduleException } from '../services/exceptionHandler.js'
 import { isSingleDayMove, reconcileSingleDayMove, resolveSourceConflict, retargetConflict } from '../services/exceptionReconcile.js'
 import { syncEventsToKiditLogbook } from '../services/kiditSync.js'
@@ -203,21 +203,7 @@ function cleanupFutureFirstDialysisAddSessions(db, patientId, masterRules, patie
       console.log(`[FirstDialysisPlan] ${dateStr} 今日排程已凍結，跳過重建（由現場手動調整）`)
       continue
     }
-    const finalSchedule = rebuildSingleDaySchedule(dateStr, masterRules, patientsMap)
-    db.prepare(`
-      INSERT INTO schedules (id, date, schedule, sync_method, last_modified_by, created_at, updated_at)
-      VALUES (?, ?, ?, 'first_dialysis_rebuild', ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
-      ON CONFLICT(date) DO UPDATE SET
-        schedule = excluded.schedule,
-        sync_method = excluded.sync_method,
-        last_modified_by = excluded.last_modified_by,
-        updated_at = datetime('now', 'localtime')
-    `).run(
-      dateStr,
-      dateStr,
-      JSON.stringify(finalSchedule),
-      JSON.stringify(modifiedBy),
-    )
+    rebuildAndSaveSchedules([dateStr], masterRules, patientsMap, modifiedBy, 'first_dialysis_rebuild')
   }
 
   return targetDates.size
@@ -520,7 +506,7 @@ router.get('/exception-tasks', authenticate, getExceptionsList)
 /**
  * GET /api/schedules/:date
  * 取得特定日期的排程
- * 如果排程不存在或為空，自動從總表生成
+ * 排程列不存在時由總表與例外共同生成；已存在的空排程是有效結果。
  */
 router.get('/:date', authenticate, (req, res) => {
   try {
@@ -551,8 +537,8 @@ router.get('/:date', authenticate, (req, res) => {
         }
       }
       // 有「非空」列照常回；空列視同查無（優先信歸檔，空殼多為殘留）；兩表皆無則落到下方的空回應
-    } else if (!schedule || Object.keys(scheduleData).length === 0) {
-      console.log(`[Schedules] 排程 ${date} 不存在或為空，從總表自動生成...`)
+    } else if (!schedule) {
+      console.log(`[Schedules] 排程 ${date} 不存在，從總表與調班例外生成...`)
 
       // 取得總表
       const masterDoc = db.prepare(`
@@ -569,30 +555,8 @@ router.get('/:date', authenticate, (req, res) => {
         const patientsMap = new Map()
         patients.forEach(p => patientsMap.set(p.id, p))
 
-        // 生成排程
-        scheduleData = generateDailyScheduleFromRules(masterRules, date, patientsMap)
-
-        if (Object.keys(scheduleData).length > 0) {
-          // 儲存生成的排程
-          if (schedule) {
-            // 更新現有的空排程
-            db.prepare(`
-              UPDATE schedules
-              SET schedule = ?, sync_method = 'auto_generate', updated_at = datetime('now', 'localtime')
-              WHERE date = ?
-            `).run(JSON.stringify(scheduleData), date)
-          } else {
-            // 創建新排程
-            db.prepare(`
-              INSERT INTO schedules (id, date, schedule, sync_method, created_at, updated_at)
-              VALUES (?, ?, ?, 'auto_generate', datetime('now', 'localtime'), datetime('now', 'localtime'))
-            `).run(date, date, JSON.stringify(scheduleData))
-          }
-          console.log(`[Schedules] 已自動生成 ${date} 排程，共 ${Object.keys(scheduleData).length} 個床位`)
-
-          // 重新讀取更新後的記錄
-          schedule = db.prepare(`SELECT * FROM schedules WHERE date = ?`).get(date)
-        }
+        rebuildAndSaveSchedules([date], masterRules, patientsMap, {}, 'auto_generate')
+        schedule = db.prepare(`SELECT * FROM schedules WHERE date = ?`).get(date)
       }
     }
 
@@ -602,6 +566,8 @@ router.get('/:date', authenticate, (req, res) => {
         id: date,
         date,
         schedule: {},
+        // 既存列從 0 起算；-1 代表尚未建立，避免兩個首次存檔互相覆寫。
+        version: -1,
         createdAt: null,
         updatedAt: null
       })
@@ -630,7 +596,7 @@ router.get('/:date', authenticate, (req, res) => {
 /**
  * PUT /api/schedules/:date
  * 更新特定日期的排程
- * Body 可選 expectedVersion（number）：帶入時做樂觀鎖版本檢查，版本不符回 409 VERSION_CONFLICT。
+ * Body 可選 expectedVersion（number）：帶入時做樂觀鎖版本檢查，版本不符回 409 VERSION_CONFLICT；-1 代表預期尚未建立。
  * 不帶則維持現行無條件覆寫（相容舊前端）。
  */
 router.put('/:date', ...isEditor, async (req, res) => {
@@ -674,7 +640,17 @@ router.put('/:date', ...isEditor, async (req, res) => {
         })
       }
     } else {
-      // INSERT 分支忽略 expectedVersion（新建列無版本可比對）
+      if (typeof expectedVersion === 'number' && expectedVersion !== -1) {
+        return res.status(409).json({
+          error: true,
+          code: 'VERSION_CONFLICT',
+          message: '排程已被移除，請重新載入',
+          currentVersion: -1,
+          lastModifiedBy: {},
+          updatedAt: null,
+        })
+      }
+      // 舊端未帶版本仍相容；新版以 -1 明確表示首次建立。
       db.prepare(`
         INSERT INTO schedules (id, date, schedule, last_modified_by)
         VALUES (?, ?, ?, ?)
@@ -1323,7 +1299,7 @@ router.post('/exceptions', ...isEditor, async (req, res) => {
         type: result.action === 'swapped' ? 'SWAP' : 'MOVE',
         status: 'applied',
         patientId: data.patientId,
-        affectedDates: [dateStr],
+        affectedDates: result.affectedDates || [dateStr],
         date: dateStr,
       })
 
@@ -1332,7 +1308,7 @@ router.post('/exceptions', ...isEditor, async (req, res) => {
         action: result.action,
         swappedWith: result.swappedWith || null,
         status: 'applied',
-        affectedDates: [dateStr],
+        affectedDates: result.affectedDates || [dateStr],
       })
     }
 
@@ -1552,11 +1528,11 @@ router.post('/exceptions/:id/resolve-conflict', ...isEditor, async (req, res) =>
       id,
       type: result.type || 'MOVE',
       status: choice === 'keep_base' ? 'cancelled' : 'applied',
-      affectedDates: result.dateStr ? [result.dateStr] : [],
+      affectedDates: result.affectedDates || (result.dateStr ? [result.dateStr] : []),
       date: result.dateStr,
     })
 
-    res.json({ success: true, action: result.action, affectedDates: result.dateStr ? [result.dateStr] : [] })
+    res.json({ success: true, action: result.action, affectedDates: result.affectedDates || (result.dateStr ? [result.dateStr] : []) })
   } catch (error) {
     console.error('解決調班衝突錯誤:', error)
     res.status(500).json({ error: true, message: '解決調班衝突失敗' })
@@ -1593,6 +1569,7 @@ router.delete('/exceptions/:id', ...isEditor, async (req, res) => {
       status: exception.status,
     }
 
+    db.transaction(() => {
     if (exData.type === 'ADD_SESSION' && exData.to?.goalDate) {
       removeAutoMovementFromDailyLog(db, exData.to.goalDate, `auto_add_session_${id}`)
     }
@@ -1650,31 +1627,13 @@ router.delete('/exceptions/:id', ...isEditor, async (req, res) => {
         const patientsMap = new Map()
         patients.forEach(p => patientsMap.set(p.id, p))
 
-        // 重建每個受影響日期的排程
-        for (const dateStr of datesToRebuild) {
-          try {
-            const finalSchedule = rebuildSingleDaySchedule(dateStr, masterRules, patientsMap)
-
-            db.prepare(`
-              UPDATE schedules
-              SET schedule = ?,
-                  sync_method = 'rebuild_on_delete',
-                  last_modified_by = ?,
-                  updated_at = datetime('now', 'localtime')
-              WHERE date = ?
-            `).run(
-              JSON.stringify(finalSchedule),
-              JSON.stringify({ uid: req.user.id, name: req.user.name }),
-              dateStr
-            )
-            console.log(`[ExceptionDelete] 已重建 ${dateStr} 的排程`)
-          } catch (rebuildError) {
-            console.error(`[ExceptionDelete] 重建 ${dateStr} 失敗:`, rebuildError)
-          }
-        }
+        rebuildAndSaveSchedules([...datesToRebuild], masterRules, patientsMap,
+          { uid: req.user.id, name: req.user.name }, 'rebuild_on_delete', [...datesToRebuild].sort()[0])
       }
     }
 
+
+    })()
 
     await logAudit('EXCEPTION_DELETE', req.user.id, req.user.name, 'schedule_exceptions', id, {
       type: exData.type,
@@ -2164,32 +2123,8 @@ router.post('/admin/force-resync', ...isEditor, async (req, res) => {
       return formatDateToYYYYMMDD(date)
     })
 
-    let syncedCount = 0
-
-    for (const dateStr of futureDates) {
-      // 今日排程整天凍結（06:00 起）：跳過重建，今天由現場組長手動調整
-      if (isTodayScheduleFrozen(dateStr)) {
-        console.log(`[Admin] ${dateStr} 今日排程已凍結，跳過強制重同步（由現場手動調整）`)
-        continue
-      }
-      const finalSchedule = rebuildSingleDaySchedule(dateStr, masterRules, patientsMap)
-
-      db.prepare(`
-        INSERT INTO schedules (id, date, schedule, sync_method, last_modified_by, created_at, updated_at)
-        VALUES (?, ?, ?, 'force_resync', ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
-        ON CONFLICT(date) DO UPDATE SET
-          schedule = excluded.schedule,
-          sync_method = 'force_resync',
-          last_modified_by = excluded.last_modified_by,
-          updated_at = datetime('now', 'localtime')
-      `).run(
-        dateStr,
-        dateStr,
-        JSON.stringify(finalSchedule),
-        JSON.stringify({ uid: req.user.id, name: req.user.name })
-      )
-      syncedCount++
-    }
+    const syncedCount = rebuildAndSaveSchedules(futureDates, masterRules, patientsMap,
+      { uid: req.user.id, name: req.user.name }, 'force_resync').size
 
 
     console.log(`[Admin] ✅ 強制重新同步完成，共處理 ${syncedCount} 天`)
