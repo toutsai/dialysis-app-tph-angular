@@ -20,6 +20,12 @@ import { PatientStoreService } from '@services/patient-store.service';
 import { MedicationStoreService } from '@services/medication-store.service';
 import { queryWithInChunks } from '@/utils/firestoreUtils';
 import { formatDateToYYYYMM } from '@/utils/dateUtils';
+import { AkCatalogService } from '@services/ak-catalog.service';
+import {
+  ConsumableItemMappingDialogComponent,
+  type ConsumableItemMappingRequest,
+  type ConsumableItemMappings,
+} from '@app/components/dialogs/consumable-item-mapping-dialog/consumable-item-mapping-dialog.component';
 
 interface MedicationMaster {
   code: string;
@@ -62,6 +68,14 @@ interface UploadResult {
   errors?: { rowNumber: number; reason: string }[];
   success?: boolean;
   processedCount?: number;
+  cancelled?: boolean;
+  /** 透析醫囑上傳：星期一～六 AK 品名對照「品項設定」的結果（後端 POST /dialysis-orders/upload 回傳） */
+  akMapping?: {
+    created: string[];
+    mapped: { from: string; to: string; remembered: boolean }[];
+    autoMapped: { from: string; to: string }[];
+    kept: string[];
+  };
 }
 
 /** 透析醫囑檢視列（GET /orders/dialysis-orders 回傳，orders key 對齊 DialysisOrderModal） */
@@ -83,7 +97,7 @@ interface DialysisOrderRow {
 @Component({
   selector: 'app-orders',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ConsumableItemMappingDialogComponent],
   templateUrl: './orders.component.html',
   styleUrl: './orders.component.css',
 })
@@ -95,6 +109,7 @@ export class OrdersComponent implements OnInit {
   private readonly apiManagerService = inject(ApiManagerService);
   private readonly patientStore = inject(PatientStoreService);
   private readonly medicationStore = inject(MedicationStoreService);
+  private readonly akCatalog = inject(AkCatalogService);
 
   private readonly baseSchedulesApi: ApiManager<FirestoreRecord>;
   private readonly ordersApi: ApiManager<OrderRecord>;
@@ -235,6 +250,8 @@ export class OrdersComponent implements OnInit {
   readonly isDialysisUploading = signal(false);
   readonly dialysisUploadResult = signal<UploadResult | null>(null);
   readonly isDialysisDragOver = signal(false);
+  /** 後端回 needsItemMapping（星期一～六 AK 品名對不上品項設定）→ 開對照確認視窗（2026-09-15 使用者裁定） */
+  readonly dialysisItemMappingRequest = signal<ConsumableItemMappingRequest | null>(null);
 
   // --- Helper Maps ---
   private readonly SHIFT_MAP: Record<string, number> = {
@@ -780,21 +797,42 @@ export class OrdersComponent implements OnInit {
       alert('請先選擇一個檔案！');
       return;
     }
+    await this.postDialysisUpload(file);
+  }
+
+  /**
+   * 送後端解析；星期一～六 AK 品名對不上「品項設定」時後端回 needsItemMapping 且不寫入，
+   * 這裡開對照確認視窗（對應既有品項／新增為品項／保留原字），使用者確認後帶 itemMappings 重送同一檔。
+   */
+  private async postDialysisUpload(file: File, itemMappings?: ConsumableItemMappings): Promise<void> {
     this.isDialysisUploading.set(true);
     this.dialysisUploadResult.set(null);
+    this.dialysisItemMappingRequest.set(null);
     try {
       const fileContentBase64 = await this.toBase64(file);
       const res = await fetch(`${this.firebaseService.apiBaseUrl}/dialysis-orders/process`, {
         method: 'POST',
         headers: this.firebaseService.getHeaders(),
-        body: JSON.stringify({ fileName: file.name, fileContent: fileContentBase64 }),
+        body: JSON.stringify({
+          fileName: file.name,
+          fileContent: fileContentBase64,
+          ...(itemMappings ? { itemMappings } : {}),
+        }),
       });
-      const resultData = (await res.json()) as UploadResult;
+      const resultData = (await res.json()) as UploadResult & { needsItemMapping?: boolean };
+      if (resultData?.needsItemMapping) {
+        this.dialysisItemMappingRequest.set(resultData as unknown as ConsumableItemMappingRequest);
+        return;
+      }
       this.dialysisUploadResult.set(resultData);
       if (resultData && resultData.success) {
         // 檢視清單重載 + 病人快取刷新（上傳會回寫 patients.dialysis_orders）
         this.dialysisLoaded.set(false);
         void this.patientStore.forceRefreshPatients();
+        // 確認視窗可能新增了品項/別名 → 醫囑視窗等處的 AK 下拉下次重新取目錄
+        if (resultData.akMapping?.created?.length || resultData.akMapping?.mapped?.length) {
+          this.akCatalog.invalidate();
+        }
       }
     } catch (error: any) {
       console.error('透析醫囑上傳失敗:', error);
@@ -806,5 +844,39 @@ export class OrdersComponent implements OnInit {
     } finally {
       this.isDialysisUploading.set(false);
     }
+  }
+
+  async onDialysisItemMappingConfirm(mappings: ConsumableItemMappings): Promise<void> {
+    const file = this.dialysisSelectedFile();
+    this.dialysisItemMappingRequest.set(null);
+    if (!file) {
+      alert('找不到原始檔案，請重新選擇檔案再上傳。');
+      return;
+    }
+    await this.postDialysisUpload(file, mappings);
+  }
+
+  onDialysisItemMappingCancel(): void {
+    this.dialysisItemMappingRequest.set(null);
+    this.dialysisUploadResult.set({
+      message: '已取消上傳：AK 品項對照未確認，未寫入任何資料。',
+      errorCount: 0,
+      errors: [],
+      cancelled: true,
+    });
+  }
+
+  /** 上傳結果裡的 AK 品名對照摘要（有內容才顯示） */
+  akMappingLines(result: UploadResult | null): string[] {
+    const m = result?.akMapping;
+    if (!m) return [];
+    const lines: string[] = [];
+    if (m.autoMapped?.length) lines.push(`自動對應：${m.autoMapped.map((x) => `${x.from} → ${x.to}`).join('、')}`);
+    if (m.mapped?.length) {
+      lines.push(`手動對應：${m.mapped.map((x) => `${x.from} → ${x.to}${x.remembered ? '（已記住）' : ''}`).join('、')}`);
+    }
+    if (m.created?.length) lines.push(`新增品項：${m.created.join('、')}（每箱數等設定請到品項設定補齊）`);
+    if (m.kept?.length) lines.push(`保留原字（未建品項，庫存推估會標示未設定品項）：${m.kept.join('、')}`);
+    return lines;
   }
 }

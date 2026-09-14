@@ -9,6 +9,12 @@ import { getTaipeiMonthString, getTaipeiTodayString } from '../utils/dateUtils.j
 import { normalizeDialysisMode, normalizeDialysisOrdersMode } from '../utils/dialysisMode.js'
 import { FREQ_MAP_TO_DAY_INDEX } from '../utils/scheduleUtils.js'
 import { saveDialysisOrder } from '../services/dialysisOrderService.js'
+import {
+  createInventoryItemResolver,
+  applyPendingItemChanges,
+  stripAkCellSuffix,
+  loadAkCatalog,
+} from '../utils/inventoryItemName.js'
 
 const router = Router()
 const isDoctorRole = isContributor
@@ -178,92 +184,9 @@ const CONSUMABLE_CATEGORY_LABELS = {
   bicarbonateType: 'B液種類',
 }
 
-/**
- * 品名寬鬆比對 key：全形轉半形、去所有空白、轉大寫
- * （HIS 報表與品項設定只差大小寫/空白時視為同一品項，不用再問使用者）
- */
-function looseConsumableItemKey(name) {
-  return String(name ?? '')
-    .replace(/[！-～]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
-    .replace(/\s+/g, '')
-    .toUpperCase()
-}
-
-/**
- * 建立「消耗紀錄品名 → 品項設定品項」解析器（inventory_items 為唯一權威）
- * 解析順序：品名完全相同 → 別名表 inventory_item_aliases → 寬鬆比對（大小寫/空白）
- *          → 本次請求的 itemMappings（使用者在確認視窗的決定：map/create/skip）→ unmatched
- * 回傳 resolve(rawTrimmed) => { canonical: string|null, via: 'exact'|'auto'|'map'|'create'|'skip'|'unmatched' }
- * map/create 的副作用（新建品項、記住別名）先收在 pendingCreates/pendingAliases，由呼叫端在交易內寫入。
- */
-function buildConsumableItemResolver(db, category, itemMappings) {
-  const inventoryItems = db
-    .prepare(`SELECT id, name FROM inventory_items WHERE category = ? ORDER BY name`)
-    .all(category)
-  const itemById = new Map(inventoryItems.map((i) => [i.id, i]))
-  const itemByExact = new Map()
-  const itemByLoose = new Map()
-  for (const it of inventoryItems) {
-    if (!itemByExact.has(it.name)) itemByExact.set(it.name, it)
-    const loose = looseConsumableItemKey(it.name)
-    if (!itemByLoose.has(loose)) itemByLoose.set(loose, it)
-  }
-  const itemByAlias = new Map()
-  for (const a of db
-    .prepare(`SELECT alias, item_id FROM inventory_item_aliases WHERE category = ?`)
-    .all(category)) {
-    const target = itemById.get(a.item_id)
-    if (!target) continue // 品項已刪除的殘留別名，忽略
-    itemByAlias.set(a.alias, target)
-    const loose = looseConsumableItemKey(a.alias)
-    if (!itemByAlias.has(loose)) itemByAlias.set(loose, target)
-  }
-
-  const mappings =
-    itemMappings && typeof itemMappings === 'object' && !Array.isArray(itemMappings) ? itemMappings : {}
-  const cache = new Map()
-  const pendingCreates = [] // [{ id, name }]
-  const pendingAliases = [] // [{ alias, itemId, itemName }]
-  const mapped = [] // [{ from, to, remembered }]
-  const skipped = [] // [name]
-
-  const resolve = (rawTrimmed) => {
-    if (cache.has(rawTrimmed)) return cache.get(rawTrimmed)
-    const loose = looseConsumableItemKey(rawTrimmed)
-    let result
-    const exact = itemByExact.get(rawTrimmed)
-    const auto = exact || itemByAlias.get(rawTrimmed) || itemByAlias.get(loose) || itemByLoose.get(loose)
-    if (auto) {
-      result = { canonical: auto.name, via: exact ? 'exact' : 'auto' }
-    } else {
-      const m = mappings[rawTrimmed]
-      const action = m && typeof m === 'object' ? m.action : null
-      if (action === 'skip') {
-        skipped.push(rawTrimmed)
-        result = { canonical: null, via: 'skip' }
-      } else if (action === 'create') {
-        const created = { id: uuidv4(), name: rawTrimmed }
-        pendingCreates.push(created)
-        itemById.set(created.id, created)
-        itemByExact.set(created.name, created)
-        itemByLoose.set(loose, created)
-        result = { canonical: created.name, via: 'create' }
-      } else if (action === 'map' && m.itemId && itemById.has(String(m.itemId))) {
-        const target = itemById.get(String(m.itemId))
-        const remembered = m.remember !== false && target.name !== rawTrimmed
-        if (remembered) pendingAliases.push({ alias: rawTrimmed, itemId: target.id, itemName: target.name })
-        mapped.push({ from: rawTrimmed, to: target.name, remembered })
-        result = { canonical: target.name, via: 'map' }
-      } else {
-        result = { canonical: null, via: 'unmatched' }
-      }
-    }
-    cache.set(rawTrimmed, result)
-    return result
-  }
-
-  return { inventoryItems, resolve, pendingCreates, pendingAliases, mapped, skipped }
-}
+// 品名對照解析器（品項設定為唯一權威）已抽到 src/utils/inventoryItemName.js，
+// 消耗紀錄上傳與透析醫囑 Excel 的 AK 欄共用同一套規則。
+const buildConsumableItemResolver = createInventoryItemResolver
 
 /**
  * 依 report_data.ranges（各上傳區間明細）重算三類耗材的月聚合陣列
@@ -1939,15 +1862,6 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
     const { pendingCreates, pendingAliases } = itemResolver
     if (updatesMap.size > 0 || pendingCreates.length > 0 || pendingAliases.length > 0) {
       const createdByJson = JSON.stringify({ uid: req.user.id, name: req.user.name })
-      const insertItemStmt = db.prepare(`INSERT INTO inventory_items (id, name, category) VALUES (?, ?, ?)`)
-      const upsertAliasStmt = db.prepare(`
-        INSERT INTO inventory_item_aliases (id, category, alias, item_id, created_by)
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(category, alias) DO UPDATE SET
-          item_id = excluded.item_id,
-          created_by = excluded.created_by,
-          created_at = datetime('now', 'localtime')
-      `)
       const upsertStmt = db.prepare(`
         INSERT INTO consumables_reports (id, patient_id, patient_name, medical_record_number, report_date, report_data, source_file, created_by)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -1959,8 +1873,7 @@ router.post('/consumables/upload', ...isInventoryRole, async (req, res) => {
       `)
 
       const upsertMany = db.transaction((reportList) => {
-        for (const c of pendingCreates) insertItemStmt.run(c.id, c.name, firestoreField)
-        for (const a of pendingAliases) upsertAliasStmt.run(uuidv4(), firestoreField, a.alias, a.itemId, createdByJson)
+        applyPendingItemChanges(db, itemResolver, firestoreField, createdByJson)
         for (const report of reportList) {
           upsertStmt.run(
             report.id,
@@ -2341,7 +2254,7 @@ router.post('/medications/upload', ...isDoctorRole, async (req, res) => {
  */
 router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
   try {
-    const { fileName, fileContent } = req.body
+    const { fileName, fileContent, itemMappings } = req.body
     if (!fileName || !fileContent) {
       return res.status(400).json({ error: true, message: '請求中缺少檔案名稱或內容。' })
     }
@@ -2427,6 +2340,38 @@ router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
     const WEEKDAY_HEADERS = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
     const cellStr = (row, name) => (col[name] !== undefined ? String(row[col[name]] ?? '').trim() : '')
 
+    // AK 品名以「品項設定」（inventory_items / artificialKidney）為唯一權威（2026-09-15 使用者裁定）：
+    // 星期一～六格子先去掉 HIS 旗標後綴（19H;Y → 19H），再經 品項設定 → 別名表 → 寬鬆比對；
+    // 對不上的先整檔掃完回 needsItemMapping 讓使用者決定（對應/新增/保留原字），確認後帶 itemMappings 重送。
+    // 已離開病人的列只存檔不回寫，AK 照原字保存、不拿來問使用者（舊型號不需要建品項）。
+    const AK_CATEGORY = 'artificialKidney'
+    const akResolver = createInventoryItemResolver(db, AK_CATEGORY, itemMappings)
+    const akUnmatched = new Map() // raw -> { item, rowCount, totalCount }
+    const akAutoMapped = new Map() // raw -> canonical（寬鬆/別名自動對上的，回報給使用者看）
+    // 回傳一列六格的正式品名；rowUnmatched 收這列對不上的原字（統計 rowCount 用）
+    const resolveAkRow = (row, askUser) => {
+      const rowUnmatched = new Set()
+      const weekly = WEEKDAY_HEADERS.map((h) => {
+        const cell = stripAkCellSuffix(cellStr(row, h))
+        if (!cell || !askUser) return cell
+        const r = akResolver.resolve(cell)
+        if (r.canonical) {
+          if (r.via === 'auto' && r.canonical !== cell) akAutoMapped.set(cell, r.canonical)
+          return r.canonical
+        }
+        // skip = 保留原字（醫囑是臨床資料，不因品項未建檔而丟掉）；unmatched = 第一輪先收集再問
+        if (r.via === 'unmatched') {
+          const u = akUnmatched.get(cell) || { item: cell, rowCount: 0, totalCount: 0 }
+          u.totalCount++
+          akUnmatched.set(cell, u)
+          rowUnmatched.add(cell)
+        }
+        return cell
+      })
+      for (const cell of rowUnmatched) akUnmatched.get(cell).rowCount++
+      return weekly
+    }
+
     // 總表頻率（輪替字串生成用）：ak 的 '/' 慣例 = 依透析日序每次一段（勿去重、勿錯序）
     let masterRules = {}
     try {
@@ -2480,8 +2425,8 @@ router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
       const timeH = Math.floor(totalMinutes / 60)
       const timeM = totalMinutes % 60
 
-      // AK：六天各一欄（akWeekly 為權威）；輪替字串依病人總表頻率換算
-      const akWeekly = WEEKDAY_HEADERS.map((h) => cellStr(row, h))
+      // AK：六天各一欄（akWeekly 為權威）；品名對照品項設定；輪替字串依病人總表頻率換算
+      const akWeekly = resolveAkRow(row, !patient.is_deleted)
       const akString = buildAkRotation(akWeekly, masterRules[patient.id]?.freq)
 
       const heparinInitial = cellStr(row, '初劑量')
@@ -2526,6 +2471,29 @@ router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
         mrn: patient.medical_record_number,
         effectiveDate,
         orders,
+      })
+    }
+
+    // 有 AK 品名對不上品項設定 → 不寫任何東西，回確認視窗需要的資料（HTTP 200，前端依 needsItemMapping 分流）
+    if (akUnmatched.size > 0) {
+      const unmatchedItems = [...akUnmatched.values()].sort((a, b) => b.totalCount - a.totalCount)
+      console.log(
+        `[DialysisOrders] ${fileName} 有 ${unmatchedItems.length} 個 AK 品名不在品項設定，等待使用者確認：` +
+          unmatchedItems.map((u) => u.item).join(', '),
+      )
+      return res.json({
+        success: false,
+        needsItemMapping: true,
+        message: `有 ${unmatchedItems.length} 個 AK 品名在「品項設定」找不到，請先確認對照。尚未寫入任何資料。`,
+        fileName,
+        category: AK_CATEGORY,
+        categoryLabel: '人工腎臟',
+        reportMonth: '',
+        rangeKey: '',
+        rangeLabel: '透析醫囑（星期一～六 AK）',
+        unmatchedItems,
+        inventoryItems: akResolver.inventoryItems.map((i) => ({ id: i.id, name: i.name })),
+        mappingMode: 'dialysisOrders',
       })
     }
 
@@ -2579,7 +2547,10 @@ router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
     `)
 
     const afterCommit = []
+    const createdByJson = JSON.stringify({ uid: req.user.id, name: req.user.name })
     db.transaction(() => {
+      // 使用者在確認視窗選「新增為品項」/「對應＋記住」→ 同交易寫 inventory_items / inventory_item_aliases
+      applyPendingItemChanges(db, akResolver, AK_CATEGORY, createdByJson)
       for (const r of rowsToUpsert) {
         upsert.run(uuidv4(), r.patientId, r.patientName, r.mrn, r.effectiveDate, JSON.stringify(r.orders), fileName)
         if (existingKeys.has(`${r.mrn}|${r.effectiveDate}`)) updatedCount++
@@ -2627,9 +2598,26 @@ router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
       errorCount: errors.length,
     })
 
+    const akMapping = {
+      created: akResolver.pendingCreates.map((c) => c.name),
+      mapped: akResolver.mapped,
+      autoMapped: [...akAutoMapped.entries()].map(([from, to]) => ({ from, to })),
+      kept: akResolver.skipped, // 使用者選「保留原字」的品名（未建品項，庫存推估會標示未設定品項）
+    }
+    const akMappingParts = []
+    if (akMapping.autoMapped.length) {
+      akMappingParts.push(`自動對應 ${akMapping.autoMapped.map((m) => `${m.from}→${m.to}`).join('、')}`)
+    }
+    if (akMapping.mapped.length) {
+      akMappingParts.push(`手動對應 ${akMapping.mapped.map((m) => `${m.from}→${m.to}`).join('、')}`)
+    }
+    if (akMapping.created.length) akMappingParts.push(`新增品項 ${akMapping.created.join('、')}`)
+    if (akMapping.kept.length) akMappingParts.push(`保留原字 ${akMapping.kept.join('、')}`)
+    const akMappingMessage = akMappingParts.length ? ` AK 品名對照 — ${akMappingParts.join('；')}。` : ''
+
     console.log(
       `[DialysisOrders] 處理完成：儲存 ${rowsToUpsert.length} 筆（新增 ${insertedCount}／更新 ${updatedCount}），` +
-        `回寫病人醫囑 ${writtenBackCount} 人、無變動 ${unchangedCount} 人、手動較新跳過 ${skippedNewerCount} 人，問題 ${errors.length} 列。`,
+        `回寫病人醫囑 ${writtenBackCount} 人、無變動 ${unchangedCount} 人、手動較新跳過 ${skippedNewerCount} 人，問題 ${errors.length} 列。${akMappingMessage}`,
     )
 
     res.json({
@@ -2637,7 +2625,8 @@ router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
       message:
         `處理完成！儲存 ${rowsToUpsert.length} 筆醫囑（新增 ${insertedCount}、更新 ${updatedCount}，其中已刪除病人 ${deletedRowCount} 筆僅存檔）；` +
         `回寫病人現行醫囑 ${writtenBackCount} 人、內容無變動 ${unchangedCount} 人、系統醫囑較新未覆蓋 ${skippedNewerCount} 人；` +
-        `${errors.length} 個問題列。`,
+        `${errors.length} 個問題列。${akMappingMessage}`,
+      akMapping,
       deletedRowCount,
       processedCount: rowsToUpsert.length,
       insertedCount,
@@ -2654,6 +2643,21 @@ router.post('/dialysis-orders/upload', ...isDoctorRole, async (req, res) => {
       error: true,
       message: `處理 Excel 檔案時發生錯誤: ${error.message}`,
     })
+  }
+})
+
+/**
+ * GET /api/orders/ak-catalog
+ * AK（人工腎臟）品項目錄 = 品項設定 artificialKidney 類別 + 別名表。
+ * 透析醫囑視窗/藥物調整/交辦的 AK 下拉、排程推估引擎的品名對照都吃這裡（品項設定為唯一權威）。
+ * 只要登入即可讀（護理師/醫師開醫囑用），與書記專用的 GET /system/inventory 權限分開。
+ */
+router.get('/ak-catalog', authenticate, (req, res) => {
+  try {
+    res.json(loadAkCatalog(getDatabase()))
+  } catch (error) {
+    console.error('[AkCatalog] 讀取失敗:', error)
+    res.status(500).json({ error: true, message: '讀取 AK 品項目錄失敗' })
   }
 })
 

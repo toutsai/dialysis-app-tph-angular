@@ -74,14 +74,19 @@
                       (ngModelChange)="onAkWeeklyChange(i)"
                     >
                       <option value="">—</option>
-                      @for (option of akOptionsWithCurrent(); track option) {
-                        <option [value]="option">{{ option }}</option>
+                      @for (option of akOptionsWithCurrent(); track option.value) {
+                        <option [value]="option.value">{{ option.label }}</option>
                       }
                     </select>
                   </div>
                 }
               </div>
               <div class="ak-rotation-preview">輪替（自動產生）：{{ akRotationString() || '–' }}</div>
+              @if (akUnregisteredValues().length > 0) {
+                <div class="ak-rotation-preview ak-unregistered-hint">
+                  ⚠️ {{ akUnregisteredValues().join('、') }} 不在庫存「品項設定」中，請改選正式品名（庫存推估才對得上）。
+                </div>
+              }
             </div>
             <div class="form-group">
               <label for="dialysateCa">透析液鈣離子 (Ca)</label>

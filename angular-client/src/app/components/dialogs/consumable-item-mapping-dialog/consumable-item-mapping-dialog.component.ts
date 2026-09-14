@@ -14,6 +14,11 @@ export interface ConsumableItemMappingRequest {
   rangeLabel: string;
   unmatchedItems: { item: string; rowCount: number; totalCount: number }[];
   inventoryItems: { id: string; name: string }[];
+  /**
+   * 'consumables'（預設）：消耗紀錄上傳，略過 = 該品項不寫入報表；
+   * 'dialysisOrders'：透析醫囑 Excel 的星期一～六 AK 欄，略過 = 保留原字寫入醫囑（臨床資料不丟），只是不建品項
+   */
+  mappingMode?: 'consumables' | 'dialysisOrders';
 }
 
 export type ConsumableItemMappingDecision =
@@ -55,19 +60,29 @@ function fuzzyKey(s: string): string {
     <div class="cim-overlay" (click)="onOverlayClick($event)">
       <div class="cim-dialog" role="dialog" aria-modal="true" aria-labelledby="cim-title">
         <div class="cim-header">
-          <h3 id="cim-title">消耗紀錄品項對照確認</h3>
+          <h3 id="cim-title">{{ isOrdersMode ? '醫囑 AK 品項對照確認' : '消耗紀錄品項對照確認' }}</h3>
           <button type="button" class="cim-close" aria-label="關閉" (click)="cancel.emit()">&times;</button>
         </div>
         <div class="cim-body">
           <div class="cim-meta">
             <span><strong>類別</strong> {{ request.categoryLabel }}</span>
+            @if (isOrdersMode) {
+            <span><strong>來源</strong> {{ request.rangeLabel }}</span>
+            } @else {
             <span><strong>區間</strong> {{ request.rangeLabel }}（{{ request.reportMonth }}）</span>
+            }
             <span class="cim-file" [title]="request.fileName"><strong>檔案</strong> {{ request.fileName }}</span>
           </div>
           <p class="cim-hint">
+            @if (isOrdersMode) {
+            HIS 醫囑裡有 <strong>{{ rows.length }}</strong> 個 AK 品名在「品項設定」（{{ request.categoryLabel }}）中找不到，
+            資料庫中無此品項，<strong>尚未寫入任何資料</strong>。請逐項確認：對應到既有品項、新增為品項，或保留原字（不建品項，庫存推估會標示未設定品項）。
+            勾選「記住」後，之後上傳同名品項會自動對應，不再詢問（可在品項設定的別名欄移除）。
+            } @else {
             以下 <strong>{{ rows.length }}</strong> 個品項在「品項設定」（{{ request.categoryLabel }}）中找不到，
             <strong>尚未寫入任何資料</strong>。請逐項確認：對應到既有品項、新增為品項，或略過不匯入。
             勾選「記住」後，之後上傳同名品項會自動對應，不再詢問（可在品項設定的別名欄移除）。
+            }
           </p>
           <div class="cim-table-wrap">
             <table class="cim-table">
@@ -89,7 +104,7 @@ function fuzzyKey(s: string): string {
                     <select [(ngModel)]="row.action" (ngModelChange)="onActionChange(row)">
                       <option value="map">對應既有品項</option>
                       <option value="create">新增為品項「{{ row.item }}」</option>
-                      <option value="skip">略過不匯入</option>
+                      <option value="skip">{{ isOrdersMode ? '保留原字（不建品項）' : '略過不匯入' }}</option>
                     </select>
                   </td>
                   <td>
@@ -106,7 +121,7 @@ function fuzzyKey(s: string): string {
                     } @else if (row.action === 'create') {
                     <span class="cim-note">將新增品項「{{ row.item }}」（{{ request.categoryLabel }}），數量等設定請之後到品項設定補齊</span>
                     } @else {
-                    <span class="cim-note cim-note-skip">此品項 {{ row.rowCount }} 筆不會寫入報表</span>
+                    <span class="cim-note cim-note-skip">{{ isOrdersMode ? '醫囑照原字「' + row.item + '」寫入，不建品項' : '此品項 ' + row.rowCount + ' 筆不會寫入報表' }}</span>
                     }
                   </td>
                   <td class="cim-remember">
@@ -127,7 +142,7 @@ function fuzzyKey(s: string): string {
         </div>
         <div class="cim-footer">
           <span class="cim-summary">
-            對應 {{ countOf('map') }}、新增 {{ countOf('create') }}、略過 {{ countOf('skip') }}
+            對應 {{ countOf('map') }}、新增 {{ countOf('create') }}、{{ isOrdersMode ? '保留原字' : '略過' }} {{ countOf('skip') }}
             @if (!isValid) { <span class="cim-invalid">（尚有 {{ missingCount }} 項未選擇對應品項）</span> }
           </span>
           <button type="button" class="cim-btn cim-btn-secondary" (click)="cancel.emit()">取消上傳</button>
@@ -353,6 +368,10 @@ export class ConsumableItemMappingDialogComponent implements OnChanges {
   @Output() cancel = new EventEmitter<void>();
 
   rows: MappingRow[] = [];
+
+  get isOrdersMode(): boolean {
+    return this.request?.mappingMode === 'dialysisOrders';
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['request']) {

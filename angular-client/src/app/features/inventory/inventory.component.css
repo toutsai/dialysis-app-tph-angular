@@ -670,6 +670,19 @@ tbody tr:hover {
   font-size: 0.9rem;
   color: #212529;
 }
+/* 品名不在品項設定（醫囑舊拼法）→ 小標籤提醒（2026-09-15 AK 品名統一） */
+.dash-card-unregistered {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #856404;
+  background: #fff3cd;
+  border: 1px solid #ffeeba;
+  vertical-align: middle;
+}
 
 .dash-card-stock {
   font-size: 1.75rem;

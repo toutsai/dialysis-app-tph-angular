@@ -3,6 +3,9 @@
 import { Injectable, inject } from '@angular/core';
 import { ApiConfigService } from './api-config.service';
 import { PatientStoreService } from './patient-store.service';
+import { AkCatalogService } from './ak-catalog.service';
+import { akForDate } from '@/utils/akRotation';
+import { resolveDailyRotationValue } from '@/utils/scheduleUtils';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -31,6 +34,8 @@ export interface ConsumptionResult {
 export class ConsumptionEngineService {
   private readonly firebaseService = inject(ApiConfigService);
   private readonly patientStore = inject(PatientStoreService);
+  /** AK 品名對照「品項設定」（唯一權威）；對不上的保留原字，由總覽卡片標示「未設定品項」 */
+  private readonly akCatalog = inject(AkCatalogService);
 
   /**
    * Calculate theoretical consumption for a date range.
@@ -81,8 +86,8 @@ export class ConsumptionEngineService {
     startDate: string,
     endDate: string,
   ): Promise<Map<string, { grouped: Record<string, Record<string, number>>; totalSlots: number }>> {
-    // 1. Load patients if not yet loaded
-    await this.patientStore.fetchPatientsIfNeeded();
+    // 1. Load patients if not yet loaded（AK 品項目錄一併就緒，品名才對得上品項設定）
+    await Promise.all([this.patientStore.fetchPatientsIfNeeded(), this.akCatalog.ensureLoaded()]);
     const patientMap = this.patientStore.patientMap();
 
     // 2. Load bed inventory settings via REST API
@@ -132,12 +137,12 @@ export class ConsumptionEngineService {
         const orders = (patient.dialysisOrders || {}) as Record<string, unknown>;
 
         // --- AK (人工腎臟) ---
-        const akRaw = orders['ak'] as string;
-        if (akRaw) {
-          const akTypes = akRaw.split('/').map((s) => s.trim()).filter(Boolean);
-          for (const ak of akTypes) {
-            grouped['artificialKidney'][ak] = (grouped['artificialKidney'][ak] || 0) + 1;
-          }
+        // 2026-09-15 統一：排程日是星期幾就取 akWeekly 該格（一次透析只算一顆，輪替病人不再被重複計算）；
+        // 沒有 akWeekly 的舊資料才退回輪替字串（依頻率取當次段）。品名再對照品項設定，對不上保留原字。
+        // freq 真理之源是 MASTER_SCHEDULE 的 scheduleRule.freq（patientStore 已扁平化到 patient.freq）
+        const freq = String(patient.freq ?? patient.scheduleRule?.freq ?? '');
+        for (const ak of this.akNamesForSlot(orders, dateKey, freq)) {
+          grouped['artificialKidney'][ak] = (grouped['artificialKidney'][ak] || 0) + 1;
         }
 
         // --- A液 (透析藥水CA) ---
@@ -162,6 +167,28 @@ export class ConsumptionEngineService {
   // -------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------
+
+  /**
+   * 某次排程要用的 AK 正式品名（通常 1 個）。
+   * 舊輪替字串連頻率都判斷不了時保守整串回傳，再拆 / 逐段對照（與改版前行為一致，寧多備勿漏）。
+   */
+  private akNamesForSlot(orders: Record<string, unknown>, date: string, freq: string | undefined): string[] {
+    const value = akForDate(
+      orders,
+      date,
+      freq,
+      (name) => this.akCatalog.isCanonical(name),
+      (raw, f, dayOfWeek) => resolveDailyRotationValue(raw, f, dayOfWeek),
+    );
+    if (!value) return [];
+    const whole = this.akCatalog.resolve(value);
+    if (whole) return [whole];
+    return value
+      .split('/')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((s) => this.akCatalog.resolve(s) ?? s);
+  }
 
   private extractBedIdFromSlotKey(slotKey: string): string {
     const lastDash = slotKey.lastIndexOf('-');

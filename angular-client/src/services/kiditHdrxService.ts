@@ -92,8 +92,10 @@ export function buildHdrxPrefill(patient: any, quarterEnd: string, ordersSource?
   // 模式以醫囑來源為主（歷史季度看當時處方），無值才用病人檔現況
   const mode = String(o.mode || patient?.mode || '');
 
+  // 週一格優先（akWeekly 是權威），其次輪替字串：整串先查（CAT/2000 這種含 / 的正式品名不能先拆），再取第一段
+  const akWeekly = Array.isArray(o.akWeekly) && o.akWeekly.length === 6 ? o.akWeekly.map((v: unknown) => String(v ?? '').trim()) : null;
   const akFull = String(o.ak || o.artificialKidney || '').trim();
-  const akFirst = akFull.split('/')[0]?.trim() || '';
+  const akFirst = akWeekly?.find(Boolean) || (resolveAkCode(akFull) ? akFull : akFull.split('/')[0]?.trim() || '');
   const dialyzerCode = resolveAkCode(akFirst);
   if (akFirst && !dialyzerCode) warnings.push(`AK「${akFirst}」查無官方對應代碼，請手動選擇`);
 
