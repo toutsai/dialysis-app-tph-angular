@@ -142,6 +142,9 @@
                       @for (b of bLiquidOptions; track b) {
                         <option [value]="b">{{ b }}</option>
                       }
+                      @if (item.spec && !bLiquidOptions.includes(item.spec)) {
+                        <option [value]="item.spec">{{ item.spec }}（未設定品項）</option>
+                      }
                     </select>
                   } @else if (item.type === '其他耗材') {
                     <select [(ngModel)]="item.spec" class="supply-spec-select" [disabled]="isEditMode">
