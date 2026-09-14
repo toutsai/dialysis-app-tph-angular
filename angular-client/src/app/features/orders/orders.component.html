@@ -352,6 +352,13 @@
           [class.is-success]="dialysisUploadResult()!.errorCount === 0"
         >
           <p>{{ dialysisUploadResult()!.message }}</p>
+          @if (akMappingLines(dialysisUploadResult()).length > 0) {
+            <ul class="ak-mapping-summary">
+              @for (line of akMappingLines(dialysisUploadResult()); track line) {
+                <li>{{ line }}</li>
+              }
+            </ul>
+          }
           <ul *ngIf="dialysisUploadResult()!.errors && dialysisUploadResult()!.errors!.length > 0">
             <li *ngFor="let error of dialysisUploadResult()!.errors">
               第 {{ error.rowNumber }} 行: {{ error.reason }}
@@ -361,4 +368,11 @@
       </div>
     </div>
   </main>
+
+  <!-- 星期一～六 AK 品名不在品項設定 → 對照確認（對應 / 新增 / 保留原字），確認後帶 itemMappings 重送 -->
+  <app-consumable-item-mapping-dialog
+    [request]="dialysisItemMappingRequest()"
+    (confirm)="onDialysisItemMappingConfirm($event)"
+    (cancel)="onDialysisItemMappingCancel()"
+  ></app-consumable-item-mapping-dialog>
 </div>

@@ -117,7 +117,7 @@
                       (keydown.enter)="openStockItem(item)"
                       [class.dash-card-safe]="item.status === 'safe'" [class.dash-card-warning]="item.status === 'warning'" [class.dash-card-danger]="item.status === 'danger'" [class.dash-card-critical]="item.status === 'critical'">
                       <div class="dash-card-header">
-                        <span class="dash-card-name">{{ item.itemName }}</span>
+                        <span class="dash-card-name">{{ item.itemName }}@if (item.unregistered) {<span class="dash-card-unregistered" title="此品名不在「品項設定」中（來自病人醫囑的舊拼法或未建檔型號）。請到病人醫囑改選正式品名，或在品項設定新增此品項。">未設定品項</span>}</span>
                         <span class="status-dot" [class.dot-safe]="item.status === 'safe'" [class.dot-warning]="item.status === 'warning'" [class.dot-danger]="item.status === 'danger'" [class.dot-critical]="item.status === 'critical'"></span>
                       </div>
                       <div class="dash-card-stock">{{ item.estimatedStock }}</div>

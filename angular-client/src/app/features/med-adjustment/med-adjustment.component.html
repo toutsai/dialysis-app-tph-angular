@@ -100,8 +100,8 @@
                             <span class="adjust-ak-day">{{ day }}</span>
                             <select class="adjust-ak-select" [(ngModel)]="adjustAkWeekly[i]" (ngModelChange)="onAdjustAkChange(i)">
                               <option value="">—</option>
-                              @for (option of akOptionsCurrent; track option) {
-                                <option [value]="option">{{ option }}</option>
+                              @for (option of akOptionsCurrent; track option.value) {
+                                <option [value]="option.value">{{ option.label }}</option>
                               }
                             </select>
                           </div>

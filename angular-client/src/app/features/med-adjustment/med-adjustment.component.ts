@@ -14,6 +14,8 @@ import { ApiConfigService } from '@services/api-config.service';
 import { PatientStoreService } from '@services/patient-store.service';
 import { LAB_ITEM_DISPLAY_NAMES } from '@/constants/labAlertConstants';
 import { exportMedAdjustmentExcel } from '@/services/medAdjustmentExportService';
+import { AkCatalogService } from '@services/ak-catalog.service';
+import { AK_WEEKDAY_LABELS, buildAkRotation, deriveAkWeeklyFromRotation } from '@/utils/akRotation';
 
 interface DrugDef {
   label: string;
@@ -187,18 +189,14 @@ export class MedAdjustmentComponent implements OnInit {
   savedNotes: Record<string, string> = {};
 
   // --- 修正欄結構化輸入：透析時間＝時/分兩欄、AK＝週一〜六六格（比照 DialysisOrderModal；存入 notes 仍是字串）---
-  readonly akWeekdayLabels = ['一', '二', '三', '四', '五', '六'];
-  private readonly akOptions = ['13M', '15S', '17UX', '17HX', 'FX80', 'BG-1.8U', 'Pro-19H', '21S', 'Hi23', '25H', '25S', 'CTA2000'];
-  private readonly FREQ_MAP_TO_DAY_INDEX: Record<string, number[]> = {
-    '一三五': [0, 2, 4], '二四六': [1, 3, 5], '一四': [0, 3], '二五': [1, 4],
-    '三六': [2, 5], '一五': [0, 4], '二六': [1, 5], '每日': [0, 1, 2, 3, 4, 5],
-    '每周一': [0], '每周二': [1], '每周三': [2], '每周四': [3], '每周五': [4], '每周六': [5],
-  };
+  readonly akWeekdayLabels = AK_WEEKDAY_LABELS;
+  /** AK 下拉選項來源：品項設定（庫存管理）為唯一權威，不再寫死清單（2026-09-15 AK 品名統一） */
+  private readonly akCatalog = inject(AkCatalogService);
   adjustTimeHours: number | null = null;
   adjustTimeMinutes: number | null = null;
   adjustAkWeekly: string[] = ['', '', '', '', '', ''];
-  /** 下拉選項（固定清單＋現值中清單外型號）；memoize 成欄位，模板勿用 getter 重算 */
-  akOptionsCurrent: string[] = [...this.akOptions];
+  /** 下拉選項（品項設定＋現值中不在品項設定的舊拼法，標「未設定品項」）；memoize 成欄位，模板勿用 getter 重算 */
+  akOptionsCurrent: { value: string; label: string; unregistered: boolean }[] = [];
 
   constructor() {
     this.baseSchedulesApi = this.apiManager.create<FirestoreRecord>('base_schedules');
@@ -351,12 +349,14 @@ export class MedAdjustmentComponent implements OnInit {
     this.adjustTimeHours = null;
     this.adjustTimeMinutes = null;
     this.adjustAkWeekly = ['', '', '', '', '', ''];
-    this.akOptionsCurrent = [...this.akOptions];
+    this.refreshAkOptions();
     this.isDirty.set(false);
     this.savedHint.set('');
     if (!patient) { this.dataRevision.update((v) => v + 1); return; }
     this.isLoading.set(true);
     try {
+      // AK 品項目錄先就緒（有快取，通常立即回），六格下拉才拿得到品項設定
+      await this.akCatalog.ensureLoaded();
       const [history, meds, labs, drafts, uploads] = await Promise.all([
         this.historyApi.fetchWhere({ patientId: patient.patientId }),
         this.medsApi.fetchWhere({ patientId: patient.patientId }),
@@ -463,38 +463,12 @@ export class MedAdjustmentComponent implements OnInit {
   }
 
   private refreshAkOptions(): void {
-    const extras = this.adjustAkWeekly.filter((v) => v && !this.akOptions.includes(v));
-    this.akOptionsCurrent = [...this.akOptions, ...[...new Set(extras)]];
+    this.akOptionsCurrent = this.akCatalog.optionsWithCurrent(this.adjustAkWeekly);
   }
 
-  /** 週欄位 → 輪替字串（同 DialysisOrderModal）：有頻率取透析日對應值依序串接（全同→單值）；無頻率取六天非空去重 */
+  /** 週欄位 → 輪替字串（同 DialysisOrderModal／後端 Excel 匯入，見 utils/akRotation.ts） */
   private adjustAkRotationString(): string {
-    const days = this.FREQ_MAP_TO_DAY_INDEX[this.currentPatient?.freq || ''] || [];
-    const sessionValues = days.map((d) => this.adjustAkWeekly[d]).filter((v) => v);
-    if (sessionValues.length > 0) {
-      return new Set(sessionValues).size === 1 ? sessionValues[0] : sessionValues.join('/');
-    }
-    const uniq = [...new Set(this.adjustAkWeekly.filter((v) => v))];
-    return uniq.join('/');
-  }
-
-  /** 輪替字串反推六格（同 DialysisOrderModal）：單值→六天全填；多段→依透析日序展開 */
-  private deriveAkWeeklyFromRotation(akString: string, freq: string): string[] {
-    const weekly = ['', '', '', '', '', ''];
-    const segments = (akString || '').split('/').map((s) => s.trim()).filter(Boolean);
-    if (segments.length === 0) return weekly;
-    if (segments.length === 1) return weekly.map(() => segments[0]);
-    const days = this.FREQ_MAP_TO_DAY_INDEX[freq] || [];
-    if (days.length > 0) {
-      days.forEach((d, i) => {
-        weekly[d] = segments[i % segments.length];
-      });
-    } else {
-      segments.forEach((seg, i) => {
-        if (i < 6) weekly[i] = seg;
-      });
-    }
-    return weekly;
+    return buildAkRotation(this.adjustAkWeekly, this.currentPatient?.freq || '');
   }
 
   /** 「X時Y分」/純數字（十進位小時）→ 時/分；解析不了（自由文字）兩欄留空、notes 不動 */
@@ -530,7 +504,7 @@ export class MedAdjustmentComponent implements OnInit {
     // 修正值未被改過（＝醫囑輪替字串）時，直接用醫囑權威六格，保住各天差異
     this.adjustAkWeekly = orderWeekly && akText === orderRotation
       ? [...orderWeekly]
-      : this.deriveAkWeeklyFromRotation(akText, this.currentPatient?.freq || '');
+      : deriveAkWeeklyFromRotation(akText, this.currentPatient?.freq || '', (name) => this.akCatalog.isCanonical(name));
     this.refreshAkOptions();
   }
 

@@ -7,6 +7,7 @@ import { NotificationService, type NotificationType } from '@services/notificati
 import { UserDirectoryService, DirectoryUser } from '@services/user-directory.service';
 import ApiManager from '@/services/api_manager';
 import { getToday } from '@/utils/dateUtils';
+import { AkCatalogService } from '@services/ak-catalog.service';
 import { PatientSelectDialogComponent } from '../patient-select-dialog/patient-select-dialog.component';
 
 interface SupplyItem {
@@ -34,6 +35,8 @@ export class TaskCreateDialogComponent implements OnChanges, OnInit {
   private authService = inject(AuthService);
   private notificationService = inject(NotificationService);
   private userDirectoryService = inject(UserDirectoryService);
+  /** AK 規格下拉來源：庫存「品項設定」為唯一權威，不再寫死清單（2026-09-15 AK 品名統一） */
+  private akCatalog = inject(AkCatalogService);
   private tasksApi = ApiManager('tasks');
 
   isSubmitting = false;
@@ -72,7 +75,8 @@ export class TaskCreateDialogComponent implements OnChanges, OnInit {
     '護理長': 'nurse_individual',
   };
 
-  readonly akOptions = ['13M', '15S', '17UX', '17HX', 'FX80', 'BG-1.8U', 'Pro-19H', '21S', 'Hi23', '25S', 'CTA2000'];
+  /** 品項設定的 AK 品名（視窗開啟時載入；memoize 成欄位，模板勿用 getter 重算） */
+  akOptions: string[] = [];
   readonly aLiquidOptions = ['2.5', '3.0', '3.5'];
   readonly bLiquidOptions = ['5L B液', '罐裝B粉', '袋裝B粉'];
   readonly medicalSuppliesOptions = ['傷口照護包', '住院包', 'EKG貼片', 'OP site(每周)', 'OP site(每三天)', '鼻導管', '輸血set'];
@@ -137,11 +141,19 @@ export class TaskCreateDialogComponent implements OnChanges, OnInit {
 
   ngOnInit() {
     this.userDirectoryService.ensureUsersLoaded().catch(err => console.error('Failed to load user directory', err));
+    this.loadAkOptions();
+  }
+
+  private loadAkOptions(): void {
+    void this.akCatalog.ensureLoaded().then(() => {
+      this.akOptions = this.akCatalog.names();
+    });
   }
 
   ngOnChanges(changes: SimpleChanges) {
     if (changes['isVisible'] && this.isVisible) {
       this.userDirectoryService.ensureUsersLoaded().catch(err => console.error('Failed to load user directory', err));
+      this.loadAkOptions();
       if (this.isEditMode) {
         const item = this.initialData;
         this.formData.id = item.id;

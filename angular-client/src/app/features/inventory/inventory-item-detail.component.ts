@@ -20,6 +20,8 @@ export interface DashboardItemSummary {
   pending: number;
   status: 'safe' | 'warning' | 'danger' | 'critical';
   statusLabel: string;
+  /** 品名不在「品項設定」（來自病人醫囑的舊拼法或未建檔型號）→ 卡片標示「未設定品項」 */
+  unregistered?: boolean;
 }
 
 @Component({

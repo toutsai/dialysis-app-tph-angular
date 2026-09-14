@@ -4,6 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@services/api-manager.service';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
 import { getToday, formatDateToYYYYMMDD } from '@/utils/dateUtils';
+import { AkCatalogService } from '@services/ak-catalog.service';
+import { AK_WEEKDAY_LABELS, buildAkRotation, deriveAkWeeklyFromRotation } from '@/utils/akRotation';
 // Standalone 版：已移除 Firebase
 
 @Component({
@@ -15,6 +17,8 @@ import { getToday, formatDateToYYYYMMDD } from '@/utils/dateUtils';
 })
 export class DialysisOrderModalComponent implements OnInit, OnDestroy {
   private readonly apiManagerService = inject(ApiManagerService);
+  /** AK 下拉選項來源：品項設定（庫存管理）為唯一權威，不再寫死清單（2026-09-15） */
+  private readonly akCatalog = inject(AkCatalogService);
   private readonly ordersHistoryApi: ApiManager<FirestoreRecord>;
 
   @Input() patient: any = null;
@@ -28,18 +32,12 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
   isConfirmDeleteVisible = false;
   orderToDelete: any = null;
 
-  readonly akOptions = ['13M', '15S', '17UX', '17HX', 'FX80', 'BG-1.8U', 'Pro-19H', '21S', 'Hi23', '25H', '25S', 'CTA2000'];
   readonly caOptions = ['2.5', '3.0', '3.5'];
   readonly vascAccessOptions = ['D/L', 'Perm', 'AVF', 'AVG'];
   readonly needleSizeOptions = ['15G', '16G', '17G'];
 
   /** AK 週欄位（0=週一…5=週六，與 HIS 備藥前置作業 Excel 同模型；輪替字串由此自動產生） */
-  readonly akWeekdayLabels = ['一', '二', '三', '四', '五', '六'];
-  private readonly FREQ_MAP_TO_DAY_INDEX: Record<string, number[]> = {
-    '一三五': [0, 2, 4], '二四六': [1, 3, 5], '一四': [0, 3], '二五': [1, 4],
-    '三六': [2, 5], '一五': [0, 4], '二六': [1, 5], '每日': [0, 1, 2, 3, 4, 5],
-    '每周一': [0], '每周二': [1], '每周三': [2], '每周四': [3], '每周五': [4], '每周六': [5],
-  };
+  readonly akWeekdayLabels = AK_WEEKDAY_LABELS;
 
   localOrderData: any = this.createFormState();
 
@@ -73,6 +71,7 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     document.body.classList.add('modal-open');
+    void this.akCatalog.ensureLoaded();
 
     // Parent passes [patient], map to patientData for internal use
     if (this.patient && !this.patientData) {
@@ -87,9 +86,10 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
       if (Array.isArray(orders.akWeekly) && orders.akWeekly.length === 6) {
         this.localOrderData.akWeekly = orders.akWeekly.map((v: any) => String(v || ''));
       } else {
-        this.localOrderData.akWeekly = this.deriveAkWeeklyFromRotation(
+        this.localOrderData.akWeekly = deriveAkWeeklyFromRotation(
           typeof orders.ak === 'string' ? orders.ak : '',
           this.patientFreq(),
+          (name) => this.akCatalog.isCanonical(name),
         );
       }
 
@@ -288,44 +288,19 @@ export class DialysisOrderModalComponent implements OnInit, OnDestroy {
     );
   }
 
-  /** 舊資料反推：單值 → 六天全填；多段 → 依透析日序展開（其餘天留空） */
-  private deriveAkWeeklyFromRotation(akString: string, freq: string): string[] {
-    const weekly = ['', '', '', '', '', ''];
-    const segments = (akString || '').split('/').map((s) => s.trim()).filter(Boolean);
-    if (segments.length === 0) return weekly;
-    if (segments.length === 1) return weekly.map(() => segments[0]);
-    const days = this.FREQ_MAP_TO_DAY_INDEX[freq] || [];
-    if (days.length > 0) {
-      days.forEach((d, i) => {
-        weekly[d] = segments[i % segments.length];
-      });
-    } else {
-      segments.forEach((seg, i) => {
-        if (i < 6) weekly[i] = seg;
-      });
-    }
-    return weekly;
-  }
-
-  /** 週欄位 → 輪替字串（與後端 Excel 匯入同邏輯）：
-   *  有頻率取透析日對應值依序串接（全同 → 單值）；無頻率取六天非空去重 */
+  /** 週欄位 → 輪替字串（與後端 Excel 匯入同邏輯，見 utils/akRotation.ts） */
   akRotationString(): string {
-    const weekly: string[] = this.localOrderData.akWeekly || [];
-    const days = this.FREQ_MAP_TO_DAY_INDEX[this.patientFreq()] || [];
-    const sessionValues = days.map((d) => weekly[d]).filter((v) => v);
-    if (sessionValues.length > 0) {
-      return new Set(sessionValues).size === 1 ? sessionValues[0] : sessionValues.join('/');
-    }
-    const uniq = [...new Set(weekly.filter((v) => v))];
-    return uniq.join('/');
+    return buildAkRotation(this.localOrderData.akWeekly || [], this.patientFreq());
   }
 
-  /** 下拉選項：固定清單 + 現有資料裡清單外的型號（HIS 匯入可能帶入 APS21S、HI:23 等拼法），避免顯示空白 */
-  akOptionsWithCurrent(): string[] {
-    const extras = (this.localOrderData.akWeekly || []).filter(
-      (v: string) => v && !this.akOptions.includes(v),
-    );
-    return [...this.akOptions, ...[...new Set(extras)] as string[]];
+  /** 下拉選項：品項設定的 AK 品項 + 現值裡不在品項設定的舊拼法（標示「未設定品項」），避免顯示空白 */
+  akOptionsWithCurrent(): { value: string; label: string; unregistered: boolean }[] {
+    return this.akCatalog.optionsWithCurrent(this.localOrderData.akWeekly || []);
+  }
+
+  /** 目前六格裡有不在品項設定的值 → 提示改選正式品名 */
+  akUnregisteredValues(): string[] {
+    return this.akOptionsWithCurrent().filter((o) => o.unregistered).map((o) => o.value);
   }
 
   /** 常見情境快捷：其餘五天皆空時，選一格自動整週帶入同值 */

@@ -37,13 +37,8 @@ import { INVENTORY_CATEGORY_NAMES, emptyItemLists } from './inventory-categories
 
 const CATEGORY_NAMES = INVENTORY_CATEGORY_NAMES;
 
-const DEFAULT_ITEMS: Record<string, string[]> = {
-  artificialKidney: ['15S', '17UX', '25H', '34', 'APS21S', 'BG1.8', 'CAT/2000', 'FX80', 'HI:23'],
-  dialysateCa: ['2.5', '3.0', '3.5'],
-  bicarbonateType: ['0_袋裝Bicarbonate 500mg', '1_瓶裝Bicarbonate 500mg', '2_Hemodialysis 5L B液'],
-  // 其他耗材（IV set / 輸血 set / 迴路管…）由書記在品項設定自行建立，不預設
-  otherSupplies: [],
-};
+// 2026-09-15 AK 品名統一：盤點/訂購/篩選的品項清單（knownItems）只來自「品項設定」，
+// 不再併入 HIS 消耗報表品名、叫貨紀錄品名，也不再有寫死的 DEFAULT_ITEMS 預設清單（曾把已不存在的「34」帶進盤點表）。
 
 const WEEKDAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -91,7 +86,6 @@ export class InventoryComponent implements OnInit {
   private readonly inventoryItemsApi: ApiManager<FirestoreRecord>;
   private readonly purchasesApi: ApiManager<FirestoreRecord>;
   private readonly countsApi: ApiManager<FirestoreRecord>;
-  private readonly consumablesReportsApi: ApiManager<FirestoreRecord>;
 
   readonly CATEGORY_NAMES = CATEGORY_NAMES;
   readonly categoryKeys = Object.keys(CATEGORY_NAMES);
@@ -157,6 +151,8 @@ export class InventoryComponent implements OnInit {
   dashboardLoading = signal(false);
   dashboardLoaded = signal(false);
   dashboardItems = signal<DashboardItemSummary[]>([]);
+  /** 品項設定全清單（不受設定頁籤類別篩選影響）：knownItems 與總覽「未設定品項」判定都以此為準 */
+  allInventoryItems = signal<any[]>([]);
   /** 點總覽卡片 → 品項明細視窗（盤點基準、盤後到貨/消耗、未來 14 天逐日餘量、預計不足日） */
   selectedStockItem = signal<DashboardItemSummary | null>(null);
 
@@ -230,17 +226,14 @@ export class InventoryComponent implements OnInit {
     this.inventoryItemsApi = this.apiManagerService.create<FirestoreRecord>('inventory_items');
     this.purchasesApi = this.apiManagerService.create<FirestoreRecord>('inventory_purchases');
     this.countsApi = this.apiManagerService.create<FirestoreRecord>('inventory_counts');
-    this.consumablesReportsApi = this.apiManagerService.create<FirestoreRecord>('consumables_reports');
   }
 
   async ngOnInit(): Promise<void> {
     await this.patientStore.fetchPatientsIfNeeded();
-    await this.initializeDefaultItems();
     await this.fetchInventoryItems();
     await this.fetchMachineConfigs(); // Load machine configs BEFORE beds
     await this.fetchBedsSettings();
     await this.fetchPurchases();
-    await this.loadKnownItems();
     this.selectedDate.set(this.stock.todayString());
     this.refreshDayPanelEntries();
     await this.loadUploadRanges();
@@ -570,6 +563,16 @@ export class InventoryComponent implements OnInit {
         const catCmp = (a.category || '').localeCompare(b.category || '');
         return catCmp !== 0 ? catCmp : (a.name || '').localeCompare(b.name || '');
       });
+      this.allInventoryItems.set(results as any[]);
+
+      // knownItems 每次整份重建（品項設定是唯一來源；換新物件讓子元件 @Input 觸發 ngOnChanges）
+      const rebuilt = emptyItemLists();
+      for (const item of results as any[]) {
+        const list = rebuilt[item?.category];
+        if (list && item?.name && !list.includes(item.name)) list.push(item.name);
+      }
+      for (const category of Object.keys(rebuilt)) rebuilt[category].sort();
+      this.knownItems = rebuilt;
 
       if (this.itemFilter.category) {
         results = results.filter((item: any) => item.category === this.itemFilter.category);
@@ -577,42 +580,12 @@ export class InventoryComponent implements OnInit {
 
       this.inventoryItems.set(results as any[]);
       this.filteredInventoryItems.set(results as any[]);
-
-      results.forEach((item: any) => {
-        if (!this.knownItems[item.category].includes(item.name)) {
-          this.knownItems[item.category].push(item.name);
-        }
-      });
     } catch (error) {
+      // 載入失敗不再退回寫死清單：清單留空，畫面提示先到品項設定建檔
       console.error('載入品項設定失敗:', error);
-      this.useDefaultItemsAsFallback();
     } finally {
       this.itemsLoading.set(false);
     }
-  }
-
-  private useDefaultItemsAsFallback(): void {
-    const fallbackItems: any[] = [];
-    let id = 1;
-    for (const [category, items] of Object.entries(DEFAULT_ITEMS)) {
-      for (const itemName of items) {
-        fallbackItems.push({
-          id: `default-${id++}`,
-          category,
-          name: itemName,
-          unitsPerBox: null,
-          safeInventoryLevel: 0,
-          hospitalCode: null,
-          vendorPhone: null,
-          createdBy: '系統預設',
-        });
-        if (!this.knownItems[category].includes(itemName)) {
-          this.knownItems[category].push(itemName);
-        }
-      }
-    }
-    this.inventoryItems.set(fallbackItems);
-    this.filteredInventoryItems.set(fallbackItems);
   }
 
   filterItems(): void {
@@ -727,50 +700,6 @@ export class InventoryComponent implements OnInit {
     }
   }
 
-  private async initializeDefaultItems(): Promise<void> {
-    try {
-      const existingItems = await this.inventoryItemsApi.fetchAll();
-      if (existingItems.length > 0) {
-        console.log('品項已存在，跳過初始化');
-        return;
-      }
-
-      console.log('初始化預設品項...');
-      const batch: Promise<any>[] = [];
-
-      for (const [category, items] of Object.entries(DEFAULT_ITEMS)) {
-        for (const itemName of items) {
-          batch.push(
-            this.inventoryItemsApi.create({
-              category,
-              name: itemName,
-              unitsPerBox: null,
-              safeInventoryLevel: 0,
-              hospitalCode: null,
-              vendorPhone: null,
-              createdAt: new Date().toISOString(),
-              createdBy: '系統預設',
-              updatedAt: new Date().toISOString(),
-              updatedBy: '系統預設',
-            } as any)
-          );
-        }
-      }
-
-      await Promise.all(batch);
-      console.log('預設品項初始化完成');
-    } catch (error) {
-      console.error('初始化預設品項失敗（可能是權限問題，將使用備援品項）:', error);
-      for (const [category, items] of Object.entries(DEFAULT_ITEMS)) {
-        items.forEach((itemName) => {
-          if (!this.knownItems[category].includes(itemName)) {
-            this.knownItems[category].push(itemName);
-          }
-        });
-      }
-    }
-  }
-
   // ==================== 叫貨/到貨 ====================
 
   getUnitsPerBox(category: string, itemName: string): number {
@@ -791,15 +720,7 @@ export class InventoryComponent implements OnInit {
       const results = [...allPurchases].sort((a: any, b: any) => keyDate(b).localeCompare(keyDate(a)));
 
       this.purchases.set(results);
-
-      // knownItems 只併入「當月」出現過的品項（沿用改版前的月份範圍；全歷史會把停用品項都撈進盤點/訂購表）
-      const thisMonth = this.stock.todayString().slice(0, 7);
-      results.forEach((p: any) => {
-        if (!keyDate(p).startsWith(thisMonth)) return;
-        if (p.category && this.knownItems[p.category] && !this.knownItems[p.category].includes(p.item)) {
-          this.knownItems[p.category].push(p.item);
-        }
-      });
+      // 叫貨紀錄的品名不再併入 knownItems（品項設定是唯一來源）
     } catch (error) {
       console.error('載入進貨紀錄失敗:', error);
       this.showAlert('載入失敗', '載入進貨紀錄失敗');
@@ -881,16 +802,20 @@ export class InventoryComponent implements OnInit {
         lastWeek.grouped,
       ]);
       // 品名本身可能含冒號（如 HI:23），不能把 `${cat}:${item}` 組成字串再 split 回來（曾把 HI:23 截成 HI）
-      const allEntries: { category: string; itemName: string; key: string }[] = [];
+      // 品名不在品項設定（例如醫囑裡的舊拼法）→ 卡片標「未設定品項」，提醒去醫囑改選正式品名或到品項設定新增
+      const registeredNames = new Set(
+        this.allInventoryItems().map((i: any) => `${i.category}:${i.name}`),
+      );
+      const allEntries: { category: string; itemName: string; key: string; unregistered: boolean }[] = [];
       for (const cat of Object.keys(CATEGORY_NAMES)) {
         for (const item of itemsByCategory[cat] || []) {
-          allEntries.push({ category: cat, itemName: item, key: `${cat}:${item}` });
+          allEntries.push({ category: cat, itemName: item, key: `${cat}:${item}`, unregistered: !registeredNames.has(`${cat}:${item}`) });
         }
       }
 
       // 7. 每品項推估庫存 + 4 階狀態
       const dashItems: ReturnType<typeof this.dashboardItems> = [];
-      allEntries.forEach(({ category, itemName, key }) => {
+      allEntries.forEach(({ category, itemName, key, unregistered }) => {
         // 今日消耗前的庫存 = 推估（消耗到昨天）+ 今天已到貨
         const estimatedStock =
           this.stock.value(estimate.stock, category, itemName) +
@@ -923,7 +848,7 @@ export class InventoryComponent implements OnInit {
         }
         if (status !== 'safe' && pending > 0) statusLabel += '（已叫貨）';
 
-        dashItems.push({ category, itemName, estimatedStock, safeLevel, autoSafeLevel, dailyUsage, todayConsumption, remainingAfterToday, pending, status, statusLabel });
+        dashItems.push({ category, itemName, estimatedStock, safeLevel, autoSafeLevel, dailyUsage, todayConsumption, remainingAfterToday, pending, status, statusLabel, unregistered });
       });
 
       const statusOrder: Record<string, number> = { critical: 0, danger: 1, warning: 2, safe: 3 };
@@ -952,44 +877,6 @@ export class InventoryComponent implements OnInit {
   }
 
   // ==================== Utility ====================
-
-  private async loadKnownItems(): Promise<void> {
-    try {
-      const allReports = await this.consumablesReportsApi.fetchAll();
-      // Sort by createdAt desc and take first 50
-      const sorted = (allReports as any[]).sort((a: any, b: any) => {
-        const aDate = typeof a.createdAt === 'string' ? a.createdAt : '';
-        const bDate = typeof b.createdAt === 'string' ? b.createdAt : '';
-        return bDate.localeCompare(aDate);
-      });
-
-      sorted.slice(0, 50).forEach((report: any) => {
-        const data = report.data || {};
-
-        for (const category of Object.keys(this.knownItems)) {
-          if (data[category] && Array.isArray(data[category])) {
-            data[category].forEach((item: any) => {
-              if (!this.knownItems[category].includes(item.item)) {
-                this.knownItems[category].push(item.item);
-              }
-            });
-          }
-        }
-      });
-
-      // 併入「品項設定」裡登記的品項，確保盤點頁一定有格子可填
-      for (const item of this.inventoryItems()) {
-        const list = this.knownItems[item.category];
-        if (list && item.name && !list.includes(item.name)) list.push(item.name);
-      }
-
-      for (const category of Object.keys(this.knownItems)) {
-        this.knownItems[category].sort();
-      }
-    } catch (error) {
-      console.error('載入已知品項失敗:', error);
-    }
-  }
 
   onModalOverlayClick(event: MouseEvent, modal: 'item' | 'machineConfig'): void {
     if (event.target === event.currentTarget) {

@@ -264,6 +264,14 @@ tr.pending-order td:nth-child(2) {
   font-size: 0.85rem;
   color: #495057;
 }
+/* 六格裡有不在庫存「品項設定」的舊拼法 → 提醒改選正式品名（2026-09-15 AK 品名統一） */
+.ak-unregistered-hint {
+  color: #856404;
+  background: #fff3cd;
+  border: 1px solid #ffeeba;
+  border-radius: 4px;
+  padding: 4px 8px;
+}
 .ak-select-wrapper {
   display: flex;
   align-items: center;

@@ -416,15 +416,20 @@ export const AK_DIALYZER_LIST: AkDialyzerEntry[] = [
  *  待與 KiDit 端確認代碼/文字後若需數字代碼，須請 KiDit 補建型號 */
 export const HOSPITAL_AK_ALIASES: Record<string, string> = {
   'FX80': '91', // Fresenius FX80
-  'Hi23': '237', // B.Braun Xevonta Hi23
-  'BG-1.8U': '137', // Toray BG-1.8U
+  'Hi23': '237', // B.Braun Xevonta Hi23（舊手動拼法）
+  'HI:23': '237', // 同上，品項設定/HIS 正式拼法（2026-09-15 AK 品名統一以品項設定為準）
+  'BG-1.8U': '137', // Toray BG-1.8U（舊手動拼法）
+  'BG1.8': '137', // 同上，品項設定/HIS 正式拼法
   '25H': '200', // Nipro ELISIO-25H
   'Pro-19H': '303', // B.Braun Diacap Pro 19H
-  '21S': '58', // Asahi APS-21S
+  '19H': '303', // 同上，HIS 拼法（去掉 ;Y 後綴後）
+  '21S': '58', // Asahi APS-21S（舊手動拼法）
+  'APS21S': '58', // 同上，品項設定/HIS 正式拼法
   '15S': '56', // Asahi APS-15S
   '17UX': 'Asahi-APS-17UX', // 官方表無此型號，暫帶文字
   '17HX': 'Asahi-APS-17HX', // 官方表無此型號，暫帶文字
-  'CTA2000': '110', // KAWASUMI CTA-2000
+  'CTA2000': '110', // KAWASUMI CTA-2000（顯示用別名，見 scheduleUtils normalizeAkAliases）
+  'CAT/2000': '110', // 同上，品項設定/HIS 正式拼法（含 /，查代碼時整串先比對，不能先拆）
   // '13M' 刻意不對應：官方表有 Nipro ELISIO-13M(272)/NIPRO-MAXIFLUX-13M(363)/Allmed Polypure M-13M(384) 三候選，待使用者確認
 };
 
