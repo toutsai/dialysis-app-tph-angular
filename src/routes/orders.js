@@ -14,6 +14,7 @@ import {
   applyPendingItemChanges,
   stripAkCellSuffix,
   loadAkCatalog,
+  loadItemCatalog,
 } from '../utils/inventoryItemName.js'
 
 const router = Router()
@@ -2658,6 +2659,21 @@ router.get('/ak-catalog', authenticate, (req, res) => {
   } catch (error) {
     console.error('[AkCatalog] 讀取失敗:', error)
     res.status(500).json({ error: true, message: '讀取 AK 品項目錄失敗' })
+  }
+})
+
+/**
+ * GET /api/orders/item-catalog?category=otherSupplies
+ * 任一類別的品項目錄（品項設定 + 別名），登入即可讀。
+ * 交辦補帳視窗的 A液/其他耗材 下拉吃這裡（2026-09-15 使用者指示：交辦耗材選項改讀品項設定）。
+ */
+router.get('/item-catalog', authenticate, (req, res) => {
+  try {
+    res.json(loadItemCatalog(getDatabase(), String(req.query.category || '')))
+  } catch (error) {
+    if (error.status === 400) return res.status(400).json({ error: true, message: error.message })
+    console.error('[ItemCatalog] 讀取失敗:', error)
+    res.status(500).json({ error: true, message: '讀取品項目錄失敗' })
   }
 })
 

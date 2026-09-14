@@ -127,23 +127,30 @@ export function applyPendingItemChanges(db, resolver, category, createdByJson) {
   for (const a of pendingAliases) upsertAliasStmt.run(uuidv4(), category, a.alias, a.itemId, createdByJson)
 }
 
+/** 品項設定的類別白名單（與前端 inventory-categories.ts 一致） */
+export const INVENTORY_CATEGORIES = ['artificialKidney', 'dialysateCa', 'bicarbonateType', 'otherSupplies']
+
 /**
- * 給前端用的 AK 目錄（品項設定 + 別名），GET /orders/ak-catalog
+ * 給前端用的品項目錄（品項設定 + 別名），GET /orders/item-catalog?category=
  */
-export function loadAkCatalog(db) {
+export function loadItemCatalog(db, category) {
+  if (!INVENTORY_CATEGORIES.includes(category)) {
+    throw Object.assign(new Error(`不支援的品項類別: ${category}`), { status: 400 })
+  }
   const items = db
-    .prepare(
-      `SELECT id, name, units_per_box FROM inventory_items WHERE category = 'artificialKidney' ORDER BY name`,
-    )
-    .all()
+    .prepare(`SELECT id, name, units_per_box FROM inventory_items WHERE category = ? ORDER BY name`)
+    .all(category)
     .map((i) => ({ id: i.id, name: i.name, unitsPerBox: i.units_per_box }))
   const nameById = new Map(items.map((i) => [i.id, i.name]))
   const aliases = {}
-  for (const a of db
-    .prepare(`SELECT alias, item_id FROM inventory_item_aliases WHERE category = 'artificialKidney'`)
-    .all()) {
+  for (const a of db.prepare(`SELECT alias, item_id FROM inventory_item_aliases WHERE category = ?`).all(category)) {
     const name = nameById.get(a.item_id)
     if (name) aliases[a.alias] = name
   }
-  return { category: 'artificialKidney', items, aliases }
+  return { category, items, aliases }
+}
+
+/** AK 目錄，GET /orders/ak-catalog（= loadItemCatalog 的 artificialKidney 版） */
+export function loadAkCatalog(db) {
+  return loadItemCatalog(db, 'artificialKidney')
 }

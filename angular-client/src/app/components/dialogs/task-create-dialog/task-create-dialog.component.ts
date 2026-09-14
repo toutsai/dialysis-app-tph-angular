@@ -8,6 +8,7 @@ import { UserDirectoryService, DirectoryUser } from '@services/user-directory.se
 import ApiManager from '@/services/api_manager';
 import { getToday } from '@/utils/dateUtils';
 import { AkCatalogService } from '@services/ak-catalog.service';
+import { InventoryCatalogService } from '@services/inventory-catalog.service';
 import { PatientSelectDialogComponent } from '../patient-select-dialog/patient-select-dialog.component';
 
 interface SupplyItem {
@@ -37,6 +38,8 @@ export class TaskCreateDialogComponent implements OnChanges, OnInit {
   private userDirectoryService = inject(UserDirectoryService);
   /** AK 規格下拉來源：庫存「品項設定」為唯一權威，不再寫死清單（2026-09-15 AK 品名統一） */
   private akCatalog = inject(AkCatalogService);
+  /** A液 / 其他耗材 下拉同樣讀品項設定（2026-09-15：交辦耗材選項改讀品項設定） */
+  private inventoryCatalog = inject(InventoryCatalogService);
   private tasksApi = ApiManager('tasks');
 
   isSubmitting = false;
@@ -77,19 +80,22 @@ export class TaskCreateDialogComponent implements OnChanges, OnInit {
 
   /** 品項設定的 AK 品名（視窗開啟時載入；memoize 成欄位，模板勿用 getter 重算） */
   akOptions: string[] = [];
-  readonly aLiquidOptions = ['2.5', '3.0', '3.5'];
+  /** 品項設定「透析藥水CA」品名；目錄載入失敗/空白時退回舊固定值，避免視窗卡住 */
+  aLiquidOptions: string[] = ['2.5', '3.0', '3.5'];
+  /** B液維持交辦慣用名稱（品項設定的 B液 品名是盤點/HIS 用的長名，不適合寫進交辦內容） */
   readonly bLiquidOptions = ['5L B液', '罐裝B粉', '袋裝B粉'];
-  readonly medicalSuppliesOptions = ['傷口照護包', '住院包', 'EKG貼片', 'OP site(每周)', 'OP site(每三天)', '鼻導管', '輸血set'];
+  /** 品項設定「其他耗材」品名（Tubing、NS、傷口照護包…由書記在品項設定維護） */
+  otherSupplyOptions: string[] = [];
 
+  /** 類型只剩四類：AK / A液 / B液 各自規格，其餘耗材一律走「其他耗材」＋品項設定的品名 */
   supplyTypeOptions = [
     { value: 'AK', label: 'AK' },
     { value: 'A液', label: 'A液' },
     { value: 'B液', label: 'B液' },
-    { value: 'Tubing', label: 'Tubing' },
-    { value: 'NS500', label: 'NS (500cc)' },
-    { value: 'NS1000', label: 'NS (1000cc)' },
-    { value: '耗衛材', label: '耗衛材' },
+    { value: '其他耗材', label: '其他耗材' },
   ];
+  /** 需要選規格的類型（四類皆是） */
+  private readonly SPEC_REQUIRED_TYPES = ['AK', 'A液', 'B液', '其他耗材'];
 
   dynamicSupplyItems: SupplyItem[] = [];
   otherSupplyInfo = '';
@@ -124,7 +130,7 @@ export class TaskCreateDialogComponent implements OnChanges, OnInit {
     if (this.isEditMode) return true;
     if (this.isClerkSupplyTask) {
       const allItemsValid = this.dynamicSupplyItems.every(item => {
-        if (['AK', 'A液', 'B液', '耗衛材'].includes(item.type)) {
+        if (this.SPEC_REQUIRED_TYPES.includes(item.type)) {
           return item.type && item.spec && item.quantity > 0;
         }
         return item.type && item.quantity > 0;
@@ -144,9 +150,17 @@ export class TaskCreateDialogComponent implements OnChanges, OnInit {
     this.loadAkOptions();
   }
 
+  /** 三個下拉的來源都是品項設定；各自載入完成才覆蓋欄位，載入失敗保留現值 */
   private loadAkOptions(): void {
     void this.akCatalog.ensureLoaded().then(() => {
       this.akOptions = this.akCatalog.names();
+    });
+    void this.inventoryCatalog.ensureLoaded('dialysateCa').then(() => {
+      const names = this.inventoryCatalog.names('dialysateCa');
+      if (names.length > 0) this.aLiquidOptions = names;
+    });
+    void this.inventoryCatalog.ensureLoaded('otherSupplies').then(() => {
+      this.otherSupplyOptions = this.inventoryCatalog.names('otherSupplies');
     });
   }
 
@@ -251,6 +265,8 @@ export class TaskCreateDialogComponent implements OnChanges, OnInit {
       const parts = this.dynamicSupplyItems
         .filter(item => item.type && item.quantity > 0)
         .map(item => {
+          // 其他耗材：品名本身就是項目（Tubing、鼻導管…），不再套「其他耗材 (…)」
+          if (item.type === '其他耗材' && item.spec) return `${item.spec} x${item.quantity}`;
           let itemName = this.supplyTypeOptions.find(opt => opt.value === item.type)?.label || item.type;
           if (item.spec) itemName += ` (${item.spec})`;
           return `${itemName} x${item.quantity}`;
