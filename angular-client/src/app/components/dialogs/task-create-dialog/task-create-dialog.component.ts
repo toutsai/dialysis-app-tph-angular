@@ -82,8 +82,8 @@ export class TaskCreateDialogComponent implements OnChanges, OnInit {
   akOptions: string[] = [];
   /** 品項設定「透析藥水CA」品名；目錄載入失敗/空白時退回舊固定值，避免視窗卡住 */
   aLiquidOptions: string[] = ['2.5', '3.0', '3.5'];
-  /** B液維持交辦慣用名稱（品項設定的 B液 品名是盤點/HIS 用的長名，不適合寫進交辦內容） */
-  readonly bLiquidOptions = ['5L B液', '罐裝B粉', '袋裝B粉'];
+  /** 品項設定「B液種類」品名（2026-09-15 品項設定已改成交辦慣用名）；目錄空時退回舊固定值 */
+  bLiquidOptions: string[] = ['5L B液', '罐裝B粉', '袋裝B粉'];
   /** 品項設定「其他耗材」品名（Tubing、NS、傷口照護包…由書記在品項設定維護） */
   otherSupplyOptions: string[] = [];
 
@@ -158,6 +158,10 @@ export class TaskCreateDialogComponent implements OnChanges, OnInit {
     void this.inventoryCatalog.ensureLoaded('dialysateCa').then(() => {
       const names = this.inventoryCatalog.names('dialysateCa');
       if (names.length > 0) this.aLiquidOptions = names;
+    });
+    void this.inventoryCatalog.ensureLoaded('bicarbonateType').then(() => {
+      const names = this.inventoryCatalog.names('bicarbonateType');
+      if (names.length > 0) this.bLiquidOptions = names;
     });
     void this.inventoryCatalog.ensureLoaded('otherSupplies').then(() => {
       this.otherSupplyOptions = this.inventoryCatalog.names('otherSupplies');
