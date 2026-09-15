@@ -16,7 +16,9 @@
 
   <!-- 頁內檢視：判讀（個管師每天的主線）／匯入與設定 -->
   <nav class="views">
-    <button type="button" class="view-tab" [class.on]="view() === 'daily'" (click)="view.set('daily')">明日追蹤 · 收案評估</button>
+    <button type="button" class="view-tab" [class.on]="view() === 'daily'" (click)="view.set('daily')">明日追蹤 · 收案評估 · 個案紀錄</button>
+    <button type="button" class="view-tab" [class.on]="view() === 'audit'" (click)="view.set('audit')">全名單稽核</button>
+    <button type="button" class="view-tab" [class.on]="view() === 'wide'" (click)="view.set('wide')">檢驗總表</button>
     <button type="button" class="view-tab" [class.on]="view() === 'import'" (click)="view.set('import')">匯入與設定</button>
   </nav>
 
@@ -26,6 +28,12 @@
 
   @if (view() === 'daily') {
     <app-ckd-daily />
+  }
+  @if (view() === 'audit') {
+    <app-ckd-audit (openRecords)="goRecords($event)" />
+  }
+  @if (view() === 'wide') {
+    <app-ckd-wide (openRecords)="goRecords($event)" />
   }
 
   @if (status(); as st) {

@@ -1,0 +1,116 @@
+<section class="block">
+  <div class="head">
+    <h2><span class="tag-d">D</span>檢驗總表 <span class="dim sub">追蹤記錄表 × 檢驗報告</span></h2>
+    <span class="dim">
+      @if (loading()) { 整理中… }
+      @else if (wide()) { 符合 {{ wide()!.listed }} 人@if (wide()!.buildMs != null) { · 建表 {{ wide()!.buildMs }} ms } }
+    </span>
+    <span class="head-btns">
+      <button type="button" class="btn small ghost" (click)="exportCsv()" [disabled]="exporting() || !wide()?.tally?.persons" title="檢驗明細（每次檢驗一列），吃目前範圍與搜尋">匯出 CSV</button>
+      <button type="button" class="btn small" (click)="exportXlsx()" [disabled]="exporting() || !wide()?.tally?.persons" title="兩張工作表：檢驗明細＋每人最新值，吃目前範圍與搜尋">{{ exporting() ? '匯出中…' : '匯出 Excel' }}</button>
+    </span>
+  </div>
+
+  @if (error(); as err) { <div class="banner error">{{ err }}</div> }
+
+  @if (wide(); as w) {
+    @if (!w.tally.persons) {
+      <div class="empty">先匯入「已收案名單」或「檢驗報告」。</div>
+    } @else {
+      <div class="tally">
+        @for (t of tally(); track t.k) {
+          <button type="button" class="tl" [class]="'tl ' + t.c" [class.on]="!!t.f && scope() === t.f && t.f !== 'all'" [class.static]="!t.f" (click)="clickTally(t.f)"><span>{{ t.k }}</span><b>{{ t.v }}</b></button>
+        }
+      </div>
+      <div class="chips">
+        <span class="dim lab">模式</span>
+        <button type="button" class="chip" [class.on]="mode() === 'long'" (click)="setMode('long')">每次檢驗一列</button>
+        <button type="button" class="chip" [class.on]="mode() === 'wide'" (click)="setMode('wide')">每人一列（最新值）</button>
+        <span class="sep"></span>
+        <span class="dim lab">範圍</span>
+        @for (s of scopes; track s.s) { <button type="button" class="chip" [class.on]="scope() === s.s" (click)="setScope(s.s)">{{ s.k }}</button> }
+        <input type="text" class="q" placeholder="搜尋病歷號或姓名" [ngModel]="q()" (ngModelChange)="onQuery($event)" />
+        <span class="dim hint">表格可左右捲動 · 病人欄與表頭已凍結</span>
+      </div>
+
+      @if (!w.listed) {
+        <div class="empty">沒有符合條件的病人。</div>
+      } @else {
+        <div class="tbox">
+          <table>
+            <thead>
+              <tr class="grp">
+                <th class="gz" [attr.colspan]="mode() === 'long' ? 5 : 7">基本資料</th>
+                @for (g of groupCols(); track g.key) { <th [attr.colspan]="g.n" [class]="'g-' + g.key">{{ g.label }}</th> }
+                <th class="gz" colspan="2">生理量測</th>
+              </tr>
+              <tr class="col">
+                <th class="sticky">病人</th><th>方案</th>
+                @if (mode() === 'long') { <th>日期</th><th>來源</th><th>分期</th> }
+                @else { <th>收案日</th><th>資料期間</th><th>列數</th><th>eGFR 年變化</th><th>分期</th> }
+                @for (x of w.labs; track x[0]) { <th [class]="'g-' + x[3]">{{ x[1] }}<div class="unit">{{ x[2] }}</div></th> }
+                <th>BP</th><th>BMI</th>
+              </tr>
+            </thead>
+            <tbody>
+              @if (mode() === 'long') {
+                @for (o of w.rows || []; track o.mrn + '|' + (o.row.date || '') + '|' + $index) {
+                  <tr>
+                    <td class="sticky">
+                      <button type="button" class="nmlink" (click)="openRecords.emit(o.mrn)" title="查看/新增此病人的個案紀錄">{{ o.name || '（無姓名）' }}</button>
+                      <div class="mrn">{{ o.mrn }}</div>
+                      @if (o.inClinic) { <div class="dim xs">明日 {{ o.clinicNo }}</div> }
+                    </td>
+                    <td><span class="badge xs" [class]="'badge xs ' + progCls(o.prog)">{{ o.prog }}</span></td>
+                    <td class="num sm">{{ roc(o.row.date) }}</td>
+                    <td class="dim sm">{{ o.row.src }}</td>
+                    <td class="num sm">{{ o.row.stage || '·' }}</td>
+                    @for (x of w.labs; track x[0]) {
+                      <td class="num" [class]="'num g-' + x[3]">
+                        @if (cell(o.row, x[0]); as c) { @if (c.f) { <span class="flag" [class]="'flag ' + c.f.toLowerCase()">{{ c.f }}</span> }{{ c.v }}@if (c.calc) { <span class="dim xxs">算</span> } }
+                        @else { <span class="dim">·</span> }
+                      </td>
+                    }
+                    <td class="num sm">{{ o.row.bp || '·' }}</td>
+                    <td class="num">{{ o.row.bmi == null ? '·' : o.row.bmi }}</td>
+                  </tr>
+                }
+              } @else {
+                @for (p of w.persons || []; track p.mrn) {
+                  <tr>
+                    <td class="sticky">
+                      <button type="button" class="nmlink" (click)="openRecords.emit(p.mrn)" title="查看/新增此病人的個案紀錄">{{ p.name || '（無姓名）' }}</button>
+                      <div class="mrn">{{ p.mrn }}</div>
+                      @if (p.inClinic) { <div class="dim xs">明日 {{ p.clinicNo }}</div> }
+                    </td>
+                    <td><span class="badge xs" [class]="'badge xs ' + progCls(p.prog)">{{ p.prog }}</span></td>
+                    <td class="num sm">{{ roc(p.enroll) }}</td>
+                    <td class="num sm">{{ roc(p.first) }}<br><span class="dim">→ {{ roc(p.last) }}</span></td>
+                    <td class="num">{{ p.n }}</td>
+                    <td class="num sm">
+                      @if (p.slope == null) { <span class="dim">·</span> }
+                      @else { <span [class]="slopeCls(p)">{{ slopeTxt(p.slope) }}</span>@if (p.slWeak) { <div class="dim xxs">僅 {{ p.slN }} 點/{{ p.slSpan }} 天，不可靠</div> } }
+                    </td>
+                    <td class="num sm">{{ p.stage || '·' }}</td>
+                    @for (x of w.labs; track x[0]) { <td class="num" [class]="'num g-' + x[3]">{{ p.latest[x[0]] == null ? '·' : p.latest[x[0]] }}</td> }
+                    <td class="num sm">{{ p.latest['bp'] || '·' }}</td>
+                    <td class="num">{{ p.latest['bmi'] == null ? '·' : p.latest['bmi'] }}</td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+        @if (mode() === 'long' && w.total > (w.rows?.length || 0)) {
+          <div class="note">畫面只顯示前 {{ w.rows?.length }} 列（共 {{ w.total }} 列）。用上方搜尋縮小範圍，或直接匯出 Excel 取得完整資料。</div>
+        }
+        @if (mode() === 'wide' && w.total > (w.persons?.length || 0)) {
+          <div class="note">畫面只顯示前 {{ w.persons?.length }} 人（共 {{ w.total }} 人）。用上方範圍或搜尋縮小，或直接匯出 Excel 取得完整資料。</div>
+        }
+      }
+      <p class="note dim">同一位病人同一天的生化單與尿液單會併成一列，<b>來源</b>欄標示資料出處。追蹤記錄表與檢驗單值衝突時以<b>先出現者為準</b>（追蹤表先寫入）。UPCR 標「算」者為以尿蛋白 ÷ 尿肌酐 × 1000 推算。eGFR 年變化率需至少 3 個時間點且跨度滿 180 天才視為可靠，否則以灰字標示。</p>
+    }
+  } @else if (loading()) {
+    <div class="placeholder">整理中…</div>
+  }
+</section>

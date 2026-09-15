@@ -5,6 +5,7 @@
 .block { border: 1px solid #eceff1; border-radius: 8px; background: #fff; padding: 0.7rem 0.9rem; scroll-margin-top: 0.5rem; }
 .block h2 { margin: 0 0 0.5rem; font-size: 1rem; color: #263238; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .block h2 .sub { font-weight: 400; font-size: 0.76rem; }
+.block h2 .csv { margin-left: auto; font-weight: 400; }
 .tag-e { display: inline-flex; width: 1.5rem; height: 1.5rem; border-radius: 6px; align-items: center; justify-content: center; font-weight: 800; color: #fff; font-size: 0.85rem; background: var(--g3); }
 .recsec.flash { animation: recflash 1.1s ease-out; }
 @keyframes recflash { 0% { box-shadow: 0 0 0 3px var(--g3); } 100% { box-shadow: 0 0 0 0 transparent; } }

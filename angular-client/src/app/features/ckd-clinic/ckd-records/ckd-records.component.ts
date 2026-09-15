@@ -11,6 +11,7 @@ import {
   CkdRecordStats,
 } from '@app/core/services/ckd-api.service';
 import { ConfirmDialogComponent } from '@app/components/dialogs/confirm-dialog/confirm-dialog.component';
+import { exportRecordsCsv } from '../ckd-export';
 
 const ALL_LIMIT = 40;
 
@@ -309,6 +310,22 @@ export class CkdRecordsComponent implements OnInit {
 
   confirmCancel(): void {
     this.confirmBox.set(null);
+  }
+
+  /** 匯出全部未刪除紀錄 CSV（原版 btnCsvE；when 新→舊） */
+  readonly exporting = signal(false);
+  async exportCsv(): Promise<void> {
+    this.exporting.set(true);
+    this.error.set(null);
+    try {
+      const r = await this.ckdApi.listRecords({ limit: 10000 });
+      if (!r.records.length) { this.error.set('目前沒有紀錄可匯出。'); return; }
+      exportRecordsCsv(r.records, this.types(), new Date().toLocaleDateString('sv-SE'));
+    } catch (e: any) {
+      this.error.set(e?.error?.message || e?.message || '匯出失敗');
+    } finally {
+      this.exporting.set(false);
+    }
   }
 
   // ---------- 顯示輔助（原版 recLine 卡片） ----------

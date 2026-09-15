@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -11,9 +11,11 @@ import {
   CkdUploadResult,
 } from '@app/core/services/ckd-api.service';
 import { CkdDailyComponent } from './ckd-daily/ckd-daily.component';
+import { CkdAuditComponent } from './ckd-audit/ckd-audit.component';
+import { CkdWideComponent } from './ckd-wide/ckd-wide.component';
 
-/** 頁內檢視：daily = 明日追蹤／收案評估（階段 2）；import = 匯入與設定（階段 1） */
-type CkdView = 'daily' | 'import';
+/** 頁內檢視：daily = 明日追蹤／收案評估／個案紀錄；audit = 全名單稽核；wide = 檢驗總表；import = 匯入與設定 */
+type CkdView = 'daily' | 'audit' | 'wide' | 'import';
 
 /** 上傳卡片：四種 HIS 報表（順序＝個管師匯入順序） */
 interface UploadCard {
@@ -48,14 +50,25 @@ const NUMERIC_SETTING_KEYS = ['preGap', 'earlyNew', 'earlyGap', 'dmGap', 'over',
 @Component({
   selector: 'app-ckd-clinic',
   standalone: true,
-  imports: [CommonModule, FormsModule, CkdDailyComponent],
+  imports: [CommonModule, FormsModule, CkdDailyComponent, CkdAuditComponent, CkdWideComponent],
   templateUrl: './ckd-clinic.component.html',
   styleUrl: './ckd-clinic.component.css',
 })
 export class CkdClinicComponent implements OnInit {
   private readonly ckdApi = inject(CkdApiService);
+  @ViewChild(CkdDailyComponent) daily?: CkdDailyComponent;
 
   readonly view = signal<CkdView>('daily');
+
+  /** 稽核／總表的姓名連結 → 切到主線檢視並跳到該病人的個案紀錄（原版 gotoRecords 跨區） */
+  goRecords(mrn: string): void {
+    this.view.set('daily');
+    const tryOpen = (n: number) => {
+      if (this.daily) { this.daily.openRecords(mrn); return; }
+      if (n > 0) setTimeout(() => tryOpen(n - 1), 100);
+    };
+    setTimeout(() => tryOpen(20), 0);
+  }
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly status = signal<CkdStatus | null>(null);

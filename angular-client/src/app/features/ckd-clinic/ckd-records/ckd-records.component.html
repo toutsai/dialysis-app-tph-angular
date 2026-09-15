@@ -1,5 +1,7 @@
 <section class="block recsec" [class.flash]="flash()">
-  <h2><span class="tag-e">E</span>個案紀錄 <span class="dim sub">血管通路 / RRT SDM / 聯絡 / 外院查核 / P 碼補登更正 / 收案狀態更正 / 不予收案 / 追蹤紀錄</span></h2>
+  <h2><span class="tag-e">E</span>個案紀錄 <span class="dim sub">血管通路 / RRT SDM / 聯絡 / 外院查核 / P 碼補登更正 / 收案狀態更正 / 不予收案 / 追蹤紀錄</span>
+    <button type="button" class="btn small ghost csv" (click)="exportCsv()" [disabled]="exporting() || !stats()?.total" title="全部紀錄（不分病人），八類欄位攤平">{{ exporting() ? '匯出中…' : '匯出 CSV' }}</button>
+  </h2>
 
   @if (tally().length) {
     <div class="tally">

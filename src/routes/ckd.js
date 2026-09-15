@@ -16,6 +16,8 @@ import {
   REC_TYPES, listRecords, getRecord, createRecord, updateRecord, deleteRecord, makeHooks, pcodeTimeline,
   recLine, recWhen, lookupName, searchPatients, recordStats,
 } from '../services/ckd/records.js'
+import { getWide, wideRows, wideTally, wideSheets, wideBuildMs, WIDE_LABS, WIDE_GROUPS } from '../services/ckd/wide.js'
+import { roc, dGap } from '../services/ckd/parsers.js'
 
 const router = Router()
 router.use(...isContributor)
@@ -26,7 +28,7 @@ const PHASES = [
   { no: 1, title: '匯入與設定：四種 HIS 報表上傳、辨識、合併、批次紀錄、判定參數', status: 'done' },
   { no: 2, title: '明日追蹤＋收案評估（判定引擎搬後端）', status: 'done' },
   { no: 3, title: '個案紀錄八類、VPN 他院查核、不予收案、P 碼補登更正、P 碼總覽', status: 'done' },
-  { no: 4, title: '全名單稽核、檢驗總表、XLSX／CSV 匯出', status: 'todo' },
+  { no: 4, title: '全名單稽核、檢驗總表（21 項＋eGFR 斜率）、XLSX／CSV 匯出（A／B／稽核／總表／個案紀錄）', status: 'done' },
   { no: 5, title: '召回清單、異常檢驗、透析準備管線、月報、檢核 P 碼', status: 'todo' },
   { no: 6, title: '與病人清單／預約洗腎登記打通', status: 'todo' },
 ]
@@ -179,6 +181,70 @@ router.get('/daily', (req, res) => {
   }
 })
 
+// ---------- 階段 4：全名單稽核 ----------
+// GET /audit?date=YYYY-MM-DD → 登錄簿全部未結案且有照護紀錄者（不限當日門診；原版 AUD）。篩選／排序在前端。
+router.get('/audit', (req, res) => {
+  try {
+    const db = getDatabase()
+    const { settings } = getSettings()
+    const data = loadDataset(db)
+    const hooks = makeHooks(data.records)
+    const dateQ = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || '')) ? String(req.query.date) : ''
+    const C = makeCfg(settings, dateQ)
+    const t0 = Date.now()
+    const R = analyze(data, C, { doctorSel: '', withAudit: true, hooks })
+    res.json({
+      date: plain(C.date),
+      spanFrom: plain(R.spanFrom),
+      hasCases: data.cases.length > 0,
+      rows: R.AUD.map((r) => slimAudit(r, hooks)),
+      timing: { loadMs: data.loadMs, analyzeMs: Date.now() - t0 },
+    })
+  } catch (error) {
+    console.error('❌ GET /ckd/audit:', error)
+    res.status(500).json({ error: true, message: '全名單稽核失敗' })
+  }
+})
+
+// ---------- 階段 4：檢驗總表 ----------
+// GET /wide?scope=all|clinic|enrolled|unlisted&q=&mode=long|wide → 畫面用（long 上限 600 列）；GET /wide/export → 完整兩張表（前端產 XLSX／CSV）
+router.get('/wide', (req, res) => {
+  try {
+    const data = loadDataset(getDatabase())
+    const W = getWide(data)
+    const scope = String(req.query.scope || 'all'), q = String(req.query.q || ''), mode = req.query.mode === 'wide' ? 'wide' : 'long'
+    const list = wideRows(W, scope, q)
+    const out = { scope, q, mode, tally: wideTally(W), buildMs: wideBuildMs(), labs: WIDE_LABS, groups: WIDE_GROUPS, listed: list.length }
+    if (mode === 'long') {
+      const cap = Math.min(Math.max(parseInt(req.query.limit, 10) || 600, 1), 5000)
+      const flat = []
+      list.forEach((p) => p.rows.forEach((r) => flat.push({ p, r })))
+      flat.sort((a, b) => a.p.mrn.localeCompare(b.p.mrn) || ((a.r.date || 0) - (b.r.date || 0)))
+      out.total = flat.length
+      out.rows = flat.slice(0, cap).map(({ p, r }) => plain({ mrn: p.mrn, name: p.name, prog: p.prog, inClinic: p.inClinic, clinicNo: p.clinicNo, row: r }))
+    } else {
+      /* 每人一列：原版無上限（瀏覽器內全算）；這裡三萬多人一次回傳太重，預設 2000 人，匯出走 /wide/export 拿完整 */
+      const cap = Math.min(Math.max(parseInt(req.query.limit, 10) || 2000, 1), 50000)
+      out.total = list.length
+      out.persons = list.slice(0, cap).map((p) => plain({ ...p, rows: undefined }))
+    }
+    res.json(out)
+  } catch (error) {
+    console.error('❌ GET /ckd/wide:', error)
+    res.status(500).json({ error: true, message: '檢驗總表失敗' })
+  }
+})
+router.get('/wide/export', (req, res) => {
+  try {
+    const data = loadDataset(getDatabase())
+    const list = wideRows(getWide(data), String(req.query.scope || 'all'), String(req.query.q || ''))
+    res.json({ persons: list.length, ...wideSheets(list, roc) })
+  } catch (error) {
+    console.error('❌ GET /ckd/wide/export:', error)
+    res.status(500).json({ error: true, message: '檢驗總表匯出失敗' })
+  }
+})
+
 // ---------- 階段 3：個案紀錄 ----------
 router.get('/records/types', (req, res) => {
   res.json({ types: Object.entries(REC_TYPES).map(([key, T]) => ({ key, label: T.label, tag: T.tag, color: T.color, fields: T.fields })) })
@@ -197,7 +263,7 @@ router.get('/records', (req, res) => {
   try {
     const mrn = String(req.query.mrn || '').trim()
     const type = String(req.query.type || '').trim()
-    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 60, 1), 500)
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 60, 1), 10000)
     res.json({ records: listRecords(getDatabase(), { mrn, type, limit }).map(decorate) })
   } catch (error) {
     console.error('❌ GET /ckd/records:', error)
@@ -311,6 +377,22 @@ function slimA(r, C, hooks) {
     recon: r.recon ? { anchor: r.recon.anchor, misses: r.recon.misses.map((m) => ({ visit: m.visit, code: m.code })), shortBilled: r.recon.shortBilled } : null,
     miss: r.miss, unk: r.unk, bed: r.bed, ord: r.ord, inds: r.inds, age: r.age,
     box,
+    chips: hooks.chipsOf(r.mrn),
+  })
+}
+/** 稽核列（原版 renderAudit／btnCsvC 用到的欄位；recs 只留「前次間隔不足」判定需要的追蹤列日期） */
+function slimAudit(r, hooks) {
+  const care = (r.recs || []).filter((x) => x.ctype === '追蹤' && x.visit)
+  const tooSoon = care.length >= 2 && dGap(care[1].visit, care[0].visit) < r.need
+  return plain({
+    mrn: r.mrn, name: (r.last && r.last.name) || (r.p && r.p.name) || '', age: r.age, isDM: r.isDM, dkd: !!r.dkd,
+    prog: r.prog, code: r.code, egfr: r.egfr, stage: r.stage, upcr: r.upcr, uacr: r.uacr,
+    last: r.last ? { visit: r.last.visit, enroll: r.last.enroll } : null,
+    gap: r.gap, need: r.need, status: r.status, nYear: r.nYear, n12: r.n12, tenure: r.tenure,
+    ann: { ok: !!(r.ann && r.ann.ok), code: r.ann ? r.ann.code : null },
+    inds: r.inds, miss: r.miss, unk: r.unk, alerts: r.alerts, slope: r.slope,
+    recon: r.recon ? { anchor: r.recon.anchor, misses: r.recon.misses.map((m) => ({ visit: m.visit, code: m.code })), shortBilled: r.recon.shortBilled } : null,
+    tooSoon,
     chips: hooks.chipsOf(r.mrn),
   })
 }

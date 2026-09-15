@@ -29,6 +29,11 @@
 .block h2 { margin: 0 0 0.5rem; font-size: 1rem; color: #263238; display: flex; align-items: center; gap: 0.5rem; }
 .tag-a, .tag-b { display: inline-flex; width: 1.5rem; height: 1.5rem; border-radius: 6px; align-items: center; justify-content: center; font-weight: 800; color: #fff; font-size: 0.85rem; }
 .tag-a { background: #27548f; }
+.btn-x { margin-left: 0.4rem; border: 1px solid #cfd8dc; background: #fff; border-radius: 6px; padding: 0.15rem 0.55rem; font-size: 0.74rem; font-weight: 500; cursor: pointer; color: #546e7a; }
+.btn-x:hover { background: #f5f7f8; }
+.btn-x:disabled { opacity: 0.5; cursor: default; }
+.btn-x.primary { border-color: #1565c0; color: #1565c0; }
+.export-msg { font-size: 0.76rem; font-weight: 400; color: #c62828; margin-left: 0.4rem; }
 .tag-b { background: #6a3d91; }
 
 /* 統計列 */

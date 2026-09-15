@@ -292,6 +292,110 @@ export interface CkdRowB {
 
 export interface CkdSessionGroup { date: string; doctor: string; n: number }
 
+// ---------- 階段 4：全名單稽核 ----------
+
+export interface CkdAuditRow {
+  mrn: string;
+  name: string;
+  age: number | null;
+  isDM: boolean;
+  dkd: boolean;
+  prog: 'pre' | 'early';
+  code: string | null;
+  egfr: number | null;
+  stage: string | null;
+  upcr: number | null;
+  uacr: number | null;
+  last: { visit: string | null; enroll: string | null } | null;
+  gap: number | null;
+  need: number | null;
+  status: 'ok' | 'over' | 'cap' | 'wait' | 'none' | 'dkd';
+  nYear: number;
+  n12: number;
+  tenure: number | null;
+  ann: { ok: boolean; code: string | null };
+  inds: CkdIndicator[];
+  miss: string[];
+  unk: string[];
+  alerts: CkdAlert[];
+  slope: { v: number; mo: number } | null;
+  recon: { anchor: string | null; misses: { visit: string; code: string }[]; shortBilled: { at: string; code: string; gap: number; need: number }[] } | null;
+  tooSoon: boolean;
+  chips: CkdRecChips | null;
+}
+
+export interface CkdAudit {
+  date: string;
+  spanFrom: string | null;
+  hasCases: boolean;
+  rows: CkdAuditRow[];
+  timing: { loadMs: number; analyzeMs: number };
+}
+
+// ---------- 階段 4：檢驗總表 ----------
+
+export type CkdWideScope = 'all' | 'clinic' | 'enrolled' | 'unlisted';
+export type CkdWideMode = 'long' | 'wide';
+/** [key, 顯示名, 單位, 群組] */
+export type CkdWideLab = [string, string, string, string];
+
+export interface CkdWideTally { persons: number; rows: number; clinic: number; unlisted: number; slopeOk: number; noProt: number }
+
+/** 每人每日期一列：21 項值在 row[key]、旗標 row[key+'_f']、定性 row[key+'_q']、推算 row['upcr_c'] */
+export interface CkdWideDayRow {
+  date: string | null;
+  src: string;
+  stage: string | null;
+  bp?: string | null;
+  bmi?: number | null;
+  smoke?: string | null;
+  educator?: string | null;
+  no?: string | null;
+  [k: string]: any;
+}
+
+export interface CkdWideLongRow { mrn: string; name: string; prog: string; inClinic: boolean; clinicNo: string; row: CkdWideDayRow }
+
+export interface CkdWidePerson {
+  mrn: string;
+  name: string;
+  sex: string;
+  age: number | null;
+  enroll: string | null;
+  enrolled: boolean;
+  prog: string;
+  stage: string | null;
+  egfr: number | null;
+  upcr: number | null;
+  slope: number | null;
+  slWeak: boolean;
+  slN: number;
+  slSpan: number;
+  n: number;
+  first: string | null;
+  last: string | null;
+  inClinic: boolean;
+  clinicNo: string;
+  labOnly: boolean;
+  latest: Record<string, any>;
+}
+
+export interface CkdWide {
+  scope: CkdWideScope;
+  q: string;
+  mode: CkdWideMode;
+  tally: CkdWideTally;
+  buildMs: number | null;
+  labs: CkdWideLab[];
+  groups: [string, string][];
+  listed: number;
+  total: number;
+  rows?: CkdWideLongRow[];
+  persons?: CkdWidePerson[];
+}
+
+export interface CkdWideExport { persons: number; d1: (string | number)[][]; d2: (string | number)[][] }
+
 export interface CkdDaily {
   date: string;
   doctorSel: string;
@@ -343,6 +447,24 @@ export class CkdApiService {
     if (date) params['date'] = date;
     if (doctor) params['doctor'] = doctor;
     return firstValueFrom(this.api.get<CkdDaily>('/ckd/daily', params));
+  }
+
+  // ---------- 稽核／總表 ----------
+
+  getAudit(date?: string): Promise<CkdAudit> {
+    const params: Record<string, string> = {};
+    if (date) params['date'] = date;
+    return firstValueFrom(this.api.get<CkdAudit>('/ckd/audit', params));
+  }
+
+  getWide(params: { scope: CkdWideScope; q: string; mode: CkdWideMode; limit?: number }): Promise<CkdWide> {
+    const p: Record<string, string> = { scope: params.scope, q: params.q, mode: params.mode };
+    if (params.limit) p['limit'] = String(params.limit);
+    return firstValueFrom(this.api.get<CkdWide>('/ckd/wide', p));
+  }
+
+  getWideExport(params: { scope: CkdWideScope; q: string }): Promise<CkdWideExport> {
+    return firstValueFrom(this.api.get<CkdWideExport>('/ckd/wide/export', { scope: params.scope, q: params.q }));
   }
 
   // ---------- 個案紀錄 ----------

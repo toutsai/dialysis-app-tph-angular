@@ -1,0 +1,94 @@
+<section class="block">
+  <div class="head">
+    <h2><span class="tag-c">C</span>全名單稽核 <span class="dim sub">年度評估、轉出與獎勵</span></h2>
+    <span class="dim">
+      @if (loading()) { 判讀中… }
+      @else if (audit()) { 判讀日 {{ audit()!.date }} · 載入 {{ audit()!.timing.loadMs }} ms · 判讀 {{ audit()!.timing.analyzeMs }} ms }
+    </span>
+    <span class="head-btns">
+      <button type="button" class="btn small" (click)="load()" [disabled]="loading()">重新判讀</button>
+      <button type="button" class="btn small" (click)="exportCsv()" [disabled]="!audit()?.rows?.length" title="全部收案病人，不受篩選與排序影響">匯出 CSV</button>
+    </span>
+  </div>
+
+  @if (error(); as err) { <div class="banner error">{{ err }}</div> }
+
+  @if (audit(); as a) {
+    @if (!a.rows.length) {
+      <div class="empty">{{ a.hasCases ? '登錄簿裡沒有未結案且有照護紀錄的病人。' : '尚未匯入「已收案名單」。' }}</div>
+    } @else {
+      <div class="tally">
+        @for (t of tally(); track t.f) {
+          <button type="button" class="tl" [class]="'tl ' + t.c" [class.on]="filter() === t.f" (click)="clickTally(t.f)" [title]="'展開並只看：' + t.k"><span>{{ t.k }}</span><b>{{ t.v }}</b></button>
+        }
+      </div>
+      <div class="chips">
+        @for (c of chipDefs; track c.f) {
+          <button type="button" class="chip" [class.on]="filter() === c.f" (click)="setFilter(c.f)">{{ c.k }}</button>
+        }
+      </div>
+
+      @if (!rows().length) {
+        <div class="empty">此分類目前 0 人。點統計列的「收案總數」或篩選鈕的「全部」可看全部 {{ a.rows.length }} 人。</div>
+      } @else {
+        @if (a.spanFrom) {
+          <div class="note">名單涵蓋的就診紀錄自 <b>{{ roc(a.spanFrom) }}</b> 起。照護次數與年度評估資格是<b>由這份追蹤記錄表的就診日期推估</b>，不是實際申報紀錄；若匯出區間短於一年，近 12 個月次數會被低估，P3404C 判定會偏保守。要準確判定年度評估，請匯出滿一年以上的區間。</div>
+        }
+        <div class="tbox">
+          <table>
+            <thead>
+              <tr>
+                <th>病人</th><th>方案</th>
+                <th class="sortable" [class.on]="sort().key === 'egfr'" [title]="sortHint('egfr')" (click)="setSort('egfr')">eGFR{{ arrow('egfr') }}</th>
+                <th>尿蛋白</th>
+                <th class="sortable" [class.on]="sort().key === 'last'" [title]="sortHint('last')" (click)="setSort('last')">上次照護{{ arrow('last') }}</th>
+                <th class="sortable" [class.on]="sort().key === 'gap'" [title]="sortHint('gap')" (click)="setSort('gap')">間隔{{ arrow('gap') }}</th>
+                <th class="sortable" [class.on]="sort().key === 'n12'" [title]="sortHint('n12')" (click)="setSort('n12')">今年/近12月{{ arrow('n12') }}</th>
+                <th>年度評估</th><th>照護指標</th><th>必要檢驗</th><th>提醒</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of rows(); track r.mrn) {
+                @let b = stb(r.status);
+                <tr>
+                  <td>
+                    <button type="button" class="nmlink" (click)="openRecords.emit(r.mrn)" title="查看/新增此病人的個案紀錄">{{ r.name || '（無姓名）' }}</button>
+                    <div class="mrn">{{ r.mrn }}</div>
+                    <div class="dim">{{ r.age == null ? '—' : r.age }} 歲@if (r.isDM) { · DM }</div>
+                    @if (r.chips) {
+                      <div class="rchips">
+                        @if (r.chips.access) { <i class="rchip c-acc" [title]="r.chips.access.type">通路 {{ r.chips.access.status }}</i> }
+                        @if (r.chips.sdm) { <i class="rchip c-sdm" [title]="r.chips.sdm.at">SDM {{ r.chips.sdm.leaning }}</i> }
+                        @if (r.chips.extPos) { <i class="rchip c-ext" [title]="r.chips.extHospital">外院收案</i> }
+                        @if (r.chips.notes) { <i class="rchip c-note">紀錄 {{ r.chips.notes }}</i> }
+                      </div>
+                    }
+                  </td>
+                  <td><span class="badge" [class]="'badge b-' + r.prog">{{ r.prog === 'pre' ? 'Pre-ESRD' : 'Early-CKD' }}</span><div class="dim xs">{{ r.code || (r.dkd ? 'DKD' : '') }}</div></td>
+                  <td class="num">{{ f1(r.egfr) }} <span class="dim xs">{{ r.stage || '' }}</span></td>
+                  <td class="num sm">@if (r.upcr != null) { P {{ r.upcr }} }@if (r.uacr != null) { <br>A {{ r.uacr }} }@if (r.upcr == null && r.uacr == null) { <span class="dim">—</span> }</td>
+                  <td class="num sm">{{ roc(r.last?.visit) }}<br><span class="dim">收 {{ roc(r.last?.enroll) }}</span></td>
+                  <td><span class="badge xs" [class]="'badge xs ' + b[0]">{{ r.gap == null ? '—' : r.gap }} 天</span><div class="dim xs">{{ b[1] }}</div></td>
+                  <td class="num">{{ r.nYear }} / {{ r.n12 }}</td>
+                  <td>@if (r.ann.code) { @if (r.ann.ok) { <span class="badge xs b-pre">{{ r.ann.code }}</span> } @else { <span class="dim xs">未到</span> } } @else { <span class="dim xs">—</span> }</td>
+                  <td class="inds">@if (r.inds.length) { @for (i of r.inds; track i.n) { <span class="ind" [class.good]="i.ok" [class.bad]="!i.ok">{{ i.n }} {{ i.v }}</span> } } @else { <span class="dim">—</span> }</td>
+                  <td class="sm">
+                    @if (r.miss.length) { <span class="badge xs b-wait">缺 {{ r.miss.length }}</span><div class="dim xs wrap">{{ r.miss.slice(0, 4).join('、') }}{{ r.miss.length > 4 ? '…' : '' }}</div> }
+                    @else { <span class="badge xs b-early">齊全</span> }
+                    @if (r.unk.length) { <div class="dim xxs wrap">另 {{ r.unk.length }} 項待檢驗單核對</div> }
+                  </td>
+                  <td>@if (r.alerts.length) { @for (al of r.alerts; track $index) { <div class="alert" [class]="'alert ' + alertCls(al.t)"><b>{{ al.t }}</b> {{ al.m }}</div> } } @else { <span class="dim">—</span> }</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        @if (hidden() > 0) {
+          <div class="note more"><button type="button" class="btn small ghost" (click)="showAll.set(true)">顯示其餘 {{ hidden() }} 人（共 {{ rowsAll().length }} 人）</button></div>
+        }
+      }
+    }
+  } @else if (loading()) {
+    <div class="placeholder">判讀中…</div>
+  }
+</section>

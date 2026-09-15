@@ -37,7 +37,7 @@
 
       <!-- ===== A：已收案 明日可否追蹤 ===== -->
       <section class="block">
-        <h2><span class="tag-a">A</span>明日已收案 · 可否追蹤申報</h2>
+        <h2><span class="tag-a">A</span>明日已收案 · 可否追蹤申報 <button type="button" class="btn-x" (click)="exportA()" [disabled]="!dl.A.length" title="全部 A 區列，不受篩選影響">匯出 CSV</button></h2>
         <div class="tally">
           @for (t of aTally(); track t.f) {
             <button type="button" class="tl" [class]="'tl ' + (t.c || '')" [class.on]="aFilter() === t.f" (click)="aFilter.set(t.f)"><span>{{ t.k }}</span><b>{{ t.v }}</b></button>
@@ -141,7 +141,11 @@
 
       <!-- ===== B：未收案 是否符合收案 ===== -->
       <section class="block">
-        <h2><span class="tag-b">B</span>未收案 · 是否符合收案條件</h2>
+        <h2><span class="tag-b">B</span>未收案 · 是否符合收案條件
+          <button type="button" class="btn-x" (click)="exportB()" [disabled]="!dl.B.length" title="全部 B 區列（含不予收案與他院收案者）">匯出 CSV</button>
+          <button type="button" class="btn-x primary" (click)="exportDayXlsx()" [disabled]="!dl.B.length" title="單日可收案名單：看診醫師/日期/診號/病歷號/姓名/收案別/本次收案階段（已排除他院收案與不予收案者）">匯出當日收案名單 XLSX</button>
+          @if (exportMsg(); as m) { <span class="export-msg">{{ m }}</span> }
+        </h2>
         <div class="tally">
           @for (t of bTally(); track t.f) {
             <button type="button" class="tl" [class]="'tl ' + (t.c || '')" [class.on]="bFilter() === t.f" (click)="bFilter.set(t.f)"><span>{{ t.k }}</span><b>{{ t.v }}</b></button>

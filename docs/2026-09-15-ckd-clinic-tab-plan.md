@@ -31,7 +31,7 @@
 | 1 | 匯入與設定 | POST `/upload`（raw 二進位、8MB 上限、獨立子程序解析）、`services/ckd/ingest.js` 合併規則照原版（case 逐人取代／lab 聯集新值覆蓋／clinic、bill 同鍵略過／sha1 同檔略過）、批次紀錄、判定參數 CRUD；`scripts/ckd-import.mjs` 命令列大批匯入 | 四張上傳卡（拖放／選檔／多檔自動分流）、本次上傳進度、上傳紀錄、參數表單（預設值／還原） | 完成 2026-09-15（dev） |
 | 2 | 明日追蹤＋收案評估 | `services/ckd/engine.js`（app.js 規則引擎逐字搬純函式；階段 3 掛鉤留介面）、`dataset.js`（SQLite→Date 快取）、GET `/daily?date&doctor`（本科醫師／全部／他科掛號已收案） | `ckd-daily` 元件：診次按鈕列、A/B 統計列篩選、兩張表、判定欄＋可展開依據；頁內檢視「明日追蹤 · 收案評估」／「匯入與設定」 | 完成 2026-09-15（dev） |
 | 3 | 個案紀錄八類 | `services/ckd/records.js`（REC_TYPES 欄位定義照原版、validateRecord、CRUD 軟刪除、makeHooks 四掛鉤＋chipsOf、pcodeTimeline、recordStats、lookupName/searchPatients）；`/api/ckd/records*`、`/patients/search`、`/patients/:mrn/summary`；`dataset.js` 載入紀錄進判讀；schema 加 `name`/`updated_by` | `ckd-records` 子元件（原版第五區）：病人搜尋、八顆新增鈕、動態表單、VPN 三態狀態列、不予收案狀態、P 碼總覽、紀錄卡編輯／刪除、全部紀錄；A／B 列姓名可點跳轉、chips、判定欄行動列可點（VPN／個管）、判定依據 VPN 註記、B 統計列「已外院收案」 | 完成 2026-09-15（dev） |
-| 4 | 稽核與匯出 | 全名單稽核、檢驗總表（21 項＋eGFR 斜率）、XLSX（當日可收案名單）／CSV | 兩張總表＋匯出鈕 | 未開始 |
+| 4 | 稽核與匯出 | GET `/audit?date`（analyze withAudit → slimAudit，含 tooSoon／recon／tenure／slope／chips）；`services/ckd/wide.js` = 原版 buildWide／wideRows／wideSheets 逐字搬（21 項 WIDE_LABS、五群、最小平方法 eGFR 斜率、UPCR 補算、方案推估、排序），簽章快取；GET `/wide?scope&q&mode`（long 上限 600 列、wide 上限 2000 人）、`/wide/export`（完整 d1／d2）；records 列表上限放寬到 10000 供 CSV | `ckd-audit`（15 統計格三段式＋15 篩選鈕、四欄可排序記 localStorage `ckdAuditSort`、前 300 列＋「顯示其餘」、CSV）、`ckd-wide`（模式／範圍／搜尋、分組雙列凍結表頭＋病人欄凍結、群組底色、旗標 H/L、推算「算」、斜率紅綠灰、Excel 兩工作表＋CSV）、頁籤四個；`ckd-export.ts`（A／B CSV、當日可收案名單 XLSX 含欄寬與 autofilter、稽核 CSV、個案紀錄 CSV，標題與檔名逐字照原版）；稽核／總表姓名 → 切回主線並跳到該病人紀錄 | 完成 2026-09-16（dev） |
 | 5 | 進階模組 | 召回清單、近日異常檢驗、透析準備管線、月報、檢核 P 碼 | 各一頁 | 未開始 |
 | 6 | 與本站打通 | 透析準備管線 ↔ 預約洗腎登記本／首透；病歷號連到病人詳情 | | 未開始 |
 
@@ -62,6 +62,8 @@
 - 與本站既有「CKD 關懷名單」（住院 AKI 快照來源）是兩套來源，並存不合併。
 
 ## 進度紀錄
+
+- 2026-09-16：階段 4 完成（dev 未上線）：`tests/ckd-wide.test.mjs` 3 組；3002 真資料驗證 35 項（稽核 4,897 人／判讀 0.7 秒；總表 31,587 人／81,593 列／建表 1.8 秒；五種匯出真的下載並讀回檢查標題、BOM、autofilter、工作表名）全過；smoke 74/74。與原版的刻意差異：每人一列模式加 2000 人顯示上限（原版無上限，三萬人一次畫太重；匯出仍完整）；不做去識別遮蔽（本站有登入與 RBAC）；總表匯出的檔名日期用今天而非判讀日。修過的 bug：總表切模式／範圍連發時大回應晚到覆蓋畫面 → load 加序號。未做：藥師名單 CSV（併階段 5）。
 
 - 2026-09-15：階段 3 完成（dev 未上線）：`tests/ckd-records.test.mjs` 3 組（驗證／CRUD＋統計／掛鉤進判讀＋P 碼總覽）；3002 真資料驗證 21 項 API（VPN pend→pos→neg 判定句、不予收案沉底與暫緩過期恢復、P 碼補登改變 A 區最後照護日、註銷列 voided、全部刪除後判定還原）＋ 10 項 UI（行動列跳轉開表單、必填提示、送出、確認框刪除、清除、搜尋下拉）全過；smoke 74/74。與原版的刻意差異：紀錄區是常駐子元件不是搬 DOM 節點；刪除／切病人確認用站內 `app-confirm-dialog`；表單錯誤顯示在表單內不用 alert；紀錄卡多顯示建檔者／修改者；P 碼總覽鈕多「+ 不予收案」；病人搜尋改後端 API（原版 datalist）。未做：紀錄 CSV 匯出（併入階段 4）、工作台列內展開版面（本站無工作台檢視）。
 

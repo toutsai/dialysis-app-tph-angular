@@ -2,6 +2,7 @@ import { Component, OnInit, ViewChild, computed, inject, signal } from '@angular
 import { CommonModule } from '@angular/common';
 import { CkdApiService, CkdDaily, CkdMergedLab, CkdRecType, CkdRowA, CkdRowB } from '@app/core/services/ckd-api.service';
 import { CkdRecordsComponent } from '../ckd-records/ckd-records.component';
+import { exportACsv, exportBCsv, exportDayEnrollXlsx } from '../ckd-export';
 
 type AFilter = 'all' | 'pre' | 'early' | 'due' | 'wait' | 'ann' | 'miss' | 'alert';
 type BFilter = 'all' | 'pre' | 'early' | 'check' | 'nodata' | 'no' | 'noen' | 'closed' | 'ord' | 'ext';
@@ -156,6 +157,31 @@ export class CkdDailyComponent implements OnInit {
   onRecordsChanged(): void {
     const dl = this.daily();
     void this.load(dl?.date, dl?.doctorSel);
+  }
+
+  // ---------- 匯出（原版 btnCsvA / btnCsvB / btnXlsxDay） ----------
+  readonly exportMsg = signal<string | null>(null);
+
+  exportA(): void {
+    const dl = this.daily();
+    if (dl) exportACsv(dl.A, dl.date);
+  }
+
+  exportB(): void {
+    const dl = this.daily();
+    if (dl) exportBCsv(dl.B, dl.date);
+  }
+
+  async exportDayXlsx(): Promise<void> {
+    const dl = this.daily();
+    if (!dl) return;
+    this.exportMsg.set(null);
+    try {
+      const n = await exportDayEnrollXlsx(dl.B, dl.date);
+      if (!n) this.exportMsg.set('當日沒有符合收案條件的病人（已排除他院收案與不予收案者）。');
+    } catch (e: any) {
+      this.exportMsg.set(e?.message || '匯出失敗');
+    }
   }
 
   /** B 區判定依據內的 VPN 註記（原版 .vpnnote 三態） */
