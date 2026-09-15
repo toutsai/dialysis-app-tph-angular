@@ -11,7 +11,7 @@ import { cleanupExpiredBlacklist, cleanupExpiredSessions } from '../middleware/a
 import { getTaipeiTodayString, getTaipeiYesterdayString, formatDateToYYYYMMDD } from '../utils/dateUtils.js'
 import { FREQ_MAP_TO_DAY_INDEX } from '../utils/scheduleUtils.js'
 import { normalizeDialysisMode } from '../utils/dialysisMode.js'
-import { addAutoMovementToDailyLog } from './dailyLogMovementSync.js'
+import { addAutoMovementToDailyLog, removeSameDayDeleteMovements } from './dailyLogMovementSync.js'
 import { recordPatientHistory, createPatientSnapshot } from './patientHistory.js'
 import { hourlyNurseAssignmentSnapshot } from './nurseAssignmentRevisions.js'
 import { countCurrentCensus, recordDailyCensus } from './patientCensus.js'
@@ -837,14 +837,17 @@ async function applyScheduledPatientUpdates() {
                 const restoreStatus = payload.status || afterRestorePatient.status
                 recordPatientHistory(db, patientId, afterRestorePatient.name, 'RESTORE_AND_TRANSFER',
                   { restoredTo: restoreStatus }, createPatientSnapshot(afterRestorePatient))
-                addAutoMovementToDailyLog(db, todayStr, {
-                  id: `auto_scheduled_restore_${taskId}`,
-                  type: '復原', name: afterRestorePatient.name, patientId,
-                  medicalRecordNumber: afterRestorePatient.medical_record_number,
-                  ...(restoreStatus === 'ipd' ? { admissionDate: todayStr } : {}),
-                  physician: afterRestorePatient.physician || '', reason: '',
-                  remarks: `復原至「${SCHED_STATUS_MAP[restoreStatus] || restoreStatus}」（預約變更）`,
-                })
+                // 同日誤刪又復原：清掉今天的自動「刪除」列、不加「復原」列
+                if (removeSameDayDeleteMovements(db, todayStr, patientId) === 0) {
+                  addAutoMovementToDailyLog(db, todayStr, {
+                    id: `auto_scheduled_restore_${taskId}`,
+                    type: '復原', name: afterRestorePatient.name, patientId,
+                    medicalRecordNumber: afterRestorePatient.medical_record_number,
+                    ...(restoreStatus === 'ipd' ? { admissionDate: todayStr } : {}),
+                    physician: afterRestorePatient.physician || '', reason: '',
+                    remarks: `復原至「${SCHED_STATUS_MAP[restoreStatus] || restoreStatus}」（預約變更）`,
+                  })
+                }
               }
             } catch (syncErr) {
               console.error(`    - ⚠️ 工作日誌同步失敗 (非致命): ${syncErr.message}`)
