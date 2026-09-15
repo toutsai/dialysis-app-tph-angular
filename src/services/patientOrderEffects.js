@@ -247,13 +247,18 @@ export function snapshotPatientScheduleChange(db, existing, updated, data, user,
     const statusChanged = updated.status !== existing.status
     const modeChanged = (newOrders.mode || null) !== (oldOrders.mode || null)
     const freqChanged = (newOrders.freq || null) !== (oldOrders.freq || null)
+    const wardChanged = (updated.ward_number || null) !== (existing.ward_number || null)
+    // 病房號單獨變更（2026-09-15，使用者拍板比照身分/模式走「本班一起改／本班維持到下班」守門）：
+    // 快照只動 wardNumber 不碰身分/模式的凍結；未帶生效範圍的舊呼叫端視為「本班起」，
+    // 否則整天快照舊病房號會讓今天永遠看不到新值（病房號不像身分有「明天生效」的語意）。
+    const wardOnly = wardChanged && !statusChanged && !modeChanged && !freqChanged && !isDeleting
     const todayStr = getTaipeiTodayString()
     const effectiveShiftScope =
       data.effectiveShiftScope === 'current'
         ? 'current'
         : data.effectiveShiftScope === 'next' || data.effectiveFromNextShift === true
           ? 'next'
-          : 'all'
+          : wardOnly ? 'current' : 'all'
     const SHIFT_ORDER = ['early', 'noon', 'late']
     const SHIFT_START_TIMES = { early: '07:30', noon: '12:30', late: '17:30' }
     const nowTaipeiHM = new Date()
@@ -281,7 +286,7 @@ export function snapshotPatientScheduleChange(db, existing, updated, data, user,
     // 僅在今日凍結窗（06:00 起）內寫快照：凌晨的變更依既有設計本來就算今天的，
     // 不該把變更前狀態凍進今天（與 isTodayScheduleFrozen 的重建放行邊界一致）
     if (
-      (statusChanged || modeChanged || freqChanged || isDeleting) &&
+      (statusChanged || modeChanged || freqChanged || isDeleting || wardChanged) &&
       isTodayScheduleFrozen(todayStr)
     ) {
       const todayRow = db.prepare(`SELECT schedule FROM schedules WHERE date = ?`).get(todayStr)
@@ -289,6 +294,7 @@ export function snapshotPatientScheduleChange(db, existing, updated, data, user,
         const todaySchedule = JSON.parse(todayRow.schedule || '{}')
         let snapshotWritten = false
         const removedShifts = new Set()
+        const newWard = updated.ward_number || null
         for (const [slotKey, slot] of Object.entries(todaySchedule)) {
           if (slot?.patientId !== id) continue
           const slotShift = slot.shiftId || String(slotKey).split('-').pop()
@@ -298,12 +304,31 @@ export function snapshotPatientScheduleChange(db, existing, updated, data, user,
               delete todaySchedule[slotKey]
               removedShifts.add(slotShift)
               snapshotWritten = true
+            } else if (wardOnly) {
+              // 病房號單獨變更：既有快照只更新病房號，身分/模式的凍結不動
+              if (slot.archivedPatientInfo && (slot.archivedPatientInfo.wardNumber || null) !== newWard) {
+                slot.archivedPatientInfo.wardNumber = newWard
+                snapshotWritten = true
+              }
             } else if (effectiveShiftScope !== 'all' && slot.archivedPatientInfo) {
               // 同日先前變更留下的快照會把這格鎖在舊顯示；使用者明確選定生效範圍時以本次為準
               delete slot.archivedPatientInfo
               snapshotWritten = true
             }
             continue
+          }
+          if (wardOnly) {
+            // 維持原顯示的班別：「空的病房號」是尚未填而非歷史 → 視為補登（既有快照填上新值、
+            // 沒快照就不建，讓該格即時顯示新值）；已有不同的舊病房號才是真正的「變更前」記錄 → 保留／建快照
+            const snap = slot.archivedPatientInfo
+            if (snap) {
+              if (!snap.wardNumber && newWard && ['ipd', 'er'].includes(snap.status)) {
+                snap.wardNumber = newWard
+                snapshotWritten = true
+              }
+              continue
+            }
+            if (!existing.ward_number) continue
           }
           if (!slot.archivedPatientInfo) {
             slot.archivedPatientInfo = {

@@ -636,7 +636,9 @@
     title="設定床號"
     message="請輸入病房床號"
     [currentValue]="currentWardNumber"
-    (confirm)="handleWardNumberConfirm($event)"
+    [askShiftScope]="wardScopeAsk"
+    [shiftName]="wardScopeShiftName"
+    (confirmScope)="handleWardNumberConfirm($event)"
     (cancel)="isWardDialogVisible = false"
   ></app-ward-number-dialog>
 

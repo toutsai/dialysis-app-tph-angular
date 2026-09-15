@@ -15,6 +15,20 @@
         (keyup.escape)="onCancel()"
         [attr.maxlength]="maxLength"
       />
+      <!-- 當日異動守門：病人正在本班排程中，比照身分/模式變更問生效範圍 -->
+      <div *ngIf="askShiftScope" class="scope-options">
+        <div class="scope-title">病人今天{{ shiftName }}正在排程中，這次修改要從哪一班開始顯示？</div>
+        <label class="scope-option">
+          <input type="radio" name="wardScope" value="current" [(ngModel)]="scope" />
+          <span class="scope-text">本班（{{ shiftName }}）一起改</span>
+          <span class="scope-hint">{{ shiftName }}的格子立即套用，之後的班別也是；已結束的班次維持原記錄</span>
+        </label>
+        <label class="scope-option">
+          <input type="radio" name="wardScope" value="next" [(ngModel)]="scope" />
+          <span class="scope-text">本班（{{ shiftName }}）維持到下班</span>
+          <span class="scope-hint">{{ shiftName }}維持原顯示到當班結束，下一班起才套用</span>
+        </label>
+      </div>
     </main>
     <footer class="dialog-footer">
       <button class="btn-primary" (click)="onConfirm()">確定</button>

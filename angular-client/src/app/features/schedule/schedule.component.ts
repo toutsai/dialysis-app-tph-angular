@@ -30,6 +30,8 @@ import { DateStateService } from '@app/core/services/date-state.service';
 import { UserDirectoryService } from '@app/core/services/user-directory.service';
 import { fetchEffectiveOrders } from '@/services/effectiveOrdersService';
 import { isDoNotMoveActiveOn, doNotMoveRangeText } from '@/utils/doNotMove';
+import { wardScopePrompt, shiftsOfPatientInSchedule } from '@/utils/shiftTime';
+import type { WardNumberConfirmEvent } from '@app/components/dialogs/ward-number-dialog/ward-number-dialog.component';
 import { InpatientSidebarComponent } from '@app/components/inpatient-sidebar/inpatient-sidebar.component';
 import { BedAssignmentDialogComponent } from '@app/components/dialogs/bed-assignment-dialog/bed-assignment-dialog.component';
 import { DailyStaffDisplayComponent } from '@app/components/daily-staff-display/daily-staff-display.component';
@@ -307,6 +309,9 @@ export class ScheduleComponent implements OnInit, OnDestroy {
 
   // Reactive state
   readonly currentDate = signal(new Date());
+  /** 病房號當日守門：病人正在本班排程中 → 視窗內問「本班一起改／本班維持到下班」 */
+  readonly wardScopeAsk = signal(false);
+  readonly wardScopeShiftName = signal('');
   private readonly scheduleRevision = signal(0);
   readonly hasUnsavedChanges = signal(false);
   readonly statusIndicator = signal('');
@@ -1439,7 +1444,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
     }
   }
 
-  promptWardNumber(shiftId: string): void {
+  async promptWardNumber(shiftId: string): Promise<void> {
     if (this.isPageLocked()) return;
     const slot = this.currentRecord.schedule[shiftId];
     if (!slot?.patientId) return;
@@ -1450,18 +1455,39 @@ export class ScheduleComponent implements OnInit, OnDestroy {
       this.showAlert('提示', '只有住院或急診病人才能設定床號');
       return;
     }
+    // 當日守門（2026-09-15）：看「今天」的排程（頁面可能停在別的日期）
+    const prompt = wardScopePrompt(await this.getPatientTodayShiftsForWard(slot.patientId));
+    this.wardScopeAsk.set(prompt.ask);
+    this.wardScopeShiftName.set(prompt.shiftName);
     this.currentEditingShiftId.set(shiftId);
     this.currentWardNumber.set(((patient as Record<string, unknown>)['wardNumber'] as string) || '');
     this.isWardDialogVisible.set(true);
   }
 
-  async handleWardNumberConfirm(value: string): Promise<void> {
+  private async getPatientTodayShiftsForWard(patientId: string): Promise<string[]> {
+    const todayStr = this.formatDate(new Date());
+    try {
+      if (this.currentRecord.date === todayStr) return shiftsOfPatientInSchedule(this.currentRecord.schedule, patientId);
+      const rec: any = await this.fetchLiveSchedule(todayStr);
+      return shiftsOfPatientInSchedule(rec?.schedule || rec || {}, patientId);
+    } catch (error: unknown) {
+      console.error('檢查當日排程失敗:', error);
+      return [];
+    }
+  }
+
+  async handleWardNumberConfirm(event: WardNumberConfirmEvent): Promise<void> {
     if (!this.currentEditingShiftId()) return;
     const slot = this.currentRecord.schedule[this.currentEditingShiftId()!];
     if (!slot?.patientId) return;
     try {
-      await optimizedUpdatePatient(slot.patientId, { wardNumber: value });
+      // effectiveShiftScope 只送 API（後端更新今日格快照的病房號），不進本地 store
+      await optimizedUpdatePatient(slot.patientId, { wardNumber: event.value, effectiveShiftScope: event.scope });
       await this.patientStore.forceRefreshPatients();
+      // 今日格的快照病房號由後端改了，重讀當天資料才看得到；有未儲存草稿時不動（SSE 橫幅會提醒重載）
+      if (!this.hasUnsavedChanges() && !this.hasUnsavedTeamChanges()) {
+        await this.loadDataForDay(this.currentDate(), false);
+      }
       this.showAlert('操作成功', '床號已更新');
     } catch (error: unknown) {
       console.error('更新床號失敗:', error);

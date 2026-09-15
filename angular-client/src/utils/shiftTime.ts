@@ -33,6 +33,27 @@ export function isShiftEndedToday(shift: string, now: Date = new Date()): boolea
   return idx < ORDERED_SHIFT_CODES.indexOf(current);
 }
 
+/** 病人在某日排程（key→slot 物件）中出現的班別清單 */
+export function shiftsOfPatientInSchedule(schedule: Record<string, any> | null | undefined, patientId: string): string[] {
+  const shifts: string[] = [];
+  for (const [slotKey, slot] of Object.entries(schedule || {})) {
+    if (slot && (slot as any).patientId === patientId) shifts.push(getShiftCodeFromSlotKey(slotKey));
+  }
+  return shifts;
+}
+
+/**
+ * 病房號當日異動守門（2026-09-15，比照身分/模式）：凍結窗（06:00 起）內、有進行中班別、
+ * 且病人今天在該班有格子 → 要問「本班一起改／本班維持到下班」；否則不問、直接以「本班起」生效
+ * （已結束班次維持原記錄，尚未開始的班次即時顯示新病房號）。
+ */
+export function wardScopePrompt(todayShifts: string[], now: Date = new Date()): { ask: boolean; shiftName: string } {
+  if (now.getHours() < 6) return { ask: false, shiftName: '' };
+  const current = getCurrentShiftCode(now);
+  if (!current || !todayShifts.includes(current)) return { ask: false, shiftName: '' };
+  return { ask: true, shiftName: getShiftDisplayName(current) };
+}
+
 /** 由每日排程 key（bed-1-early / peripheral-2-noon）取班別 */
 export function getShiftCodeFromSlotKey(slotKey: string): string {
   return String(slotKey).split('-').pop() || '';

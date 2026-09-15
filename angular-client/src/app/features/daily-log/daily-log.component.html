@@ -263,8 +263,10 @@
                   <input type="text" [(ngModel)]="item.medicalRecordNumber" [disabled]="!isRowInEditMode(item)" />
                 </td>
                 <td class="col-bed">
-                  <input *ngIf="isRowInEditMode(item)" type="text" [(ngModel)]="item.wardNumber" placeholder="床號" />
-                  <span *ngIf="!isRowInEditMode(item)">{{ item.wardNumber || patientStore.patientMap().get(item.patientId)?.wardNumber || '-' }}</span>
+                  <!-- 病房號權威在病人資料（三處同步）：不再在列上自由輸入，改點筆型鈕開共用視窗寫回病人並走當日守門 -->
+                  <span class="ward-display">{{ movementWardDisplay(item) }}</span>
+                  <button *ngIf="!isPageLocked && item.patientId" type="button" class="ward-edit-btn"
+                          title="設定/修改病房號（同步病人清單與每日排程）" (click)="promptWardNumber(i)">✎</button>
                 </td>
                 <td class="col-date">
                   <input type="date" [(ngModel)]="item.admissionDate" [disabled]="!isRowInEditMode(item)" />
@@ -616,7 +618,9 @@
   <app-ward-number-dialog
     *ngIf="isWardDialogVisible"
     [currentValue]="wardDialogCurrentValue"
-    (confirm)="handleWardNumberConfirm($event)"
+    [askShiftScope]="wardScopeAsk"
+    [shiftName]="wardScopeShiftName"
+    (confirmScope)="handleWardNumberConfirm($event)"
     (cancel)="handleWardNumberCancel()">
   </app-ward-number-dialog>
 
