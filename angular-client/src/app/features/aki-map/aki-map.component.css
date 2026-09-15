@@ -462,26 +462,33 @@
 /* 頁籤 */
 .tabs {
   display: flex;
-  gap: 0.25rem;
+  align-items: flex-end;
+  gap: 0.3rem;
   border-bottom: 1px solid #dee2e6;
   margin-bottom: 1rem;
+  flex-wrap: wrap;
 }
 .tab {
-  border: none;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
   background: none;
-  padding: 0.55rem 1rem;
-  font-size: 0.95rem;
+  padding: 0.6rem 1.1rem;
+  font-size: 1rem;
+  font-weight: 700;
   color: #607d8b;
   cursor: pointer;
-  border-bottom: 3px solid transparent;
   margin-bottom: -1px;
+  border-bottom: 3px solid transparent;
 }
-.tab:hover { color: #263238; }
-.tab.active {
-  color: #1565c0;
-  font-weight: 700;
-  border-bottom-color: #1565c0;
-}
+.tab-gap { width: 0.6rem; }
+/* 兩組底色（2026-09-15）：全院／ICU 藍底；CKD／AKI／出院待透析 橘底；作用中反白 */
+.tab.grp-a { background: #e3f2fd; color: #0d47a1; border-color: #bbdefb; }
+.tab.grp-a:hover { background: #bbdefb; }
+.tab.grp-a.active { background: #1565c0; color: #fff; border-color: #1565c0; border-bottom-color: #0d47a1; }
+.tab.grp-b { background: #fff3e0; color: #bf360c; border-color: #ffe0b2; }
+.tab.grp-b:hover { background: #ffe0b2; }
+.tab.grp-b.active { background: #ef6c00; color: #fff; border-color: #ef6c00; border-bottom-color: #bf360c; }
 
 /* 關懷名單 */
 .care-toolbar {

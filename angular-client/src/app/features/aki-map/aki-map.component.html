@@ -51,12 +51,14 @@
   }
 
   <!-- 頁籤 -->
+  <!-- 2026-09-15 使用者拍板順序／命名：全院、ICU 一組（藍底）；CKD、AKI、出院待透析 一組（橘底），皆粗體 -->
   <nav class="tabs">
-    <button class="tab" [class.active]="activeTab() === 'map'" (click)="switchTab('map')">腎臟病地圖</button>
-    <button class="tab" [class.active]="activeTab() === 'ckd'" (click)="switchTab('ckd')">CKD 關懷名單</button>
-    <button class="tab" [class.active]="activeTab() === 'care'" (click)="switchTab('care')">AKI 關懷名單</button>
-    <button class="tab" [class.active]="activeTab() === 'discharged'" (click)="switchTab('discharged')">出院待追蹤名單</button>
-    <button class="tab" [class.active]="activeTab() === 'icu'" (click)="switchTab('icu')">ICU 透析病人</button>
+    <button class="tab grp-a" [class.active]="activeTab() === 'map'" (click)="switchTab('map')">全院腎臟病地圖</button>
+    <button class="tab grp-a" [class.active]="activeTab() === 'icu'" (click)="switchTab('icu')">ICU 透析</button>
+    <span class="tab-gap"></span>
+    <button class="tab grp-b" [class.active]="activeTab() === 'ckd'" (click)="switchTab('ckd')">CKD 關懷名單</button>
+    <button class="tab grp-b" [class.active]="activeTab() === 'care'" (click)="switchTab('care')">AKI 關懷名單</button>
+    <button class="tab grp-b" [class.active]="activeTab() === 'discharged'" (click)="switchTab('discharged')">出院待透析</button>
   </nav>
 
   @if (activeTab() === 'icu') {
