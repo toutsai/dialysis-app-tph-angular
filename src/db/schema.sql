@@ -1054,13 +1054,15 @@ CREATE INDEX IF NOT EXISTS idx_ckd_billing_date ON ckd_billing(visit_date);
 CREATE TABLE IF NOT EXISTS ckd_records (
     id TEXT PRIMARY KEY,
     mrn TEXT NOT NULL,
-    rec_type TEXT NOT NULL,
-    rec_date TEXT,
+    name TEXT,                         -- 建檔當時查到的姓名（快照）
+    rec_type TEXT NOT NULL,            -- access | sdm | contact | extEnroll | claimFix | enrollFix | noEnroll | note
+    rec_date TEXT,                     -- 排序用日期（各類型的 when 欄）
     payload_json TEXT NOT NULL DEFAULT '{}',
     created_by TEXT DEFAULT '{}',
+    updated_by TEXT DEFAULT '{}',
     created_at TEXT DEFAULT (datetime('now', 'localtime')),
     updated_at TEXT DEFAULT (datetime('now', 'localtime')),
-    deleted_at TEXT
+    deleted_at TEXT                    -- 軟刪除
 );
 CREATE INDEX IF NOT EXISTS idx_ckd_records_mrn ON ckd_records(mrn, rec_type);
 

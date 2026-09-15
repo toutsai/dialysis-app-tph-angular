@@ -30,7 +30,7 @@
 | 0 | 骨架 | `routes/ckd.js` 掛 `/api/ckd`（contributor 門檻）；schema 加 `ckd_cases / ckd_clinic_visits / ckd_labs / ckd_billing / ckd_records / ckd_settings / ckd_upload_batches`；`services/ckd/parsers.js` 搬移＋測試 | 側欄改名住院腎臟病地圖＋新增門診CKD收案；路由 `/ckd-clinic` + guard；`features/ckd-clinic/` 開發中頁（進度／筆數／參數） | 完成 2026-09-15（dev） |
 | 1 | 匯入與設定 | POST `/upload`（raw 二進位、8MB 上限、獨立子程序解析）、`services/ckd/ingest.js` 合併規則照原版（case 逐人取代／lab 聯集新值覆蓋／clinic、bill 同鍵略過／sha1 同檔略過）、批次紀錄、判定參數 CRUD；`scripts/ckd-import.mjs` 命令列大批匯入 | 四張上傳卡（拖放／選檔／多檔自動分流）、本次上傳進度、上傳紀錄、參數表單（預設值／還原） | 完成 2026-09-15（dev） |
 | 2 | 明日追蹤＋收案評估 | `services/ckd/engine.js`（app.js 規則引擎逐字搬純函式；階段 3 掛鉤留介面）、`dataset.js`（SQLite→Date 快取）、GET `/daily?date&doctor`（本科醫師／全部／他科掛號已收案） | `ckd-daily` 元件：診次按鈕列、A/B 統計列篩選、兩張表、判定欄＋可展開依據；頁內檢視「明日追蹤 · 收案評估」／「匯入與設定」 | 完成 2026-09-15（dev） |
-| 3 | 個案紀錄七類 | `ckd_records` CRUD；P 碼補登／收案更正／不予收案 進入判定時間軸 | 紀錄表單、VPN 三態閉環、暫緩至 | 未開始 |
+| 3 | 個案紀錄八類 | `services/ckd/records.js`（REC_TYPES 欄位定義照原版、validateRecord、CRUD 軟刪除、makeHooks 四掛鉤＋chipsOf、pcodeTimeline、recordStats、lookupName/searchPatients）；`/api/ckd/records*`、`/patients/search`、`/patients/:mrn/summary`；`dataset.js` 載入紀錄進判讀；schema 加 `name`/`updated_by` | `ckd-records` 子元件（原版第五區）：病人搜尋、八顆新增鈕、動態表單、VPN 三態狀態列、不予收案狀態、P 碼總覽、紀錄卡編輯／刪除、全部紀錄；A／B 列姓名可點跳轉、chips、判定欄行動列可點（VPN／個管）、判定依據 VPN 註記、B 統計列「已外院收案」 | 完成 2026-09-15（dev） |
 | 4 | 稽核與匯出 | 全名單稽核、檢驗總表（21 項＋eGFR 斜率）、XLSX（當日可收案名單）／CSV | 兩張總表＋匯出鈕 | 未開始 |
 | 5 | 進階模組 | 召回清單、近日異常檢驗、透析準備管線、月報、檢核 P 碼 | 各一頁 | 未開始 |
 | 6 | 與本站打通 | 透析準備管線 ↔ 預約洗腎登記本／首透；病歷號連到病人詳情 | | 未開始 |
@@ -62,6 +62,8 @@
 - 與本站既有「CKD 關懷名單」（住院 AKI 快照來源）是兩套來源，並存不合併。
 
 ## 進度紀錄
+
+- 2026-09-15：階段 3 完成（dev 未上線）：`tests/ckd-records.test.mjs` 3 組（驗證／CRUD＋統計／掛鉤進判讀＋P 碼總覽）；3002 真資料驗證 21 項 API（VPN pend→pos→neg 判定句、不予收案沉底與暫緩過期恢復、P 碼補登改變 A 區最後照護日、註銷列 voided、全部刪除後判定還原）＋ 10 項 UI（行動列跳轉開表單、必填提示、送出、確認框刪除、清除、搜尋下拉）全過；smoke 74/74。與原版的刻意差異：紀錄區是常駐子元件不是搬 DOM 節點；刪除／切病人確認用站內 `app-confirm-dialog`；表單錯誤顯示在表單內不用 alert；紀錄卡多顯示建檔者／修改者；P 碼總覽鈕多「+ 不予收案」；病人搜尋改後端 API（原版 datalist）。未做：紀錄 CSV 匯出（併入階段 4）、工作台列內展開版面（本站無工作台檢視）。
 
 - 2026-09-15：階段 2 完成（dev 未上線）：真資料 8/28 全部醫師 A=50／B=32、五個醫師診次與他科診次（77 人）皆正確；資料集載入 1.6 秒（快取後 0）、判讀 0.14 秒；6 組引擎測試。已知：手動加入病歷號未做；年度評估到期 0 人屬預期（登錄簿時間軸只有收案列＋最後照護列，需入帳史累積）。
 - 2026-09-15：階段 1 完成（dev 未上線）：四份真檔經 API／CLI 匯入全部正確、重複／超限／垃圾檔處理正確、參數表單可存；`tests/ckd-ingest.test.mjs` 5 組。

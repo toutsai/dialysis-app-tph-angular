@@ -49,6 +49,15 @@ tr.other td { background: #f6f8fb; }
 .slot small { font-weight: 400; color: #78909c; }
 .slot .oth { color: #27548f; }
 .nm { font-weight: 700; font-size: 0.95rem; }
+.nmlink { border: none; background: none; padding: 0; cursor: pointer; color: #1a3c6e; text-align: left; font-family: inherit; }
+.nmlink:hover { text-decoration: underline; color: #1565c0; }
+/* 個案紀錄小標記（原版 recChips） */
+.rchips { display: flex; flex-wrap: wrap; gap: 0.2rem; margin-top: 0.25rem; }
+.rchip { font-style: normal; font-family: ui-monospace, Consolas, monospace; font-size: 0.66rem; border: 1px solid; border-radius: 3px; padding: 0 0.3rem; white-space: nowrap; }
+.c-acc { color: #27548f; background: #eaf0f8; border-color: #27548f; }
+.c-sdm { color: #6a3d91; background: #f1ebf7; border-color: #6a3d91; }
+.c-ext { color: var(--pre); background: var(--pre-bg); border-color: var(--pre); font-weight: 700; }
+.c-note { color: #0f6b78; background: #e6f2f4; border-color: #0f6b78; }
 .mrn { font-size: 0.75rem; color: #78909c; font-variant-numeric: tabular-nums; }
 .badge { display: inline-block; border-radius: 4px; padding: 0.05rem 0.45rem; font-size: 0.75rem; font-weight: 700; white-space: nowrap; }
 .b-pre { background: var(--pre-bg); color: var(--pre); }
@@ -99,6 +108,16 @@ tr.other td { background: #f6f8fb; }
 .vd-x b { margin-right: 0.35rem; }
 .vd-x.miss { background: var(--miss-bg); color: var(--miss); }
 .vd-x.act { background: #eaf0f8; color: #27548f; }
+/* 可點的行動列：VPN 待查核 黑底白字（原版 Henry 要求）、查詢中 琥珀 */
+.vd-x.clickable { display: block; width: 100%; text-align: left; border: none; cursor: pointer; font: inherit; font-size: 0.78rem; }
+.vd-x.clickable.act { background: #16202b; color: #fff; }
+.vd-x.clickable.act:hover { background: #27548f; }
+.vd-x.clickable.act.pend { background: var(--wait-bg); color: var(--wait); border: 1px solid #e4cf94; }
+.vd-x.clickable.act.pend:hover { background: #f5e9c6; }
+.vpnnote { align-self: flex-start; border: 1px solid transparent; border-radius: 4px; padding: 0.15rem 0.45rem; font-size: 0.74rem; cursor: pointer; background: #eef1ee; color: #4a5763; font-family: inherit; }
+.vpnnote.v-ext { background: var(--pre-bg); color: var(--pre); border-color: #e7b9b6; }
+.vpnnote.v-ok { background: var(--early-bg); color: var(--early); border-color: #b9d9d4; }
+.vpnnote.v-pend { background: var(--wait-bg); color: var(--wait); border-color: #e4cf94; }
 .more { border: none; background: none; color: #1976d2; font-size: 0.74rem; cursor: pointer; padding: 0.2rem 0 0; }
 .detail { margin-top: 0.3rem; display: flex; flex-direction: column; gap: 0.3rem; }
 .missbox { font-size: 0.76rem; border: 1px dashed #dfe5e1; border-radius: 4px; padding: 0.3rem 0.45rem; }

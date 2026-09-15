@@ -58,9 +58,10 @@
                   <tr [class.row-miss]="r.ord.length" [class.other]="r.otherDept">
                     <td class="slot">{{ r.p?.no }}<br><small>{{ r.p?.half }}</small>@if (r.otherDept) { <br><small class="oth">{{ r.p?.dept }}</small> }</td>
                     <td>
-                      <div class="nm">{{ r.name }}</div>
+                      <button type="button" class="nm nmlink" (click)="openRecords(r.mrn)" title="查看/新增此病人的個案紀錄">{{ r.name || '（無姓名）' }}</button>
                       <div class="mrn">{{ r.mrn }}</div>
                       <div class="dim">{{ r.age == null ? '—' : r.age }} 歲 {{ r.p?.sex }}@if (r.isDM) { · <b>DM</b> }</div>
+                      <ng-container *ngTemplateOutlet="chips; context: { $implicit: r.chips }" />
                     </td>
                     <td>
                       <span class="badge" [class]="'badge b-' + r.prog">{{ r.prog === 'pre' ? 'Pre-ESRD' : 'Early-CKD' }}</span>
@@ -100,7 +101,10 @@
                       <div class="vd" [class]="'vd ' + r.box.tone">
                         <div class="vd-a">{{ r.box.head }}</div>
                         <div class="vd-b">{{ r.box.sub }}</div>
-                        @if (r.box.act) { <div class="vd-x" [class]="'vd-x ' + r.box.act.cls"><b>{{ r.box.act.lab }}</b>{{ r.box.act.txt }}</div> }
+                        @if (r.box.act; as act) {
+                          @if (act.vpn || act.rec) { <button type="button" class="vd-x clickable" [class]="'vd-x clickable ' + act.cls" (click)="onAct(r.mrn, act)"><b>{{ act.lab }}</b>{{ act.txt }}</button> }
+                          @else { <div class="vd-x" [class]="'vd-x ' + act.cls"><b>{{ act.lab }}</b>{{ act.txt }}</div> }
+                        }
                         @if (!(r.box.act?.cls === 'miss')) {
                           @if (r.ord.length) { <div class="vd-x miss"><b>須開單</b>{{ r.ord.join('、') }}</div> }
                           @if (!r.ord.length && r.unk.length) { <div class="vd-x"><b>待核對</b>{{ r.unk.join('、') }}（未匯入檢驗報告）</div> }
@@ -156,9 +160,10 @@
                   <tr [class.row-miss]="(r.verdict === 'pre' || r.verdict === 'early') && !r.noEn && r.ord.length">
                     <td class="slot">{{ r.p.no }}<br><small>{{ r.p.half }}</small></td>
                     <td>
-                      <div class="nm">{{ r.name }}</div>
+                      <button type="button" class="nm nmlink" (click)="openRecords(r.mrn)" title="查看/新增此病人的個案紀錄">{{ r.name || '（無姓名）' }}</button>
                       <div class="mrn">{{ r.mrn }}</div>
                       <div class="dim">{{ r.age == null ? '—' : r.age }} 歲 {{ r.p.sex }}@if (r.p.pDM) { · <b>DM</b> }</div>
+                      <ng-container *ngTemplateOutlet="chips; context: { $implicit: r.chips }" />
                     </td>
                     <td>
                       @if (r.egfr != null) {
@@ -182,7 +187,10 @@
                       <div class="vd" [class]="'vd ' + r.box.tone">
                         <div class="vd-a">{{ r.box.head }}</div>
                         <div class="vd-b">{{ r.box.sub }}</div>
-                        @if (r.box.act) { <div class="vd-x" [class]="'vd-x ' + r.box.act.cls"><b>{{ r.box.act.lab }}</b>{{ r.box.act.txt }}</div> }
+                        @if (r.box.act; as act) {
+                          @if (act.vpn || act.rec) { <button type="button" class="vd-x clickable" [class]="'vd-x clickable ' + act.cls" (click)="onAct(r.mrn, act)"><b>{{ act.lab }}</b>{{ act.txt }}</button> }
+                          @else { <div class="vd-x" [class]="'vd-x ' + act.cls"><b>{{ act.lab }}</b>{{ act.txt }}</div> }
+                        }
                         @if (!(r.box.act?.cls === 'miss') && !(r.verdict === 'no' || r.noEn || r.closeKind === 'dialysis' || r.closeKind === 'dead')) {
                           @if (r.ord.length) { <div class="vd-x miss"><b>須開單</b>{{ r.ord.join('、') }}</div> }
                           @if (!r.ord.length && r.unk.length) { <div class="vd-x"><b>待核對</b>{{ r.unk.join('、') }}（未匯入檢驗報告）</div> }
@@ -191,6 +199,7 @@
                         @if (expanded().has(r.mrn)) {
                           <div class="detail">
                             <div class="why">@for (w of r.why; track $index) { <div>{{ w }}</div> }</div>
+                            @if (vpnNote(r); as vn) { <button type="button" class="vpnnote" [class]="'vpnnote ' + vn.cls" (click)="openRecords(r.mrn, 'extEnroll')" title="點此更新外院收案查核">{{ vn.text }}</button> }
                           </div>
                         }
                       </div>
@@ -206,4 +215,19 @@
   } @else if (loading()) {
     <div class="placeholder">判讀中…</div>
   }
+
+  <!-- ===== E：個案紀錄（原版第五區；姓名／行動列可跳進來） ===== -->
+  <app-ckd-records (changed)="onRecordsChanged()" />
 </div>
+
+<!-- 姓名下方的小標記（原版 recChips：通路／SDM／外院收案／紀錄數） -->
+<ng-template #chips let-c>
+  @if (c) {
+    <div class="rchips">
+      @if (c.access) { <i class="rchip c-acc" [title]="c.access.type">通路 {{ c.access.status }}</i> }
+      @if (c.sdm) { <i class="rchip c-sdm" [title]="c.sdm.at">SDM {{ c.sdm.leaning }}</i> }
+      @if (c.extPos) { <i class="rchip c-ext" [title]="c.extHospital">外院收案</i> }
+      @if (c.notes) { <i class="rchip c-note">紀錄 {{ c.notes }}</i> }
+    </div>
+  }
+</ng-template>

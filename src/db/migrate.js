@@ -1210,10 +1210,12 @@ export function runMigrations() {
         CREATE TABLE IF NOT EXISTS ckd_records (
           id TEXT PRIMARY KEY,
           mrn TEXT NOT NULL,
+          name TEXT,
           rec_type TEXT NOT NULL,
           rec_date TEXT,
           payload_json TEXT NOT NULL DEFAULT '{}',
           created_by TEXT DEFAULT '{}',
+          updated_by TEXT DEFAULT '{}',
           created_at TEXT DEFAULT (datetime('now', 'localtime')),
           updated_at TEXT DEFAULT (datetime('now', 'localtime')),
           deleted_at TEXT
@@ -1248,6 +1250,10 @@ export function runMigrations() {
         if (addColumnIfNotExists(db, 'ckd_upload_batches', col, def)) migrationsApplied++
       }
       db.exec(`CREATE INDEX IF NOT EXISTS idx_ckd_batches_hash ON ckd_upload_batches(file_hash)`)
+      // 階段 3（2026-09-15）：個案紀錄加姓名快照與最後修改者
+      for (const [col, def] of [['name', 'TEXT'], ['updated_by', "TEXT DEFAULT '{}'"]]) {
+        if (addColumnIfNotExists(db, 'ckd_records', col, def)) migrationsApplied++
+      }
     }
 
     if (migrationsApplied > 0) {

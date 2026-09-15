@@ -12,6 +12,10 @@ import { ingestPayload, sourceSummary, listBatches } from '../services/ckd/inges
 import { plain } from '../services/ckd/rows.js'
 import { loadDataset } from '../services/ckd/dataset.js'
 import { analyze, makeCfg, sessionGroups, verdictA, verdictB, OTHER_SESSION } from '../services/ckd/engine.js'
+import {
+  REC_TYPES, listRecords, getRecord, createRecord, updateRecord, deleteRecord, makeHooks, pcodeTimeline,
+  recLine, recWhen, lookupName, searchPatients, recordStats,
+} from '../services/ckd/records.js'
 
 const router = Router()
 router.use(...isContributor)
@@ -21,7 +25,7 @@ const PHASES = [
   { no: 0, title: '骨架：頁面、路由、資料表、解析器搬移＋測試', status: 'done' },
   { no: 1, title: '匯入與設定：四種 HIS 報表上傳、辨識、合併、批次紀錄、判定參數', status: 'done' },
   { no: 2, title: '明日追蹤＋收案評估（判定引擎搬後端）', status: 'done' },
-  { no: 3, title: '個案紀錄七類、VPN 他院查核、不予收案、P 碼補登更正', status: 'todo' },
+  { no: 3, title: '個案紀錄八類、VPN 他院查核、不予收案、P 碼補登更正、P 碼總覽', status: 'done' },
   { no: 4, title: '全名單稽核、檢驗總表、XLSX／CSV 匯出', status: 'todo' },
   { no: 5, title: '召回清單、異常檢驗、透析準備管線、月報、檢核 P 碼', status: 'todo' },
   { no: 6, title: '與病人清單／預約洗腎登記打通', status: 'todo' },
@@ -142,20 +146,21 @@ router.put('/settings', async (req, res) => {
 
 // ---------- 階段 2：判讀日 × 醫師 的 A（已收案可否追蹤）／B（未收案可否收案） ----------
 // GET /daily?date=YYYY-MM-DD&doctor=<醫師|空=全部|__other__[|科別|醫師]>
-// 沒帶 date → 本科別最近的門診日（原版 app.js:180-184 的預設）
+// 沒帶 date → 本科別最近的門診日（原版 app.js:180-184 的預設）。個案紀錄（階段 3）經 hooks 參與判讀。
 router.get('/daily', (req, res) => {
   try {
     const db = getDatabase()
     const { settings } = getSettings()
     const data = loadDataset(db)
+    const hooks = makeHooks(data.records)
     const dateQ = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || '')) ? String(req.query.date) : ''
     const doctorQ = String(req.query.doctor || '')
     const sessions = sessionGroups(data, makeCfg(settings, dateQ), doctorQ, dateQ)
     const C = makeCfg(settings, sessions.cur)
     const t0 = Date.now()
-    const R = analyze(data, C, { doctorSel: sessions.doctorSel, withAudit: false })
-    const A = R.A.map((r) => slimA(r, C))
-    const B = R.B.map((r) => slimB(r))
+    const R = analyze(data, C, { doctorSel: sessions.doctorSel, withAudit: false, hooks })
+    const A = R.A.map((r) => slimA(r, C, hooks))
+    const B = R.B.map((r) => slimB(r, hooks))
     res.json({
       date: sessions.cur,
       doctorSel: sessions.doctorSel,
@@ -174,6 +179,114 @@ router.get('/daily', (req, res) => {
   }
 })
 
+// ---------- 階段 3：個案紀錄 ----------
+router.get('/records/types', (req, res) => {
+  res.json({ types: Object.entries(REC_TYPES).map(([key, T]) => ({ key, label: T.label, tag: T.tag, color: T.color, fields: T.fields })) })
+})
+
+router.get('/records/stats', (req, res) => {
+  try {
+    res.json(recordStats(getDatabase()))
+  } catch (error) {
+    console.error('❌ GET /ckd/records/stats:', error)
+    res.status(500).json({ error: true, message: '讀取紀錄統計失敗' })
+  }
+})
+
+router.get('/records', (req, res) => {
+  try {
+    const mrn = String(req.query.mrn || '').trim()
+    const type = String(req.query.type || '').trim()
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 60, 1), 500)
+    res.json({ records: listRecords(getDatabase(), { mrn, type, limit }).map(decorate) })
+  } catch (error) {
+    console.error('❌ GET /ckd/records:', error)
+    res.status(500).json({ error: true, message: '讀取個案紀錄失敗' })
+  }
+})
+
+router.get('/patients/search', (req, res) => {
+  try {
+    res.json({ patients: searchPatients(getDatabase(), String(req.query.q || ''), 20) })
+  } catch (error) {
+    console.error('❌ GET /ckd/patients/search:', error)
+    res.status(500).json({ error: true, message: '搜尋病人失敗' })
+  }
+})
+
+/** 病人摘要：紀錄清單、小標記、P 碼總覽（登錄／入帳／手動補登）、最新外院查核與不予收案 */
+router.get('/patients/:mrn/summary', (req, res) => {
+  try {
+    const db = getDatabase()
+    const mrn = String(req.params.mrn || '').trim().replace(/^0+/, '') || '0'
+    const data = loadDataset(db)
+    const hooks = makeHooks(data.records)
+    const { settings } = getSettings()
+    const C = makeCfg(settings, '')
+    const records = listRecords(db, { mrn, limit: 500 }).map(decorate)
+    res.json({
+      mrn,
+      name: lookupName(db, mrn),
+      records,
+      chips: hooks.chipsOf(mrn),
+      pcode: plain(pcodeTimeline(data, mrn, C, hooks)),
+      ext: hooks.extEnrollOf(mrn) ? decorate(hooks.extEnrollOf(mrn)) : null,
+      noEn: hooks.noEnrollOf(mrn, C.date),
+    })
+  } catch (error) {
+    console.error('❌ GET /ckd/patients/:mrn/summary:', error)
+    res.status(500).json({ error: true, message: '讀取病人摘要失敗' })
+  }
+})
+
+router.post('/records', async (req, res) => {
+  try {
+    const { mrn, type, data } = req.body || {}
+    const m = String(mrn || '').trim().replace(/^0+/, '')
+    if (!m || !/^[0-9A-Za-z-]{1,15}$/.test(m)) return res.status(400).json({ error: true, message: '病歷號格式不對' })
+    if (!REC_TYPES[type]) return res.status(400).json({ error: true, message: '不支援的紀錄類型' })
+    const db = getDatabase()
+    const record = createRecord(db, { mrn: m, name: lookupName(db, m), type, data: data || {}, user: req.user })
+    await logAuditWithRequest(req, 'ckd_record_create', 'ckd_records', record.id, { mrn: m, type })
+    res.status(201).json({ record: decorate(record) })
+  } catch (error) {
+    const status = error.status || 500
+    if (status >= 500) console.error('❌ POST /ckd/records:', error)
+    res.status(status).json({ error: true, message: error.message || '新增個案紀錄失敗' })
+  }
+})
+
+router.put('/records/:id', async (req, res) => {
+  try {
+    const db = getDatabase()
+    const record = updateRecord(db, String(req.params.id), { data: (req.body && req.body.data) || {}, user: req.user })
+    if (!record) return res.status(404).json({ error: true, message: '找不到這筆紀錄（可能已刪除）' })
+    await logAuditWithRequest(req, 'ckd_record_update', 'ckd_records', record.id, { mrn: record.mrn, type: record.type })
+    res.json({ record: decorate(record) })
+  } catch (error) {
+    const status = error.status || 500
+    if (status >= 500) console.error('❌ PUT /ckd/records/:id:', error)
+    res.status(status).json({ error: true, message: error.message || '修改個案紀錄失敗' })
+  }
+})
+
+router.delete('/records/:id', async (req, res) => {
+  try {
+    const db = getDatabase()
+    const cur = deleteRecord(db, String(req.params.id), req.user)
+    if (!cur) return res.status(404).json({ error: true, message: '找不到這筆紀錄（可能已刪除）' })
+    await logAuditWithRequest(req, 'ckd_record_delete', 'ckd_records', cur.id, { mrn: cur.mrn, type: cur.type })
+    res.json({ deleted: true })
+  } catch (error) {
+    console.error('❌ DELETE /ckd/records/:id:', error)
+    res.status(500).json({ error: true, message: '刪除個案紀錄失敗' })
+  }
+})
+
+// ---------- 輔助 ----------
+function decorate(r) {
+  return { ...r, line: recLine(r), when: recWhen(r), typeLabel: REC_TYPES[r.type] ? REC_TYPES[r.type].label : r.type }
+}
 /** 門診列去識別（身分證不送前端）＋ 日期字串化 */
 function slimClinic(p) {
   if (!p) return null
@@ -183,7 +296,7 @@ function slimLab(lab) {
   if (!lab) return null
   return plain({ date: lab.date, v: lab.v, flag: lab.flag, q: lab.q, dateOf: lab.dateOf, src: lab.src, kinds: lab.kinds, calcUpcr: !!lab.calcUpcr })
 }
-function slimA(r, C) {
+function slimA(r, C, hooks) {
   const box = verdictA(r, C)
   return plain({
     mrn: r.mrn, p: slimClinic(r.p), name: (r.p && r.p.name) || (r.last && r.last.name) || '',
@@ -198,17 +311,21 @@ function slimA(r, C) {
     recon: r.recon ? { anchor: r.recon.anchor, misses: r.recon.misses.map((m) => ({ visit: m.visit, code: m.code })), shortBilled: r.recon.shortBilled } : null,
     miss: r.miss, unk: r.unk, bed: r.bed, ord: r.ord, inds: r.inds, age: r.age,
     box,
+    chips: hooks.chipsOf(r.mrn),
   })
 }
-function slimB(r) {
-  const box = verdictB(r, null)   // 外院查核紀錄：階段 3
+function slimB(r, hooks) {
+  const ext = hooks.extEnrollOf(r.p.mrn)
+  const box = verdictB(r, ext)
   return plain({
     mrn: r.p.mrn, p: slimClinic(r.p), name: r.p.name || '',
     lab: slimLab(r.lab), egfr: r.egfr, from: r.from, upcr: r.upcr, uacr: r.uacr, stage: r.stage,
     verdict: r.verdict, code: r.code, why: r.why, age: r.age,
-    closed: r.closed, closeKind: r.closeKind, closeInfo: r.closeInfo, noEn: r.noEn,
+    closed: r.closed, closeKind: r.closeKind, closeInfo: r.closeInfo, noEn: r.noEn, enrollFix: r.enrollFix,
     miss: r.miss, unk: r.unk, bed: r.bed, ord: r.ord,
     box,
+    chips: hooks.chipsOf(r.p.mrn),
+    ext: ext ? { result: ext.result || '', at: ext.at || '', hospital: ext.hospital || '', extProg: ext.extProg || '' } : null,
   })
 }
 

@@ -1,0 +1,218 @@
+<section class="block recsec" [class.flash]="flash()">
+  <h2><span class="tag-e">E</span>個案紀錄 <span class="dim sub">血管通路 / RRT SDM / 聯絡 / 外院查核 / P 碼補登更正 / 收案狀態更正 / 不予收案 / 追蹤紀錄</span></h2>
+
+  @if (tally().length) {
+    <div class="tally">
+      @for (t of tally(); track t.k) {
+        <span class="tl" [class]="'tl ' + t.c"><span>{{ t.k }}</span><b>{{ t.v }}</b></span>
+      }
+    </div>
+  }
+
+  @if (error(); as err) {
+    <div class="banner error">{{ err }}</div>
+  }
+
+  <!-- 病人輸入 ＋ 八顆新增鈕（原版 .recbar） -->
+  <div class="recbar">
+    <div class="pat">
+      <input type="text" class="pat-in" placeholder="輸入病歷號或姓名" [ngModel]="query()" (ngModelChange)="onQueryInput($event)"
+             (keydown.enter)="onQueryEnter()" (focus)="results().length && showResults.set(true)" (blur)="hideResultsSoon()" />
+      @if (mrn()) { <button type="button" class="btn small ghost" (click)="clearPatient()" title="回到全部紀錄">清除</button> }
+      @if (showResults() && results().length) {
+        <ul class="pat-list">
+          @for (p of results(); track p.mrn) {
+            <li (mousedown)="pick(p.mrn)"><b>{{ p.mrn }}</b> {{ p.name }}</li>
+          }
+        </ul>
+      }
+    </div>
+    <div class="addbar">
+      @for (t of types(); track t.key) {
+        <button type="button" class="btn small add" [class]="'btn small add ' + t.color" [disabled]="!mrn()" (click)="startAdd(t.key)">+ {{ t.label }}</button>
+      }
+    </div>
+  </div>
+
+  <!-- 新增／編輯表單 -->
+  @if (formDef(); as def) {
+    <form class="recform" [class]="'recform sec-' + def.color" (ngSubmit)="saveForm()">
+      <div class="rf-h">
+        <b>{{ editing() ? '編輯' : '新增' }} {{ def.label }}</b>
+        <span class="dim">{{ mrn() }} {{ summary()?.name }}</span>
+      </div>
+      <div class="rf-grid">
+        @for (f of def.fields; track f.k) {
+          <label class="rf-f" [class.wide]="isWide(f)">
+            <span>{{ f.t }} @if (f.req) { <i>*</i> }</span>
+            @switch (f.type) {
+              @case ('select') {
+                <select [ngModel]="form()[f.k]" (ngModelChange)="setField(f.k, $event)" [name]="f.k">
+                  <option value=""></option>
+                  @for (o of f.opts || []; track o) { <option [value]="o">{{ o }}</option> }
+                </select>
+              }
+              @case ('textarea') {
+                <textarea rows="2" [placeholder]="f.ph || ''" [ngModel]="form()[f.k]" (ngModelChange)="setField(f.k, $event)" [name]="f.k"></textarea>
+              }
+              @case ('checks') {
+                <span class="rf-checks">
+                  @for (o of f.opts || []; track o) {
+                    <label class="chk"><input type="checkbox" [checked]="isChecked(f.k, o)" (change)="toggleCheck(f.k, o, $any($event.target).checked)" /> {{ o }}</label>
+                  }
+                </span>
+              }
+              @case ('date') {
+                <input type="date" [ngModel]="form()[f.k]" (ngModelChange)="setField(f.k, $event)" [name]="f.k" />
+              }
+              @default {
+                <input type="text" [placeholder]="f.ph || ''" [ngModel]="form()[f.k]" (ngModelChange)="setField(f.k, $event)" [name]="f.k" />
+              }
+            }
+          </label>
+        }
+      </div>
+      @if (formError(); as fe) { <div class="banner error">{{ fe }}</div> }
+      <div class="rf-btn">
+        <button type="submit" class="btn primary" [disabled]="saving()">{{ saving() ? '儲存中…' : (editing() ? '儲存修改' : '新增紀錄') }}</button>
+        <button type="button" class="btn ghost" (click)="cancelForm()" [disabled]="saving()">取消</button>
+      </div>
+    </form>
+  }
+
+  @if (!mrn()) {
+    <!-- 未選病人：全部紀錄（最近 40 筆） -->
+    @if (allRecords().length) {
+      <div class="reclist">
+        @for (r of allRecords(); track r.id) {
+          <div class="recwrap">
+            <button type="button" class="rec-who" (click)="pick(r.mrn)" title="查看此病人全部紀錄">{{ r.name || '（無姓名）' }} <small>{{ r.mrn }}</small></button>
+            <ng-container *ngTemplateOutlet="card; context: { $implicit: r }" />
+          </div>
+        }
+        @if (allTotal() > allRecords().length) { <div class="dim foot">僅顯示最近 {{ allRecords().length }} 筆，共 {{ allTotal() }} 筆；輸入病歷號可查看單一病人全部紀錄。</div> }
+      </div>
+    } @else if (!loading()) {
+      <div class="empty">尚無紀錄。先在上方輸入病歷號或姓名，再按「+ 血管通路」等按鈕新增。</div>
+    }
+  } @else if (summary()) {
+    @if (summary(); as sum) {
+    <!-- 已選病人 -->
+    <div class="recpat">
+      <b>{{ sum.mrn }}</b> {{ sum.name || '（登錄簿／門診／檢驗皆查無姓名）' }}
+      <span class="dim">{{ sum.records.length }} 筆紀錄</span>
+      @if (sum.chips) {
+        <span class="rchips">
+          @if (sum.chips.access) { <i class="rchip c-acc" [title]="sum.chips.access.type">通路 {{ sum.chips.access.status }}</i> }
+          @if (sum.chips.sdm) { <i class="rchip c-sdm" [title]="sum.chips.sdm.at">SDM {{ sum.chips.sdm.leaning }}</i> }
+          @if (sum.chips.extPos) { <i class="rchip c-ext" [title]="sum.chips.extHospital">外院收案</i> }
+          @if (sum.chips.notes) { <i class="rchip c-note">紀錄 {{ sum.chips.notes }}</i> }
+        </span>
+      }
+    </div>
+
+    <!-- 狀態列：VPN 三態 ＋ 不予收案 -->
+    @let vpn = vpnLine(sum);
+    <div class="statusrow">
+      <div class="st-i" [class]="'st-i ' + vpn.cls">
+        <b>健保 VPN 他院收案查核</b><span>{{ vpn.text }}</span>
+        <button type="button" class="btn small" (click)="startAdd('extEnroll')">{{ sum.ext ? '更新查核' : '記錄查核' }}</button>
+      </div>
+      @if (sum.noEn) {
+        <div class="st-i v-off">
+          <b>不予收案</b><span>{{ sum.noEn.reason }} · {{ sum.noEn.at }}{{ sum.noEn.doctor ? ' · ' + sum.noEn.doctor : '' }}{{ sum.noEn.until ? ' · 暫緩至 ' + sum.noEn.until + '（到期自動恢復評估）' : ' · 長期排除' }}{{ sum.noEn.note ? ' · ' + sum.noEn.note : '' }}</span>
+          <span class="dim">要解除：刪除下方的不予收案紀錄，或新增一筆填「暫緩至」</span>
+        </div>
+      }
+    </div>
+
+    <!-- P 碼總覽 -->
+    <div class="pcbox">
+      <div class="pc-h">
+        <b>P 碼總覽</b><span class="dim">追蹤表登錄 · 實際入帳 · 手動補登 三來源合併</span>
+        <span class="pc-btns">
+          <button type="button" class="btn small" (click)="startAdd('claimFix')">+ P 碼補登/更正</button>
+          <button type="button" class="btn small" (click)="startAdd('enrollFix')">+ 收案狀態更正</button>
+          <button type="button" class="btn small" (click)="startAdd('noEnroll')">+ 不予收案</button>
+        </span>
+      </div>
+      @if (sum.pcode.rows.length) {
+        @let st = sum.pcode.stat;
+        <div class="pcstat">
+          <span>共 <b>{{ st.total }}</b> 筆</span>
+          <span>已入帳 <b>{{ st.billed }}</b></span>
+          @if (st.unbilled) { <span class="wn">未見入帳 <b>{{ st.unbilled }}</b></span> }
+          <span>今年追蹤 <b>{{ st.thisYear }}</b> 次</span>
+          @if (st.annThisYear) { <span>今年年度評估 <b>{{ st.annThisYear }}</b></span> }
+          @if (st.short) { <span class="wn">間隔不足 <b>{{ st.short }}</b></span> }
+          @if (st.points) { <span>入帳點數 <b>{{ st.points }}</b></span> }
+        </div>
+        <div class="tbox">
+          <table class="pctab">
+            <thead><tr><th>看診日</th><th>P 碼</th><th>類別</th><th>來源</th><th>距前次追蹤</th><th>醫師</th><th>點數</th></tr></thead>
+            <tbody>
+              @for (p of sum.pcode.rows; track $index) {
+                <tr [class.void]="p.voided">
+                  <td class="num">{{ roc(p.visit) }}</td>
+                  <td>{{ p.code || '—' }}</td>
+                  <td>{{ p.ctype }}</td>
+                  <td>
+                    @for (s of p.src; track s) { <i class="pcsrc" [class]="'pcsrc ' + (s === '入帳' ? 's-b' : s === '登錄' ? 's-c' : 's-f')">{{ s }}</i> }
+                    @if (p.voided) { <i class="pcsrc s-v">已註銷</i> }
+                  </td>
+                  <td class="num">@if (p.gapPrev != null) { {{ p.gapPrev }} 天 @if (p.needPrev != null && p.gapPrev < p.needPrev) { <b class="wn">&lt; {{ p.needPrev }}</b> } } @else { <span class="dim">—</span> }</td>
+                  <td>{{ p.doctor }}</td>
+                  <td class="num">{{ p.price ?? '' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else {
+        <div class="dim">此人查無任何 P 碼紀錄（追蹤表 / 入帳 / 手動補登皆無）。</div>
+      }
+    </div>
+
+    <!-- 該病人的紀錄 -->
+    @if (sum.records.length) {
+      <div class="reclist">
+        @for (r of sum.records; track r.id) {
+          <ng-container *ngTemplateOutlet="card; context: { $implicit: r }" />
+        }
+      </div>
+    } @else {
+      <div class="empty">這位病人尚無紀錄。</div>
+    }
+    }
+  } @else if (loading()) {
+    <div class="placeholder">載入中…</div>
+  }
+
+  <p class="note dim">個案紀錄是個管師的工作備忘與判定更正，不是病歷；正式紀錄仍應寫入 HIS。P 碼補登／收案狀態更正／不予收案／外院查核會即時改變上方 A、B 區的判讀。</p>
+</section>
+
+<!-- 紀錄卡（原版 recLine） -->
+<ng-template #card let-r>
+  <div class="rec" [class]="'rec sec-' + colorOf(r.type)">
+    <div class="rec-h">
+      <span class="badge" [class]="'badge b-' + colorOf(r.type)">{{ labelOf(r.type) }}</span>
+      <span class="rec-when">{{ r.when || '—' }}</span>
+      <span class="rec-line">{{ r.line }}</span>
+      <span class="rec-act">
+        <button type="button" class="btn link" (click)="startEdit(r)">編輯</button>
+        <button type="button" class="btn link danger" (click)="askDelete(r)">刪除</button>
+      </span>
+    </div>
+    @if (chipFields(r).length) {
+      <div class="rec-chips">@for (c of chipFields(r); track c.t) { <i><b>{{ c.t }}</b>{{ c.v }}</i> }</div>
+    }
+    @for (n of noteFields(r); track n.t) {
+      <div class="rec-note"><b>{{ n.t }}</b>{{ n.v }}</div>
+    }
+    <div class="rec-t">建立 {{ fmtTime(r.created) }} {{ r.createdBy?.name || '' }}@if (r.updated && r.updated !== r.created) { · 修改 {{ fmtTime(r.updated) }} {{ r.updatedBy?.name || '' }} }</div>
+  </div>
+</ng-template>
+
+@if (confirmBox(); as c) {
+  <app-confirm-dialog [title]="c.title" [message]="c.message" [confirmText]="c.confirmText" confirmClass="btn-danger" (confirm)="confirmOk()" (cancel)="confirmCancel()" />
+}

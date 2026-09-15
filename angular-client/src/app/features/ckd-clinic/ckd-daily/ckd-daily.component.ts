@@ -1,9 +1,10 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { CkdApiService, CkdDaily, CkdMergedLab, CkdRowA, CkdRowB } from '@app/core/services/ckd-api.service';
+import { CkdApiService, CkdDaily, CkdMergedLab, CkdRecType, CkdRowA, CkdRowB } from '@app/core/services/ckd-api.service';
+import { CkdRecordsComponent } from '../ckd-records/ckd-records.component';
 
 type AFilter = 'all' | 'pre' | 'early' | 'due' | 'wait' | 'ann' | 'miss' | 'alert';
-type BFilter = 'all' | 'pre' | 'early' | 'check' | 'nodata' | 'no' | 'noen' | 'closed' | 'ord';
+type BFilter = 'all' | 'pre' | 'early' | 'check' | 'nodata' | 'no' | 'noen' | 'closed' | 'ord' | 'ext';
 
 /** 統計列（原版 renderA/renderB 的 tally；篩選定義 = engine.js A_FILTERS / B_FILTERS） */
 const A_FILTERS: Record<AFilter, (x: CkdRowA) => boolean> = {
@@ -18,23 +19,26 @@ const B_FILTERS: Record<BFilter, (x: CkdRowB) => boolean> = {
   no: x => x.verdict === 'no' && !x.noEn,
   noen: x => !!x.noEn, closed: x => !!x.closed,
   ord: x => (x.verdict === 'pre' || x.verdict === 'early') && !x.noEn && (x.ord || []).length > 0,
+  ext: x => !!x.ext && x.ext.result === '已於他院收案',
 };
 const STB: Record<string, [string, string]> = { ok: ['early', '可申報追蹤'], over: ['pre', '逾期 應追蹤'], cap: ['none', '年度已達上限'], wait: ['wait', '未滿間隔'], none: ['none', '資料不足'], dkd: ['none', 'DKD 收案 · 不適用'] };
 const BREAKS = [0, 15, 30, 45, 60, 90, 120];
 
 /**
- * 門診 CKD：明日追蹤（A 已收案可否追蹤）＋ 收案評估（B 未收案可否收案）
+ * 門診 CKD：明日追蹤（A 已收案可否追蹤）＋ 收案評估（B 未收案可否收案）＋ 個案紀錄（E）
  * 判定全在後端（services/ckd/engine.js，照單機版）；本元件只畫：診次按鈕列、統計列篩選、兩張表、判定欄。
+ * 姓名／判定欄行動列可跳到下方個案紀錄區（原版 gotoRecords）；紀錄異動後重判讀。
  */
 @Component({
   selector: 'app-ckd-daily',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, CkdRecordsComponent],
   templateUrl: './ckd-daily.component.html',
   styleUrl: './ckd-daily.component.css',
 })
 export class CkdDailyComponent implements OnInit {
   private readonly ckdApi = inject(CkdApiService);
+  @ViewChild(CkdRecordsComponent) records?: CkdRecordsComponent;
 
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
@@ -70,6 +74,7 @@ export class CkdDailyComponent implements OnInit {
       { k: '無檢驗資料', v: cnt('nodata'), c: 'none', f: 'nodata' },
       { k: '須先開單補驗', v: B.filter(B_FILTERS.ord).length, c: 'wait', f: 'ord' },
       { k: '不予收案', v: B.filter(x => !!x.noEn).length, c: 'none', f: 'noen' },
+      { k: '已外院收案', v: B.filter(B_FILTERS.ext).length, c: 'pre', f: 'ext' },
       { k: '目前不符', v: cnt('no'), c: 'none', f: 'no' },
       { k: '曾收案已結案', v: B.filter(x => x.closed).length, c: 'wait', f: 'closed' },
     ];
@@ -131,6 +136,35 @@ export class CkdDailyComponent implements OnInit {
     const next = new Set(this.expanded());
     if (next.has(mrn)) next.delete(mrn); else next.add(mrn);
     this.expanded.set(next);
+  }
+
+  // ---------- 個案紀錄（原版 data-gorec / data-vpncheck） ----------
+
+  /** 跳到下方個案紀錄區；type 有值時直接開該類型的新增表單 */
+  openRecords(mrn: string, type: CkdRecType | null = null): void {
+    this.records?.open(mrn, type);
+  }
+
+  /** 判定欄行動列被點：vpn → 開外院收案查核表單；rec → 只跳到該病人紀錄 */
+  onAct(mrn: string, act: { vpn?: string; rec?: string } | null): void {
+    if (!act) return;
+    if (act.vpn) this.openRecords(mrn, 'extEnroll');
+    else if (act.rec) this.openRecords(mrn, null);
+  }
+
+  /** 紀錄異動後：以目前診次重判讀（原版 afterRecChange → run()） */
+  onRecordsChanged(): void {
+    const dl = this.daily();
+    void this.load(dl?.date, dl?.doctorSel);
+  }
+
+  /** B 區判定依據內的 VPN 註記（原版 .vpnnote 三態） */
+  vpnNote(r: CkdRowB): { cls: string; text: string } | null {
+    const e = r.ext;
+    if (!e) return null;
+    if (e.result === '已於他院收案') return { cls: 'v-ext', text: `VPN ${e.hospital || '他院'}${e.extProg ? ' · ' + e.extProg : ''} · 查於 ${e.at}` };
+    if (e.result === '未於他院收案') return { cls: 'v-ok', text: `VPN 已查 ${e.at} 無他院收案` };
+    return { cls: 'v-pend', text: `VPN 查詢中 ${e.at}` };
   }
 
   // ---------- 顯示輔助（原版 ruler / gauge / lv / roc） ----------

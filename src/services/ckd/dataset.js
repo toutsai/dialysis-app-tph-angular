@@ -1,18 +1,18 @@
 // 門診 CKD：從 SQLite 載入判定引擎要的資料集（日期字串 → Date），並以「各表筆數＋最後異動時間」為簽章快取。
 // 真實量：追蹤清冊 2.5 萬列、檢驗 7 萬份、門診 3.5 千列、入帳 1.5 千列 → 全載約 1 秒、記憶體數十 MB；
-// 簽章不變就直接重用，上傳／匯入後簽章改變才重載。
+// 簽章不變就直接重用，上傳／匯入／個案紀錄異動後簽章改變才重載。
 const D = (s) => { if (!s) return null; const d = new Date(String(s).slice(0, 10) + 'T00:00:00'); return isNaN(d) ? null : d }
 const J = (s) => { try { return s ? JSON.parse(s) : {} } catch { return {} } }
 
 let cache = null
 
 function signature(db) {
-  const q = (t, col) => db.prepare(`SELECT COUNT(*) AS n, MAX(${col}) AS m FROM ${t}`).get()
-  const a = q('ckd_cases', 'updated_at'), b = q('ckd_clinic_visits', 'updated_at'), c = q('ckd_labs', 'updated_at'), d = q('ckd_billing', 'created_at')
-  return [a.n, a.m, b.n, b.m, c.n, c.m, d.n, d.m].join('|')
+  const q = (t, col, extra = '') => db.prepare(`SELECT COUNT(*) AS n, MAX(${col}) AS m FROM ${t}${extra}`).get()
+  const a = q('ckd_cases', 'updated_at'), b = q('ckd_clinic_visits', 'updated_at'), c = q('ckd_labs', 'updated_at'), d = q('ckd_billing', 'created_at'), e = q('ckd_records', 'updated_at')
+  return [a.n, a.m, b.n, b.m, c.n, c.m, d.n, d.m, e.n, e.m].join('|')
 }
 
-/** 載入（或取快取）：{ cases, clinic, labs, billing, records: [], manual: [], loadedAt, sig } */
+/** 載入（或取快取）：{ cases, clinic, labs, billing, records, manual: [], loadedAt, sig, loadMs } */
 export function loadDataset(db) {
   const sig = signature(db)
   if (cache && cache.sig === sig) return cache
@@ -35,7 +35,10 @@ export function loadDataset(db) {
     .map((r) => ({ mrn: r.mrn, name: r.name || '', date: D(r.report_date), spec: r.spec, kind: r.kind || '', no: r.no, v: J(r.values_json), flag: J(r.flags_json), q: J(r.quals_json), src: r.src || 'lab' }))
   const billing = db.prepare(`SELECT mrn, visit_date, code, code_name, prog, ctype, name, doctor, dept, sex, birth, price, n FROM ckd_billing`).all()
     .map((r) => ({ src: 'bill', mrn: r.mrn, visit: D(r.visit_date), code: r.code, codeName: r.code_name || '', prog: r.prog || '', ctype: r.ctype || '', name: r.name || '', doctor: r.doctor || '', dept: r.dept || '', sex: r.sex || '', birth: D(r.birth), price: r.price, n: r.n || 1 }))
-  cache = { sig, cases, clinic, labs, billing, records: [], manual: [], loadedAt: new Date(), loadMs: Date.now() - t0 }
+  /* 個案紀錄（未刪除）：展開成原版 S.records 的形狀 { id, type, mrn, name, created, updated, deleted:false, ...欄位 } */
+  const records = db.prepare(`SELECT id, mrn, name, rec_type, payload_json, created_at, updated_at FROM ckd_records WHERE deleted_at IS NULL`).all()
+    .map((r) => ({ id: r.id, type: r.rec_type, mrn: r.mrn, name: r.name || '', created: r.created_at, updated: r.updated_at, deleted: false, ...J(r.payload_json) }))
+  cache = { sig, cases, clinic, labs, billing, records, manual: [], loadedAt: new Date(), loadMs: Date.now() - t0 }
   return cache
 }
 

@@ -102,6 +102,82 @@ export interface CkdUploadResult {
   sources?: Record<CkdReportKind, CkdSourceSummary>;
 }
 
+// ---------- 階段 3：個案紀錄 ----------
+
+export type CkdRecType = 'access' | 'sdm' | 'contact' | 'extEnroll' | 'claimFix' | 'enrollFix' | 'noEnroll' | 'note';
+
+export interface CkdRecField {
+  k: string;
+  t: string;
+  type: 'select' | 'text' | 'textarea' | 'date' | 'checks';
+  req?: number;
+  opts?: string[];
+  ph?: string;
+}
+
+export interface CkdRecTypeDef {
+  key: CkdRecType;
+  label: string;
+  tag: string;
+  color: string;
+  fields: CkdRecField[];
+}
+
+export interface CkdRecord {
+  id: string;
+  type: CkdRecType;
+  mrn: string;
+  name: string;
+  created: string;
+  updated: string;
+  createdBy: CkdActor | null;
+  updatedBy: CkdActor | null;
+  line?: string;
+  when?: string;
+  typeLabel?: string;
+  [field: string]: any;
+}
+
+/** 第一、二區的小標記 */
+export interface CkdRecChips {
+  total: number;
+  access: { status: string; type: string } | null;
+  sdm: { leaning: string; at: string } | null;
+  extPos: boolean;
+  extHospital: string;
+  notes: number;
+}
+
+export interface CkdPcodeRow {
+  visit: string;
+  code: string;
+  ctype: string;
+  prog: string;
+  doctor: string;
+  price: number | null;
+  src: string[];
+  voided?: boolean;
+  gapPrev?: number;
+  needPrev?: number;
+}
+
+export interface CkdRecordStats {
+  total: number;
+  byType: Partial<Record<CkdRecType, number>>;
+  accessPersons: number;
+  sdmFollow: number;
+}
+
+export interface CkdPatientSummary {
+  mrn: string;
+  name: string;
+  records: CkdRecord[];
+  chips: CkdRecChips | null;
+  pcode: { rows: CkdPcodeRow[]; stat: { total: number; billed: number; unbilled: number; thisYear: number; annThisYear: number; points: number; short: number } };
+  ext: CkdRecord | null;
+  noEn: any;
+}
+
 // ---------- 階段 2：判讀 ----------
 
 export interface CkdClinicSlot {
@@ -183,6 +259,7 @@ export interface CkdRowA {
   inds: CkdIndicator[];
   age: number | null;
   box: CkdVerdictBox;
+  chips: CkdRecChips | null;
 }
 
 export interface CkdRowB {
@@ -203,11 +280,14 @@ export interface CkdRowB {
   closeKind: string | null;
   closeInfo: { at: string; prog: string; code: string; reason: string } | null;
   noEn: any;
+  enrollFix: any;
   miss: string[];
   unk: string[];
   bed: string[];
   ord: string[];
   box: CkdVerdictBox;
+  chips: CkdRecChips | null;
+  ext: { result: string; at: string; hospital: string; extProg: string } | null;
 }
 
 export interface CkdSessionGroup { date: string; doctor: string; n: number }
@@ -263,5 +343,43 @@ export class CkdApiService {
     if (date) params['date'] = date;
     if (doctor) params['doctor'] = doctor;
     return firstValueFrom(this.api.get<CkdDaily>('/ckd/daily', params));
+  }
+
+  // ---------- 個案紀錄 ----------
+
+  getRecordTypes(): Promise<{ types: CkdRecTypeDef[] }> {
+    return firstValueFrom(this.api.get<{ types: CkdRecTypeDef[] }>('/ckd/records/types'));
+  }
+
+  listRecords(params: { mrn?: string; type?: string; limit?: number }): Promise<{ records: CkdRecord[] }> {
+    const p: Record<string, string> = {};
+    if (params.mrn) p['mrn'] = params.mrn;
+    if (params.type) p['type'] = params.type;
+    if (params.limit) p['limit'] = String(params.limit);
+    return firstValueFrom(this.api.get<{ records: CkdRecord[] }>('/ckd/records', p));
+  }
+
+  getRecordStats(): Promise<CkdRecordStats> {
+    return firstValueFrom(this.api.get<CkdRecordStats>('/ckd/records/stats'));
+  }
+
+  getPatientSummary(mrn: string): Promise<CkdPatientSummary> {
+    return firstValueFrom(this.api.get<CkdPatientSummary>(`/ckd/patients/${encodeURIComponent(mrn)}/summary`));
+  }
+
+  searchPatients(q: string): Promise<{ patients: { mrn: string; name: string }[] }> {
+    return firstValueFrom(this.api.get<{ patients: { mrn: string; name: string }[] }>('/ckd/patients/search', { q }));
+  }
+
+  createRecord(mrn: string, type: CkdRecType, data: Record<string, unknown>): Promise<{ record: CkdRecord }> {
+    return firstValueFrom(this.api.post<{ record: CkdRecord }>('/ckd/records', { mrn, type, data }));
+  }
+
+  updateRecord(id: string, data: Record<string, unknown>): Promise<{ record: CkdRecord }> {
+    return firstValueFrom(this.api.put<{ record: CkdRecord }>(`/ckd/records/${encodeURIComponent(id)}`, { data }));
+  }
+
+  deleteRecord(id: string): Promise<{ deleted: boolean }> {
+    return firstValueFrom(this.api.delete<{ deleted: boolean }>(`/ckd/records/${encodeURIComponent(id)}`));
   }
 }
