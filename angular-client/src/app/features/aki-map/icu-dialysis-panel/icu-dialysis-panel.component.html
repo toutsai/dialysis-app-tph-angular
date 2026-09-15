@@ -3,14 +3,14 @@
     <div class="icu-title">
       ICU 透析病人
       <span class="icu-count">共 {{ total() }} 人</span>
-      <span class="icu-hint">依病人清單「住院／急診＋病房號 ICUA / ICUB / ICUD」即時取得；卡片欄位改動即存檔</span>
+      <span class="icu-hint">依病人清單「住院／急診＋病房號 ICUA / ICUB / ICUD」即時取得；滑過卡片看摘要、點選卡片登錄評估</span>
     </div>
     <div class="icu-actions">
       @if (crrtFlagTotal()) {
         <span class="crrt-total" title="HD/SLED 病人達 CRRT 風險門檻或直接考慮者">疑需 CRRT {{ crrtFlagTotal() }} 人</span>
       }
       <button class="btn ghost" (click)="showCrrtHelp.set(!showCrrtHelp())">CRRT 風險說明</button>
-      <span class="legend">
+      <span class="legend" title="底色＝嚴重度：HD 綠、SLED 黃、CVVHDF 紅">
         <span class="mode mode-hd">HD</span>
         <span class="mode mode-sled">SLED</span>
         <span class="mode mode-cvvhdf">CVVHDF</span>
@@ -33,38 +33,29 @@
     </div>
   }
 
-  <!-- 篩選列（純前端） -->
+  <!-- 篩選列（純前端）：只留透析模式與 CRRT 風險 -->
   @if (units().length) {
     <div class="icu-filters">
       <div class="fgroup">
-        <span class="flabel">分區</span>
-        <span class="chips">
-          <button type="button" class="chip" [class.on]="unitFilter() === 'all'" (click)="unitFilter.set('all')">全部</button>
-          @for (u of units(); track u.key) {
-            <button type="button" class="chip" [class.on]="unitFilter() === u.key" (click)="unitFilter.set(u.key)"><span>{{ u.key }}</span><b>{{ u.patients.length }}</b></button>
-          }
-        </span>
-      </div>
-      <div class="fgroup">
-        <span class="flabel">模式</span>
+        <span class="flabel">透析模式</span>
         <span class="chips">
           @for (m of modeOptions; track m) {
-            <button type="button" [class]="'chip ' + modeClass(m)" [class.on]="modeFilter().has(m)" (click)="toggleMode(m)">{{ m }}</button>
-          }
-        </span>
-      </div>
-      <div class="fgroup">
-        <span class="flabel">狀態</span>
-        <span class="chips">
-          @for (s of statusOptions; track s.key) {
-            <button type="button" [class]="'chip ' + (s.cls || '')" [class.on]="statusFilter() === s.key" (click)="statusFilter.set(s.key)">
-              <span>{{ s.label }}</span>@if (s.key !== 'all') {<b>{{ statusCount(s.key) }}</b>}
+            <button type="button" [class]="'chip ' + modeClass(m)" [class.on]="modeFilter().has(m)" (click)="toggleMode(m)">
+              <span>{{ m }}</span><b>{{ modeCount(m) }}</b>
             </button>
           }
         </span>
       </div>
-      <input class="fsearch" type="text" placeholder="搜尋 姓名／病歷號／床號／醫師／住院原因"
-             [ngModel]="search()" (ngModelChange)="search.set($event)" />
+      <div class="fgroup">
+        <span class="flabel">CRRT 風險</span>
+        <span class="chips">
+          @for (c of crrtOptions; track c.key) {
+            <button type="button" [class]="'chip ' + (c.cls || '')" [class.on]="crrtFilter() === c.key" [title]="c.hint" (click)="crrtFilter.set(c.key)">
+              <span>{{ c.label }}</span>@if (c.key !== 'all') {<b>{{ crrtCount(c.key) }}</b>}
+            </button>
+          }
+        </span>
+      </div>
       @if (hasFilter()) {
         <span class="fresult">符合 {{ shownCount() }} / {{ total() }} 人</span>
         <button type="button" class="btn fclear" (click)="clearFilters()">清除篩選</button>
@@ -78,189 +69,278 @@
     <div class="placeholder">目前 ICU 沒有透析病人。</div>
   }
 
-  <div class="icu-units" [class.single]="unitFilter() !== 'all'">
+  <!-- 三大圓形區塊：ICUA / ICUB / ICUD -->
+  <div class="icu-zones">
     @for (u of filteredUnits(); track u.key) {
-      <div class="icu-unit">
-        <div class="icu-unit-head">
-          <div class="unit-title">
-            <h3>{{ u.key }} <small>{{ u.label }}</small></h3>
-            <span class="unit-n">
+      <div class="zone" [class.zone-empty-bg]="!u.all.length">
+        <div class="zone-inner">
+          <div class="zone-head">
+            <h3>{{ u.key }}<small>{{ u.label }}</small></h3>
+            <div class="zone-n">
               @if (u.patients.length !== u.all.length) { 顯示 {{ u.patients.length }} / }{{ u.all.length }} 人
-            </span>
-            @if (crrtFlagCount(u.all)) {
-              <span class="unit-crrt" title="HD/SLED 病人達 CRRT 風險門檻或直接考慮">疑需 CRRT {{ crrtFlagCount(u.all) }}</span>
-            }
-            @if (pendingCount(u.all)) {
-              <span class="unit-pending" title="四項狀態皆未登錄">未評估 {{ pendingCount(u.all) }}</span>
+            </div>
+            <div class="zone-stats">
+              @for (s of modeCounts(u.all); track s.mode) {
+                <span class="mode" [class]="'mode ' + modeClass(s.mode)">{{ s.mode }} {{ s.n }}</span>
+              }
+              @if (crrtFlagCount(u.all)) {
+                <span class="unit-crrt" title="HD/SLED 病人達 CRRT 風險門檻或直接考慮">疑需 CRRT {{ crrtFlagCount(u.all) }}</span>
+              }
+              @if (pendingCount(u.all)) {
+                <span class="unit-pending" title="狀態皆未登錄">未評估 {{ pendingCount(u.all) }}</span>
+              }
+            </div>
+          </div>
+
+          @if (!u.all.length) {
+            <div class="zone-empty">目前無透析病人</div>
+          } @else if (!u.patients.length) {
+            <div class="zone-empty">無符合篩選的病人</div>
+          }
+
+          <div class="minis">
+            @for (p of u.patients; track p.id) {
+              <button type="button"
+                      [class]="'mini ' + modeClass(p.mode)"
+                      [class.crrt-flag]="p.crrtFlag"
+                      [class.saved]="savedId() === p.id"
+                      [attr.aria-label]="p.bedNo + ' ' + p.name + ' ' + (p.mode || '模式未填')"
+                      (mouseenter)="showPop($event, p)"
+                      (mouseleave)="hidePop()"
+                      (focus)="showPop($event, p)"
+                      (blur)="hidePop()"
+                      (click)="open(p)">
+                <span class="mini-bed">{{ p.bedNo }}</span>
+                <span class="mini-name">{{ p.name }}</span>
+                <span class="mini-mode">{{ p.mode || '模式未填' }}</span>
+                @if (p.physician) { <span class="mini-line" [title]="'醫師 ' + p.physician"><i>醫師</i>{{ p.physician }}</span> }
+                @if (p.inpatientReason) { <span class="mini-line" [title]="'住院原因 ' + p.inpatientReason"><i>原因</i>{{ p.inpatientReason }}</span> }
+                @if (p.crrtFlag) { <span class="mini-alert" title="疑需 CRRT：建議提前借第 6 台">!</span> }
+              </button>
             }
           </div>
-          <!-- 模式統計列：HD n / SLED n / CVVHDF n（依原始名單，不受篩選影響） -->
-          <div class="unit-stats">
-            @for (s of modeCounts(u.all); track s.mode) {
-              <span class="mode" [class]="'mode ' + modeClass(s.mode)">{{ s.mode }} {{ s.n }}</span>
-            }
-          </div>
-        </div>
-
-        @if (!u.all.length) {
-          <div class="unit-empty">目前無透析病人</div>
-        } @else if (!u.patients.length) {
-          <div class="unit-empty">無符合篩選的病人</div>
-        }
-
-        <div class="cards">
-        @for (p of u.patients; track p.id) {
-          <article class="icu-card"
-                   [class]="'icu-card ' + modeClass(p.mode)"
-                   [class.saved]="savedId() === p.id"
-                   [class.crit]="p.vasopressor === '有' || p.ecmo === '有'"
-                   [class.crrt-flag]="p.crrtFlag">
-            <header class="card-head">
-              <span class="bed">{{ p.bedNo }}</span>
-              <span class="mode" [class]="'mode ' + modeClass(p.mode)">{{ p.mode || '模式未填' }}</span>
-              @if (p.status === 'er') { <span class="tag er">急診</span> }
-              @if (p.doNotMove) { <span class="tag lock" title="病人勿動">勿動</span> }
-              @if (p.firstDialysis) { <span class="tag first" title="首次透析：首次 ICU 透析不耐受率高（SOCRATE 43%）">首次透析</span> }
-              @if (akiBadge(p); as b) {
-                <span class="tag aki" [style.background]="b.bg" [style.color]="b.fg">{{ b.label }}</span>
-              }
-              <span class="flags">
-                @if (p.vasopressor === '有') { <span class="flag f-vaso" [title]="p.vasopressorDetail">升壓劑</span> }
-                @if (p.ecmo === '有') { <span class="flag f-ecmo" [title]="p.ecmoDetail">ECMO</span> }
-                @if (p.oxygen && p.oxygen !== '室內空氣') { <span class="flag f-o2" [title]="p.oxygenDetail">{{ p.oxygen }}</span> }
-                @if (p.ufDifficulty === '有') { <span class="flag f-uf" [title]="p.ufDetail">脫水困難</span> }
-              </span>
-            </header>
-
-            <div class="who">
-              <b class="name">{{ p.name }}</b>
-              <span class="mono">{{ p.mrn }}</span>
-              @if (p.gender || p.age != null) {
-                <span class="dim">{{ p.gender }}{{ p.age != null ? ' ' + p.age + ' 歲' : '' }}</span>
-              }
-            </div>
-
-            <div class="meta">
-              @if (p.physician) { <span><i>醫師</i>{{ p.physician }}</span> }
-              @if (scheduleLabel(p)) { <span><i>排程</i>{{ scheduleLabel(p) }}{{ p.freq ? '・' + p.freq : '' }}</span> }
-              @else if (p.freq) { <span><i>頻率</i>{{ p.freq }}</span> }
-              @if (p.vascAccess) { <span><i>通路</i>{{ p.vascAccess }}</span> }
-              @if (p.dryWeight != null && p.dryWeight !== '') { <span><i>乾體重</i>{{ p.dryWeight }} kg</span> }
-              @if (p.dialysisTimeText) { <span><i>時數</i>{{ p.dialysisTimeText }}</span> }
-              @if (p.latestCr != null) { <span><i>Cr</i>{{ p.latestCr }} <small>{{ p.latestCrDate }}</small></span> }
-              @if (p.inpatientReason) { <span class="reason"><i>住院原因</i>{{ p.inpatientReason }}</span> }
-            </div>
-
-            <div class="assess">
-              <!-- 1. 升壓劑 -->
-              <div class="row">
-                <span class="lbl">升壓劑</span>
-                <span class="seg">
-                  @for (v of yesNoOptions; track v) {
-                    <button type="button" [class.on-yes]="v === '有' && p.vasopressor === v" [class.on-no]="v === '無' && p.vasopressor === v"
-                            (click)="setYesNo(p, 'vasopressor', v)">{{ v }}</button>
-                  }
-                </span>
-                @if (p.vasopressor === '有') {
-                  <input class="detail" [(ngModel)]="p.vasopressorDetail" (change)="saveDetail(p, 'vasopressorDetail')"
-                         placeholder="藥物／劑量，如 Levophed 8 mL/hr" />
-                }
-              </div>
-
-              <!-- 2. ECMO -->
-              <div class="row">
-                <span class="lbl">ECMO</span>
-                <span class="seg">
-                  @for (v of yesNoOptions; track v) {
-                    <button type="button" [class.on-yes]="v === '有' && p.ecmo === v" [class.on-no]="v === '無' && p.ecmo === v"
-                            (click)="setYesNo(p, 'ecmo', v)">{{ v }}</button>
-                  }
-                </span>
-                @if (p.ecmo === '有') {
-                  <input class="detail" [(ngModel)]="p.ecmoDetail" (change)="saveDetail(p, 'ecmoDetail')"
-                         placeholder="VA／VV、流量等（選填）" />
-                }
-              </div>
-
-              <!-- 3. 氧氣使用 -->
-              <div class="row">
-                <span class="lbl">氧氣</span>
-                <select class="o2" [(ngModel)]="p.oxygen" (change)="setOxygen(p)">
-                  <option value="">未評估</option>
-                  @for (o of oxygenOptions; track o) { <option [value]="o">{{ o }}</option> }
-                </select>
-                @if (p.oxygen) {
-                  <input class="detail" [(ngModel)]="p.oxygenDetail" (change)="saveDetail(p, 'oxygenDetail')"
-                         placeholder="FiO2／流量／呼吸器設定" />
-                }
-              </div>
-
-              <!-- 4. HD / SLED 脫水困難（CVVHDF 不適用） -->
-              @if (showUfRow(p)) {
-                <div class="row">
-                  <span class="lbl">脫水困難</span>
-                  <span class="seg">
-                    @for (v of yesNoOptions; track v) {
-                      <button type="button" [class.on-yes]="v === '有' && p.ufDifficulty === v" [class.on-no]="v === '無' && p.ufDifficulty === v"
-                              (click)="setYesNo(p, 'ufDifficulty', v)">{{ v }}</button>
-                    }
-                  </span>
-                  @if (p.ufDifficulty === '有') {
-                    <input class="detail" [(ngModel)]="p.ufDetail" (change)="saveDetail(p, 'ufDetail')"
-                           placeholder="原因／處置，如低血壓、脫水量達不到" />
-                  }
-                </div>
-              }
-            </div>
-
-            <!-- CRRT 需求風險檢核（HD / SLED 適用；門檻由後端回傳） -->
-            @if (p.crrtApplicable) {
-              <div class="crrt" [class]="'crrt lv-' + crrtLevel(p)">
-                <div class="crrt-head">
-                  <span class="lbl">CRRT 風險</span>
-                  <span class="crrt-score" [title]="p.crrtItems.join('、') || '尚無命中項目'">{{ p.crrtScore }}/{{ p.crrtMax }}</span>
-                  @if (p.crrtFlag) {
-                    <span class="crrt-advice">{{ p.crrtDirect ? '直接考慮 CRRT' : '達門檻 ≥' + p.crrtThreshold }}・建議提前借第 6 台</span>
-                  } @else {
-                    <span class="crrt-sub">門檻 {{ p.crrtThreshold }} 分</span>
-                  }
-                </div>
-                @if (p.crrtItems.length) {
-                  <div class="crrt-items">
-                    @for (it of p.crrtItems; track it) { <span class="crrt-item">{{ it }}</span> }
-                  </div>
-                }
-                <div class="crrt-checks">
-                  @for (c of crrtCheckItems; track c.field) {
-                    @if (!c.needsVaso || p.vasopressor === '有') {
-                      <div class="crrt-check" [title]="c.hint">
-                        <span class="clbl">{{ c.label }} <small>{{ c.pts }}</small></span>
-                        <span class="seg mini">
-                          @for (v of yesNoOptions; track v) {
-                            <button type="button" [class.on-yes]="v === '有' && p[c.field] === v" [class.on-no]="v === '無' && p[c.field] === v"
-                                    (click)="setYesNo(p, c.field, v)">{{ v }}</button>
-                          }
-                        </span>
-                      </div>
-                    }
-                  }
-                </div>
-              </div>
-            }
-
-            <footer class="card-foot">
-              @if (savingId() === p.id) {
-                <span class="saving">儲存中…</span>
-              } @else if (p.statusUpdatedAt) {
-                <span>最後更新 {{ p.statusUpdatedBy }} {{ fmtTime(p.statusUpdatedAt) }}</span>
-              } @else {
-                <span class="unassessed">尚未評估</span>
-              }
-            </footer>
-          </article>
-        }
         </div>
       </div>
     }
   </div>
+
+  <!-- 滑過摘要浮窗（唯讀） -->
+  @if (pop(); as h) {
+    <div class="pop" [class.above]="h.above" [style.left.px]="h.x" [style.top.px]="h.y">
+      <div class="pop-head">
+        <span class="bed">{{ h.p.bedNo }}</span>
+        <b class="name">{{ h.p.name }}</b>
+        <span class="mode" [class]="'mode ' + modeClass(h.p.mode)">{{ h.p.mode || '模式未填' }}</span>
+        @if (h.p.status === 'er') { <span class="tag er">急診</span> }
+        @if (h.p.doNotMove) { <span class="tag lock">勿動</span> }
+        @if (h.p.firstDialysis) { <span class="tag first">首次透析</span> }
+        @if (akiBadge(h.p); as b) {
+          <span class="tag aki" [style.background]="b.bg" [style.color]="b.fg">{{ b.label }}</span>
+        }
+      </div>
+      <div class="who">
+        <span class="mono">{{ h.p.mrn }}</span>
+        @if (h.p.gender || h.p.age != null) {
+          <span class="dim">{{ h.p.gender }}{{ h.p.age != null ? ' ' + h.p.age + ' 歲' : '' }}</span>
+        }
+      </div>
+      <div class="meta">
+        @if (h.p.physician) { <span><i>醫師</i>{{ h.p.physician }}</span> }
+        @if (scheduleLabel(h.p)) { <span><i>排程</i>{{ scheduleLabel(h.p) }}{{ h.p.freq ? '・' + h.p.freq : '' }}</span> }
+        @else if (h.p.freq) { <span><i>頻率</i>{{ h.p.freq }}</span> }
+        @if (h.p.vascAccess) { <span><i>通路</i>{{ h.p.vascAccess }}</span> }
+        @if (h.p.dryWeight != null && h.p.dryWeight !== '') { <span><i>乾體重</i>{{ h.p.dryWeight }} kg</span> }
+        @if (h.p.dialysisTimeText) { <span><i>時數</i>{{ h.p.dialysisTimeText }}</span> }
+        @if (h.p.latestCr != null) { <span><i>Cr</i>{{ h.p.latestCr }} <small>{{ h.p.latestCrDate }}</small></span> }
+        @if (h.p.inpatientReason) { <span class="reason"><i>住院原因</i>{{ h.p.inpatientReason }}</span> }
+      </div>
+      <div class="pop-flags">
+        @if (isUnassessed(h.p)) {
+          <span class="unassessed">尚未評估（升壓劑／ECMO／氧氣{{ showUfRow(h.p) ? '／脫水困難' : '' }}）</span>
+        } @else if (!statusFlags(h.p).length) {
+          <span class="dim">目前無升壓劑／ECMO／氧氣／脫水困難</span>
+        }
+        @for (f of statusFlags(h.p); track f.label) {
+          <span class="flag" [class]="'flag ' + f.cls">{{ f.label }}@if (f.detail) { <small>{{ f.detail }}</small> }</span>
+        }
+      </div>
+      @if (h.p.crrtApplicable) {
+        <div class="pop-crrt" [class]="'pop-crrt lv-' + crrtLevel(h.p)">
+          <span class="lbl">CRRT 風險</span>
+          <span class="crrt-score">{{ h.p.crrtScore }}/{{ h.p.crrtMax }}</span>
+          @if (h.p.crrtFlag) {
+            <span class="crrt-advice">{{ h.p.crrtDirect ? '直接考慮 CRRT' : '達門檻 ≥' + h.p.crrtThreshold }}・建議提前借第 6 台</span>
+          } @else {
+            <span class="crrt-sub">門檻 {{ h.p.crrtThreshold }} 分</span>
+          }
+          @if (h.p.crrtItems.length) {
+            <span class="pop-crrt-items">{{ h.p.crrtItems.join('、') }}</span>
+          }
+        </div>
+      }
+      <div class="pop-foot">
+        @if (h.p.statusUpdatedAt) {
+          <span>最後更新 {{ h.p.statusUpdatedBy }} {{ fmtTime(h.p.statusUpdatedAt) }}</span>
+        }
+        <span class="pop-tip">點選卡片登錄評估</span>
+      </div>
+    </div>
+  }
+
+  <!-- 點選 → 完整卡片（可編輯） -->
+  @if (selected(); as p) {
+    <div class="icu-modal-backdrop" (click)="close()">
+      <div class="icu-modal" (click)="$event.stopPropagation()">
+        <article class="icu-card"
+                 [class]="'icu-card ' + modeClass(p.mode)"
+                 [class.saved]="savedId() === p.id"
+                 [class.crit]="p.vasopressor === '有' || p.ecmo === '有'"
+                 [class.crrt-flag]="p.crrtFlag">
+          <header class="card-head">
+            <span class="bed">{{ p.bedNo }}</span>
+            <span class="mode" [class]="'mode ' + modeClass(p.mode)">{{ p.mode || '模式未填' }}</span>
+            @if (p.status === 'er') { <span class="tag er">急診</span> }
+            @if (p.doNotMove) { <span class="tag lock" title="病人勿動">勿動</span> }
+            @if (p.firstDialysis) { <span class="tag first" title="首次透析：首次 ICU 透析不耐受率高（SOCRATE 43%）">首次透析</span> }
+            @if (akiBadge(p); as b) {
+              <span class="tag aki" [style.background]="b.bg" [style.color]="b.fg">{{ b.label }}</span>
+            }
+            <span class="flags">
+              @if (p.vasopressor === '有') { <span class="flag f-vaso" [title]="p.vasopressorDetail">升壓劑</span> }
+              @if (p.ecmo === '有') { <span class="flag f-ecmo" [title]="p.ecmoDetail">ECMO</span> }
+              @if (p.oxygen && p.oxygen !== '室內空氣') { <span class="flag f-o2" [title]="p.oxygenDetail">{{ p.oxygen }}</span> }
+              @if (p.ufDifficulty === '有') { <span class="flag f-uf" [title]="p.ufDetail">脫水困難</span> }
+            </span>
+            <button type="button" class="card-close" (click)="close()" title="關閉 (Esc)">✕</button>
+          </header>
+
+          <div class="who">
+            <b class="name">{{ p.name }}</b>
+            <span class="mono">{{ p.mrn }}</span>
+            @if (p.gender || p.age != null) {
+              <span class="dim">{{ p.gender }}{{ p.age != null ? ' ' + p.age + ' 歲' : '' }}</span>
+            }
+          </div>
+
+          <div class="meta">
+            @if (p.physician) { <span><i>醫師</i>{{ p.physician }}</span> }
+            @if (scheduleLabel(p)) { <span><i>排程</i>{{ scheduleLabel(p) }}{{ p.freq ? '・' + p.freq : '' }}</span> }
+            @else if (p.freq) { <span><i>頻率</i>{{ p.freq }}</span> }
+            @if (p.vascAccess) { <span><i>通路</i>{{ p.vascAccess }}</span> }
+            @if (p.dryWeight != null && p.dryWeight !== '') { <span><i>乾體重</i>{{ p.dryWeight }} kg</span> }
+            @if (p.dialysisTimeText) { <span><i>時數</i>{{ p.dialysisTimeText }}</span> }
+            @if (p.latestCr != null) { <span><i>Cr</i>{{ p.latestCr }} <small>{{ p.latestCrDate }}</small></span> }
+            @if (p.inpatientReason) { <span class="reason"><i>住院原因</i>{{ p.inpatientReason }}</span> }
+          </div>
+
+          <div class="assess">
+            <!-- 1. 升壓劑 -->
+            <div class="row">
+              <span class="lbl">升壓劑</span>
+              <span class="seg">
+                @for (v of yesNoOptions; track v) {
+                  <button type="button" [class.on-yes]="v === '有' && p.vasopressor === v" [class.on-no]="v === '無' && p.vasopressor === v"
+                          (click)="setYesNo(p, 'vasopressor', v)">{{ v }}</button>
+                }
+              </span>
+              @if (p.vasopressor === '有') {
+                <input class="detail" [(ngModel)]="p.vasopressorDetail" (change)="saveDetail(p, 'vasopressorDetail')"
+                       placeholder="藥物／劑量，如 Levophed 8 mL/hr" />
+              }
+            </div>
+
+            <!-- 2. ECMO -->
+            <div class="row">
+              <span class="lbl">ECMO</span>
+              <span class="seg">
+                @for (v of yesNoOptions; track v) {
+                  <button type="button" [class.on-yes]="v === '有' && p.ecmo === v" [class.on-no]="v === '無' && p.ecmo === v"
+                          (click)="setYesNo(p, 'ecmo', v)">{{ v }}</button>
+                }
+              </span>
+              @if (p.ecmo === '有') {
+                <input class="detail" [(ngModel)]="p.ecmoDetail" (change)="saveDetail(p, 'ecmoDetail')"
+                       placeholder="VA／VV、流量等（選填）" />
+              }
+            </div>
+
+            <!-- 3. 氧氣使用 -->
+            <div class="row">
+              <span class="lbl">氧氣</span>
+              <select class="o2" [(ngModel)]="p.oxygen" (change)="setOxygen(p)">
+                <option value="">未評估</option>
+                @for (o of oxygenOptions; track o) { <option [value]="o">{{ o }}</option> }
+              </select>
+              @if (p.oxygen) {
+                <input class="detail" [(ngModel)]="p.oxygenDetail" (change)="saveDetail(p, 'oxygenDetail')"
+                       placeholder="FiO2／流量／呼吸器設定" />
+              }
+            </div>
+
+            <!-- 4. HD / SLED 脫水困難（CVVHDF 不適用） -->
+            @if (showUfRow(p)) {
+              <div class="row">
+                <span class="lbl">脫水困難</span>
+                <span class="seg">
+                  @for (v of yesNoOptions; track v) {
+                    <button type="button" [class.on-yes]="v === '有' && p.ufDifficulty === v" [class.on-no]="v === '無' && p.ufDifficulty === v"
+                            (click)="setYesNo(p, 'ufDifficulty', v)">{{ v }}</button>
+                  }
+                </span>
+                @if (p.ufDifficulty === '有') {
+                  <input class="detail" [(ngModel)]="p.ufDetail" (change)="saveDetail(p, 'ufDetail')"
+                         placeholder="原因／處置，如低血壓、脫水量達不到" />
+                }
+              </div>
+            }
+          </div>
+
+          <!-- CRRT 需求風險檢核（HD / SLED 適用；門檻由後端回傳） -->
+          @if (p.crrtApplicable) {
+            <div class="crrt" [class]="'crrt lv-' + crrtLevel(p)">
+              <div class="crrt-head">
+                <span class="lbl">CRRT 風險</span>
+                <span class="crrt-score" [title]="p.crrtItems.join('、') || '尚無命中項目'">{{ p.crrtScore }}/{{ p.crrtMax }}</span>
+                @if (p.crrtFlag) {
+                  <span class="crrt-advice">{{ p.crrtDirect ? '直接考慮 CRRT' : '達門檻 ≥' + p.crrtThreshold }}・建議提前借第 6 台</span>
+                } @else {
+                  <span class="crrt-sub">門檻 {{ p.crrtThreshold }} 分</span>
+                }
+              </div>
+              @if (p.crrtItems.length) {
+                <div class="crrt-items">
+                  @for (it of p.crrtItems; track it) { <span class="crrt-item">{{ it }}</span> }
+                </div>
+              }
+              <div class="crrt-checks">
+                @for (c of crrtCheckItems; track c.field) {
+                  @if (!c.needsVaso || p.vasopressor === '有') {
+                    <div class="crrt-check" [title]="c.hint">
+                      <span class="clbl">{{ c.label }} <small>{{ c.pts }}</small></span>
+                      <span class="seg mini-seg">
+                        @for (v of yesNoOptions; track v) {
+                          <button type="button" [class.on-yes]="v === '有' && p[c.field] === v" [class.on-no]="v === '無' && p[c.field] === v"
+                                  (click)="setYesNo(p, c.field, v)">{{ v }}</button>
+                        }
+                      </span>
+                    </div>
+                  }
+                }
+              </div>
+            </div>
+          }
+
+          <footer class="card-foot">
+            @if (savingId() === p.id) {
+              <span class="saving">儲存中…</span>
+            } @else if (p.statusUpdatedAt) {
+              <span>最後更新 {{ p.statusUpdatedBy }} {{ fmtTime(p.statusUpdatedAt) }}</span>
+            } @else {
+              <span class="unassessed">尚未評估</span>
+            }
+          </footer>
+        </article>
+      </div>
+    </div>
+  }
 </section>
