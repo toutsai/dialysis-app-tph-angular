@@ -522,6 +522,7 @@ export class DailyLogComponent implements OnInit {
     }
 
     try {
+      this.markManuallyEditedAutoRows(this.dailyLog.patientMovements);
       const dataToSave = JSON.parse(JSON.stringify(this.dailyLog));
       dataToSave.patientMovements = this.stripEditFlags(dataToSave.patientMovements);
       if (dataToSave.stats?.staffing) {
@@ -888,6 +889,26 @@ export class DailyLogComponent implements OnInit {
     return movements;
   }
 
+  /**
+   * 自動產生的動態列（id 以 auto_ 開頭）被使用者改過內容後，標上 originalAutoId，
+   * 後端同步引擎（dailyLogMovementSync / patientOrderEffects / schedules）看到此欄位就不再覆蓋或移除該列。
+   * 只比對「與載入時是否不同」，按編輯但沒改就不標。刻意不把 type 改成「手動」：
+   * KiDit 事件類型與列上的類型標籤都吃 type，改掉會讓「刪除/新增」在 KiDit 變成手動列（2026-09-15）。
+   */
+  private markManuallyEditedAutoRows(rows: any[]): void {
+    if (!Array.isArray(rows)) return;
+    const strip = (name: string, value: any) => (name === 'isEdited' || name === 'originalAutoId') ? undefined : value;
+    const baseline = new Map<string, string>(
+      (JSON.parse(this.loadedSnapshot['patientMovements'] || '[]') as any[])
+        .map((row: any) => [String(row.id), JSON.stringify(row, strip)]),
+    );
+    for (const row of rows) {
+      if (!row || typeof row.id !== 'string' || !row.id.startsWith('auto_') || row.originalAutoId) continue;
+      const before = baseline.get(row.id);
+      if (before !== undefined && before !== JSON.stringify(row, strip)) row.originalAutoId = row.id;
+    }
+  }
+
   unlockMovement(item: any): void {
     if (this.isPageLocked) return;
     item.isEdited = true;
@@ -904,10 +925,6 @@ export class DailyLogComponent implements OnInit {
     if (!item.name) {
       this.showAlert('資料不完整', '請至少填寫病人姓名。');
       return;
-    }
-    if (item.isEdited && item.originalType) {
-      item.originalAutoId = item.id;
-      item.type = '手動';
     }
     if (await this.saveJustMovements(item)) {
       if (item.id === this.newMovementId) this.newMovementId = null;
@@ -927,6 +944,7 @@ export class DailyLogComponent implements OnInit {
     this.isLoading.set(true);
     try {
       const docId = this.selectedDate();
+      this.markManuallyEditedAutoRows(item ? [item] : this.dailyLog.patientMovements);
       // isEdited 是純 UI 旗標，送出前剝掉；否則會存進 DB，重整後該列永遠卡在編輯狀態（2026-09-15 修）
       const submitted = this.stripEditFlags(JSON.parse(JSON.stringify(item ? [item] : this.dailyLog.patientMovements)));
       const result = await this.dailyLogsApi.save(docId, {
