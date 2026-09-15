@@ -102,21 +102,28 @@
 @media (max-width: 1100px) { .icu-zones { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 720px) { .icu-zones { grid-template-columns: 1fr; } }
 
-/* 圓：aspect-ratio 1 讓區塊至少是正方形（→ 正圓）；病人多時高度隨內容長成橢圓，卡片仍在內側。
-   padding 15%（相對寬度）≈ 圓內接正方形的留白 (1-1/√2)/2 ≈ 14.6%，讓格子不會戳出圓外 */
+/* 圓：用 ::before padding-bottom 100% 佔位讓區塊「至少」正方形（→ 正圓）；病人多時高度隨內容長成橢圓，
+   卡片仍在內側（aspect-ratio 在這裡不會隨內容撐高，實測會溢出，刻意不用）。
+   padding ≈ 圓內接正方形的留白 (1-1/√2)/2 ≈ 14.6%，讓格子不會戳出圓外 */
 .zone {
   box-sizing: border-box;
-  aspect-ratio: 1 / 1;
   border-radius: 50%;
   background: radial-gradient(circle at 50% 35%, #ffffff 0%, #f1f5f7 70%, #e6ecef 100%);
   border: 3px solid #cfd8dc;
   box-shadow: inset 0 0 0 6px #fff, 0 4px 14px rgba(38, 50, 56, 0.08);
   padding: 14% 15% 16%;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.zone::before {
+  content: '';
+  grid-area: 1 / 1;
+  /* 內容盒寬 70% + 上下 padding 30% = 總高 ≈ 總寬 */
+  padding-bottom: 100%;
 }
 .zone.zone-empty-bg { background: radial-gradient(circle at 50% 35%, #fafbfc 0%, #f3f5f6 100%); border-style: dashed; }
 .zone-inner {
-  flex: 1 1 auto;
+  grid-area: 1 / 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -158,7 +165,7 @@
 /* 迷你卡：床號／姓名／模式，底色＝模式嚴重度 */
 .minis {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(6.4rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
   gap: 0.45rem;
   justify-content: center;
   /* 再內縮一點：最底排卡片的外角才不會戳出圓弧 */
@@ -201,6 +208,18 @@
   white-space: nowrap;
 }
 .mini-mode { font-size: 0.76rem; font-weight: 700; opacity: 0.95; line-height: 1.2; }
+/* 醫師／住院原因（2026-09-15 使用者要求加入）：單行截斷，完整內容看 title 或滑過摘要 */
+.mini-line {
+  font-size: 0.74rem;
+  line-height: 1.25;
+  opacity: 0.92;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mini-line i { font-style: normal; opacity: 0.75; margin-right: 0.2rem; }
+.mini-mode + .mini-line { margin-top: 0.12rem; }
 .mini-alert {
   position: absolute;
   top: -0.45rem;

@@ -113,6 +113,8 @@
                 <span class="mini-bed">{{ p.bedNo }}</span>
                 <span class="mini-name">{{ p.name }}</span>
                 <span class="mini-mode">{{ p.mode || '模式未填' }}</span>
+                @if (p.physician) { <span class="mini-line" [title]="'醫師 ' + p.physician"><i>醫師</i>{{ p.physician }}</span> }
+                @if (p.inpatientReason) { <span class="mini-line" [title]="'住院原因 ' + p.inpatientReason"><i>原因</i>{{ p.inpatientReason }}</span> }
                 @if (p.crrtFlag) { <span class="mini-alert" title="疑需 CRRT：建議提前借第 6 台">!</span> }
               </button>
             }
