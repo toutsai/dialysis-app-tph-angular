@@ -72,9 +72,9 @@
   <!-- 三大圓形區塊：ICUA / ICUB / ICUD -->
   <div class="icu-zones">
     @for (u of filteredUnits(); track u.key) {
-      <div class="zone-wrap">
-        <!-- 區塊標題放在圓的上方，與卡片分開（2026-09-15 使用者要求） -->
-        <div class="zone-head">
+      <div class="zone" [class.zone-empty-bg]="!u.all.length">
+        <div class="zone-inner">
+          <div class="zone-head">
             <h3>{{ u.key }}<small>{{ u.label }}</small></h3>
             <div class="zone-n">
               @if (u.patients.length !== u.all.length) { 顯示 {{ u.patients.length }} / }{{ u.all.length }} 人
@@ -90,10 +90,8 @@
                 <span class="unit-pending" title="狀態皆未登錄">未評估 {{ pendingCount(u.all) }}</span>
               }
             </div>
-        </div>
+          </div>
 
-        <div class="zone" [class.zone-empty-bg]="!u.all.length">
-        <div class="zone-inner">
           @if (!u.all.length) {
             <div class="zone-empty">目前無透析病人</div>
           } @else if (!u.patients.length) {
@@ -121,7 +119,6 @@
               </button>
             }
           </div>
-        </div>
         </div>
       </div>
     }
