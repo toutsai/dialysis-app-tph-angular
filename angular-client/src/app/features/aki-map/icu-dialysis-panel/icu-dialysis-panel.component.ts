@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -44,17 +44,31 @@ const AKI_BADGE: Record<string, { label: string; bg: string; fg: string }> = {
   esrd: { label: '疑似 ESRD', bg: '#7b1fa2', fg: '#fff' },
 };
 
-type StatusFilter = 'all' | 'crrt' | 'unassessed' | 'vaso' | 'ecmo' | 'vent' | 'uf' | 'first';
+type CrrtLevel = 'hi' | 'mid' | 'lo';
+type CrrtFilter = 'all' | CrrtLevel;
 
 /** 篩選後的分區：patients 為顯示用子集，all 為原始名單（標題統計） */
 interface FilteredUnit extends IcuDialysisUnit {
   all: IcuDialysisPatient[];
 }
 
+/** 滑過迷你卡時的摘要浮窗（fixed 定位，座標由卡片位置算） */
+interface HoverPop {
+  p: IcuDialysisPatient;
+  x: number;
+  y: number;
+  /** 下方放不下 → 改放卡片上方 */
+  above: boolean;
+}
+const POP_W = 352;
+const POP_H = 360;
+
 /**
  * 腎臟病地圖 → ICU 透析病人頁籤
- * 依 ICUA / ICUB / ICUD 三區顯示目前在 ICU 的透析病人（HD / SLED / CVVHDF），
- * 每張卡片可直接登錄：升壓劑（藥物/劑量）、ECMO、氧氣使用、HD/SLED 脫水困難。
+ * 2026-09-15 改版（使用者/長官需求）：ICUA / ICUB / ICUD 三大圓形區塊；
+ * 病人以「床號／姓名／模式」迷你卡呈現，底色＝紅黃綠嚴重度（HD 綠、SLED 黃、CVVHDF 紅）；
+ * 滑過看摘要、點選才開完整卡片登錄升壓劑／ECMO／氧氣／脫水困難與 CRRT 風險；
+ * 篩選只留「透析模式」與「CRRT 風險」。
  * 資料來源＝病人清單住院狀態＋病房號（護理師即時維護），不是 AKI 上傳快照。
  */
 @Component({
@@ -83,65 +97,44 @@ export class IcuDialysisPanelComponent implements OnInit {
   /** CRRT 風險檢核說明（摺疊） */
   readonly showCrrtHelp = signal(false);
 
-  // ---------- 篩選（純前端，不打 API） ----------
-  /** 分區：all = 三區並排；單一分區 = 整寬多欄 */
-  readonly unitFilter = signal<string>('all');
+  // ---------- 互動：滑過摘要 / 點選開完整卡片 ----------
+  readonly pop = signal<HoverPop | null>(null);
+  readonly selected = signal<IcuDialysisPatient | null>(null);
+
+  // ---------- 篩選（純前端，不打 API）：只留模式與 CRRT 風險 ----------
   /** 模式多選；空集合 = 全部 */
   readonly modeFilter = signal<ReadonlySet<string>>(new Set());
-  /** 狀態單選 */
-  readonly statusFilter = signal<StatusFilter>('all');
-  readonly search = signal('');
+  readonly crrtFilter = signal<CrrtFilter>('all');
   readonly modeOptions = ['HD', 'SLED', 'CVVHDF'];
-  readonly statusOptions: { key: StatusFilter; label: string; cls?: string }[] = [
-    { key: 'all', label: '全部' },
-    { key: 'crrt', label: '疑需 CRRT', cls: 'crrt' },
-    { key: 'unassessed', label: '未評估', cls: 'pending' },
-    { key: 'vaso', label: '升壓劑' },
-    { key: 'ecmo', label: 'ECMO' },
-    { key: 'vent', label: '呼吸器' },
-    { key: 'uf', label: '脫水困難' },
-    { key: 'first', label: '首次透析' },
+  readonly crrtOptions: { key: CrrtFilter; label: string; cls?: string; hint: string }[] = [
+    { key: 'all', label: '全部', hint: '不依 CRRT 風險篩選' },
+    // cls 刻意不用 'crrt'：會撞到完整卡片 CRRT 區塊的 .crrt { flex-direction: column } 讓 chip 折行
+    { key: 'hi', label: '疑需 CRRT', cls: 'lv-hi', hint: 'HD/SLED 病人達門檻（≥4 分）或腦損傷／肝衰竭直接考慮' },
+    { key: 'mid', label: '中 2–3 分', cls: 'lv-mid', hint: 'HD/SLED 病人 CRRT 風險 2–3 分，未達門檻' },
+    { key: 'lo', label: '低 0–1 分', cls: 'lv-lo', hint: 'HD/SLED 病人 CRRT 風險 0–1 分' },
   ];
 
-  readonly hasFilter = computed(() =>
-    this.unitFilter() !== 'all' || this.modeFilter().size > 0 || this.statusFilter() !== 'all' || !!this.search().trim(),
-  );
+  readonly hasFilter = computed(() => this.modeFilter().size > 0 || this.crrtFilter() !== 'all');
 
   /** 篩選後的分區：patients = 顯示用；all = 原始（標題統計用原始人數） */
   readonly filteredUnits = computed<FilteredUnit[]>(() => {
-    const unit = this.unitFilter();
     const modes = this.modeFilter();
-    const status = this.statusFilter();
-    const q = this.search().trim().toLowerCase();
-    return this.units()
-      .filter((u) => unit === 'all' || u.key === unit)
-      .map((u) => ({
-        ...u,
-        all: u.patients,
-        patients: u.patients.filter((p) => {
-          if (modes.size && !modes.has(String(p.mode || '').toUpperCase())) return false;
-          if (!this.matchStatus(p, status)) return false;
-          if (q) {
-            const hay = `${p.name} ${p.mrn} ${p.bedNo} ${p.physician} ${p.inpatientReason} ${p.vasopressorDetail}`.toLowerCase();
-            if (!hay.includes(q)) return false;
-          }
-          return true;
-        }),
-      }));
+    const crrt = this.crrtFilter();
+    return this.units().map((u) => ({
+      ...u,
+      all: u.patients,
+      patients: u.patients.filter((p) => {
+        if (modes.size && !modes.has(String(p.mode || '').toUpperCase())) return false;
+        return this.matchCrrt(p, crrt);
+      }),
+    }));
   });
   readonly shownCount = computed(() => this.filteredUnits().reduce((s, u) => s + u.patients.length, 0));
 
-  private matchStatus(p: IcuDialysisPatient, s: StatusFilter): boolean {
-    switch (s) {
-      case 'crrt': return p.crrtFlag;
-      case 'unassessed': return this.isUnassessed(p);
-      case 'vaso': return p.vasopressor === '有';
-      case 'ecmo': return p.ecmo === '有';
-      case 'vent': return p.oxygen === '呼吸器';
-      case 'uf': return p.ufDifficulty === '有';
-      case 'first': return p.firstDialysis;
-      default: return true;
-    }
+  private matchCrrt(p: IcuDialysisPatient, f: CrrtFilter): boolean {
+    if (f === 'all') return true;
+    // CRRT 風險只對 HD/SLED 計分；CVVHDF 不適用 → 任何風險篩選都不列
+    return !!p.crrtApplicable && this.crrtLevel(p) === f;
   }
 
   toggleMode(m: string): void {
@@ -152,15 +145,18 @@ export class IcuDialysisPanelComponent implements OnInit {
   }
 
   clearFilters(): void {
-    this.unitFilter.set('all');
     this.modeFilter.set(new Set());
-    this.statusFilter.set('all');
-    this.search.set('');
+    this.crrtFilter.set('all');
   }
 
-  /** 篩選列各狀態的人數（依原始名單，供 chip 顯示） */
-  statusCount(s: StatusFilter): number {
-    return this.units().reduce((n, u) => n + u.patients.filter((p) => this.matchStatus(p, s)).length, 0);
+  /** 篩選列各模式人數（依原始名單） */
+  modeCount(m: string): number {
+    return this.units().reduce((n, u) => n + u.patients.filter((p) => String(p.mode || '').toUpperCase() === m).length, 0);
+  }
+
+  /** 篩選列各 CRRT 風險等級人數（依原始名單） */
+  crrtCount(f: CrrtFilter): number {
+    return this.units().reduce((n, u) => n + u.patients.filter((p) => this.matchCrrt(p, f)).length, 0);
   }
 
   ngOnInit(): void {
@@ -172,14 +168,61 @@ export class IcuDialysisPanelComponent implements OnInit {
     this.error.set(null);
     try {
       const res = await this.akiApi.getIcuDialysis();
-      this.units.set(res.units || []);
+      const units = res.units || [];
+      this.units.set(units);
       this.total.set(res.total || 0);
       this.loadedAt.set(new Date());
+      // 重新整理後把開著的完整卡片指回新物件（病人已不在 ICU → 關閉）
+      const sel = this.selected();
+      if (sel) {
+        const fresh = units.flatMap((u) => u.patients).find((p) => p.id === sel.id) || null;
+        this.selected.set(fresh);
+      }
     } catch (e: any) {
       this.error.set(e?.error?.message || e?.message || '載入 ICU 透析病人失敗');
     } finally {
       this.loading.set(false);
     }
+  }
+
+  // ---------- 滑過摘要浮窗 / 完整卡片 ----------
+
+  showPop(ev: Event, p: IcuDialysisPatient): void {
+    if (this.selected()) return;
+    const el = ev.currentTarget as HTMLElement | null;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let x = r.left;
+    if (x + POP_W > vw - 8) x = Math.max(8, vw - 8 - POP_W);
+    const above = r.bottom + 6 + POP_H > vh && r.top > POP_H;
+    const y = above ? r.top - 6 : r.bottom + 6;
+    this.pop.set({ p, x, y, above });
+  }
+
+  hidePop(): void {
+    this.pop.set(null);
+  }
+
+  @HostListener('window:scroll')
+  @HostListener('window:resize')
+  onViewportChange(): void {
+    this.hidePop();
+  }
+
+  open(p: IcuDialysisPatient): void {
+    this.hidePop();
+    this.selected.set(p);
+  }
+
+  close(): void {
+    this.selected.set(null);
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    if (this.selected()) this.close();
   }
 
   // ---------- 顯示輔助 ----------
@@ -232,9 +275,19 @@ export class IcuDialysisPanelComponent implements OnInit {
     return this.units().reduce((s, u) => s + this.crrtFlagCount(u.patients), 0);
   }
 
-  crrtLevel(p: IcuDialysisPatient): 'hi' | 'mid' | 'lo' {
+  crrtLevel(p: IcuDialysisPatient): CrrtLevel {
     if (p.crrtFlag) return 'hi';
     return p.crrtScore >= 2 ? 'mid' : 'lo';
+  }
+
+  /** 摘要浮窗用：目前登錄的狀態旗標（只列「有」的） */
+  statusFlags(p: IcuDialysisPatient): { cls: string; label: string; detail: string }[] {
+    const out: { cls: string; label: string; detail: string }[] = [];
+    if (p.vasopressor === '有') out.push({ cls: 'f-vaso', label: '升壓劑', detail: p.vasopressorDetail || '' });
+    if (p.ecmo === '有') out.push({ cls: 'f-ecmo', label: 'ECMO', detail: p.ecmoDetail || '' });
+    if (p.oxygen && p.oxygen !== '室內空氣') out.push({ cls: 'f-o2', label: p.oxygen, detail: p.oxygenDetail || '' });
+    if (p.ufDifficulty === '有') out.push({ cls: 'f-uf', label: '脫水困難', detail: p.ufDetail || '' });
+    return out;
   }
 
   /** 區塊統計列：HD n / SLED n / CVVHDF n（固定順序，0 的模式仍顯示；其他模式併入「其他」） */
@@ -309,6 +362,8 @@ export class IcuDialysisPanelComponent implements OnInit {
     try {
       const res = await this.akiApi.saveIcuStatus(p.id, payload);
       if (res?.status) Object.assign(p, res.status);
+      // 迷你卡/區塊統計依 signal 內容重算（同物件就地更新，觸發一次變更）
+      this.units.set([...this.units()]);
       this.savedId.set(p.id);
       setTimeout(() => {
         if (this.savedId() === p.id) this.savedId.set(null);
