@@ -35,12 +35,23 @@ function isDailyLogLockedForUser(date, user) {
   return isPastDailyLogDate(date) && !canEditPastDailyLog(user)
 }
 
+// isEdited 是前端「該列正在編輯」的純 UI 旗標，曾被連同資料存進 DB，導致重整後永遠卡在編輯狀態（2026-09-15 修）。
+// 讀取與寫入兩端都剝掉，舊髒資料不必手動清。
+function stripMovementUiFlags(movements) {
+  if (!Array.isArray(movements)) return movements
+  return movements.map(item => {
+    if (!item || typeof item !== 'object' || !('isEdited' in item)) return item
+    const { isEdited, ...rest } = item
+    return rest
+  })
+}
+
 function formatDailyLog(log, user = null) {
   return {
     id: log.id,
     version: dailyLogVersion(log),
     date: log.date,
-    patientMovements: JSON.parse(log.patient_movements || '[]'),
+    patientMovements: stripMovementUiFlags(JSON.parse(log.patient_movements || '[]')),
     vascularAccessLog: JSON.parse(log.vascular_access_log || '[]'),
     announcements: JSON.parse(log.announcements || '[]'),
     stats: JSON.parse(log.stats || '{}'),
@@ -1450,7 +1461,9 @@ router.put('/daily-logs/:date', ...isEditor, async (req, res) => {
           new Set(patientMovements.map(item => String(item.id))).size !== patientMovements.length) {
         return res.status(400).json({ error: true, message: '病人動態需有唯一 ID' })
       }
-      patientMovements = preserveMovementMetadata(patientMovements, JSON.parse(existing?.patient_movements || '[]'))
+      patientMovements = stripMovementUiFlags(
+        preserveMovementMetadata(patientMovements, JSON.parse(existing?.patient_movements || '[]')),
+      )
     }
 
     if (existing) {
