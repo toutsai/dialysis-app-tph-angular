@@ -68,6 +68,46 @@
   box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
 }
 
+.scope-options {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  background-color: #f8f9fa;
+}
+
+.scope-title {
+  font-size: 0.92rem;
+  color: #343a40;
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.scope-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+  align-items: start;
+  padding: 6px 4px;
+  cursor: pointer;
+}
+
+.scope-option input[type='radio'] {
+  margin-top: 3px;
+}
+
+.scope-text {
+  font-weight: 600;
+  color: #212529;
+}
+
+.scope-hint {
+  grid-column: 2;
+  font-size: 0.82rem;
+  color: #6c757d;
+  line-height: 1.35;
+}
+
 .dialog-footer {
   padding: 16px 24px;
   border-top: 1px solid #e9ecef;

@@ -395,6 +395,25 @@ h1 { font-size: 2rem; margin: 0; color: #343a40; }
 .desktop-only { display: flex; flex-direction: column; gap: 2rem; }
 
 /* Movement Type Badges */
+.col-bed .ward-display {
+  margin-right: 4px;
+}
+
+.col-bed .ward-edit-btn {
+  border: 1px solid #ced4da;
+  background: #fff;
+  color: #495057;
+  border-radius: 4px;
+  padding: 0 5px;
+  line-height: 1.4;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.col-bed .ward-edit-btn:hover {
+  background: #e9ecef;
+}
+
 .movement-type-badge {
   display: inline-block; padding: 3px 8px; border-radius: 12px;
   font-size: 0.8em; font-weight: bold; color: white; white-space: nowrap;

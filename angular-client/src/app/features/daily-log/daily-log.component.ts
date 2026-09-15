@@ -14,6 +14,8 @@ import { ApiConfigService } from '@services/api-config.service';
 import { ApiManagerService, type ApiManager, type FirestoreRecord } from '@app/core/services/api-manager.service';
 import { PatientStoreService } from '@services/patient-store.service';
 import { updatePatient as optimizedUpdatePatient } from '@/services/optimizedApiService';
+import { wardScopePrompt, shiftsOfPatientInSchedule } from '@/utils/shiftTime';
+import type { WardNumberConfirmEvent } from '@app/components/dialogs/ward-number-dialog/ward-number-dialog.component';
 import { WardNumberDialogComponent } from '@app/components/dialogs/ward-number-dialog/ward-number-dialog.component';
 import { ConfirmDialogComponent } from '@app/components/dialogs/confirm-dialog/confirm-dialog.component';
 import { AlertDialogComponent } from '@app/components/dialogs/alert-dialog/alert-dialog.component';
@@ -932,7 +934,7 @@ export class DailyLogComponent implements OnInit {
     }
   }
 
-  async saveJustMovements(item?: any): Promise<boolean> {
+  async saveJustMovements(item?: any, options: { silent?: boolean } = {}): Promise<boolean> {
     if (this.isLoading()) return false;
     if (this.isPageLocked) {
       this.showAlert(
@@ -959,7 +961,7 @@ export class DailyLogComponent implements OnInit {
       this.loadedSnapshot['patientMovements'] = JSON.stringify([...byId.values()]);
       this.hasUnsavedChanges.set(this.hasPendingDraft());
       this.dailyLogCache.delete(docId); // Clear cache to force fresh reload
-      this.showAlert('操作成功', '病人動態已更新！');
+      if (!options.silent) this.showAlert('操作成功', '病人動態已更新！');
       return true;
     } catch (error: any) {
       console.error('儲存病人動態失敗:', error);
@@ -1206,7 +1208,18 @@ export class DailyLogComponent implements OnInit {
   // ===================================================================
   // Ward Number Dialog
   // ===================================================================
-  promptWardNumber(index: number): void {
+  /** 病房號當日守門：病人正在本班排程中 → 視窗內問「本班一起改／本班維持到下班」 */
+  wardScopeAsk = false;
+  wardScopeShiftName = '';
+
+  /** 動態列病房號顯示：今天的日誌以病人資料為準（三處同步後的權威），歷史日誌以列上記錄為準 */
+  movementWardDisplay(item: any): string {
+    const live = item?.patientId ? (this.patientStore.patientMap().get(item.patientId) as any)?.wardNumber : '';
+    const isToday = this.selectedDate() === this.formatDate(new Date());
+    return (isToday ? (live || item?.wardNumber) : (item?.wardNumber || live)) || '-';
+  }
+
+  async promptWardNumber(index: number): Promise<void> {
     if (this.isPageLocked) return;
     const patientId = this.dailyLog.patientMovements[index]?.patientId;
     if (!patientId) {
@@ -1218,19 +1231,43 @@ export class DailyLogComponent implements OnInit {
       this.showAlert('提示', `病人「${patient?.name || ''}」目前的狀態是「${patient?.status === 'opd' ? '門診' : '未知'}」，無法設定住院床號。`);
       return;
     }
+    // 當日守門（2026-09-15）：看「今天」的排程（日誌可能停在別的日期）
+    const todayStr = this.formatDate(new Date());
+    let todayShifts: string[] = [];
+    try {
+      if (this.selectedDate() === todayStr) {
+        todayShifts = shiftsOfPatientInSchedule(this.currentSchedule, patientId);
+      } else {
+        const records = (await this.schedulesApi.fetchWhere({ date: todayStr })) as any[];
+        todayShifts = shiftsOfPatientInSchedule(records?.[0]?.schedule, patientId);
+      }
+    } catch (error) {
+      console.error('檢查當日排程失敗:', error);
+    }
+    const prompt = wardScopePrompt(todayShifts);
+    this.wardScopeAsk = prompt.ask;
+    this.wardScopeShiftName = prompt.shiftName;
     this.currentEditingMovementIndex = index;
     this.isWardDialogVisible = true;
   }
 
-  async handleWardNumberConfirm(newWardNumber: string): Promise<void> {
+  async handleWardNumberConfirm(event: WardNumberConfirmEvent): Promise<void> {
     if (this.isPageLocked) return;
     const index = this.currentEditingMovementIndex;
     if (index < 0) return;
-    const patientId = this.dailyLog.patientMovements[index]?.patientId;
+    const item = this.dailyLog.patientMovements[index];
+    const patientId = item?.patientId;
     if (!patientId) return;
     try {
-      await optimizedUpdatePatient(patientId, { wardNumber: newWardNumber });
+      // 病人資料是病房號的唯一權威；effectiveShiftScope 只送 API（後端更新今日格快照）
+      await optimizedUpdatePatient(patientId, { wardNumber: event.value, effectiveShiftScope: event.scope });
       await this.patientStore.forceRefreshPatients();
+      // 日誌列也記下這次的病房號（歷史日誌顯示以列上記錄為準）；新列尚未存檔就只改本機
+      if (item.wardNumber !== event.value) {
+        item.wardNumber = event.value;
+        if (item.id !== this.newMovementId) await this.saveJustMovements(item, { silent: true });
+        else this.markDirty();
+      }
       this.showAlert('操作成功', '住院床號已更新！');
     } catch (error) {
       console.error('更新住院床號失敗:', error);

@@ -29,7 +29,9 @@ import {
   getCurrentShiftCode,
   getShiftCodeFromSlotKey,
   isShiftEndedToday,
+  wardScopePrompt,
 } from '@/utils/shiftTime';
+import type { WardNumberConfirmEvent } from '@app/components/dialogs/ward-number-dialog/ward-number-dialog.component';
 import { doNotMoveRangeText } from '@/utils/doNotMove';
 import { escapeHtml } from '@/utils/sanitize';
 import { displayDiseaseTag } from '@/utils/hepatitis';
@@ -154,6 +156,9 @@ export class PatientsComponent implements OnInit, OnDestroy {
   readonly isWardDialogVisible = signal(false);
   readonly currentWardNumber = signal('');
   readonly editingPatientForWardNumber = signal<any>(null);
+  /** 病房號當日守門：病人正在本班排程中 → 視窗內問「本班一起改／本班維持到下班」 */
+  readonly wardScopeAsk = signal(false);
+  readonly wardScopeShiftName = signal('');
 
   // Scheduler dialog state
   readonly isSchedulerDialogVisible = signal(false);
@@ -1144,6 +1149,11 @@ export class PatientsComponent implements OnInit, OnDestroy {
       if (patientData.status && patientData.status !== originalPatient.status) identityChanges.push('身分');
       if (pick(patientData, 'mode') !== pick(originalPatient, 'mode')) identityChanges.push('透析模式');
       if (pick(patientData, 'freq') !== pick(originalPatient, 'freq')) identityChanges.push('透析頻率');
+      // 病房號也走同一條守門（2026-09-15）：表單有帶 wardNumber 且與原值不同才算
+      if (
+        patientData.wardNumber !== undefined &&
+        (patientData.wardNumber || null) !== (originalPatient.wardNumber || null)
+      ) identityChanges.push('病房號');
 
       if (
         identityChanges.length > 0 &&
@@ -1154,7 +1164,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
           this.pendingShiftScope = scope;
           void doSave();
         };
-        this.pendingEditFallbackType = identityChanges.includes('身分')
+        this.pendingEditFallbackType = identityChanges.includes('身分') || identityChanges.includes('病房號')
           ? 'UPDATE_STATUS'
           : identityChanges.includes('透析模式')
             ? 'UPDATE_MODE'
@@ -2173,24 +2183,33 @@ export class PatientsComponent implements OnInit, OnDestroy {
   }
 
   // --- Ward Number ---
-  promptWardNumber(patient: any): void {
+  async promptWardNumber(patient: any): Promise<void> {
     if (this.isPageLocked()) return;
     if (!patient || (patient.status !== 'ipd' && patient.status !== 'er')) {
       this.showAlert('提示', '只有住院或急診病人才能設定床號');
       return;
     }
+    // 當日守門（2026-09-15）：病人正在進行中的本班有格子 → 視窗內問生效範圍，其餘直接「本班起」
+    const prompt = wardScopePrompt(await this.getPatientTodayShifts(patient.id));
+    this.wardScopeAsk.set(prompt.ask);
+    this.wardScopeShiftName.set(prompt.shiftName);
     this.editingPatientForWardNumber.set(patient);
     this.currentWardNumber.set(patient.wardNumber || '');
     this.isWardDialogVisible.set(true);
   }
 
-  async handleWardNumberConfirm(value: string): Promise<void> {
-    const trimmedValue = value.trim();
+  async handleWardNumberConfirm(event: WardNumberConfirmEvent): Promise<void> {
+    const trimmedValue = event.value.trim();
     const patient = this.editingPatientForWardNumber();
     if (!patient?.id) return;
 
     try {
-      await this.patientsApi.save(patient.id, { wardNumber: trimmedValue, updatedAt: new Date().toISOString() });
+      // effectiveShiftScope 只送 API（後端決定今日快照範圍），不進本地 store
+      await this.patientsApi.save(patient.id, {
+        wardNumber: trimmedValue,
+        updatedAt: new Date().toISOString(),
+        effectiveShiftScope: event.scope,
+      });
       this.patientStore.updatePatientInStore(patient.id, { wardNumber: trimmedValue, updatedAt: new Date().toISOString() } as any);
       this.notificationService.createNotification(
         `更新床號：${patient.name} -> ${trimmedValue || '無'}`,

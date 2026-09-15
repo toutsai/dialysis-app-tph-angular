@@ -510,7 +510,9 @@
   <app-ward-number-dialog
     *ngIf="isWardDialogVisible()"
     [currentValue]="currentWardNumber()"
-    (confirm)="handleWardNumberConfirm($event)"
+    [askShiftScope]="wardScopeAsk()"
+    [shiftName]="wardScopeShiftName()"
+    (confirmScope)="handleWardNumberConfirm($event)"
     (cancel)="isWardDialogVisible.set(false)"
   ></app-ward-number-dialog>
 
