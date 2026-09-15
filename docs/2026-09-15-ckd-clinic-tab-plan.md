@@ -28,7 +28,7 @@
 | 階段 | 內容 | 後端 | 前端 | 狀態 |
 |---|---|---|---|---|
 | 0 | 骨架 | `routes/ckd.js` 掛 `/api/ckd`（contributor 門檻）；schema 加 `ckd_cases / ckd_clinic_visits / ckd_labs / ckd_billing / ckd_records / ckd_settings / ckd_upload_batches`；`services/ckd/parsers.js` 搬移＋測試 | 側欄改名住院腎臟病地圖＋新增門診CKD收案；路由 `/ckd-clinic` + guard；`features/ckd-clinic/` 開發中頁（進度／筆數／參數） | 完成 2026-09-15（dev） |
-| 1 | 匯入與設定 | POST `/upload`（detectKind 標題優先）、合併規則（追蹤清冊同人整批換、0204 同人同日聯集、醫令明細）、批次紀錄、判定參數 CRUD | 四張上傳卡＋讀取資料夾、批次列表、參數表單 | 未開始 |
+| 1 | 匯入與設定 | POST `/upload`（raw 二進位、8MB 上限、獨立子程序解析）、`services/ckd/ingest.js` 合併規則照原版（case 逐人取代／lab 聯集新值覆蓋／clinic、bill 同鍵略過／sha1 同檔略過）、批次紀錄、判定參數 CRUD；`scripts/ckd-import.mjs` 命令列大批匯入 | 四張上傳卡（拖放／選檔／多檔自動分流）、本次上傳進度、上傳紀錄、參數表單（預設值／還原） | 完成 2026-09-15（dev） |
 | 2 | 明日追蹤＋收案評估 | `analyze/evalCase` 搬 service；GET `/daily?date&physician` | 「日期｜醫師｜人數」按鈕列、A 已收案可否追蹤、B 未收案可否收案、詳情面板 | 未開始 |
 | 3 | 個案紀錄七類 | `ckd_records` CRUD；P 碼補登／收案更正／不予收案 進入判定時間軸 | 紀錄表單、VPN 三態閉環、暫緩至 | 未開始 |
 | 4 | 稽核與匯出 | 全名單稽核、檢驗總表（21 項＋eGFR 斜率）、XLSX（當日可收案名單）／CSV | 兩張總表＋匯出鈕 | 未開始 |
@@ -41,7 +41,15 @@
 - `ckd_cases` 唯一鍵 `mrn|visit|code|ctype`；`ckd_clinic_visits` `mrn|date|no`；`ckd_labs` `no` 或 `mrn|date|kind`；`ckd_billing` `mrn|visit|code`。
 - `ckd_settings` 單列：preGap 77、earlyNew 77、earlyGap 161、dmGap 70、逾期 120、檢驗回溯 ±90（以原版 app.js:220-232 為準，README 的 180 是舊值）。
 
-## 階段 1 要用真檔驗證的事項
+## 真檔驗證結果（2026-09-15，D:\建置相關資料\CKD 四份）
+
+- 四份都是真 xlsx／xls（zip／OLE），不是 HTML 偽裝 → HTML 路徑的 ISO 日期問題暫不需處理。
+- 0204 八個月 31MB／76 萬列：`toAoa` 30 秒、heap 1.3GB。**PM2 `max_memory_restart: 500M`、VM 8GB** → 網頁上傳限 8MB 且在獨立子程序解析（PM2 不計子程序）；首次大批用 `node --max-old-space-size=2048 scripts/ckd-import.mjs <檔>`（實測 33 秒寫入 71,209 份／26,591 人）。之後每日／每週匯出（<1MB）走網頁。
+- 追蹤清冊 25,976 列 → DB 25,168 列：同人同日同碼同類的重複列以 UNIQUE 鍵去重（原版陣列會保留重複列，只影響筆數顯示不影響判定）。
+- 醫令明細檔名 1050701 但內容民國 115 年；含心臟內科等他科 P 碼（Early-CKD 多科會收，對應 allA 設定）。
+- 門診清單 4 天 3,474 列、29 位醫師、他科佔多數（腎臟內科 338）；19 列身分證推不出性別。
+
+## 階段 1 原本要用真檔驗證的事項（保留原文）
 
 - HIS「匯出 Excel」若其實是 HTML／XML（開頭 `<`），SheetJS 文字路徑 `raw:false` 會把 ISO 日期字串改寫成 `m/d/yy`，`anyDate` 讀不回來（原版同樣行為）。拿真實 HTML 匯出檔確認日期格式；若真有 ISO 日期，改 `toAoa` 文字路徑為 `raw:true` 或在 `anyDate` 加 `m/d/yy`（屬額外相容，不動原規則）。
 - 0204 檔 15 萬列在後端主執行緒 `toAoa` 的耗時與記憶體；必要時搬進 spreadsheetParser 的 worker（需擴充成讀全部工作表＋文字路徑）。
@@ -55,4 +63,5 @@
 
 ## 進度紀錄
 
+- 2026-09-15：階段 1 完成（dev 未上線）：四份真檔經 API／CLI 匯入全部正確、重複／超限／垃圾檔處理正確、參數表單可存；`tests/ckd-ingest.test.mjs` 5 組。
 - 2026-09-15：盤點完成、計畫拍板。階段 0 完成（dev）：解析器 ESM 版 6 組測試通過；/api/ckd status+settings；七張表已在 3002 測試 DB 建立；頁面／側欄／改名經無頭驗證。

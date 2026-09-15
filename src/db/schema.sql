@@ -1082,9 +1082,12 @@ CREATE TABLE IF NOT EXISTS ckd_upload_batches (
     replaced INTEGER DEFAULT 0,
     range_start TEXT,
     range_end TEXT,
+    file_hash TEXT,                    -- sha1；同內容檔略過不重複匯入
+    stats_json TEXT DEFAULT '{}',      -- {rows, persons, added, updated, dup, removed, labStats}
     uploaded_by TEXT DEFAULT '{}',
     created_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
+CREATE INDEX IF NOT EXISTS idx_ckd_batches_hash ON ckd_upload_batches(file_hash);
 
 -- 季度造管CSV匯出的人工欄與覆寫（快照/事件欄每次載入即時重算，只存 overrides 避免資料過期）
 CREATE TABLE IF NOT EXISTS vascular_quarter_exports (

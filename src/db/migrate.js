@@ -1234,11 +1234,20 @@ export function runMigrations() {
           replaced INTEGER DEFAULT 0,
           range_start TEXT,
           range_end TEXT,
+          file_hash TEXT,
+          stats_json TEXT DEFAULT '{}',
           uploaded_by TEXT DEFAULT '{}',
           created_at TEXT DEFAULT (datetime('now', 'localtime'))
         );
+        CREATE INDEX IF NOT EXISTS idx_ckd_batches_hash ON ckd_upload_batches(file_hash);
       `)
       migrationsApplied++
+    } else {
+      // 階段 1（2026-09-15）：批次加 sha1 與統計
+      for (const [col, def] of [['file_hash', 'TEXT'], ['stats_json', "TEXT DEFAULT '{}'"]]) {
+        if (addColumnIfNotExists(db, 'ckd_upload_batches', col, def)) migrationsApplied++
+      }
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_ckd_batches_hash ON ckd_upload_batches(file_hash)`)
     }
 
     if (migrationsApplied > 0) {

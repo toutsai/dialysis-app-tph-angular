@@ -1,5 +1,5 @@
 /* 門診 CKD 收案：版面對齊住院腎臟病地圖（aki-map.component.css）的頁首風格 */
-.ckd-page { width: 100%; padding: 0 0 1.5rem; color: #263238; font-size: 0.9rem; }
+.ckd-page { width: 100%; padding: 0 0 1.5rem; color: #263238; font-size: 0.9rem; display: flex; flex-direction: column; gap: 1rem; }
 
 .ckd-header {
   display: flex;
@@ -8,7 +8,6 @@
   gap: 1rem;
   flex-wrap: wrap;
   padding-bottom: 0.75rem;
-  margin-bottom: 0.9rem;
   border-bottom: 1px solid #dee2e6;
 }
 .title-block { display: flex; flex-direction: column; gap: 0.15rem; }
@@ -36,47 +35,37 @@
   font-size: 0.88rem;
   cursor: pointer;
   color: #37474f;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
 }
 .btn:hover { background: #f5f7f8; }
 .btn:disabled { opacity: 0.55; cursor: default; }
 .btn.ghost { color: #607d8b; }
+.btn.primary { background: #1565c0; border-color: #1565c0; color: #fff; font-weight: 600; }
+.btn.primary:hover { background: #0d47a1; }
+.btn.small { padding: 0.25rem 0.6rem; font-size: 0.82rem; }
+.btn.link { border: none; background: none; color: #1976d2; padding: 0 0.3rem; font-size: 0.82rem; }
 
-.banner { padding: 0.5rem 0.75rem; border-radius: 6px; margin-bottom: 0.75rem; }
+.banner { padding: 0.5rem 0.75rem; border-radius: 6px; }
 .banner.error { background: #ffebee; border: 1px solid #ef9a9a; color: #b71c1c; }
 .placeholder { padding: 2.5rem; text-align: center; color: #90a4ae; background: #fafafa; border-radius: 8px; }
 
-.cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
-  gap: 1rem;
-  align-items: start;
-}
 .card {
   border: 1px solid #eceff1;
   border-radius: 8px;
   background: #fff;
   padding: 0.8rem 1rem;
 }
-.card h2 { margin: 0 0 0.6rem; font-size: 1.05rem; color: #1565c0; }
-.card h3 { margin: 0.8rem 0 0.35rem; font-size: 0.9rem; color: #546e7a; }
-.dim { color: #90a4ae; font-size: 0.85rem; margin: 0.5rem 0 0; }
+.card h2 { margin: 0; font-size: 1.05rem; color: #1565c0; }
+.card-head { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 0.7rem; }
+.card-head .dim { flex: 1 1 20rem; }
+.dim { color: #90a4ae; font-size: 0.82rem; }
 
 /* 階段進度 */
-.phases { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
-.phase {
-  display: grid;
-  grid-template-columns: 1.6rem 1fr auto;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.35rem 0.5rem;
-  border-radius: 6px;
-  background: #f5f7f8;
-}
-.phase-no {
-  width: 1.5rem; height: 1.5rem; border-radius: 50%;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-weight: 800; font-size: 0.8rem; color: #fff; background: #90a4ae;
-}
+.phases { list-style: none; margin: 0.6rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.phase { display: grid; grid-template-columns: 1.6rem 1fr auto; align-items: center; gap: 0.5rem; padding: 0.3rem 0.5rem; border-radius: 6px; background: #f5f7f8; }
+.phase-no { width: 1.5rem; height: 1.5rem; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.8rem; color: #fff; background: #90a4ae; }
 .phase-title { font-size: 0.88rem; }
 .phase-status { font-size: 0.78rem; font-weight: 700; border-radius: 999px; padding: 0.05rem 0.55rem; }
 .phase.done { background: #e8f5e9; }
@@ -87,23 +76,64 @@
 .phase.wip .phase-status { color: #e65100; background: #ffe0b2; }
 .phase.todo .phase-status { color: #78909c; background: #eceff1; }
 
-/* 資料現況 */
-.counts { display: flex; flex-wrap: wrap; gap: 0.6rem; }
-.count {
-  flex: 1 1 6rem;
-  border: 1px solid #eceff1;
-  border-radius: 6px;
+/* 匯入卡片 */
+.pick-all { margin-left: auto; }
+.pick-all.drag { outline: 3px dashed #ffb300; outline-offset: 2px; }
+.drop-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0.7rem; }
+.drop {
+  border: 2px dashed #cfd8dc;
+  border-radius: 8px;
+  padding: 0.7rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
   background: #fafbfc;
-  padding: 0.45rem 0.6rem;
-  text-align: center;
-  display: flex; flex-direction: column;
+  min-height: 9rem;
+  transition: border-color 0.12s, background 0.12s;
 }
-.count b { font-size: 1.3rem; color: #1565c0; font-variant-numeric: tabular-nums; }
-.count span { font-size: 0.75rem; color: #78909c; }
-.batches, .kinds { margin: 0; padding-left: 1.1rem; font-size: 0.85rem; color: #455a64; line-height: 1.6; }
+.drop.has-data { border-style: solid; border-color: #a5d6a7; background: #f6fbf6; }
+.drop.drag { border-color: #ffb300; background: #fff8e1; }
+.drop-title { display: flex; align-items: center; gap: 0.4rem; font-size: 0.95rem; }
+.req { font-size: 0.72rem; font-weight: 700; color: #c62828; background: #ffebee; border-radius: 999px; padding: 0.05rem 0.45rem; }
+.req.opt { color: #546e7a; background: #eceff1; }
+.drop-hint { font-size: 0.78rem; color: #78909c; line-height: 1.4; }
+.drop-stat { font-size: 0.86rem; color: #37474f; margin-top: auto; }
+.drop-stat b { color: #1565c0; font-variant-numeric: tabular-nums; }
+.drop-stat.empty { color: #b0bec5; }
+.drop .btn.small { align-self: flex-start; }
+
+/* 本次上傳清單 */
+.uploads { margin-top: 0.8rem; border-top: 1px dashed #eceff1; padding-top: 0.6rem; }
+.uploads-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.3rem; }
+.uploads ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.upload { display: grid; grid-template-columns: 4rem minmax(10rem, 1fr) 2fr; gap: 0.5rem; align-items: baseline; font-size: 0.85rem; padding: 0.25rem 0.4rem; border-radius: 4px; background: #f5f7f8; }
+.u-state { font-weight: 700; font-size: 0.78rem; border-radius: 999px; padding: 0.02rem 0.5rem; text-align: center; background: #eceff1; color: #546e7a; }
+.upload.uploading .u-state { background: #e3f2fd; color: #1565c0; }
+.upload.done .u-state { background: #c8e6c9; color: #2e7d32; }
+.upload.dup .u-state { background: #fff3e0; color: #e65100; }
+.upload.error .u-state { background: #ffcdd2; color: #b71c1c; }
+.upload.error .u-msg { color: #b71c1c; }
+.u-name small { color: #90a4ae; margin-left: 0.3rem; }
+.u-msg { color: #455a64; }
+.saving { color: #1976d2; font-size: 0.82rem; }
+
+/* 上傳紀錄 */
+.batches { margin-top: 0.7rem; font-size: 0.85rem; }
+.batches summary { cursor: pointer; color: #546e7a; }
+.batches ul { margin: 0.4rem 0 0; padding-left: 1.1rem; color: #455a64; line-height: 1.6; }
 .batches .kind { font-weight: 700; color: #1565c0; margin-right: 0.3rem; }
 
 /* 判定參數 */
-.settings { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 0.8rem; margin: 0; font-size: 0.88rem; }
-.settings dt { color: #78909c; }
-.settings dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); gap: 0.4rem 1.2rem; }
+.setting { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 0.5rem; font-size: 0.86rem; padding: 0.2rem 0; }
+.s-label { color: #455a64; }
+.s-input { display: inline-flex; align-items: center; gap: 0.3rem; }
+.s-input input[type='number'] { width: 5rem; }
+.s-input input[type='text'] { width: 8rem; }
+.s-input input { border: 1px solid #cfd8dc; border-radius: 5px; padding: 0.25rem 0.4rem; font-size: 0.88rem; color: #263238; }
+.s-input input:focus { outline: none; border-color: #1976d2; }
+.s-input small { color: #90a4ae; }
+.s-default { font-size: 0.75rem; color: #b0bec5; white-space: nowrap; }
+.s-default.diff { color: #e65100; font-weight: 600; }
+.settings-actions { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.7rem; flex-wrap: wrap; }
+.saved { color: #2e7d32; font-weight: 600; font-size: 0.85rem; }
