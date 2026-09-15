@@ -63,6 +63,42 @@ export function addAutoMovementToDailyLog(db, date, movementData) {
   }
 }
 
+/**
+ * 同日「刪除又復原」：清掉該日工作日誌中此病人的自動「刪除」列（auto_delete_* / auto_scheduled_delete_*），
+ * 視同誤刪沒發生過，呼叫端據回傳值決定不再加「復原」列（使用者 2026-09-15 拍板）。
+ * 刻意不看 originalAutoId：即使護理師改過該列也一併清掉。跨日復原不呼叫此函式（歷史日誌已鎖定、KiDit 可能已申報）。
+ * @returns 清掉的列數
+ */
+export function removeSameDayDeleteMovements(db, date, patientId) {
+  if (!date || !patientId) return 0
+
+  try {
+    const dailyLog = db.prepare(`SELECT * FROM daily_logs WHERE date = ?`).get(date)
+    if (!dailyLog) return 0
+
+    const movements = parseJson(dailyLog.patient_movements, [])
+    const nextMovements = movements.filter((item) => !(
+      item && item.type === '刪除' && item.patientId === patientId &&
+      typeof item.id === 'string' && item.id.startsWith('auto_')
+    ))
+    const removed = movements.length - nextMovements.length
+    if (removed === 0) return 0
+
+    db.prepare(`
+      UPDATE daily_logs
+      SET patient_movements = ?, updated_at = datetime('now', 'localtime')
+      WHERE date = ?
+    `).run(JSON.stringify(nextMovements), date)
+
+    console.log(`[DailyLog] 同日復原：已清掉病人 ${patientId} 的 ${removed} 筆自動「刪除」列 (${date})`)
+    syncKiditFromDailyLog(db, date)
+    return removed
+  } catch (error) {
+    console.error('[DailyLog] Failed to remove same-day delete movement:', error)
+    return 0
+  }
+}
+
 export function removeAutoMovementFromDailyLog(db, date, movementId) {
   if (!date || !movementId) return
 

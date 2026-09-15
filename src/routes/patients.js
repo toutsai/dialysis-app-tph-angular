@@ -6,6 +6,7 @@ import { authenticate, isContributor, isEditor, hasPermission, logAudit } from '
 import { formatDateToYYYYMMDD, getTaipeiTodayString } from '../utils/dateUtils.js'
 import { validate } from '../middleware/validate.js'
 import { addMovementToDailyLog, safeJsonParse, deleteFutureScheduleExceptionsForPatient, snapshotPatientScheduleChange, applyPatientModeChange } from '../services/patientOrderEffects.js'
+import { removeSameDayDeleteMovements } from '../services/dailyLogMovementSync.js'
 import { normalizeDialysisMode, normalizeDialysisOrdersMode } from '../utils/dialysisMode.js'
 import { normalizeHepatitisStatus, deriveHepatitisFromTags, syncTagsFromHepatitis, parseHepatitisStatus, upgradeHepatitisStatus } from '../utils/hepatitis.js'
 import { getEducationDialysisDatesBatch } from '../services/patientEducationDates.js'
@@ -1403,17 +1404,21 @@ async function updatePatientHandler(req, res) {
         restoredTo: restoreStatus
       }, createPatientSnapshot(updated))
 
-      afterCommit.push(() => addMovementToDailyLog(db, {
-        id: `auto_restore_${id}_${Date.now()}`,
-        type: '復原',
-        name: existing.name,
-        patientId: id,
-        medicalRecordNumber: existing.medical_record_number,
-        ...(restoreStatus === 'ipd' ? { admissionDate: getTaipeiTodayString() } : {}),
-        physician: updated.physician || '',
-        reason: '',
-        remarks: `復原至「${STATUS_MAP[restoreStatus] || restoreStatus}」`,
-      }))
+      // 同日誤刪又復原：清掉今天的自動「刪除」列、不加「復原」列（視同沒發生過）；跨日才加「復原」列
+      afterCommit.push(() => {
+        if (removeSameDayDeleteMovements(db, getTaipeiTodayString(), id) > 0) return
+        addMovementToDailyLog(db, {
+          id: `auto_restore_${id}_${Date.now()}`,
+          type: '復原',
+          name: existing.name,
+          patientId: id,
+          medicalRecordNumber: existing.medical_record_number,
+          ...(restoreStatus === 'ipd' ? { admissionDate: getTaipeiTodayString() } : {}),
+          physician: updated.physician || '',
+          reason: '',
+          remarks: `復原至「${STATUS_MAP[restoreStatus] || restoreStatus}」`,
+        })
+      })
     } else if (!wasDeleted && !isNowDeleted && data.status && existing.status !== data.status) {
       // 🔥 檢查狀態變更，自動記錄歷史和動態（只在非刪除/復原情況下）
       const fromStatus = existing.status
@@ -1753,18 +1758,20 @@ router.post('/:id/restore', ...isEditor, async (req, res) => {
       restoredTo: restoreStatus
     }, createPatientSnapshot(restored))
 
-    // 🔥 自動加入當日動態
-    addMovementToDailyLog(db, {
-      id: `auto_restore_${id}_${Date.now()}`,
-      type: '復原',
-      name: existing.name,
-      patientId: id,
-      medicalRecordNumber: existing.medical_record_number,
-      ...(restoreStatus === 'ipd' ? { admissionDate: getTaipeiTodayString() } : {}),
-      physician: restored.physician || '',
-      reason: '',
-      remarks: `復原至「${STATUS_MAP[restoreStatus]}」`,
-    })
+    // 🔥 自動加入當日動態；同日誤刪又復原則改為清掉今天的自動「刪除」列、不加「復原」列
+    if (removeSameDayDeleteMovements(db, getTaipeiTodayString(), id) === 0) {
+      addMovementToDailyLog(db, {
+        id: `auto_restore_${id}_${Date.now()}`,
+        type: '復原',
+        name: existing.name,
+        patientId: id,
+        medicalRecordNumber: existing.medical_record_number,
+        ...(restoreStatus === 'ipd' ? { admissionDate: getTaipeiTodayString() } : {}),
+        physician: restored.physician || '',
+        reason: '',
+        remarks: `復原至「${STATUS_MAP[restoreStatus]}」`,
+      })
+    }
 
 
 
