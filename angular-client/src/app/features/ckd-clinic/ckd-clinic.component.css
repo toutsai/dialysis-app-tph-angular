@@ -1,0 +1,109 @@
+/* 門診 CKD 收案：版面對齊住院腎臟病地圖（aki-map.component.css）的頁首風格 */
+.ckd-page { width: 100%; padding: 0 0 1.5rem; color: #263238; font-size: 0.9rem; }
+
+.ckd-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.9rem;
+  border-bottom: 1px solid #dee2e6;
+}
+.title-block { display: flex; flex-direction: column; gap: 0.15rem; }
+.title-block h1 { margin: 0; font-size: 2rem; font-weight: 700; display: flex; align-items: center; gap: 0.6rem; }
+@media (max-width: 992px) { .title-block h1 { font-size: 1.2rem; } }
+.dev-badge {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #e65100;
+  background: #fff3e0;
+  border: 1px solid #ffcc80;
+  border-radius: 999px;
+  padding: 0.1rem 0.6rem;
+  letter-spacing: 0.5px;
+}
+.subtitle { color: #78909c; font-size: 0.85rem; }
+.source-hint { font-size: 0.78rem; color: #90a4ae; }
+.toolbar { display: flex; gap: 0.6rem; }
+
+.btn {
+  border: 1px solid #cfd8dc;
+  background: #fff;
+  border-radius: 6px;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.88rem;
+  cursor: pointer;
+  color: #37474f;
+}
+.btn:hover { background: #f5f7f8; }
+.btn:disabled { opacity: 0.55; cursor: default; }
+.btn.ghost { color: #607d8b; }
+
+.banner { padding: 0.5rem 0.75rem; border-radius: 6px; margin-bottom: 0.75rem; }
+.banner.error { background: #ffebee; border: 1px solid #ef9a9a; color: #b71c1c; }
+.placeholder { padding: 2.5rem; text-align: center; color: #90a4ae; background: #fafafa; border-radius: 8px; }
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+.card {
+  border: 1px solid #eceff1;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0.8rem 1rem;
+}
+.card h2 { margin: 0 0 0.6rem; font-size: 1.05rem; color: #1565c0; }
+.card h3 { margin: 0.8rem 0 0.35rem; font-size: 0.9rem; color: #546e7a; }
+.dim { color: #90a4ae; font-size: 0.85rem; margin: 0.5rem 0 0; }
+
+/* 階段進度 */
+.phases { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.phase {
+  display: grid;
+  grid-template-columns: 1.6rem 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  background: #f5f7f8;
+}
+.phase-no {
+  width: 1.5rem; height: 1.5rem; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 0.8rem; color: #fff; background: #90a4ae;
+}
+.phase-title { font-size: 0.88rem; }
+.phase-status { font-size: 0.78rem; font-weight: 700; border-radius: 999px; padding: 0.05rem 0.55rem; }
+.phase.done { background: #e8f5e9; }
+.phase.done .phase-no { background: #2e7d32; }
+.phase.done .phase-status { color: #2e7d32; background: #c8e6c9; }
+.phase.wip { background: #fff8e1; }
+.phase.wip .phase-no { background: #ef6c00; }
+.phase.wip .phase-status { color: #e65100; background: #ffe0b2; }
+.phase.todo .phase-status { color: #78909c; background: #eceff1; }
+
+/* 資料現況 */
+.counts { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.count {
+  flex: 1 1 6rem;
+  border: 1px solid #eceff1;
+  border-radius: 6px;
+  background: #fafbfc;
+  padding: 0.45rem 0.6rem;
+  text-align: center;
+  display: flex; flex-direction: column;
+}
+.count b { font-size: 1.3rem; color: #1565c0; font-variant-numeric: tabular-nums; }
+.count span { font-size: 0.75rem; color: #78909c; }
+.batches, .kinds { margin: 0; padding-left: 1.1rem; font-size: 0.85rem; color: #455a64; line-height: 1.6; }
+.batches .kind { font-weight: 700; color: #1565c0; margin-right: 0.3rem; }
+
+/* 判定參數 */
+.settings { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 0.8rem; margin: 0; font-size: 0.88rem; }
+.settings dt { color: #78909c; }
+.settings dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }

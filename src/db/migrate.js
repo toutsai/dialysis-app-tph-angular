@@ -1139,6 +1139,108 @@ export function runMigrations() {
       migrationsApplied++
     }
 
+    // ========================================
+    // 門診 CKD 收案追蹤（Angular 重寫版，2026-09-15 階段 0）：七張表，與 schema.sql 同步
+    // ========================================
+    const ckdCasesExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='ckd_cases'")
+      .get()
+    if (!ckdCasesExists) {
+      console.log('📋 建立 ckd_* 表格（門診 CKD 收案追蹤）...')
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS ckd_cases (
+          id TEXT PRIMARY KEY,
+          mrn TEXT NOT NULL,
+          visit_date TEXT NOT NULL,
+          code TEXT NOT NULL DEFAULT '',
+          ctype TEXT NOT NULL,
+          name TEXT, prog TEXT, cat TEXT, dm INTEGER DEFAULT 0, enroll_date TEXT,
+          egfr REAL, egfr_mdrd REAL, stage TEXT, doctor TEXT, next_due TEXT,
+          reenroll INTEGER DEFAULT 0, serial TEXT, gap_days REAL,
+          closed INTEGER DEFAULT 0, close_date TEXT, reason TEXT, batch_id TEXT,
+          created_at TEXT DEFAULT (datetime('now', 'localtime')),
+          updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+          UNIQUE(mrn, visit_date, code, ctype)
+        );
+        CREATE INDEX IF NOT EXISTS idx_ckd_cases_mrn ON ckd_cases(mrn);
+        CREATE INDEX IF NOT EXISTS idx_ckd_cases_date ON ckd_cases(visit_date);
+        CREATE TABLE IF NOT EXISTS ckd_clinic_visits (
+          id TEXT PRIMARY KEY,
+          mrn TEXT NOT NULL,
+          visit_date TEXT NOT NULL,
+          no TEXT NOT NULL DEFAULT '',
+          name TEXT, id_no TEXT, sex TEXT, birth TEXT, age INTEGER, half TEXT, dept TEXT, room TEXT, doctor TEXT,
+          acr_date TEXT, acr REAL, pcr_date TEXT, pcr REAL,
+          egfr_mdrd_date TEXT, egfr_mdrd REAL, egfr_date TEXT, egfr REAL,
+          batch_id TEXT,
+          created_at TEXT DEFAULT (datetime('now', 'localtime')),
+          updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+          UNIQUE(mrn, visit_date, no)
+        );
+        CREATE INDEX IF NOT EXISTS idx_ckd_clinic_mrn ON ckd_clinic_visits(mrn);
+        CREATE INDEX IF NOT EXISTS idx_ckd_clinic_date ON ckd_clinic_visits(visit_date, doctor);
+        CREATE TABLE IF NOT EXISTS ckd_labs (
+          id TEXT PRIMARY KEY,
+          no TEXT NOT NULL UNIQUE,
+          mrn TEXT NOT NULL,
+          name TEXT,
+          report_date TEXT NOT NULL,
+          spec TEXT NOT NULL,
+          kind TEXT, src TEXT,
+          values_json TEXT NOT NULL DEFAULT '{}',
+          flags_json TEXT NOT NULL DEFAULT '{}',
+          quals_json TEXT NOT NULL DEFAULT '{}',
+          batch_id TEXT,
+          created_at TEXT DEFAULT (datetime('now', 'localtime')),
+          updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_ckd_labs_mrn_date ON ckd_labs(mrn, report_date);
+        CREATE TABLE IF NOT EXISTS ckd_billing (
+          id TEXT PRIMARY KEY,
+          mrn TEXT NOT NULL,
+          visit_date TEXT NOT NULL,
+          code TEXT NOT NULL,
+          code_name TEXT, prog TEXT, ctype TEXT, name TEXT, doctor TEXT, dept TEXT, sex TEXT, birth TEXT,
+          price REAL, n INTEGER DEFAULT 1, batch_id TEXT,
+          created_at TEXT DEFAULT (datetime('now', 'localtime')),
+          UNIQUE(mrn, visit_date, code)
+        );
+        CREATE INDEX IF NOT EXISTS idx_ckd_billing_mrn ON ckd_billing(mrn);
+        CREATE INDEX IF NOT EXISTS idx_ckd_billing_date ON ckd_billing(visit_date);
+        CREATE TABLE IF NOT EXISTS ckd_records (
+          id TEXT PRIMARY KEY,
+          mrn TEXT NOT NULL,
+          rec_type TEXT NOT NULL,
+          rec_date TEXT,
+          payload_json TEXT NOT NULL DEFAULT '{}',
+          created_by TEXT DEFAULT '{}',
+          created_at TEXT DEFAULT (datetime('now', 'localtime')),
+          updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+          deleted_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_ckd_records_mrn ON ckd_records(mrn, rec_type);
+        CREATE TABLE IF NOT EXISTS ckd_settings (
+          id TEXT PRIMARY KEY DEFAULT 'main',
+          settings_json TEXT NOT NULL DEFAULT '{}',
+          updated_by TEXT,
+          updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+        );
+        CREATE TABLE IF NOT EXISTS ckd_upload_batches (
+          id TEXT PRIMARY KEY,
+          kind TEXT NOT NULL,
+          file_name TEXT,
+          row_count INTEGER DEFAULT 0,
+          inserted INTEGER DEFAULT 0,
+          replaced INTEGER DEFAULT 0,
+          range_start TEXT,
+          range_end TEXT,
+          uploaded_by TEXT DEFAULT '{}',
+          created_at TEXT DEFAULT (datetime('now', 'localtime'))
+        );
+      `)
+      migrationsApplied++
+    }
+
     if (migrationsApplied > 0) {
       console.log(`✅ 已完成 ${migrationsApplied} 項遷移`)
     } else {

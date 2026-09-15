@@ -156,7 +156,20 @@ export const routes: Routes = [
             (m) => m.AkiMapComponent
           ),
         canActivate: [specialistGuard],
-        data: { title: '腎臟病地圖' },
+        data: { title: '住院腎臟病地圖' },
+      },
+      {
+        // 門診 CKD 收案追蹤（Angular 重寫版，2026-09-15 起分階段實作）
+        path: 'ckd-clinic',
+        loadComponent: () =>
+          import('./features/ckd-clinic/ckd-clinic.component').then(
+            (m) => m.CkdClinicComponent
+          ),
+        canActivate: [roleGuard],
+        data: {
+          title: PAGE_ACCESS.ckdClinic.title,
+          roles: PAGE_ACCESS.ckdClinic.roles,
+        },
       },
       {
         path: 'user-management',

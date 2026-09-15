@@ -172,12 +172,23 @@
               </li>
             }
 
-            <!-- [腎臟病地圖] 專師專用（admin 或 專科護理師），置於預約洗腎登記下 -->
+            <!-- [住院腎臟病地圖] 專師專用（admin 或 專科護理師），置於預約洗腎登記下（2026-09-15 改名） -->
             @if (canAccessSpecialist()) {
               <li>
                 <a routerLink="/aki-map" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
                   <div class="nav-item-content">
-                    <span class="nav-title">腎臟病地圖</span>
+                    <span class="nav-title">住院腎臟病地圖</span>
+                  </div>
+                </a>
+              </li>
+            }
+
+            <!-- [門診CKD收案] Admin, Editor, Contributor：置於住院腎臟病地圖下（2026-09-15 起 Angular 重寫，分階段上線） -->
+            @if (canAccessPage('ckdClinic')) {
+              <li>
+                <a routerLink="/ckd-clinic" routerLinkActive="router-link-exact-active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">
+                  <div class="nav-item-content">
+                    <span class="nav-title">門診CKD收案</span>
                   </div>
                 </a>
               </li>

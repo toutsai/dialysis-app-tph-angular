@@ -1,0 +1,80 @@
+<div class="ckd-page">
+  <header class="ckd-header">
+    <div class="title-block">
+      <h1>門診CKD收案 <span class="dev-badge">開發中</span></h1>
+      <span class="subtitle">CKD 收案／追蹤判讀工作台 · 個管師、醫師、護理師</span>
+      <span class="source-hint">
+        資料來源：HIS 匯出的四種報表（追蹤清冊、CKD-病患清單查詢、0204 檢驗結果病患明細、醫令明細清單）。
+        功能逐階段上線，判定規則沿用單機版工作台。
+      </span>
+    </div>
+    <div class="toolbar">
+      <button class="btn ghost" (click)="load()" [disabled]="loading()">{{ loading() ? '載入中…' : '重新整理' }}</button>
+    </div>
+  </header>
+
+  @if (error(); as err) {
+    <div class="banner error">{{ err }}</div>
+  }
+
+  @if (status(); as st) {
+    <div class="cards">
+      <!-- 階段進度 -->
+      <section class="card">
+        <h2>建置進度</h2>
+        <ol class="phases">
+          @for (p of st.phases; track p.no) {
+            <li [class]="'phase ' + phaseClass(p.status)">
+              <span class="phase-no">{{ p.no }}</span>
+              <span class="phase-title">{{ p.title }}</span>
+              <span class="phase-status">{{ phaseLabel(p.status) }}</span>
+            </li>
+          }
+        </ol>
+      </section>
+
+      <!-- 資料現況 -->
+      <section class="card">
+        <h2>院內資料庫現況</h2>
+        <div class="counts">
+          <div class="count"><b>{{ st.counts.cases }}</b><span>收案時間軸列</span></div>
+          <div class="count"><b>{{ st.counts.clinicVisits }}</b><span>門診掛號列</span></div>
+          <div class="count"><b>{{ st.counts.labs }}</b><span>檢驗紀錄（人日）</span></div>
+          <div class="count"><b>{{ st.counts.billing }}</b><span>P 碼入帳</span></div>
+          <div class="count"><b>{{ st.counts.records }}</b><span>個案紀錄</span></div>
+        </div>
+        @if (st.batches.length) {
+          <h3>最近上傳</h3>
+          <ul class="batches">
+            @for (b of st.batches; track b.id) {
+              <li><span class="kind">{{ b.kindLabel }}</span> {{ b.fileName }} · {{ b.rowCount }} 列 · {{ b.uploadedBy?.name || '' }} {{ fmtTime(b.createdAt) }}</li>
+            }
+          </ul>
+        } @else {
+          <p class="dim">尚未匯入任何報表。上傳功能於階段 1 提供。</p>
+        }
+        <h3>可辨識的報表</h3>
+        <ul class="kinds">
+          @for (k of st.supportedKinds; track k.kind) { <li>{{ k.label }}</li> }
+        </ul>
+      </section>
+
+      <!-- 判定參數 -->
+      <section class="card">
+        <h2>判定參數</h2>
+        <dl class="settings">
+          @for (s of settingLabels; track s.key) {
+            <dt>{{ s.label }}</dt>
+            <dd>{{ settingValue(s.key) }}{{ s.unit ? ' ' + s.unit : '' }}</dd>
+          }
+        </dl>
+        <p class="dim">
+          @if (st.settingsUpdatedAt) { 最後更新 {{ st.settingsUpdatedBy?.name || '' }} {{ fmtTime(st.settingsUpdatedAt) }} }
+          @else { 目前為預設值（與單機版工作台相同）；調整功能於階段 1 提供。 }
+        </p>
+      </section>
+    </div>
+  } @else if (loading()) {
+    <div class="placeholder">載入中…</div>
+  }
+</div>
