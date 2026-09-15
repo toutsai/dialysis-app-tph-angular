@@ -2,7 +2,7 @@
 // parsers.js 輸出的日期是 Date 物件；跨程序傳遞前一律轉成 'YYYY-MM-DD'（台北本地日，與原版 iso() 一致）。
 import { iso, clinicLabs } from './parsers.js'
 
-function plain(v) {
+export function plain(v) {
   if (v instanceof Date) return isNaN(v) ? null : iso(v)
   if (Array.isArray(v)) return v.map(plain)
   if (v && typeof v === 'object') {

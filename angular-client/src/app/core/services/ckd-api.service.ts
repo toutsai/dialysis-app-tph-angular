@@ -64,9 +64,9 @@ export interface CkdSourceSummary {
   lastFile: string | null;
   lastAt: string | null;
   lastBy: CkdActor | null;
-  openRows?: number;     // case：未結案列
-  days?: number;         // clinic：涵蓋看診日數
-  fromClinic?: number;   // lab：門診清單自帶的檢驗份數
+  openRows?: number;
+  days?: number;
+  fromClinic?: number;
 }
 
 export interface CkdStatus {
@@ -102,6 +102,130 @@ export interface CkdUploadResult {
   sources?: Record<CkdReportKind, CkdSourceSummary>;
 }
 
+// ---------- 階段 2：判讀 ----------
+
+export interface CkdClinicSlot {
+  mrn: string;
+  name: string;
+  sex: string;
+  age: number | null;
+  date: string | null;
+  half: string;
+  dept: string;
+  room: string;
+  doctor: string;
+  no: string;
+  pDM: string;
+  manual: boolean;
+}
+
+export interface CkdMergedLab {
+  date: string | null;
+  v: Record<string, number>;
+  flag: Record<string, string>;
+  q: Record<string, string | undefined>;
+  dateOf: Record<string, string>;
+  src: number;
+  kinds: string[];
+  calcUpcr: boolean;
+}
+
+export interface CkdVerdictBox {
+  tone: 'y' | 'n' | 'q' | 'off';
+  head: string;
+  sub: string;
+  act: { cls: string; lab: string; txt: string; vpn?: string; rec?: string } | null;
+}
+
+export interface CkdAlert { t: string; m: string }
+export interface CkdIndicator { n: string; v: string | number; ok: boolean }
+
+export interface CkdRowA {
+  mrn: string;
+  p: CkdClinicSlot | null;
+  name: string;
+  prog: 'pre' | 'early';
+  dkd: boolean;
+  isDM: boolean;
+  isNew: boolean;
+  otherDept: boolean;
+  egfr: number | null;
+  src: string;
+  mdrd: number | null;
+  stage: string | null;
+  upcr: number | null;
+  uacr: number | null;
+  lab: CkdMergedLab | null;
+  labOk: boolean;
+  labGap: number | null;
+  last: { visit: string | null; enroll: string | null; code: string; ctype: string; doctor: string; src: string } | null;
+  timeline: { visit: string | null; code: string; ctype: string; src: string; doctor: string; price: number | null }[];
+  nextDue: string | null;
+  nextApp: string | null;
+  caseDoctor: string;
+  gap: number | null;
+  need: number | null;
+  code: string | null;
+  status: 'ok' | 'over' | 'cap' | 'wait' | 'none' | 'dkd';
+  why: string[];
+  nYear: number;
+  n12: number;
+  tenure: number | null;
+  enroll: string | null;
+  ann: { ok: boolean; code: string | null; why: string[] };
+  alerts: CkdAlert[];
+  slope: { v: number; mo: number } | null;
+  recon: { anchor: string | null; misses: { visit: string; code: string }[]; shortBilled: { at: string; code: string; gap: number; need: number }[] } | null;
+  miss: string[];
+  unk: string[];
+  bed: string[];
+  ord: string[];
+  inds: CkdIndicator[];
+  age: number | null;
+  box: CkdVerdictBox;
+}
+
+export interface CkdRowB {
+  mrn: string;
+  p: CkdClinicSlot;
+  name: string;
+  lab: CkdMergedLab | null;
+  egfr: number | null;
+  from: string;
+  upcr: number | null;
+  uacr: number | null;
+  stage: string | null;
+  verdict: 'pre' | 'early' | 'check' | 'nodata' | 'no';
+  code: string | null;
+  why: string[];
+  age: number | null;
+  closed: boolean;
+  closeKind: string | null;
+  closeInfo: { at: string; prog: string; code: string; reason: string } | null;
+  noEn: any;
+  miss: string[];
+  unk: string[];
+  bed: string[];
+  ord: string[];
+  box: CkdVerdictBox;
+}
+
+export interface CkdSessionGroup { date: string; doctor: string; n: number }
+
+export interface CkdDaily {
+  date: string;
+  doctorSel: string;
+  otherSession: string;
+  sessions: { groups: CkdSessionGroup[]; others: Record<string, number>; otherGroups: Record<string, { key: string; dept: string; doctor: string; n: number }[]> };
+  deptInfo: { total: number; matched: number; filter: string; undated: number; allDates: string[]; selDate: string | null; depts: string[] };
+  cfg: { preGap: number; earlyNew: number; earlyGap: number; dmGap: number; over: number; labWin: number; dept: string; allA: boolean };
+  hasCases: boolean;
+  hasClinic: boolean;
+  A: CkdRowA[];
+  B: CkdRowB[];
+  timing: { loadMs: number; analyzeMs: number };
+}
+
 @Injectable({ providedIn: 'root' })
 export class CkdApiService {
   private readonly api = inject(ApiService);
@@ -131,5 +255,13 @@ export class CkdApiService {
     });
     if (forcedKind) headers = headers.set('X-Force-Kind', forcedKind);
     return firstValueFrom(this.http.post<CkdUploadResult>(`${this.api.baseUrl}/ckd/upload`, file, { headers }));
+  }
+
+  /** 判讀日 × 醫師 的 A/B 判讀；不帶 date = 本科最近門診日 */
+  getDaily(date?: string, doctor?: string): Promise<CkdDaily> {
+    const params: Record<string, string> = {};
+    if (date) params['date'] = date;
+    if (doctor) params['doctor'] = doctor;
+    return firstValueFrom(this.api.get<CkdDaily>('/ckd/daily', params));
   }
 }

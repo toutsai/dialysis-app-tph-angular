@@ -10,6 +10,10 @@ import {
   CkdUploadBatch,
   CkdUploadResult,
 } from '@app/core/services/ckd-api.service';
+import { CkdDailyComponent } from './ckd-daily/ckd-daily.component';
+
+/** 頁內檢視：daily = 明日追蹤／收案評估（階段 2）；import = 匯入與設定（階段 1） */
+type CkdView = 'daily' | 'import';
 
 /** 上傳卡片：四種 HIS 報表（順序＝個管師匯入順序） */
 interface UploadCard {
@@ -44,13 +48,14 @@ const NUMERIC_SETTING_KEYS = ['preGap', 'earlyNew', 'earlyGap', 'dmGap', 'over',
 @Component({
   selector: 'app-ckd-clinic',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, CkdDailyComponent],
   templateUrl: './ckd-clinic.component.html',
   styleUrl: './ckd-clinic.component.css',
 })
 export class CkdClinicComponent implements OnInit {
   private readonly ckdApi = inject(CkdApiService);
 
+  readonly view = signal<CkdView>('daily');
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly status = signal<CkdStatus | null>(null);

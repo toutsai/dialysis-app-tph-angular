@@ -14,11 +14,22 @@
     </div>
   </header>
 
+  <!-- 頁內檢視：判讀（個管師每天的主線）／匯入與設定 -->
+  <nav class="views">
+    <button type="button" class="view-tab" [class.on]="view() === 'daily'" (click)="view.set('daily')">明日追蹤 · 收案評估</button>
+    <button type="button" class="view-tab" [class.on]="view() === 'import'" (click)="view.set('import')">匯入與設定</button>
+  </nav>
+
   @if (error(); as err) {
     <div class="banner error">{{ err }}</div>
   }
 
+  @if (view() === 'daily') {
+    <app-ckd-daily />
+  }
+
   @if (status(); as st) {
+    @if (view() === 'import') {
     @if (showPhases()) {
       <section class="card phases-card">
         <h2>建置進度</h2>
@@ -156,7 +167,8 @@
         </div>
       }
     </section>
-  } @else if (loading()) {
+    }
+  } @else if (loading() && view() === 'import') {
     <div class="placeholder">載入中…</div>
   }
 </div>

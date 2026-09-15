@@ -24,6 +24,23 @@
   letter-spacing: 0.5px;
 }
 .subtitle { color: #78909c; font-size: 0.85rem; }
+
+/* 頁內檢視切換 */
+.views { display: flex; gap: 0.3rem; border-bottom: 1px solid #dee2e6; }
+.view-tab {
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  background: #eef2f4;
+  color: #546e7a;
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+.view-tab:hover { background: #e3e9ec; }
+.view-tab.on { background: #1565c0; color: #fff; border-color: #1565c0; }
 .source-hint { font-size: 0.78rem; color: #90a4ae; }
 .toolbar { display: flex; gap: 0.6rem; }
 
