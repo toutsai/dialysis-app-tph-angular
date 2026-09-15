@@ -446,6 +446,8 @@ export class DailyLogComponent implements OnInit {
           }
         }
 
+        // 舊資料可能殘留 isEdited:true（後端 GET 已剝，這裡再防一層），不清會讓該列一載入就進編輯模式
+        mergedLog.patientMovements = this.stripEditFlags(mergedLog.patientMovements);
         Object.assign(this.dailyLog, mergedLog);
       } else {
         this.dailyLog.otherNotes = '';
@@ -521,6 +523,7 @@ export class DailyLogComponent implements OnInit {
 
     try {
       const dataToSave = JSON.parse(JSON.stringify(this.dailyLog));
+      dataToSave.patientMovements = this.stripEditFlags(dataToSave.patientMovements);
       if (dataToSave.stats?.staffing) {
         if (dataToSave.stats.staffing.deductions) {
           dataToSave.stats.staffing.adjustments = dataToSave.stats.staffing.deductions;
@@ -878,6 +881,13 @@ export class DailyLogComponent implements OnInit {
     return item.id === this.newMovementId || !!item.isEdited;
   }
 
+  /** 剝掉病人動態列的 isEdited UI 旗標（不可進 DB） */
+  private stripEditFlags<T>(movements: T): T {
+    if (!Array.isArray(movements)) return movements;
+    for (const row of movements) if (row && typeof row === 'object') delete (row as any).isEdited;
+    return movements;
+  }
+
   unlockMovement(item: any): void {
     if (this.isPageLocked) return;
     item.isEdited = true;
@@ -917,7 +927,8 @@ export class DailyLogComponent implements OnInit {
     this.isLoading.set(true);
     try {
       const docId = this.selectedDate();
-      const submitted = JSON.parse(JSON.stringify(item ? [item] : this.dailyLog.patientMovements));
+      // isEdited 是純 UI 旗標，送出前剝掉；否則會存進 DB，重整後該列永遠卡在編輯狀態（2026-09-15 修）
+      const submitted = this.stripEditFlags(JSON.parse(JSON.stringify(item ? [item] : this.dailyLog.patientMovements)));
       const result = await this.dailyLogsApi.save(docId, {
         version: this.dailyLog.version,
         ...(item ? { movementUpdates: submitted } : { patientMovements: submitted }),
@@ -926,7 +937,7 @@ export class DailyLogComponent implements OnInit {
       this.dailyLog.version = (result as any).version;
       const baseline = item ? JSON.parse(this.loadedSnapshot['patientMovements'] || '[]') : [];
       const byId = new Map<string, any>(baseline.map((row: any) => [String(row.id), row]));
-      for (const row of submitted) { delete row.isEdited; byId.set(String(row.id), row); }
+      for (const row of submitted) byId.set(String(row.id), row);
       this.loadedSnapshot['patientMovements'] = JSON.stringify([...byId.values()]);
       this.hasUnsavedChanges.set(this.hasPendingDraft());
       this.dailyLogCache.delete(docId); // Clear cache to force fresh reload
