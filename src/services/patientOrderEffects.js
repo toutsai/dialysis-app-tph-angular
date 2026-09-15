@@ -251,7 +251,7 @@ export function snapshotPatientScheduleChange(db, existing, updated, data, user,
     // 病房號單獨變更（2026-09-15，使用者拍板比照身分/模式走「本班一起改／本班維持到下班」守門）：
     // 快照只動 wardNumber 不碰身分/模式的凍結；未帶生效範圍的舊呼叫端視為「本班起」，
     // 否則整天快照舊病房號會讓今天永遠看不到新值（病房號不像身分有「明天生效」的語意）。
-    const wardOnly = wardChanged && !statusChanged && !modeChanged && !freqChanged && !isDeleting
+    const wardOnly = wardChanged && !statusChanged && !modeChanged && !freqChanged && !(!wasDeleted && isNowDeleted)
     const todayStr = getTaipeiTodayString()
     const effectiveShiftScope =
       data.effectiveShiftScope === 'current'
