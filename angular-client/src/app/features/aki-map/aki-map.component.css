@@ -304,60 +304,55 @@
   text-align: center;
 }
 
+/* 床卡（2026-09-16 比照 ICU 透析迷你卡）：--c＝桶色、--fg＝底色上的字色
+   fill＝底色塗滿（Stage 3 紅／2 橙／1 黃／無 AKI 綠）；outline＝白底彩色外框（CKD 深藍／無法區分 深灰） */
 .bed-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr));
-  gap: 0.4rem;
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: 0.45rem;
   padding: 0.6rem;
 }
 .bed {
-  --c: #b0bec5;
-  border: 2px solid #eceff1;
-  border-radius: 6px;
-  background: #fff;
-  padding: 0.35rem 0.5rem;
+  --c: #546e7a;
+  --fg: #fff;
+  position: relative;
+  border: 2px solid var(--c);
+  border-radius: 10px;
+  background: var(--c);
+  color: var(--fg);
+  padding: 0.38rem 0.55rem 0.36rem;
   text-align: left;
   cursor: pointer;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 0.05rem;
-  position: relative;
-  min-height: 3.5rem;
+  min-width: 0;
+  font: inherit;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
-.bed:hover { background: #fafcff; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
-/* 有 AKI（Stage 1–3 / 疑似 ESRD）：彩色外框＋同色外圈，用 box-shadow 做加粗感避免格線位移 */
-.bed.frame-aki {
-  border-color: var(--c);
-  box-shadow: 0 0 0 1px var(--c);
-  box-shadow: 0 0 0 1px var(--c), 0 1px 6px color-mix(in srgb, var(--c) 45%, transparent);
+.bed:hover, .bed:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+  outline: none;
+  z-index: 1;
 }
-.bed.frame-aki:hover {
-  background: #fafcff;
-  box-shadow: 0 0 0 1px var(--c), 0 2px 8px rgba(0, 0, 0, 0.18);
-  box-shadow: 0 0 0 1px var(--c), 0 2px 8px color-mix(in srgb, var(--c) 60%, transparent);
+.bed.outline { background: #fff; color: #263238; }
+.bed-top { display: flex; align-items: center; gap: 0.3rem; max-width: 100%; }
+.bed-no { font-size: 0.76rem; font-weight: 700; opacity: 0.92; letter-spacing: 0.3px; line-height: 1.2; }
+.bed.outline .bed-no { color: var(--c); opacity: 1; }
+.bed-name {
+  font-size: 1.02rem;
+  font-weight: 800;
+  line-height: 1.25;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-/* 無 AKI / 單筆無法判定：一般粗細黑框 */
-.bed.frame-neutral { border-color: #212121; }
-/* 無 Cr 資料：虛線灰框＋灰底 */
-.bed.frame-nodata {
-  border-style: dashed;
-  border-color: #b0bec5;
-  background: #f5f5f5;
-}
-.bed-top { display: flex; align-items: center; gap: 0.3rem; }
-.bed-no { font-size: 0.7rem; color: #90a4ae; }
-.bed-name { font-size: 0.82rem; font-weight: 600; }
-.bed-cr { font-size: 0.75rem; color: #546e7a; }
-.bed-stage {
-  position: absolute;
-  top: 0.3rem; right: 0.3rem;
-  background: var(--c);
-  color: #fff;
-  font-size: 0.62rem;
-  font-weight: 700;
-  border-radius: 4px;
-  padding: 0 0.25rem;
-}
+.bed-cr { font-size: 0.76rem; font-weight: 600; opacity: 0.95; line-height: 1.2; }
+.bed.outline .bed-cr { color: #546e7a; }
 
 /* 本院透析病人模式徽章 */
 .hd-tag {
@@ -419,6 +414,43 @@
   margin-right: 0.5rem;
 }
 .verdict-detail { font-size: 0.8rem; color: #455a64; }
+/* 詳情視窗頂部：桶標籤後接病程徽章（原床卡上的徽章移到這裡） */
+.verdict .course-badge { font-size: 0.72rem; margin-right: 0.3rem; vertical-align: middle; }
+
+/* ===== 滑過床卡摘要浮窗（唯讀，fixed；pointer-events none 避免滑鼠移進浮窗時閃爍） ===== */
+.pop {
+  position: fixed;
+  z-index: 1200;
+  width: 22rem;
+  max-width: calc(100vw - 1rem);
+  background: #fff;
+  border: 1px solid #e0e6ea;
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+  padding: 0.6rem 0.8rem;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.86rem;
+  color: #263238;
+}
+.pop.above { transform: translateY(-100%); }
+.pop-head { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.pop-bed { font-size: 0.8rem; font-weight: 700; color: #607d8b; }
+.pop-name { font-size: 1.1rem; }
+.pop-bucket { font-size: 0.74rem; font-weight: 700; border-radius: 5px; padding: 0.08rem 0.5rem; }
+.pop-who { display: flex; gap: 0.5rem; align-items: center; font-size: 0.8rem; }
+.pop-who .mono { font-family: ui-monospace, Consolas, monospace; color: #546e7a; }
+.pop .dim { color: #90a4ae; }
+.pop-meta { display: flex; flex-wrap: wrap; gap: 0.25rem 0.8rem; font-size: 0.82rem; }
+.pop-meta i { font-style: normal; color: #90a4ae; margin-right: 0.25rem; }
+.pop-meta small { color: #90a4ae; margin-left: 0.2rem; }
+.pop-badges { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.pop-badges .course-badge { font-size: 0.7rem; }
+.pop-dx { display: flex; flex-direction: column; gap: 0.1rem; font-size: 0.78rem; color: #455a64; border-top: 1px dashed #eceff1; padding-top: 0.35rem; }
+.pop-foot { display: flex; justify-content: flex-end; font-size: 0.76rem; }
+.pop-tip { color: #1976d2; }
 
 .trend { margin-bottom: 0.9rem; }
 .trend-svg {

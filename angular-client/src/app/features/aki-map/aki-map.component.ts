@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal, OnInit } from '@angular/core';
+import { Component, computed, inject, signal, HostListener, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -40,29 +40,71 @@ interface UploadResult {
   hint?: string;
 }
 
-interface CategoryDef {
-  key: AkiCategory;
+/**
+ * 地圖床卡六桶（2026-09-16 改版，比照 ICU 透析頁籤樣式）：
+ *   AKI Stage 3／2／1（紅／橙／黃底）、無 AKI（綠底）、CKD（深藍框白底）、無法區分（深灰框白底）。
+ * 純前端歸類：後端 category（含 esrd／single／no-data）與關懷名單、匯出邏輯都不動。
+ */
+export type MapBucket = 'stage-3' | 'stage-2' | 'stage-1' | 'stage-0' | 'ckd' | 'unknown';
+
+interface BucketDef {
+  key: MapBucket;
   label: string;
   color: string;
-  /** 以 color 為底色時的文字色，預設白字；淡色底需指定深色字 */
-  fg?: string;
+  /** 底色上的文字色（淡黃底需深色字） */
+  fg: string;
+  /** fill＝底色塗滿；outline＝白底彩色外框 */
+  style: 'fill' | 'outline';
 }
 
-// 分期顯示順序、標籤、色碼（與後端 AKI_CATEGORIES 對齊）
-const CATEGORY_DEFS: CategoryDef[] = [
-  { key: 'stage-3', label: 'Stage 3', color: '#d32f2f' },
-  { key: 'stage-2', label: 'Stage 2', color: '#f57c00' },
-  { key: 'stage-1', label: 'Stage 1', color: '#fdd835', fg: '#424242' },
-  { key: 'esrd', label: '疑似 ESRD', color: '#7b1fa2' },
-  { key: 'stage-0', label: '無 AKI', color: '#388e3c' },
-  { key: 'single', label: '單筆無法判定', color: '#607d8b' },
-  { key: 'no-data', label: '無 Cr 資料', color: '#b0bec5' },
+const BUCKET_DEFS: BucketDef[] = [
+  { key: 'stage-3', label: 'AKI Stage 3', color: '#e53935', fg: '#fff', style: 'fill' },
+  { key: 'stage-2', label: 'AKI Stage 2', color: '#f57c00', fg: '#fff', style: 'fill' },
+  { key: 'stage-1', label: 'AKI Stage 1', color: '#fdd835', fg: '#3e2723', style: 'fill' },
+  { key: 'stage-0', label: '無 AKI', color: '#43a047', fg: '#fff', style: 'fill' },
+  { key: 'ckd', label: 'CKD', color: '#1565c0', fg: '#fff', style: 'outline' },
+  { key: 'unknown', label: '無法區分', color: '#546e7a', fg: '#fff', style: 'outline' },
 ];
+
+/** 歸桶用到的最小欄位（地圖病人／觀察名單／詳情皆可套） */
+interface BucketSource {
+  category: AkiCategory;
+  stage: number | null;
+  ckdSuspected: boolean;
+  dialysisMode: string | null;
+}
+
+/**
+ * 歸桶優先序（使用者 2026-09-16 拍板）：
+ *   1) 本院透析病人：Cr 隨透析起伏、KDIGO 分期無意義 → 一律 CKD 桶＋模式標籤，不參與分期著色
+ *   2) AKI stage ≥1 → 對應 Stage 桶（AKI on CKD 以 AKI 色呈現，CKD 資訊進視窗）
+ *   3) 全段 Cr ≥4.0（原疑似 ESRD）或有 eGFR 慢性證據 → CKD
+ *   4) 無 AKI 且無 CKD 證據 → 無 AKI
+ *   5) 單筆無法判定／無 Cr 資料 → 無法區分
+ */
+function bucketOf(p: BucketSource): MapBucket {
+  if (p.dialysisMode) return 'ckd';
+  if (p.stage != null && p.stage >= 1) return `stage-${p.stage}` as MapBucket;
+  if (p.category === 'esrd' || p.ckdSuspected) return 'ckd';
+  if (p.category === 'stage-0') return 'stage-0';
+  return 'unknown';
+}
+
+/** 滑過床卡的摘要浮窗（fixed 定位，座標由卡片位置算；比照 ICU 頁籤） */
+interface HoverPop {
+  p: AkiPatient;
+  x: number;
+  y: number;
+  /** 下方放不下 → 改放卡片上方 */
+  above: boolean;
+}
+const POP_W = 352;
+const POP_H = 300;
 
 interface WardGroup {
   ward: string;
   patients: AkiPatient[];
-  counts: Partial<Record<AkiCategory, number>>;
+  counts: Partial<Record<MapBucket, number>>;
 }
 
 interface WardStat {
@@ -111,14 +153,16 @@ function compareWard(a: string, b: string): number {
 export class AkiMapComponent implements OnInit {
   private readonly akiApi = inject(AkiApiService);
 
-  readonly categoryDefs = CATEGORY_DEFS;
+  readonly bucketDefs = BUCKET_DEFS;
 
   readonly loading = signal(false);
   readonly message = signal<{ type: 'info' | 'error'; text: string } | null>(null);
   readonly data = signal<AkiMapResponse | null>(null);
 
   readonly selectedDate = signal<string>('');
-  readonly filterCategory = signal<AkiCategory | 'all' | 'aki'>('all');
+  readonly filterCategory = signal<MapBucket | 'all' | 'aki'>('all');
+  // 滑過床卡摘要浮窗
+  readonly pop = signal<HoverPop | null>(null);
   readonly filterCourse = signal<CourseFilter>('all');
   readonly search = signal<string>('');
   readonly courseDefs = COURSE_DEFS;
@@ -245,20 +289,21 @@ export class AkiMapComponent implements OnInit {
   // 出院名單預設隱藏已結案/死亡
   readonly showClosed = signal(false);
 
-  private readonly colorMap = new Map(CATEGORY_DEFS.map((d) => [d.key, d]));
+  private readonly bucketMap = new Map(BUCKET_DEFS.map((d) => [d.key, d]));
 
   // 隱藏病房(單托嬰/嬰兒病床)後的病人清單 —— 摘要與地圖皆以此為準，計數才一致
   readonly visiblePatients = computed(() =>
     (this.data()?.patients || []).filter((p) => !isHiddenWard(p.ward)),
   );
 
-  // 摘要（含 0 的分類也顯示，方便一眼看全）
+  // 摘要（含 0 的桶也顯示，方便一眼看全）
   readonly summaryRow = computed(() => {
-    const counts: Partial<Record<AkiCategory, number>> = {};
+    const counts: Partial<Record<MapBucket, number>> = {};
     for (const p of this.visiblePatients()) {
-      counts[p.category] = (counts[p.category] || 0) + 1;
+      const b = bucketOf(p);
+      counts[b] = (counts[b] || 0) + 1;
     }
-    return CATEGORY_DEFS.map((def) => ({
+    return BUCKET_DEFS.map((def) => ({
       ...def,
       count: counts[def.key] || 0,
     }));
@@ -282,9 +327,10 @@ export class AkiMapComponent implements OnInit {
 
     const course = this.filterCourse();
     for (const p of this.visiblePatients()) {
+      const b = bucketOf(p);
       if (cat === 'aki') {
-        if (!(p.stage != null && p.stage >= 1)) continue;
-      } else if (cat !== 'all' && p.category !== cat) {
+        if (!b.startsWith('stage-') || b === 'stage-0') continue;
+      } else if (cat !== 'all' && b !== cat) {
         continue;
       }
       if (!matchCourse(p, course)) continue;
@@ -298,7 +344,7 @@ export class AkiMapComponent implements OnInit {
         groups.set(p.ward, g);
       }
       g.patients.push(p);
-      g.counts[p.category] = (g.counts[p.category] || 0) + 1;
+      g.counts[b] = (g.counts[b] || 0) + 1;
     }
 
     const arr = [...groups.values()];
@@ -318,14 +364,18 @@ export class AkiMapComponent implements OnInit {
   // 比例統計標題：跟隨上方篩選器（Stage 3 比例 / AKI 比例 …）
   readonly filterRatioLabel = computed(() => {
     const cat = this.filterCategory();
-    return cat === 'all' || cat === 'aki' ? 'AKI 比例' : `${this.label(cat as AkiCategory)} 比例`;
+    return cat === 'all' || cat === 'aki' ? 'AKI 比例' : `${this.label(cat)} 比例`;
   });
 
   // 依目前篩選器計算各站命中比例，分「加護」與「一般病房」兩組各取前2（分母 ≥5 以免小病房失真）
+  // AKI 比例＝落在 Stage 1–3 桶者（本院透析病人已歸 CKD 桶，不計入）
   readonly topWardStats = computed<{ icu: WardStat[]; ward: WardStat[] }>(() => {
     const cat = this.filterCategory();
-    const hit = (p: AkiPatient) =>
-      cat === 'all' || cat === 'aki' ? p.stage != null && p.stage >= 1 : p.category === cat;
+    const isAkiBucket = (b: MapBucket) => b.startsWith('stage-') && b !== 'stage-0';
+    const hit = (p: AkiPatient) => {
+      const b = bucketOf(p);
+      return cat === 'all' || cat === 'aki' ? isAkiBucket(b) : b === cat;
+    };
     const map = new Map<string, { ward: string; total: number; hit: number }>();
     for (const p of this.visiblePatients()) {
       let e = map.get(p.ward);
@@ -350,24 +400,77 @@ export class AkiMapComponent implements OnInit {
     this.load();
   }
 
-  color(cat: AkiCategory): string {
-    return this.colorMap.get(cat)?.color || '#b0bec5';
+  /** 地圖六桶歸類（床卡／觀察名單／詳情共用） */
+  bucket(p: BucketSource): MapBucket {
+    return bucketOf(p);
   }
 
-  /** 分期色當底色時的文字色（淡黃底回深色字，其餘白字） */
-  fgColor(cat: AkiCategory): string {
-    return this.colorMap.get(cat)?.fg || '#fff';
+  color(b: MapBucket): string {
+    return this.bucketMap.get(b)?.color || '#546e7a';
   }
 
-  /** 床卡外框樣式：AKI/ESRD 彩色加粗、無 AKI 與單筆黑框、無 Cr 資料虛線灰框 */
-  frameClass(cat: AkiCategory): string {
-    if (cat === 'no-data') return 'frame-nodata';
-    if (cat === 'stage-0' || cat === 'single') return 'frame-neutral';
-    return 'frame-aki';
+  /** 桶色當底色時的文字色（淡黃底回深色字，其餘白字） */
+  fgColor(b: MapBucket): string {
+    return this.bucketMap.get(b)?.fg || '#fff';
   }
 
-  label(cat: AkiCategory): string {
-    return this.colorMap.get(cat)?.label || cat;
+  /** 床卡樣式：Stage 1–3／無 AKI 底色塗滿；CKD／無法區分 白底彩色外框 */
+  cardClass(b: MapBucket): string {
+    return this.bucketMap.get(b)?.style === 'outline' ? 'outline' : 'fill';
+  }
+
+  label(b: MapBucket): string {
+    return this.bucketMap.get(b)?.label || b;
+  }
+
+  /** 詳情視窗的桶（後端 staging.category + analysis.ckd + 透析模式） */
+  detailBucket(d: AkiPatientDetail): MapBucket {
+    return bucketOf({
+      category: d.staging.category,
+      stage: d.staging.stage,
+      ckdSuspected: !!d.analysis?.ckd?.suspected,
+      dialysisMode: d.dialysisMode,
+    });
+  }
+
+  /** 詳情視窗頂部的病程徽章：取地圖／觀察名單上同病歷號的扁平病程欄位 */
+  readonly detailCourse = computed<AkiCourseFields | null>(() => {
+    const mrn = this.detail()?.mrn;
+    if (!mrn) return null;
+    return this.visiblePatients().find((p) => p.mrn === mrn)
+      || this.watchList().find((w) => w.mrn === mrn)
+      || null;
+  });
+
+  // ---------- 滑過床卡摘要浮窗（比照 ICU 透析頁籤） ----------
+
+  showPop(ev: Event, p: AkiPatient): void {
+    if (this.detail() || this.detailLoading()) return;
+    const el = ev.currentTarget as HTMLElement | null;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let x = r.left;
+    if (x + POP_W > vw - 8) x = Math.max(8, vw - 8 - POP_W);
+    const above = r.bottom + 6 + POP_H > vh && r.top > POP_H;
+    const y = above ? r.top - 6 : r.bottom + 6;
+    this.pop.set({ p, x, y, above });
+  }
+
+  hidePop(): void {
+    this.pop.set(null);
+  }
+
+  @HostListener('window:scroll')
+  @HostListener('window:resize')
+  onViewportChange(): void {
+    this.hidePop();
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    if (this.detail() || this.detailLoading()) this.closeDetail();
   }
 
   wardLabel(ward: string): string {
@@ -397,7 +500,7 @@ export class AkiMapComponent implements OnInit {
     if (this.ckdLoaded()) this.loadCkd(date);
   }
 
-  setFilter(cat: AkiCategory | 'all' | 'aki'): void {
+  setFilter(cat: MapBucket | 'all' | 'aki'): void {
     this.filterCategory.set(cat);
   }
 
@@ -702,6 +805,7 @@ export class AkiMapComponent implements OnInit {
   }
 
   async openDetail(mrn: string): Promise<void> {
+    this.hidePop();
     this.detailLoading.set(true);
     this.detail.set(null);
     try {

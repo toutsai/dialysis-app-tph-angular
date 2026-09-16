@@ -111,11 +111,11 @@
           <h2>⚠️ 門急觀察名單 · {{ watchList().length }}</h2>
           <div class="watch-list">
             @for (w of watchList(); track w.mrn) {
-              <button class="watch-item" [style.--c]="color(w.category)" (click)="openDetail(w.mrn)">
-                <span class="dot" [style.background]="color(w.category)"></span>
+              <button class="watch-item" [style.--c]="color(bucket(w))" (click)="openDetail(w.mrn)">
+                <span class="dot" [style.background]="color(bucket(w))"></span>
                 <span class="wname">{{ w.name }}</span>
                 @if (w.dialysisMode) { <span class="hd-tag" title="本院透析病人">{{ w.dialysisMode }}</span> }
-                <span class="wmeta">{{ label(w.category) }} · {{ w.baselineCr }}→{{ w.peakCr }}</span>
+                <span class="wmeta">{{ label(bucket(w)) }} · {{ w.baselineCr }}→{{ w.peakCr }}</span>
               </button>
             }
           </div>
@@ -170,34 +170,36 @@
           <div class="ward-head">
             <h3>{{ wardLabel(g.ward) }}</h3>
             <div class="ward-counts">
-              @for (def of categoryDefs; track def.key) {
+              @for (def of bucketDefs; track def.key) {
                 @if (g.counts[def.key]) {
-                  <span class="mini" [style.background]="def.color" [style.color]="def.fg || '#fff'" [title]="def.label">
+                  <span class="mini" [style.background]="def.color" [style.color]="def.fg" [title]="def.label">
                     {{ g.counts[def.key] }}
                   </span>
                 }
               }
             </div>
           </div>
+          <!-- 床卡（2026-09-16 比照 ICU 透析迷你卡）：底色＝六桶；只留床號／姓名／Cr／透析模式，病程徽章移入滑過摘要與詳情視窗 -->
           <div class="bed-grid">
             @for (p of g.patients; track p.mrn) {
-              <button [class]="'bed ' + frameClass(p.category)" [style.--c]="color(p.category)" (click)="openDetail(p.mrn)">
+              @let b = bucket(p);
+              <button type="button"
+                      [class]="'bed ' + cardClass(b)"
+                      [style.--c]="color(b)" [style.--fg]="fgColor(b)"
+                      [attr.aria-label]="p.bed + ' ' + p.name + ' ' + label(b)"
+                      (mouseenter)="showPop($event, p)"
+                      (mouseleave)="hidePop()"
+                      (focus)="showPop($event, p)"
+                      (blur)="hidePop()"
+                      (click)="openDetail(p.mrn)">
                 <span class="bed-top">
                   <span class="bed-no">{{ p.bed }}</span>
                   @if (p.dialysisMode) { <span class="hd-tag" title="本院透析病人">{{ p.dialysisMode }}</span> }
                 </span>
                 <span class="bed-name">{{ p.name }}</span>
                 <span class="bed-cr">
-                  @if (p.latestCr != null) { Cr {{ p.latestCr }} } @else { — }
+                  @if (p.latestCr != null) { Cr {{ p.latestCr }} } @else { Cr — }
                 </span>
-                @if (p.stage) { <span class="bed-stage" [style.color]="fgColor(p.category)">S{{ p.stage }}</span> }
-                @if (courseBadges(p).length) {
-                  <span class="bed-badges">
-                    @for (b of courseBadges(p); track b.label) {
-                      <span class="course-badge" [style.background]="b.color" [title]="b.title">{{ b.label }}</span>
-                    }
-                  </span>
-                }
               </button>
             }
           </div>
@@ -207,6 +209,48 @@
         <div class="placeholder">此篩選條件下沒有病人。</div>
       }
     </section>
+
+    <!-- 滑過床卡摘要浮窗（唯讀；點選才開詳情） -->
+    @if (pop(); as h) {
+      @let hb = bucket(h.p);
+      <div class="pop" [class.above]="h.above" [style.left.px]="h.x" [style.top.px]="h.y">
+        <div class="pop-head">
+          <span class="pop-bed">{{ h.p.bed }}</span>
+          <b class="pop-name">{{ h.p.name }}</b>
+          <span class="pop-bucket" [style.background]="color(hb)" [style.color]="fgColor(hb)">{{ label(hb) }}</span>
+          @if (h.p.dialysisMode) { <span class="hd-tag" title="本院透析病人">{{ h.p.dialysisMode }}</span> }
+        </div>
+        <div class="pop-who">
+          <span class="mono">{{ h.p.mrn }}</span>
+          @if (h.p.sex || h.p.age) { <span class="dim">{{ h.p.sex }}{{ h.p.age ? ' ' + h.p.age + ' 歲' : '' }}</span> }
+        </div>
+        <div class="pop-meta">
+          @if (h.p.dept) { <span><i>科別</i>{{ h.p.dept }}</span> }
+          @if (h.p.physician) { <span><i>醫師</i>{{ h.p.physician }}</span> }
+          @if (h.p.latestCr != null) { <span><i>最新 Cr</i>{{ h.p.latestCr }} <small>{{ h.p.latestDate }}</small></span> }
+          @if (h.p.stage != null && h.p.stage >= 1 && h.p.baselineCr != null) {
+            <span><i>baseline→peak</i>{{ h.p.baselineCr }}→{{ h.p.peakCr }}@if (h.p.ratio) { <small>×{{ h.p.ratio }}</small> }</span>
+          }
+          @if (h.p.admitDate) { <span><i>入院</i>{{ h.p.admitDate }}</span> }
+        </div>
+        @if (courseBadges(h.p).length) {
+          <div class="pop-badges">
+            @for (cb of courseBadges(h.p); track cb.label) {
+              <span class="course-badge" [style.background]="cb.color">{{ cb.label }}</span>
+            }
+          </div>
+        }
+        @if (h.p.diagnoses?.length) {
+          <div class="pop-dx">
+            @for (dx of h.p.diagnoses.slice(0, 3); track $index) {
+              <span>{{ dx.code }} {{ dx.name }}</span>
+            }
+            @if (h.p.diagnoses.length > 3) { <span class="dim">…共 {{ h.p.diagnoses.length }} 項</span> }
+          </div>
+        }
+        <div class="pop-foot"><span class="pop-tip">點選卡片看完整判讀與趨勢</span></div>
+      </div>
+    }
   }
   }
 
@@ -460,10 +504,15 @@
           }
 
           <!-- 分期結論 -->
-          <div class="verdict" [style.--c]="color(d.staging.category)">
-            <span class="verdict-badge" [style.background]="color(d.staging.category)" [style.color]="fgColor(d.staging.category)">
-              {{ label(d.staging.category) }}
+          <div class="verdict" [style.--c]="color(detailBucket(d))">
+            <span class="verdict-badge" [style.background]="color(detailBucket(d))" [style.color]="fgColor(detailBucket(d))">
+              {{ label(detailBucket(d)) }}
             </span>
+            @if (detailCourse(); as dc) {
+              @for (cb of courseBadges(dc); track cb.label) {
+                <span class="course-badge" [style.background]="cb.color" [title]="cb.title">{{ cb.label }}</span>
+              }
+            }
             @if (d.staging.baseline && d.staging.peak) {
               <span class="verdict-detail">
                 baseline {{ d.staging.baseline.value }}（{{ sourceLabel(d.staging.baseline.source) }}
@@ -658,8 +707,15 @@
           <h4>防呆與特別歸類</h4>
           <ul>
             <li><b>低值防呆</b>（僅病程判讀）：Cr 在正常低值間的比值跳動（如 0.2→0.46）不算 AKI；比值型觸發需 Cr 升到 ≥1.0，「上升 ≥0.3」只認 48 小時內的前值。</li>
-            <li><b>疑似 ESRD／慢性</b>：全段最低 Cr ≥ 4.0 → 視為慢性腎衰，不做 AKI/AKD 判定；本院透析病人另標模式徽章。</li>
-            <li><b>單筆無法判定</b>：只有一筆 Cr。<b>無 Cr 資料</b>：區間內沒有肌酸酐數值。</li>
+            <li><b>全段 Cr ≥ 4.0（慢性腎衰）</b>：不做 AKI/AKD 判定，地圖上歸 <b>CKD</b> 桶；關懷名單仍依原規則分派（無法確認慢性者先以 AKI 論）。</li>
+            <li><b>無法區分</b>：只有一筆 Cr（無前值可比）或區間內沒有肌酸酐數值；詳情視窗會註明是哪一種。</li>
+          </ul>
+
+          <h4>地圖床卡顏色（2026-09 起）</h4>
+          <ul>
+            <li>底色塗滿＝<b>AKI Stage 3 紅／Stage 2 橙／Stage 1 黃／無 AKI 綠</b>；白底外框＝<b>CKD 深藍／無法區分 深灰</b>。</li>
+            <li><b>本院透析病人</b>（HD／SLED／CVVHDF）Cr 隨透析起伏、分期無意義，一律歸 CKD 桶並標模式，不參與 AKI 著色。</li>
+            <li>AKI on CKD 以 AKI 色呈現；CKD／AKD／恢復等病程徽章滑過床卡即可看到，點選開詳情視窗。</li>
           </ul>
 
           <h4>限制</h4>
