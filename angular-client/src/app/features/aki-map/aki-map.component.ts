@@ -180,6 +180,8 @@ export class AkiMapComponent implements OnInit {
 
   // AKI 分期計算說明視窗
   readonly showAkiHelp = signal(false);
+  // 門急觀察名單：收合在分期篩選列的小卡（2026-09-16 使用者要求），預設收起
+  readonly showWatch = signal(false);
 
   // 關懷名單（在院）
   readonly careItems = signal<AkiCareItem[]>([]);

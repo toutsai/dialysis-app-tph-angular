@@ -85,6 +85,15 @@
         {{ s.label }} <b>{{ s.count }}</b>
       </button>
     }
+    <!-- 門急觀察名單收合鈕（與分期篩選同列、靠右；點開在篩選列下方展開） -->
+    @if (watchList().length) {
+      <button class="chip watch-toggle" [class.active]="showWatch()"
+              (click)="showWatch.set(!showWatch())"
+              [attr.aria-expanded]="showWatch()">
+        ⚠️ 門急觀察名單 <b>{{ watchList().length }}</b>
+        <span class="caret">{{ showWatch() ? '▴' : '▾' }}</span>
+      </button>
+    }
   </section>
 
   <!-- 主篩選列（與上方分期色碼篩選 AND 疊加，再點一次取消） -->
@@ -106,8 +115,8 @@
       尚無資料。請先「匯入留院清單」與「匯入檢驗明細」兩份 Excel。
     </div>
   } @else {
-    <!-- 門急觀察名單（縮小）；AKI 比例統計與「分期與病程」小卡已於 2026-09-16 依使用者要求移除 -->
-    @if (watchList().length) {
+    <!-- 門急觀察名單（縮小，由分期篩選列的小卡收合控制）；AKI 比例統計與「分期與病程」小卡已於 2026-09-16 依使用者要求移除 -->
+    @if (showWatch() && watchList().length) {
       <section class="watch compact">
         <h2>⚠️ 門急觀察名單 · {{ watchList().length }}</h2>
         <div class="watch-list">

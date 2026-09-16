@@ -119,6 +119,18 @@
 .chip .dot { width: 0.62rem; height: 0.62rem; border-radius: 50%; display: inline-block; }
 .chip.total b { color: #1976d2; }
 .chip.aki { color: #c62828; font-weight: 600; }
+/* 門急觀察名單收合鈕：琥珀色、靠右 */
+.chip.watch-toggle {
+  margin-left: auto;
+  background: #fff8e1;
+  border-color: #ffe082;
+  color: #e65100;
+  font-weight: 600;
+}
+.chip.watch-toggle b { color: #e65100; }
+.chip.watch-toggle:hover { background: #fff3cd; }
+.chip.watch-toggle.active { border-color: #e65100; box-shadow: 0 0 0 1px #e65100 inset; }
+.chip.watch-toggle .caret { font-size: 0.7rem; opacity: 0.8; }
 
 .placeholder {
   padding: 2.5rem;
