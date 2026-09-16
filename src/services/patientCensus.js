@@ -8,7 +8,7 @@
 // ⚠️ 與主護病人照護清單（只算 status='opd'）刻意不同。
 // 注意：patient_history 不記錄分類變更，倒放時分類一律取 patients 現值。
 // 三個消費端（cron 快照 countCurrentCensus／scripts/backfill-patient-census.mjs／彈窗 getMonthlyCensusChanges）
-// 都走同一個 loadCensusReplay() 倒放引擎，定義只在這裡改。
+// 共用下方的病人狀態與分類/計數函式；歷史查詢另外載入倒放事件，當下人數不需讀取歷史。
 
 import { getTaipeiTodayString } from '../utils/dateUtils.js'
 
@@ -16,6 +16,31 @@ const STATUS_LABEL = { opd: '門診', ipd: '住院', er: '急診' }
 const REPLAY_EVENT_TYPES = ['CREATE', 'DELETE', 'TRANSFER', 'STATUS_CHANGE', 'RESTORE', 'RESTORE_AND_TRANSFER']
 
 export const isRegularCategory = (category) => !category || category === 'opd_regular'
+
+const isRegularPatient = (patient) => !patient.deleted && isRegularCategory(patient.category)
+
+function loadCurrentCensusState(db) {
+  const state = new Map()
+  for (const p of db.prepare('SELECT id, name, medical_record_number, status, is_deleted, patient_category FROM patients').all()) {
+    state.set(p.id, {
+      status: p.status, deleted: p.is_deleted === 1, category: p.patient_category || '',
+      name: p.name, mrn: p.medical_record_number || null, isDeletedNow: p.is_deleted === 1, currentStatus: p.status,
+    })
+  }
+  return state
+}
+
+function countCensusState(state) {
+  const counts = { opdRegular: 0, opd: 0, ipd: 0, er: 0 }
+  for (const patient of state.values()) {
+    if (patient.deleted) continue
+    if (isRegularPatient(patient)) counts.opdRegular++
+    if (patient.status === 'opd') counts.opd++
+    else if (patient.status === 'ipd') counts.ipd++
+    else if (patient.status === 'er') counts.er++
+  }
+  return counts
+}
 
 /** patient_history.timestamp 多為 ISO(UTC)，轉台北本地 YYYY-MM-DD */
 export function toTaipeiDate(ts) {
@@ -29,13 +54,7 @@ export function toTaipeiDate(ts) {
  * 呼叫端自行依序 undo 所有 date > 目標日 的事件（events 已是 DESC），再用 isRegularAt / countAt 計算。
  */
 export function loadCensusReplay(db) {
-  const state = new Map()
-  for (const p of db.prepare('SELECT id, name, medical_record_number, status, is_deleted, patient_category FROM patients').all()) {
-    state.set(p.id, {
-      status: p.status, deleted: p.is_deleted === 1, category: p.patient_category || '',
-      name: p.name, mrn: p.medical_record_number || null, isDeletedNow: p.is_deleted === 1, currentStatus: p.status,
-    })
-  }
+  const state = loadCurrentCensusState(db)
 
   const events = db
     .prepare(
@@ -81,27 +100,17 @@ export function loadCensusReplay(db) {
 
   /** 某病人在 date 當時是否算「常規門診」（state 須已退回到 date）：未刪除且分類常規，不看身分 */
   // eslint-disable-next-line no-unused-vars
-  const isRegularAt = (id, v, date) => !v.deleted && isRegularCategory(v.category)
+  const isRegularAt = (id, v, date) => isRegularPatient(v)
 
   /** state 已退回到 date 時的各項人數 */
-  const countAt = (date) => {
-    const c = { opdRegular: 0, opd: 0, ipd: 0, er: 0 }
-    for (const [id, v] of state) {
-      if (v.deleted) continue
-      if (isRegularAt(id, v, date)) c.opdRegular++
-      if (v.status === 'opd') c.opd++
-      else if (v.status === 'ipd') c.ipd++
-      else if (v.status === 'er') c.er++
-    }
-    return c
-  }
+  const countAt = () => countCensusState(state)
 
   return { state, events, earliest, undo, isRegularAt, countAt }
 }
 
 /** 以目前 patients 表計算當下各身分人數 */
 export function countCurrentCensus(db) {
-  return loadCensusReplay(db).countAt(getTaipeiTodayString())
+  return countCensusState(loadCurrentCensusState(db))
 }
 
 /** 記錄某日快照（同日覆蓋；cron 覆蓋 backfill、backfill 不覆蓋 cron） */

@@ -74,6 +74,7 @@ export class UserDirectoryService {
   // -----------------------------------------------------------------------
   private hasFetched = false;
   private fetchPromise: Promise<void> | null = null;
+  private cacheGeneration = 0;
   private nextRetryAt = 0;
   private readonly failedRetryDelayMs = 30_000;
 
@@ -82,7 +83,7 @@ export class UserDirectoryService {
   // -----------------------------------------------------------------------
 
   async fetchUsersIfNeeded(): Promise<void> {
-    if (this.hasFetched && this.allUsers().length > 0) {
+    if (this.hasFetched) {
       return;
     }
     if (this.fetchPromise) {
@@ -93,16 +94,21 @@ export class UserDirectoryService {
       return;
     }
 
-    this.fetchPromise = this.loadUsers()
+    return this.startLoad();
+  }
+
+  private startLoad(): Promise<void> {
+    const generation = this.cacheGeneration;
+    const pending = this.loadUsers(generation)
       .catch(() => {
         // loadUsers logs the concrete HTTP error. Swallow here so callers do
         // not start independent retry loops when the directory is temporarily unavailable.
       })
       .finally(() => {
-        this.fetchPromise = null;
+        if (this.fetchPromise === pending) this.fetchPromise = null;
       });
-
-    return this.fetchPromise;
+    this.fetchPromise = pending;
+    return pending;
   }
 
   async refresh(): Promise<void> {
@@ -113,15 +119,7 @@ export class UserDirectoryService {
       return this.fetchPromise;
     }
 
-    this.fetchPromise = this.loadUsers()
-      .catch(() => {
-        // See fetchUsersIfNeeded().
-      })
-      .finally(() => {
-        this.fetchPromise = null;
-      });
-
-    return this.fetchPromise;
+    return this.startLoad();
   }
 
   getUserById(id: string): DirectoryUser | undefined {
@@ -146,18 +144,19 @@ export class UserDirectoryService {
   }
 
   async clearCache(): Promise<void> {
+    ++this.cacheGeneration;
+    this.fetchPromise = null;
     this.hasFetched = false;
     this.nextRetryAt = 0;
     this.allUsers.set([]);
+    this.isLoading.set(false);
   }
 
   // -----------------------------------------------------------------------
   // Private methods
   // -----------------------------------------------------------------------
 
-  private async loadUsers(): Promise<void> {
-    if (this.isLoading()) return;
-
+  private async loadUsers(generation: number): Promise<void> {
     try {
       this.isLoading.set(true);
 
@@ -177,6 +176,7 @@ export class UserDirectoryService {
       }
 
       const data = await res.json();
+      if (generation !== this.cacheGeneration) return;
       const rawUsers = Array.isArray(data) ? data : (data.data || data.users || []);
 
       const users: DirectoryUser[] = rawUsers.map((u: any) => ({
@@ -198,6 +198,7 @@ export class UserDirectoryService {
         `[UserDirectoryService] Loaded ${users.length} users`,
       );
     } catch (error) {
+      if (generation !== this.cacheGeneration) return;
       const retryAfterMs =
         typeof (error as { retryAfterMs?: unknown })?.retryAfterMs === 'number'
           ? (error as { retryAfterMs: number }).retryAfterMs
@@ -206,7 +207,7 @@ export class UserDirectoryService {
       console.error('[UserDirectoryService] Failed to load users:', error);
       throw error;
     } finally {
-      this.isLoading.set(false);
+      if (generation === this.cacheGeneration) this.isLoading.set(false);
     }
   }
 }

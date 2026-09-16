@@ -360,6 +360,10 @@ router.get('/notifications', authenticate, (req, res) => {
       )
       .all(req.user.id)
 
+    // 舊通知可能僅存作者 ID/帳號。相同作者每次請求只查一次（包含查無資料），
+    // 不跨請求快取，使用者改名後下一次讀取即反映最新姓名。
+    const authorNames = new Map()
+    let findAuthor
 
     res.json(
       notifications.map((n) => {
@@ -369,10 +373,12 @@ router.get('/notifications', authenticate, (req, res) => {
         if (createdBy && typeof createdBy === 'object') {
           createdByName = createdBy.name || createdBy.displayName || null
         } else if (typeof createdBy === 'string' && createdBy) {
-          const user = db
-            .prepare(`SELECT name, username FROM users WHERE id = ? OR username = ?`)
-            .get(createdBy, createdBy)
-          createdByName = user?.name || user?.username || null
+          if (!authorNames.has(createdBy)) {
+            findAuthor ||= db.prepare('SELECT name, username FROM users WHERE id = ? OR username = ?')
+            const user = findAuthor.get(createdBy, createdBy)
+            authorNames.set(createdBy, user?.name || user?.username || null)
+          }
+          createdByName = authorNames.get(createdBy)
         }
         return {
           id: n.id,

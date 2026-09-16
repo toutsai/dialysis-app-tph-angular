@@ -1,40 +1,45 @@
-// 零依賴 gzip 中介層
-// 攔截 res.json：當用戶端支援 gzip 且 payload 夠大時，以 Node 內建 zlib 壓縮。
-// 重端點（檢驗報告 / 藥囑 9000+ 筆）JSON 壓縮率約 5~10x，大幅縮短傳輸與解析時間。
-import { gzip } from 'zlib'
+// Compress large JSON responses without bypassing Express serialization or HTTP semantics.
+import { gzip } from 'node:zlib'
 
-const THRESHOLD = 1024 // 小於 1KB 不壓縮（壓縮成本 > 效益）
+const THRESHOLD = 1024
 
 export function gzipJson(req, res, next) {
-  const acceptEncoding = req.headers['accept-encoding'] || ''
-  if (!/\bgzip\b/.test(acceptEncoding)) return next()
-
-  const sendJson = (body) => {
-    let buf
-    try {
-      buf = Buffer.from(JSON.stringify(body))
-    } catch {
-      // 序列化失敗 → 交回 Express 原生處理
-      res.setHeader('Content-Type', 'application/json; charset=utf-8')
-      return res.end()
-    }
-
-    res.setHeader('Content-Type', 'application/json; charset=utf-8')
-
-    if (buf.length < THRESHOLD || res.getHeader('Content-Encoding')) {
-      return res.end(buf)
-    }
-
-    gzip(buf, (err, zipped) => {
-      if (err) return res.end(buf) // 壓縮失敗 → 退回未壓縮
-      res.setHeader('Content-Encoding', 'gzip')
-      res.setHeader('Vary', 'Accept-Encoding')
-      res.removeHeader('Content-Length')
-      res.end(zipped)
-    })
-    return res
+  // Every representation varies, including uncompressed responses. Keep CORS' Vary: Origin.
+  res.vary('Accept-Encoding')
+  if (!req.headers['accept-encoding'] || req.acceptsEncodings('gzip', 'identity') !== 'gzip') {
+    return next()
   }
 
-  res.json = sendJson
+  const originalJson = res.json
+  res.json = function (...args) {
+    const originalSend = this.send
+    // Let Express honor json replacer/spaces/escape and propagate serialization errors.
+    this.send = function (body) {
+      this.send = originalSend
+      if (typeof body !== 'string' || Buffer.byteLength(body) < THRESHOLD ||
+          this.statusCode === 204 || this.statusCode === 205 || this.statusCode === 304 ||
+          this.getHeader('Content-Encoding') || /\bno-transform\b/i.test(this.getHeader('Cache-Control') || '')) {
+        return originalSend.call(this, body)
+      }
+
+      gzip(body, (err, zipped) => {
+        if (this.destroyed || this.writableEnded) return
+        try {
+          if (err) return originalSend.call(this, body)
+          this.setHeader('Content-Encoding', 'gzip')
+          // Express computes the correct length/ETag and handles HEAD/conditional requests.
+          originalSend.call(this, zipped)
+        } catch (error) {
+          next(error)
+        }
+      })
+      return this
+    }
+    try {
+      return originalJson.apply(this, args)
+    } finally {
+      this.send = originalSend
+    }
+  }
   next()
 }

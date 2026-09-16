@@ -29,6 +29,7 @@ interface CacheEntry<T> {
 }
 
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const MAX_CACHE_ENTRIES = 100;
 
 // ---------------------------------------------------------------------------
 // Service
@@ -43,6 +44,8 @@ export class MedicationStoreService {
 
   // Cache keyed by "date|sortedPatientIds"
   private readonly cache = new Map<string, CacheEntry<InjectionRecord[]>>();
+  private readonly inFlight = new Map<string, Promise<InjectionRecord[]>>();
+  private cacheGeneration = 0;
 
   /**
    * Fetch daily injection records for a set of patients.
@@ -60,7 +63,26 @@ export class MedicationStoreService {
     const cacheKey = this.buildCacheKey(date, patientIds);
     const cached = this.getFromCache(cacheKey);
     if (cached) return cached;
+    const existing = this.inFlight.get(cacheKey);
+    if (existing) return existing;
 
+    const generation = this.cacheGeneration;
+    const pending = this.loadDailyInjections(date, patientIds, cacheKey, generation).finally(() => {
+      if (this.inFlight.get(cacheKey) === pending) {
+        this.inFlight.delete(cacheKey);
+        this.isLoading.set(this.inFlight.size > 0);
+      }
+    });
+    this.inFlight.set(cacheKey, pending);
+    return pending;
+  }
+
+  private async loadDailyInjections(
+    date: string,
+    patientIds: string[],
+    cacheKey: string,
+    generation: number,
+  ): Promise<InjectionRecord[]> {
     try {
       this.isLoading.set(true);
       this.error.set(null);
@@ -77,21 +99,24 @@ export class MedicationStoreService {
 
       const backendData = await res.json();
       const backendRecords = (Array.isArray(backendData) ? backendData : (backendData.data || [])) as InjectionRecord[];
-      this.setCache(cacheKey, backendRecords);
+      if (generation === this.cacheGeneration) this.setCache(cacheKey, backendRecords);
       return backendRecords;
     } catch (error) {
+      if (generation !== this.cacheGeneration) return [];
       const message =
         error instanceof Error ? error.message : 'Failed to fetch injections';
       this.error.set(message);
       console.error('[MedicationStoreService] fetchDailyInjections error:', error);
       throw error;
-    } finally {
-      this.isLoading.set(false);
     }
   }
 
   clearCache(): void {
+    ++this.cacheGeneration;
     this.cache.clear();
+    this.inFlight.clear();
+    this.isLoading.set(false);
+    this.error.set(null);
   }
 
   // -----------------------------------------------------------------------
@@ -99,7 +124,7 @@ export class MedicationStoreService {
   // -----------------------------------------------------------------------
 
   private buildCacheKey(date: string, patientIds: string[]): string {
-    const sorted = [...patientIds].sort();
+    const sorted = [...new Set(patientIds)].sort();
     return `${date}|${sorted.join(',')}`;
   }
 
@@ -114,7 +139,15 @@ export class MedicationStoreService {
   }
 
   private setCache(key: string, data: InjectionRecord[]): void {
+    // Evict expired entries even when their keys are never requested again.
+    for (const [cachedKey, entry] of this.cache) {
+      if (this.isExpired(entry)) this.cache.delete(cachedKey);
+    }
+    this.cache.delete(key);
     this.cache.set(key, { data, timestamp: Date.now() });
+    while (this.cache.size > MAX_CACHE_ENTRIES) {
+      this.cache.delete(this.cache.keys().next().value!);
+    }
   }
 
   private isExpired(entry: CacheEntry<unknown>): boolean {

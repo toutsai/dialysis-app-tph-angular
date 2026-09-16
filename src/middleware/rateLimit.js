@@ -10,7 +10,7 @@ setInterval(() => {
       loginAttempts.delete(key)
     }
   }
-}, 30 * 60 * 1000)
+}, 30 * 60 * 1000).unref()
 
 /**
  * 登入端點的 rate limiter
@@ -72,7 +72,7 @@ setInterval(() => {
       apiTimestamps.set(key, trimmed)
     }
   }
-}, 60 * 1000)
+}, 60 * 1000).unref()
 
 // 本機 loopback 不受限速保護（Electron 桌面版、伺服器自連、健康檢查等都從 127.0.0.1/::1 進來，
 // 全部共用同一個 IP 桶會把 600/min 很快耗光，且這類流量本來就不需要外部限速）

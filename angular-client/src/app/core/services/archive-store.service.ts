@@ -40,6 +40,7 @@ interface CacheEntry {
 // ---------------------------------------------------------------------------
 
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+const MAX_CACHE_ENTRIES = 366;
 
 // ---------------------------------------------------------------------------
 // Service
@@ -59,6 +60,8 @@ export class ArchiveStoreService {
   // Cache (keyed by date string YYYY-MM-DD)
   // -----------------------------------------------------------------------
   private readonly cache = new Map<string, CacheEntry>();
+  private readonly inFlight = new Map<string, Promise<ArchivedSchedule | null>>();
+  private cacheGeneration = 0;
 
   // -----------------------------------------------------------------------
   // Public methods
@@ -76,9 +79,14 @@ export class ArchiveStoreService {
     if (cached !== undefined) {
       return cached;
     }
+    const existing = this.inFlight.get(dateStr);
+    if (existing) return existing;
 
+    return this.trackRequest(dateStr, this.loadScheduleByDate(dateStr, this.cacheGeneration));
+  }
+
+  private async loadScheduleByDate(dateStr: string, generation: number): Promise<ArchivedSchedule | null> {
     try {
-      this.isLoading.set(true);
       this.error.set(null);
 
       const res = await fetch(
@@ -88,7 +96,7 @@ export class ArchiveStoreService {
 
       if (!res.ok) {
         if (res.status === 404) {
-          this.setCache(dateStr, null);
+          if (generation === this.cacheGeneration) this.setCache(dateStr, null);
           return null;
         }
         throw new Error(`HTTP ${res.status}: ${res.statusText}`);
@@ -109,7 +117,7 @@ export class ArchiveStoreService {
         schedule = data.data as ArchivedSchedule;
       }
 
-      this.setCache(dateStr, schedule);
+      if (generation === this.cacheGeneration) this.setCache(dateStr, schedule);
 
       if (schedule) {
         console.log(
@@ -121,6 +129,7 @@ export class ArchiveStoreService {
 
       return schedule;
     } catch (error) {
+      if (generation !== this.cacheGeneration) return null;
       const message =
         error instanceof Error
           ? error.message
@@ -131,8 +140,6 @@ export class ArchiveStoreService {
         error,
       );
       throw error;
-    } finally {
-      this.isLoading.set(false);
     }
   }
 
@@ -142,21 +149,39 @@ export class ArchiveStoreService {
   async fetchSchedulesByDates(dateStrings: string[]): Promise<Map<string, ArchivedSchedule | null>> {
     const results = new Map<string, ArchivedSchedule | null>();
     const uncachedDates: string[] = [];
+    const pendingByDate = new Map<string, Promise<ArchivedSchedule | null>>();
 
-    // Check cache first for each date
-    for (const dateStr of dateStrings) {
+    // A date may already be loading through a single-date request or another batch.
+    for (const dateStr of new Set(dateStrings.filter(Boolean))) {
       const cached = this.getFromCache(dateStr);
       if (cached !== undefined) {
         results.set(dateStr, cached);
+      } else if (this.inFlight.has(dateStr)) {
+        pendingByDate.set(dateStr, this.inFlight.get(dateStr)!);
       } else {
         uncachedDates.push(dateStr);
       }
     }
 
-    if (uncachedDates.length === 0) return results;
+    if (uncachedDates.length > 0) {
+      const batch = this.loadSchedulesByDates(uncachedDates, this.cacheGeneration);
+      for (const dateStr of uncachedDates) {
+        pendingByDate.set(dateStr, this.trackRequest(dateStr, batch.then((data) => data.get(dateStr) ?? null)));
+      }
+    }
 
+    await Promise.all([...pendingByDate].map(async ([dateStr, pending]) => {
+      results.set(dateStr, await pending);
+    }));
+    return results;
+  }
+
+  private async loadSchedulesByDates(
+    uncachedDates: string[],
+    generation: number,
+  ): Promise<Map<string, ArchivedSchedule | null>> {
+    const results = new Map<string, ArchivedSchedule | null>();
     try {
-      this.isLoading.set(true);
       this.error.set(null);
 
       // POST batch request with array of dates
@@ -187,7 +212,7 @@ export class ArchiveStoreService {
       // Cache all results (including nulls for dates with no data)
       for (const dateStr of uncachedDates) {
         const schedule = fetchedByDate.get(dateStr) || null;
-        this.setCache(dateStr, schedule);
+        if (generation === this.cacheGeneration) this.setCache(dateStr, schedule);
         results.set(dateStr, schedule);
       }
 
@@ -197,6 +222,7 @@ export class ArchiveStoreService {
 
       return results;
     } catch (error) {
+      if (generation !== this.cacheGeneration) return results;
       const message =
         error instanceof Error
           ? error.message
@@ -204,8 +230,6 @@ export class ArchiveStoreService {
       this.error.set(message);
       console.error('[ArchiveStoreService] fetchSchedulesByDates error:', error);
       throw error;
-    } finally {
-      this.isLoading.set(false);
     }
   }
 
@@ -213,13 +237,30 @@ export class ArchiveStoreService {
    * Clear all cached schedule data.
    */
   clearCache(): void {
+    ++this.cacheGeneration;
     this.cache.clear();
+    this.inFlight.clear();
+    this.isLoading.set(false);
+    this.error.set(null);
     console.log('[ArchiveStoreService] Cache cleared');
   }
 
   // -----------------------------------------------------------------------
   // Private helpers
   // -----------------------------------------------------------------------
+
+  private trackRequest(dateStr: string, request: Promise<ArchivedSchedule | null>): Promise<ArchivedSchedule | null> {
+    const pending = request.finally(() => {
+      // A response from before clearCache() must not remove a new session's request.
+      if (this.inFlight.get(dateStr) === pending) {
+        this.inFlight.delete(dateStr);
+        this.isLoading.set(this.inFlight.size > 0);
+      }
+    });
+    this.inFlight.set(dateStr, pending);
+    this.isLoading.set(true);
+    return pending;
+  }
 
   private getFromCache(key: string): ArchivedSchedule | null | undefined {
     const entry = this.cache.get(key);
@@ -232,6 +273,13 @@ export class ArchiveStoreService {
   }
 
   private setCache(key: string, data: ArchivedSchedule | null): void {
+    for (const [cachedKey, entry] of this.cache) {
+      if (Date.now() - entry.timestamp > CACHE_TTL) this.cache.delete(cachedKey);
+    }
+    this.cache.delete(key);
     this.cache.set(key, { data, timestamp: Date.now() });
+    while (this.cache.size > MAX_CACHE_ENTRIES) {
+      this.cache.delete(this.cache.keys().next().value!);
+    }
   }
 }

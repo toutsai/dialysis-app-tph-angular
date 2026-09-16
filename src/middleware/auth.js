@@ -1,6 +1,7 @@
 // 認證中介軟體
 import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
+import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../db/init.js'
 import { notifySessionRevoked } from '../services/sessionEvents.js'
 
@@ -43,7 +44,8 @@ export function generateToken(user) {
       title: user.title,
     },
     JWT_SECRET,
-    { expiresIn: JWT_EXPIRES_IN },
+    // 同一秒內的登入/刷新也必須產生不同 token，避免把新 token 一起列入黑名單。
+    { expiresIn: JWT_EXPIRES_IN, jwtid: uuidv4() },
   )
 }
 
@@ -174,71 +176,64 @@ export function cleanupExpiredBlacklist() {
  * @param {string} userId - 使用者 ID
  * @param {string} token - 新的 JWT Token
  * @param {object} req - Express request 物件（用於取得 IP 和 User-Agent）
+ * @param {object} options - 刷新時可指定 replaceToken 與黑名單原因
  * @returns {object|null} - 被踢下線的舊 session 資訊，如無則返回 null
+ * @throws {Error} 持久化失敗時由登入/刷新路由回傳錯誤，不可發出未註冊的 token
  */
-export async function registerSession(userId, token, req) {
-  const { v4: uuidv4 } = await import('uuid')
+export async function registerSession(userId, token, req, { replaceToken, reason = 'duplicate_login' } = {}) {
+  const db = getDatabase()
+  const tokenHash = hashToken(token)
+  const decoded = decodeToken(token)
+  if (!decoded || !Number.isFinite(decoded.exp) || decoded.id !== userId) {
+    throw new Error('無效的 Session token')
+  }
 
-  try {
-    const db = getDatabase()
-    const tokenHash = hashToken(token)
-    const decoded = decodeToken(token)
-
-    if (!decoded || !decoded.exp) {
-      return null
+  // 本地時間字串，與清理 SQL 的 localtime 基準一致。
+  const expiresAt = new Date(decoded.exp * 1000).toLocaleString('sv-SE')
+  const ipAddress = getClientIp(req)
+  const userAgent = req.headers['user-agent'] || 'unknown'
+  const revokedTokens = new Map()
+  if (replaceToken) {
+    const replaced = decodeToken(replaceToken)
+    const replacedHash = hashToken(replaceToken)
+    if (!replaced || !Number.isFinite(replaced.exp) || replaced.id !== userId || replacedHash === tokenHash) {
+      throw new Error('無效的 Session 刷新 token')
     }
+    revokedTokens.set(replacedHash, new Date(replaced.exp * 1000).toLocaleString('sv-SE'))
+  }
 
-    // 本地時間字串，與清理 SQL 的 localtime 基準一致（同上方 blacklistToken 的說明）
-    const expiresAt = new Date(decoded.exp * 1000).toLocaleString('sv-SE')
-    const ipAddress = getClientIp(req)
-    const userAgent = req.headers['user-agent'] || 'unknown'
-
-    // 檢查是否有既存的 session
-    const existingSession = db
-      .prepare(
-        `
-      SELECT * FROM active_sessions WHERE user_id = ?
-    `,
-      )
-      .get(userId)
-
-    let kickedSession = null
-
-    if (existingSession) {
-      // 將舊 Token 加入黑名單
-      const oldToken = existingSession.token_hash
-      const oldExpiresAt = existingSession.expires_at
-
-      db.prepare(
-        `
-        INSERT OR REPLACE INTO token_blacklist (token_hash, user_id, reason, expires_at, created_at)
-        VALUES (?, ?, 'duplicate_login', ?, datetime('now', 'localtime'))
-      `,
-      ).run(oldToken, userId, oldExpiresAt)
-
-      kickedSession = {
-        ip: existingSession.ip_address,
-        userAgent: existingSession.user_agent,
-        createdAt: existingSession.created_at,
-      }
-
-      console.log(`⚠️ 使用者 ${userId} 重複登入，已將舊 session 加入黑名單`)
+  // 舊 token 作廢和新 Session 必須一起成功；中途失敗時保留原登入狀態。
+  const existingSession = db.transaction(() => {
+    const existing = db.prepare('SELECT * FROM active_sessions WHERE user_id = ?').get(userId)
+    if (existing && existing.token_hash !== tokenHash) {
+      revokedTokens.set(existing.token_hash, existing.expires_at)
     }
-
-    // 建立/更新 session（使用 REPLACE 確保每個 user_id 只有一筆）
+    const blacklist = db.prepare(`
+      INSERT OR REPLACE INTO token_blacklist (token_hash, user_id, reason, expires_at, created_at)
+      VALUES (?, ?, ?, ?, datetime('now', 'localtime'))
+    `)
+    for (const [oldHash, oldExpiresAt] of revokedTokens) {
+      blacklist.run(oldHash, userId, reason, oldExpiresAt)
+    }
     db.prepare(
       `
       INSERT OR REPLACE INTO active_sessions (id, user_id, token_hash, ip_address, user_agent, expires_at, created_at)
       VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
     `,
     ).run(uuidv4(), userId, tokenHash, ipAddress, userAgent, expiresAt)
+    return existing
+  })()
 
-    if (existingSession) notifySessionRevoked(userId, existingSession.token_hash)
-    return kickedSession
-  } catch (error) {
-    console.error('註冊 session 失敗:', error)
-    return null
+  // 只有提交後才能關閉舊 SSE 連線，避免失敗的刷新把仍有效的登入踢下線。
+  for (const oldHash of revokedTokens.keys()) notifySessionRevoked(userId, oldHash)
+  if (existingSession && existingSession.token_hash !== tokenHash) {
+    return {
+      ip: existingSession.ip_address,
+      userAgent: existingSession.user_agent,
+      createdAt: existingSession.created_at,
+    }
   }
+  return null
 }
 
 /**

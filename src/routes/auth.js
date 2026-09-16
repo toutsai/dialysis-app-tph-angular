@@ -477,14 +477,11 @@ router.post('/refresh-token', authenticate, async (req, res) => {
       })
     }
 
-    // 將舊 Token 加入黑名單
-    await blacklistToken(req.token, req.user.id, 'token_refresh')
-
     // 產生新 Token
     const newToken = generateToken(user)
 
-    // 更新 session
-    await registerSession(user.id, newToken, req)
+    // 舊 token 作廢與 Session 更新須在同一交易，失敗時原登入仍可重試。
+    await registerSession(user.id, newToken, req, { replaceToken: req.token, reason: 'token_refresh' })
 
     res.json({
       token: newToken,

@@ -17,6 +17,7 @@
     "smoke:tph-angular": "node scripts/smoke-test-tph-angular.cjs",
     "test": "node scripts/run-regression-tests.mjs",
     "check:syntax": "node scripts/check-syntax.mjs",
+    "verify": "npm run check:syntax && npm test && npm run build:angular && npm run smoke:tph-angular",
     "start:review": "node scripts/start-review-dev.mjs"
   },
   "dependencies": {

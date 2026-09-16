@@ -3,7 +3,7 @@ import 'dotenv/config'   // 讀取 .env 檔案到 process.env（PM2 env_file 不
 import express from 'express'
 import cors from 'cors'
 import { requestLogger } from './middleware/requestLogger.js'
-import { existsSync, statSync } from 'fs'
+import { existsSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 
@@ -30,6 +30,7 @@ import { initDatabase, getDatabase, ensureDefaultAdmin, closeDatabase } from './
 import { v4 as uuidv4 } from 'uuid'
 import { apiRateLimit } from './middleware/rateLimit.js'
 import { gzipJson } from './middleware/gzip.js'
+import { frontendDelivery } from './middleware/frontendDelivery.js'
 
 // 定時任務調度器
 import { startScheduler } from './services/scheduler.js'
@@ -202,53 +203,14 @@ const staticPath =
     : legacyDistPath)
 console.log(`📂 靜態檔案路徑: ${staticPath}`)
 
-// 前端部署版本識別：即時讀 index.html mtime（每次 ng build 會變）。
-// ⚠️ 必須每次請求即時讀取，不可在啟動時快取——前端改動只 build 不 pm2 restart，
-//    若啟動時算一次，端點會回舊值偵測不到更新。免認證、不含敏感資料。
-app.get('/api/version', (req, res) => {
-  try {
-    const stat = statSync(join(staticPath, 'index.html'))
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-    res.json({ build: String(Math.floor(stat.mtimeMs)) })
-  } catch (e) {
-    res.status(503).json({ error: true, message: 'index.html 不存在' })
-  }
-})
-
-app.use(
-  express.static(staticPath, {
-    setHeaders: (res, filePath) => {
-      if (filePath.endsWith('index.html')) {
-        // index.html 永不快取：確保使用者重整一定拿到「指向最新 bundle」的版本，
-        // 否則瀏覽器會用舊 index.html → 載入舊 JS → 看不到更新
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-        res.setHeader('Pragma', 'no-cache')
-        res.setHeader('Expires', '0')
-      } else if (/-[0-9A-Za-z]{8,}\.(js|css)$/.test(filePath)) {
-        // 帶內容雜湊的 JS/CSS (如 main-3Z35MFZM.js) 內容變動必換檔名，可安全長期快取
-        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
-      }
-    },
-  }),
-)
-
-// SPA 路由支援 - 所有未匹配的路由返回 index.html
-app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api/')) {
-    return next()
-  }
-  // 同樣禁止快取 index.html，避免深層連結載入到舊版
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-  res.setHeader('Pragma', 'no-cache')
-  res.setHeader('Expires', '0')
-  res.sendFile(join(staticPath, 'index.html'))
-})
+app.use(frontendDelivery(staticPath))
 
 // ========================================
 // 錯誤處理
 // ========================================
 
 app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err)
   console.error('❌ 伺服器錯誤:', err)
 
   // 記錄錯誤到稽核日誌
