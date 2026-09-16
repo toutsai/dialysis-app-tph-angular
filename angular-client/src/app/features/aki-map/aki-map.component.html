@@ -167,17 +167,10 @@
     <section class="wards">
       @for (g of wardGroups(); track g.ward) {
         <div class="ward-card">
+          <!-- 2026-09-16 使用者要求：標題列只留護理站名稱（加大加粗）＋人數，桶別小計移除 -->
           <div class="ward-head">
             <h3>{{ wardLabel(g.ward) }}</h3>
-            <div class="ward-counts">
-              @for (def of bucketDefs; track def.key) {
-                @if (g.counts[def.key]) {
-                  <span class="mini" [style.background]="def.color" [style.color]="def.fg" [title]="def.label">
-                    {{ g.counts[def.key] }}
-                  </span>
-                }
-              }
-            </div>
+            <span class="ward-n">{{ g.patients.length }} 人</span>
           </div>
           <!-- 床卡（2026-09-16 比照 ICU 透析迷你卡）：底色＝六桶；只留床號／姓名／Cr／透析模式，病程徽章移入滑過摘要與詳情視窗 -->
           <div class="bed-grid">

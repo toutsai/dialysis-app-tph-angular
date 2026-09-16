@@ -278,31 +278,25 @@
   grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr));
   gap: 0.9rem;
 }
+/* 護理站卡片（2026-09-16 使用者要求）：明顯外框＋深色標題列區隔各站；站名加大加粗 */
 .ward-card {
-  border: 1px solid #eceff1;
-  border-radius: 8px;
+  border: 2px solid #78909c;
+  border-radius: 10px;
   background: #fff;
   overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 .ward-head {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem 0.75rem;
-  background: #f5f7f8;
-  border-bottom: 1px solid #eceff1;
-}
-.ward-head h3 { margin: 0; font-size: 0.88rem; }
-.ward-counts { display: flex; gap: 0.25rem; }
-.ward-counts .mini {
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.5rem 0.85rem;
+  background: #455a64;
   color: #fff;
-  font-size: 0.68rem;
-  font-weight: 700;
-  border-radius: 4px;
-  padding: 0.05rem 0.4rem;
-  min-width: 1.1rem;
-  text-align: center;
 }
+.ward-head h3 { margin: 0; font-size: 1.15rem; font-weight: 800; letter-spacing: 0.3px; }
+.ward-n { font-size: 0.82rem; font-weight: 600; opacity: 0.85; white-space: nowrap; }
 
 /* 床卡（2026-09-16 比照 ICU 透析迷你卡）：--c＝桶色、--fg＝底色上的字色
    fill＝底色塗滿（Stage 3 紅／2 橙／1 黃／無 AKI 綠）；outline＝白底彩色外框（CKD 深藍／無法區分 深灰） */

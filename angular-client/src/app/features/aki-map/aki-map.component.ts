@@ -104,7 +104,6 @@ const POP_H = 300;
 interface WardGroup {
   ward: string;
   patients: AkiPatient[];
-  counts: Partial<Record<MapBucket, number>>;
 }
 
 interface WardStat {
@@ -152,8 +151,6 @@ function compareWard(a: string, b: string): number {
 })
 export class AkiMapComponent implements OnInit {
   private readonly akiApi = inject(AkiApiService);
-
-  readonly bucketDefs = BUCKET_DEFS;
 
   readonly loading = signal(false);
   readonly message = signal<{ type: 'info' | 'error'; text: string } | null>(null);
@@ -340,11 +337,10 @@ export class AkiMapComponent implements OnInit {
       }
       let g = groups.get(p.ward);
       if (!g) {
-        g = { ward: p.ward, patients: [], counts: {} };
+        g = { ward: p.ward, patients: [] };
         groups.set(p.ward, g);
       }
       g.patients.push(p);
-      g.counts[b] = (g.counts[b] || 0) + 1;
     }
 
     const arr = [...groups.values()];
