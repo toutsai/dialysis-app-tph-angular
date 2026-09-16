@@ -1,0 +1,74 @@
+<section class="block">
+  <div class="head">
+    <h2><span class="tag-m">M</span>月報儀表板 <span class="dim sub">收案、追蹤、年度評估、入帳</span></h2>
+    <label class="month">本月
+      <input type="month" [value]="month()" (change)="onMonth($event)" title="切換月份：本月新收案／結案與入帳統計以此月為準" />
+    </label>
+    <span class="dim">
+      @if (loading()) { 計算中… }
+      @else if (report()) { 判讀日 {{ report()!.today }} · 載入 {{ report()!.timing.loadMs }} ms · 判讀 {{ report()!.timing.analyzeMs }} ms }
+    </span>
+    <span class="head-btns">
+      <button type="button" class="btn small" (click)="exportCsv()" [disabled]="!report()?.hasCases">匯出 CSV</button>
+      <button type="button" class="btn small" (click)="refresh()" [disabled]="loading()">重新整理</button>
+    </span>
+  </div>
+
+  @if (error(); as err) { <div class="banner error">{{ err }}</div> }
+
+  @if (report(); as p) {
+    @if (!p.hasCases) {
+      <div class="empty">匯入追蹤清冊後,這裡會顯示收案現況與月報指標。</div>
+    } @else {
+      <div class="mr-grid">
+        @for (c of cards(); track c.title) {
+          <div class="mr-card">
+            <div class="mr-h">{{ c.title }}</div>
+            <table>
+              <tbody>
+                @for (r of c.rows; track $index) {
+                  <tr>
+                    <td>{{ r.k }}</td>
+                    <td class="mr-v">{{ r.v }}</td>
+                    @if (r.s != null) { <td class="mr-s">{{ r.s }}</td> }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+
+        <!-- ⑨ 本月入帳（跨滿寬） -->
+        <div class="mr-card mr-wide">
+          <div class="mr-h">本月入帳 {{ p.ym }}(醫令明細清單)</div>
+          @if (p.billRows.length) {
+            <table class="mr-bill">
+              <thead><tr><th>P 碼</th><th>名稱</th><th>人數</th><th>次數</th><th>點數</th></tr></thead>
+              <tbody>
+                @for (b of p.billRows; track b.code) {
+                  <tr>
+                    <td class="rc-last">{{ b.code }}</td>
+                    <td>{{ b.name }}</td>
+                    <td class="mr-v">{{ b.people }}</td>
+                    <td class="mr-v">{{ b.n }}</td>
+                    <td class="mr-v">{{ num(b.pts) }}</td>
+                  </tr>
+                }
+                <tr class="tot">
+                  <td colspan="2">合計</td>
+                  <td class="mr-v">{{ p.billPeople }}</td>
+                  <td class="mr-v">{{ p.billN }}</td>
+                  <td class="mr-v">{{ num(p.billTot) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          } @else {
+            <div class="dim">本月尚無入帳資料(需匯入醫令明細清單)</div>
+          }
+        </div>
+      </div>
+
+      <div class="note">{{ footNote() }}</div>
+    }
+  }
+</section>

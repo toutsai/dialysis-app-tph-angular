@@ -1242,6 +1242,16 @@ export function runMigrations() {
           created_at TEXT DEFAULT (datetime('now', 'localtime'))
         );
         CREATE INDEX IF NOT EXISTS idx_ckd_batches_hash ON ckd_upload_batches(file_hash);
+        CREATE TABLE IF NOT EXISTS ckd_alert_done (
+          key TEXT PRIMARY KEY,
+          mrn TEXT NOT NULL,
+          report_date TEXT NOT NULL,
+          rule_id TEXT NOT NULL,
+          done_at TEXT NOT NULL,
+          done_by TEXT,
+          created_at TEXT DEFAULT (datetime('now', 'localtime'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_ckd_alert_done_mrn ON ckd_alert_done(mrn);
       `)
       migrationsApplied++
     } else {
@@ -1254,6 +1264,23 @@ export function runMigrations() {
       for (const [col, def] of [['name', 'TEXT'], ['updated_by', "TEXT DEFAULT '{}'"]]) {
         if (addColumnIfNotExists(db, 'ckd_records', col, def)) migrationsApplied++
       }
+      // 階段 5（2026-09-16）：近日異常檢驗「已處理」（原版 localStorage.ckdAlertDone）
+      const ckdAlertDoneExists = db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='ckd_alert_done'")
+        .get()
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS ckd_alert_done (
+          key TEXT PRIMARY KEY,
+          mrn TEXT NOT NULL,
+          report_date TEXT NOT NULL,
+          rule_id TEXT NOT NULL,
+          done_at TEXT NOT NULL,
+          done_by TEXT,
+          created_at TEXT DEFAULT (datetime('now', 'localtime'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_ckd_alert_done_mrn ON ckd_alert_done(mrn);
+      `)
+      if (!ckdAlertDoneExists) migrationsApplied++
     }
 
     if (migrationsApplied > 0) {

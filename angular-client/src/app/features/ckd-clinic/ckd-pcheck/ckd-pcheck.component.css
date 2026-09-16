@@ -1,0 +1,62 @@
+/* 門診 CKD 檢核 P 碼：標籤與列底色照原版 workbench_layer.html 的 .pc-* */
+:host { display: block; font-size: 0.86rem; color: #263238; }
+.block { border: 1px solid #eceff1; border-radius: 8px; background: #fff; padding: 0.7rem 0.9rem; }
+.head { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; margin-bottom: 0.3rem; }
+.head h2 { margin: 0; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+.head h2 .sub { font-weight: 400; font-size: 0.78rem; }
+.tag-p { display: inline-flex; width: 1.5rem; height: 1.5rem; border-radius: 6px; align-items: center; justify-content: center; font-weight: 800; color: #fff; font-size: 0.85rem; background: #16202b; }
+.dim { color: #90a4ae; }
+.intro { margin: 0 0 0.6rem; font-size: 0.8rem; color: #546e7a; line-height: 1.5; }
+.banner { padding: 0.5rem 0.75rem; border-radius: 6px; }
+.banner.error { background: #ffebee; border: 1px solid #ef9a9a; color: #b71c1c; }
+.empty { padding: 1.5rem; text-align: center; color: #90a4ae; background: #fafafa; border-radius: 8px; line-height: 1.6; }
+.btn { border: 1px solid #cfd8dc; background: #fff; border-radius: 6px; padding: 0.4rem 0.8rem; font-size: 0.86rem; cursor: pointer; color: #37474f; }
+.btn:hover { background: #f5f7f8; }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn.small { padding: 0.25rem 0.6rem; font-size: 0.8rem; }
+
+/* 診次按鈕列（同 ckd-daily） */
+.datebar { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.datebar.sub { padding-left: 0.5rem; }
+.db-t { font-size: 0.8rem; color: #78909c; margin-right: 0.2rem; }
+.db-btn {
+  border: 1px solid #cfd8dc; background: #fff; border-radius: 8px; padding: 0.35rem 0.7rem; cursor: pointer;
+  display: inline-flex; flex-direction: column; align-items: flex-start; gap: 0.05rem; font-size: 0.85rem; color: #37474f; font-variant-numeric: tabular-nums;
+}
+.db-btn.small { flex-direction: row; gap: 0.35rem; padding: 0.2rem 0.55rem; font-size: 0.8rem; }
+.db-btn:hover { background: #f5f7f8; }
+.db-btn.on { background: #1565c0; border-color: #1565c0; color: #fff; }
+.db-d { font-size: 0.78rem; font-weight: 700; }
+.db-n { font-size: 0.72rem; opacity: 0.85; }
+
+/* 表頭摘要區 */
+.pc-head { display: flex; align-items: flex-start; gap: 12px; padding: 10px 12px; background: #f2f5f1; border: 1px solid #e3e8e4; border-radius: 6px; margin-bottom: 0.5rem; }
+.pc-sum { flex: 1; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; align-items: center; }
+.pc-sum > b { font-size: 13.5px; }
+.pc-k { color: #546e7a; }
+.pc-bad { color: #a8322d; }
+.pc-warn { color: #8a5e05; }
+.pc-nobill { color: #a8322d; font-weight: 600; flex-basis: 100%; }
+
+/* 表格 */
+.tbox { overflow-x: auto; }
+table.pc { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 58rem; }
+table.pc th { text-align: left; font-size: 0.75rem; color: #78909c; font-weight: 600; padding: 0.3rem 0.5rem; border-bottom: 1px solid #d2d8d0; white-space: nowrap; position: sticky; top: 0; background: #fff; }
+table.pc td { padding: 0.4rem 0.5rem; border-bottom: 1px solid #e6eae4; vertical-align: top; }
+.slot { font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 0.8rem; }
+.nmlink { border: none; background: none; padding: 0; cursor: pointer; color: #1a3c6e; text-align: left; font-family: inherit; font-weight: 700; font-size: 0.92rem; }
+.nmlink:hover { text-decoration: underline; color: #1565c0; }
+.mrn { font-size: 0.75rem; color: #78909c; font-variant-numeric: tabular-nums; }
+.note-cell { font-size: 12px; max-width: 22rem; white-space: normal; }
+.pc-b { font-size: 12px; white-space: nowrap; }
+
+/* 檢核標籤（class 由後端 labels[res][1] 決定） */
+.pc-tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border: 1px solid; white-space: nowrap; border-radius: 3px; }
+.pc-tag.pc-ok { color: #1a6b66; border-color: #8fc4bf; background: #e6f3f1; }
+.pc-tag.pc-bad { color: #fff; border-color: #a8322d; background: #a8322d; }
+.pc-tag.pc-warn { color: #7a5300; border-color: #c9a24a; background: #fdf6e3; }
+.pc-tag.pc-dim { color: #6b7680; border-color: #d5dad7; background: #f5f7f5; font-weight: 500; }
+
+/* 列底色 */
+tr.pc-miss td, tr.pc-unexp td { background: #fdf3f2; }
+tr.pc-none td, tr.pc-none td .nmlink { color: #78909c; }

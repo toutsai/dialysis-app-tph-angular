@@ -32,7 +32,7 @@
 | 2 | 明日追蹤＋收案評估 | `services/ckd/engine.js`（app.js 規則引擎逐字搬純函式；階段 3 掛鉤留介面）、`dataset.js`（SQLite→Date 快取）、GET `/daily?date&doctor`（本科醫師／全部／他科掛號已收案） | `ckd-daily` 元件：診次按鈕列、A/B 統計列篩選、兩張表、判定欄＋可展開依據；頁內檢視「明日追蹤 · 收案評估」／「匯入與設定」 | 完成 2026-09-15（dev） |
 | 3 | 個案紀錄八類 | `services/ckd/records.js`（REC_TYPES 欄位定義照原版、validateRecord、CRUD 軟刪除、makeHooks 四掛鉤＋chipsOf、pcodeTimeline、recordStats、lookupName/searchPatients）；`/api/ckd/records*`、`/patients/search`、`/patients/:mrn/summary`；`dataset.js` 載入紀錄進判讀；schema 加 `name`/`updated_by` | `ckd-records` 子元件（原版第五區）：病人搜尋、八顆新增鈕、動態表單、VPN 三態狀態列、不予收案狀態、P 碼總覽、紀錄卡編輯／刪除、全部紀錄；A／B 列姓名可點跳轉、chips、判定欄行動列可點（VPN／個管）、判定依據 VPN 註記、B 統計列「已外院收案」 | 完成 2026-09-15（dev） |
 | 4 | 稽核與匯出 | GET `/audit?date`（analyze withAudit → slimAudit，含 tooSoon／recon／tenure／slope／chips）；`services/ckd/wide.js` = 原版 buildWide／wideRows／wideSheets 逐字搬（21 項 WIDE_LABS、五群、最小平方法 eGFR 斜率、UPCR 補算、方案推估、排序），簽章快取；GET `/wide?scope&q&mode`（long 上限 600 列、wide 上限 2000 人）、`/wide/export`（完整 d1／d2）；records 列表上限放寬到 10000 供 CSV | `ckd-audit`（15 統計格三段式＋15 篩選鈕、四欄可排序記 localStorage `ckdAuditSort`、前 300 列＋「顯示其餘」、CSV）、`ckd-wide`（模式／範圍／搜尋、分組雙列凍結表頭＋病人欄凍結、群組底色、旗標 H/L、推算「算」、斜率紅綠灰、Excel 兩工作表＋CSV）、頁籤四個；`ckd-export.ts`（A／B CSV、當日可收案名單 XLSX 含欄寬與 autofilter、稽核 CSV、個案紀錄 CSV，標題與檔名逐字照原版）；稽核／總表姓名 → 切回主線並跳到該病人紀錄 | 完成 2026-09-16（dev） |
-| 5 | 進階模組 | 召回清單、近日異常檢驗、透析準備管線、月報、檢核 P 碼 | 各一頁 | 未開始 |
+| 5 | 進階模組 | `services/ckd/recall.js`（buildRecall 逐字：未來掛號本科優先、RECALL_STOP、五桶優先序）、`labalert.js`（九條單值規則＋eGFR 急降／首次 <15／<20＋UPCR 三條件；「已處理」改存 `ckd_alert_done` 跨使用者共享）、`rrt.js`（母體嚴格 <門檻＋有 SDM／通路紀錄；六站 if 鏈）、`report.js`（九張卡；透析準備門檻改連動 settings.rrtEgfr、grace 走 settings、召回 tally 由路由算一次注入）、`pcheck.js`（前日判定 = 濾掉當日入帳後 analyze，不 mutate data；修原版 `extOf().st` 死碼）；GET `/recall` `/alerts` `/rrt` `/report?ym` `/pcheck?date&doctor`、PUT `/alerts/done`、GET `/patients/:mrn/labs`；settings 加 recallGrace 可為 0 | `ckd-recall`／`ckd-alerts`／`ckd-rrt`／`ckd-report`／`ckd-pcheck` 五個頁內檢視＋共用 `ckd-quick-form`（列內快速紀錄，吃 REC_TYPES）；`ckd-export-followup.ts`（召回／異常／管線／累積報告 CSV）、`ckd-export.ts` 加藥師名單／月報／檢核 P 碼 CSV；藥師名單鈕放在 B 區列 | 完成 2026-09-16（dev） |
 | 6 | 與本站打通 | 透析準備管線 ↔ 預約洗腎登記本／首透；病歷號連到病人詳情 | | 未開始 |
 
 ## 資料模型（鍵沿用原版，見 HANDOFF §輸出契約）
@@ -62,6 +62,8 @@
 - 與本站既有「CKD 關懷名單」（住院 AKI 快照來源）是兩套來源，並存不合併。
 
 ## 進度紀錄
+
+- 2026-09-16：階段 5 完成（dev 未上線；規格書為當日 session scratchpad `spec-stage5.md`，93KB，六模組逐條規則與原版行號）。驗證：`tests/ckd-{recall,labalert,rrt,report,pcheck}.test.mjs` 共 27 組；3002 真資料 API 驗證 50 項全過；無頭 UI 驗證五個頁籤 61/62（唯一失敗是斷言過嚴，月報卡⑤末列刻意留空）；smoke 74/74。**與原版逐列比對**（用 puppeteer-core＋Edge 跑原版 standalone.html 餵同四份真檔、判讀日 2026-08-28）：召回 1,252 人桶別與 gap、異常 14 天 156 筆／60 天 653 筆的 key、管線 268 人站別、月報全部欄位、A 51／B 32 皆零差異。規格書 §8 的基準數字（到期 1,952 等）是原作者用自己的資料算的，不能直接對照。**比對揪出兩個早期階段的規則偏差並已修**：(1) `settings.allA` 預設誤設 false（原版 `#cfgAllA` 預設 checked）；(2) 門診清單／入帳匯入原本 `INSERT OR IGNORE`（先到先贏），原版 `mergeRows` 是同鍵內容不同以新列為準——同人同日同診號掛兩科時會留到他科列、腎臟內科列被丟，已收案者漏出 A 區（真實案例 2456960）；改成 upsert，3002 測試庫已重匯門診清單（更新 4 列）。刻意差異：召回寬限 0 天時 gap 恰等於 need 者仍在寬限桶（與原版 `gap <= need + grace` 一致）；工作台快速日誌 `ckdwb.log`／勾選 `ckdwb.done` 不做（本站無工作台檢視）。上線時後端有改 → pm2 restart（自動建表 `ckd_alert_done`）。
 
 - 2026-09-16：階段 4 完成（dev 未上線）：`tests/ckd-wide.test.mjs` 3 組；3002 真資料驗證 35 項（稽核 4,897 人／判讀 0.7 秒；總表 31,587 人／81,593 列／建表 1.8 秒；五種匯出真的下載並讀回檢查標題、BOM、autofilter、工作表名）全過；smoke 74/74。與原版的刻意差異：每人一列模式加 2000 人顯示上限（原版無上限，三萬人一次畫太重；匯出仍完整）；不做去識別遮蔽（本站有登入與 RBAC）；總表匯出的檔名日期用今天而非判讀日。修過的 bug：總表切模式／範圍連發時大回應晚到覆蓋畫面 → load 加序號。未做：藥師名單 CSV（併階段 5）。
 

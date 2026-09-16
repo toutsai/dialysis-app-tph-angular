@@ -1,7 +1,7 @@
 <div class="ckd-page">
   <header class="ckd-header">
     <div class="title-block">
-      <h1>門診CKD收案 <span class="dev-badge">開發中</span></h1>
+      <h1>門診CKD收案</h1>
       <span class="subtitle">CKD 收案／追蹤判讀工作台 · 個管師、醫師、護理師</span>
       <span class="source-hint">
         資料來源：HIS 匯出的四種報表（追蹤清冊、0204 檢驗結果病患明細、CKD-病患清單查詢、醫令明細清單）。
@@ -17,6 +17,11 @@
   <!-- 頁內檢視：判讀（個管師每天的主線）／匯入與設定 -->
   <nav class="views">
     <button type="button" class="view-tab" [class.on]="view() === 'daily'" (click)="view.set('daily')">明日追蹤 · 收案評估 · 個案紀錄</button>
+    <button type="button" class="view-tab" [class.on]="view() === 'pcheck'" (click)="view.set('pcheck')">檢核 P 碼</button>
+    <button type="button" class="view-tab" [class.on]="view() === 'recall'" (click)="view.set('recall')">召回清單</button>
+    <button type="button" class="view-tab" [class.on]="view() === 'alerts'" (click)="view.set('alerts')">異常檢驗</button>
+    <button type="button" class="view-tab" [class.on]="view() === 'rrt'" (click)="view.set('rrt')">透析準備</button>
+    <button type="button" class="view-tab" [class.on]="view() === 'report'" (click)="view.set('report')">月報</button>
     <button type="button" class="view-tab" [class.on]="view() === 'audit'" (click)="view.set('audit')">全名單稽核</button>
     <button type="button" class="view-tab" [class.on]="view() === 'wide'" (click)="view.set('wide')">檢驗總表</button>
     <button type="button" class="view-tab" [class.on]="view() === 'import'" (click)="view.set('import')">匯入與設定</button>
@@ -28,6 +33,21 @@
 
   @if (view() === 'daily') {
     <app-ckd-daily />
+  }
+  @if (view() === 'pcheck') {
+    <app-ckd-pcheck (openRecords)="goRecords($event)" />
+  }
+  @if (view() === 'recall') {
+    <app-ckd-recall (openRecords)="goRecords($event)" />
+  }
+  @if (view() === 'alerts') {
+    <app-ckd-alerts (openRecords)="goRecords($event)" />
+  }
+  @if (view() === 'rrt') {
+    <app-ckd-rrt (openRecords)="goRecords($event)" />
+  }
+  @if (view() === 'report') {
+    <app-ckd-report />
   }
   @if (view() === 'audit') {
     <app-ckd-audit (openRecords)="goRecords($event)" />

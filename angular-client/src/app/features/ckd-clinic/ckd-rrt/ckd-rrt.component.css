@@ -1,0 +1,50 @@
+/* 門診 CKD 透析準備管線：pp-* 對照原版 app_head.html:167-169 */
+:host { display: block; font-size: 0.86rem; color: #263238;
+  --pre: #a8322d; --ok: #1a6b66; --wait: #8a5e05; --none: #8b95a0; }
+.block { border: 1px solid #eceff1; border-radius: 8px; background: #fff; padding: 0.7rem 0.9rem; }
+.head { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.head h2 { margin: 0; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+.head h2 .sub { font-weight: 400; font-size: 0.78rem; }
+.head-btns { margin-left: auto; display: flex; gap: 0.3rem; }
+.tag-p { display: inline-flex; width: 1.5rem; height: 1.5rem; border-radius: 6px; align-items: center; justify-content: center; font-weight: 800; color: #fff; font-size: 0.85rem; background: #27548f; }
+.cfg { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; color: #546e7a; }
+.cfg input { width: 3.25rem; border: 1px solid #cfd8dc; border-radius: 5px; padding: 0.2rem 0.35rem; font-size: 0.82rem; font-family: inherit; color: #263238; }
+.dim { color: #90a4ae; }
+.dim.thin { font-weight: 400; }
+.banner { padding: 0.5rem 0.75rem; border-radius: 6px; margin-bottom: 0.5rem; }
+.banner.error { background: #ffebee; border: 1px solid #ef9a9a; color: #b71c1c; }
+.placeholder, .empty { padding: 1.5rem; text-align: center; color: #90a4ae; background: #fafafa; border-radius: 8px; line-height: 1.6; }
+.btn { border: 1px solid #cfd8dc; background: #fff; border-radius: 6px; padding: 0.4rem 0.8rem; font-size: 0.86rem; cursor: pointer; color: #37474f; font-family: inherit; }
+.btn:hover { background: #f5f7f8; }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn.small { padding: 0.25rem 0.6rem; font-size: 0.8rem; }
+.btn.ghost { color: #607d8b; }
+
+.tally { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.5rem; }
+.tl { border: 1px solid #dfe5e1; background: #fff; border-radius: 6px; padding: 0.25rem 0.6rem; cursor: pointer; display: inline-flex; align-items: baseline; gap: 0.35rem; font-size: 0.8rem; color: #4a5763; font-family: inherit; }
+.tl b { font-size: 0.95rem; color: #263238; }
+.tl.pre b { color: var(--pre); } .tl.ok b { color: var(--ok); } .tl.wait b { color: var(--wait); } .tl.none b { color: var(--none); }
+.tl.on { border-color: #263238; box-shadow: 0 0 0 1px #263238 inset; }
+
+.tbox { overflow-x: auto; }
+table { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 58rem; }
+th { text-align: left; font-size: 0.75rem; color: #78909c; font-weight: 600; padding: 0.3rem 0.5rem; border-bottom: 1px solid #d2d8d0; white-space: nowrap; position: sticky; top: 0; background: #fff; }
+td { padding: 0.4rem 0.5rem; border-bottom: 1px solid #e6eae4; vertical-align: top; }
+.nmlink { border: none; background: none; padding: 0; cursor: pointer; color: #1a3c6e; text-align: left; font-family: inherit; font-weight: 700; font-size: 0.92rem; }
+.nmlink:hover { text-decoration: underline; color: #1565c0; }
+.manchip { display: inline-block; margin-left: 0.25rem; font-size: 0.66rem; border: 1px solid #b08a3c; color: #8a5e05; background: #fdf6e3; border-radius: 3px; padding: 0 0.25rem; }
+.mrn { font-size: 0.75rem; color: #78909c; font-variant-numeric: tabular-nums; }
+.rc-gap { font-variant-numeric: tabular-nums; font-weight: 600; }
+.rc-gap.hot { color: var(--pre); }
+.pp-no { color: var(--pre); font-weight: 600; }
+.pp-ok { color: var(--ok); font-size: 0.72rem; }
+.pp-stage { display: inline-block; background: #eceff1; color: #455a64; border-radius: 3px; padding: 0 0.35rem; font-size: 0.72rem; font-weight: 600; }
+.nxt { line-height: 1.45; max-width: 22rem; white-space: normal; }
+.pp-act { white-space: nowrap; }
+.pp-act .btn { margin-right: 0.25rem; }
+tr.rc-form td { background: #fbfcfa; border-bottom: 2px solid #263238; }
+
+/* 站別底色（淡） */
+tr.pp-s0 td { background: #fffaf9; }
+tr.pp-s4 td { background: #f6f8f7; }
+tr.rc-form td { background: #fbfcfa; border-bottom: 2px solid #263238; }

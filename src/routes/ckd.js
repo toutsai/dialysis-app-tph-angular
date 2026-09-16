@@ -17,6 +17,11 @@ import {
   recLine, recWhen, lookupName, searchPatients, recordStats,
 } from '../services/ckd/records.js'
 import { getWide, wideRows, wideTally, wideSheets, wideBuildMs, WIDE_LABS, WIDE_GROUPS } from '../services/ckd/wide.js'
+import { buildRecall } from '../services/ckd/recall.js'
+import { buildLabAlerts, loadAlertDone, setAlertDone, ALERT_KEY_RE } from '../services/ckd/labalert.js'
+import { buildRrt, RRT_STAGE } from '../services/ckd/rrt.js'
+import { buildReport } from '../services/ckd/report.js'
+import { buildPcheck, PC_LBL } from '../services/ckd/pcheck.js'
 import { roc, dGap } from '../services/ckd/parsers.js'
 
 const router = Router()
@@ -29,7 +34,7 @@ const PHASES = [
   { no: 2, title: '明日追蹤＋收案評估（判定引擎搬後端）', status: 'done' },
   { no: 3, title: '個案紀錄八類、VPN 他院查核、不予收案、P 碼補登更正、P 碼總覽', status: 'done' },
   { no: 4, title: '全名單稽核、檢驗總表（21 項＋eGFR 斜率）、XLSX／CSV 匯出（A／B／稽核／總表／個案紀錄）', status: 'done' },
-  { no: 5, title: '召回清單、異常檢驗、透析準備管線、月報、檢核 P 碼', status: 'todo' },
+  { no: 5, title: '召回清單、異常檢驗、透析準備管線、月報、檢核 P 碼、藥師名單 CSV', status: 'done' },
   { no: 6, title: '與病人清單／預約洗腎登記打通', status: 'todo' },
 ]
 
@@ -245,6 +250,169 @@ router.get('/wide/export', (req, res) => {
   }
 })
 
+// ---------- 階段 5：召回／異常檢驗／透析準備管線／月報／檢核 P 碼 ----------
+// 規格 scratchpad spec-stage5.md；運算全在後端（純函式服務），前端只畫。
+// recall／alerts／rrt／report 共用同一份 analyze（withAudit:true）結果，不重算判讀；pcheck 自己跑一次（濾掉當日入帳）。
+
+/** 共用：載資料 → hooks → 判讀日 → 全名單判讀 */
+function auditContext(req) {
+  const db = getDatabase()
+  const { settings } = getSettings()
+  const data = loadDataset(db)
+  const hooks = makeHooks(data.records)
+  const dateQ = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || '')) ? String(req.query.date) : ''
+  const C = makeCfg(settings, dateQ)
+  const t0 = Date.now()
+  const R = analyze(data, C, { doctorSel: '', withAudit: true, hooks })
+  return { db, settings, data, hooks, C, R, timing: { loadMs: data.loadMs, analyzeMs: Date.now() - t0 } }
+}
+
+// GET /recall?date= → 五桶全部列（篩選在前端）
+router.get('/recall', (req, res) => {
+  try {
+    const { settings, data, hooks, C, R, timing } = auditContext(req)
+    const grace = settings.recallGrace
+    const RC = buildRecall(data, R, C, hooks, grace)
+    res.json({
+      date: plain(C.date),
+      grace,
+      hasCases: data.cases.length > 0,
+      rows: RC.rows.map((r) => slimRecall(r, hooks)),
+      tally: RC.tally,
+      timing,
+    })
+  } catch (error) {
+    console.error('❌ GET /ckd/recall:', error)
+    res.status(500).json({ error: true, message: '召回工作清單失敗' })
+  }
+})
+
+// GET /alerts?date= → 近 settings.alertWin 天的異常（含已處理）
+router.get('/alerts', (req, res) => {
+  try {
+    const { db, settings, data, C, R, timing } = auditContext(req)
+    const win = settings.alertWin
+    const rows = buildLabAlerts(data, R, C, loadAlertDone(db), { win })
+    const open = rows.filter((a) => !a.done)
+    res.json({
+      date: plain(C.date),
+      win,
+      hasCases: data.cases.length > 0,
+      rows: rows.map(slimAlert),
+      tally: {
+        open: open.length,
+        crit: open.filter((a) => a.sev === 'crit').length,
+        warn: open.filter((a) => a.sev === 'warn').length,
+        done: rows.length - open.length,
+        all: rows.length,
+      },
+      timing,
+    })
+  } catch (error) {
+    console.error('❌ GET /ckd/alerts:', error)
+    res.status(500).json({ error: true, message: '近日異常檢驗失敗' })
+  }
+})
+
+// PUT /alerts/done { key, done } → 標示已處理／復原（存 DB，跨使用者共享）
+router.put('/alerts/done', async (req, res) => {
+  try {
+    const key = String((req.body && req.body.key) || '')
+    const done = !!(req.body && req.body.done)
+    if (!ALERT_KEY_RE.test(key)) return res.status(400).json({ error: true, message: '異常鍵格式不正確' })
+    const out = setAlertDone(getDatabase(), key, done, req.user)
+    await logAuditWithRequest(req, 'ckd_alert_done', 'ckd_alert_done', key, { key, done })
+    res.json(out)
+  } catch (error) {
+    const status = error.status || 500
+    if (status >= 500) console.error('❌ PUT /ckd/alerts/done:', error)
+    res.status(status).json({ error: true, message: error.message || '標示異常處理狀態失敗' })
+  }
+})
+
+// GET /patients/:mrn/labs → 一位病人的累積檢驗報告（報告日新→舊；原版 wbFlowPanel）
+router.get('/patients/:mrn/labs', (req, res) => {
+  try {
+    const mrn = String(req.params.mrn || '').trim().replace(/^0+/, '') || '0'
+    const data = loadDataset(getDatabase())
+    const person = getWide(data).find((p) => p.mrn === mrn) || null
+    if (!person) return res.json({ mrn, name: '', labs: WIDE_LABS, groups: WIDE_GROUPS, rows: [] })
+    const rows = person.rows.slice().sort((a, b) => (b.date || 0) - (a.date || 0))
+    res.json(plain({ mrn: person.mrn, name: person.name || '', labs: WIDE_LABS, groups: WIDE_GROUPS, rows }))
+  } catch (error) {
+    console.error('❌ GET /ckd/patients/:mrn/labs:', error)
+    res.status(500).json({ error: true, message: '讀取累積檢驗報告失敗' })
+  }
+})
+
+// GET /rrt?date= → 六站全部列（篩選在前端）
+router.get('/rrt', (req, res) => {
+  try {
+    const { settings, data, hooks, C, R, timing } = auditContext(req)
+    const P = buildRrt(data, R, C, settings.rrtEgfr)
+    res.json({
+      date: plain(C.date),
+      egfrThreshold: settings.rrtEgfr,
+      hasCases: data.cases.length > 0,
+      rows: P.rows.map((r) => slimRrt(r, hooks)),
+      tally: P.tally,
+      stations: RRT_STAGE,
+      timing,
+    })
+  } catch (error) {
+    console.error('❌ GET /ckd/rrt:', error)
+    res.status(500).json({ error: true, message: '透析準備管線失敗' })
+  }
+})
+
+// GET /report?ym=YYYY-MM&date= → 九張卡（ym 不合法就用判讀日所在月）
+router.get('/report', (req, res) => {
+  try {
+    const { settings, data, hooks, C, R, timing } = auditContext(req)
+    const ym = /^\d{4}-\d{2}$/.test(String(req.query.ym || '')) ? String(req.query.ym) : ''
+    const recallTally = buildRecall(data, R, C, hooks, settings.recallGrace).tally
+    const P = buildReport(data, R, C, { ym, grace: settings.recallGrace, rrtEgfr: settings.rrtEgfr, recallTally })
+    res.json(plain({ ...P, hasCases: data.cases.length > 0, timing }))
+  } catch (error) {
+    console.error('❌ GET /ckd/report:', error)
+    res.status(500).json({ error: true, message: '月報失敗' })
+  }
+})
+
+// GET /pcheck?date=&doctor= → 診次（同 /daily 的 date/doctor 語意）× 當日入帳
+router.get('/pcheck', (req, res) => {
+  try {
+    const db = getDatabase()
+    const { settings } = getSettings()
+    const data = loadDataset(db)
+    const hooks = makeHooks(data.records)
+    const dateQ = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || '')) ? String(req.query.date) : ''
+    const doctorQ = String(req.query.doctor || '')
+    const sessions = sessionGroups(data, makeCfg(settings, dateQ), doctorQ, dateQ)
+    const t0 = Date.now()
+    const P = buildPcheck(data, settings, { date: sessions.cur, doctorSel: sessions.doctorSel, hooks })
+    res.json(plain({
+      date: P.date,
+      doctorSel: sessions.doctorSel,
+      otherSession: OTHER_SESSION,
+      sessions: { groups: sessions.groups, others: sessions.others, otherGroups: sessions.otherGroups },
+      hasCases: data.cases.length > 0,
+      hasClinic: data.clinic.length > 0,
+      billed: P.billed,
+      rows: P.rows,
+      extra: P.extra,
+      issues: P.issues,
+      A: P.A,
+      B: P.B,
+      labels: PC_LBL,
+      timing: { loadMs: data.loadMs, analyzeMs: Date.now() - t0 },
+    }))
+  } catch (error) {
+    console.error('❌ GET /ckd/pcheck:', error)
+    res.status(500).json({ error: true, message: '檢核 P 碼失敗' })
+  }
+})
+
 // ---------- 階段 3：個案紀錄 ----------
 router.get('/records/types', (req, res) => {
   res.json({ types: Object.entries(REC_TYPES).map(([key, T]) => ({ key, label: T.label, tag: T.tag, color: T.color, fields: T.fields })) })
@@ -408,6 +576,70 @@ function slimB(r, hooks) {
     box,
     chips: hooks.chipsOf(r.p.mrn),
     ext: ext ? { result: ext.result || '', at: ext.at || '', hospital: ext.hospital || '', extProg: ext.extProg || '' } : null,
+  })
+}
+
+/** 召回列（階段 5）：AUD 欄位攤平成前端契約 CkdRecallRow */
+function slimRecall(r, hooks) {
+  const x = r.x
+  return plain({
+    mrn: r.mrn,
+    name: x.p ? x.p.name : (x.last && x.last.name) || '',
+    age: x.age,
+    manual: !!(x.p && x.p.manual),
+    prog: x.prog,
+    stage: x.stage,
+    egfr: x.egfr,
+    lastVisit: x.last ? x.last.visit : null,
+    lastCode: x.lastCode || x.lastType || '',
+    need: x.need,
+    gap: r.gap,
+    appt: r.appt ? { date: r.appt.date, doctor: r.appt.doctor, dept: r.appt.dept, inDept: r.appt.inDept } : null,
+    ctAppt: r.ctAppt,
+    ct: r.ct ? decorate(r.ct) : null,
+    snooze: r.snooze,
+    stopped: r.stopped,
+    bucket: r.bucket,
+    chips: hooks.chipsOf(r.mrn),
+  })
+}
+/** 異常列（階段 5）：aud 只送畫面用的六個欄位 */
+function slimAlert(a) {
+  const x = a.aud
+  return plain({
+    key: a.key, id: a.id, sev: a.sev, t: a.t, m: a.m, date: a.date, v: a.v,
+    mrn: a.mrn, name: a.name, done: a.done, doneBy: a.doneBy,
+    aud: x ? {
+      prog: x.prog,
+      caseDoctor: x.caseDoctor || '',
+      lastVisit: x.last ? x.last.visit : null,
+      gap: x.gap,
+      hasAppt: !!x.p,
+      apptDoctor: x.p ? x.p.doctor || '' : '',
+    } : null,
+  })
+}
+/** 管線列（階段 5）：站別欄位名用 station，避免與 CKD 分期 stage 撞名 */
+function slimRrt(r, hooks) {
+  const x = r.x
+  return plain({
+    mrn: r.mrn,
+    name: x.p ? x.p.name : (x.last && x.last.name) || '',
+    age: x.age,
+    manual: !!(x.p && x.p.manual),
+    prog: x.prog,
+    egfr: x.egfr,
+    stage: x.stage,
+    labDate: x.lab && x.lab.date ? x.lab.date : null,
+    sdm: r.sdm ? decorate(r.sdm) : null,
+    acc: r.acc ? decorate(r.acc) : null,
+    leaning: r.leaning,
+    decided: r.decided,
+    modality: r.modality,
+    accStatus: r.accStatus,
+    station: r.stage,
+    next: r.next,
+    chips: hooks.chipsOf(r.mrn),
   })
 }
 

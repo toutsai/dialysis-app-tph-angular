@@ -396,17 +396,190 @@ export interface CkdWide {
 
 export interface CkdWideExport { persons: number; d1: (string | number)[][]; d2: (string | number)[][] }
 
+export interface CkdSessions { groups: CkdSessionGroup[]; others: Record<string, number>; otherGroups: Record<string, { key: string; dept: string; doctor: string; n: number }[]> }
+
 export interface CkdDaily {
   date: string;
   doctorSel: string;
   otherSession: string;
-  sessions: { groups: CkdSessionGroup[]; others: Record<string, number>; otherGroups: Record<string, { key: string; dept: string; doctor: string; n: number }[]> };
+  sessions: CkdSessions;
   deptInfo: { total: number; matched: number; filter: string; undated: number; allDates: string[]; selDate: string | null; depts: string[] };
   cfg: { preGap: number; earlyNew: number; earlyGap: number; dmGap: number; over: number; labWin: number; dept: string; allA: boolean };
   hasCases: boolean;
   hasClinic: boolean;
   A: CkdRowA[];
   B: CkdRowB[];
+  timing: { loadMs: number; analyzeMs: number };
+}
+
+// ---------- 階段 5：召回／異常檢驗／透析準備／月報／檢核 P 碼 ----------
+// 規格：scratchpad spec-stage5.md（原版 recall.js／labalert.js／rrt.js／report.js／workbench_layer.html buildPcheck）
+// 所有日期都是 'YYYY-MM-DD' 字串（後端 plain()），民國顯示在前端 roc()。
+
+export type CkdRecallBucket = 'call' | 'grace' | 'appt' | 'hold' | 'close';
+
+export interface CkdRecallRow {
+  mrn: string;
+  name: string;
+  age: number | null;
+  manual: boolean;
+  prog: 'pre' | 'early';
+  stage: string | null;
+  egfr: number | null;
+  lastVisit: string | null;
+  /** 原版 x.lastCode || x.lastType || '' */
+  lastCode: string;
+  need: number | null;
+  gap: number | null;
+  appt: { date: string; doctor: string; dept: string; inDept: boolean } | null;
+  ctAppt: string | null;
+  ct: CkdRecord | null;
+  snooze: string | null;
+  stopped: boolean;
+  bucket: CkdRecallBucket;
+  chips: CkdRecChips | null;
+}
+
+export interface CkdRecall {
+  date: string;
+  grace: number;
+  hasCases: boolean;
+  rows: CkdRecallRow[];
+  tally: Record<CkdRecallBucket, number>;
+  timing: { loadMs: number; analyzeMs: number };
+}
+
+export type CkdAlertSev = 'crit' | 'warn';
+export type CkdAlertId = 'k6' | 'k55' | 'hb8' | 'hb10' | 'na' | 'p55' | 'hco3' | 'a1c9' | 'upcr3' | 'egfrdrop' | 'egfrfast' | 'stage5' | 'egfr20' | 'upcrup';
+
+export interface CkdAlertRow {
+  /** mrn|YYYY-MM-DD|id，標示已處理的鍵 */
+  key: string;
+  id: CkdAlertId;
+  sev: CkdAlertSev;
+  t: string;
+  m: string;
+  date: string;
+  v: number;
+  mrn: string;
+  name: string;
+  done: string | null;
+  doneBy: CkdActor | null;
+  aud: { prog: 'pre' | 'early'; caseDoctor: string; lastVisit: string | null; gap: number | null; hasAppt: boolean; apptDoctor: string } | null;
+}
+
+export interface CkdAlerts {
+  date: string;
+  win: number;
+  hasCases: boolean;
+  rows: CkdAlertRow[];
+  tally: { open: number; crit: number; warn: number; done: number; all: number };
+  timing: { loadMs: number; analyzeMs: number };
+}
+
+/** 一位病人的累積檢驗報告（原版 wbFlowPanel；欄位同檢驗總表 long 列） */
+export interface CkdPatientLabs {
+  mrn: string;
+  name: string;
+  labs: CkdWideLab[];
+  groups: [string, string][];
+  rows: CkdWideDayRow[];
+}
+
+export type CkdRrtStation = 's0' | 's1' | 's2' | 's3' | 's4' | 's5';
+
+export interface CkdRrtRow {
+  mrn: string;
+  name: string;
+  age: number | null;
+  manual: boolean;
+  prog: 'pre' | 'early';
+  egfr: number | null;
+  stage: string | null;
+  labDate: string | null;
+  sdm: CkdRecord | null;
+  acc: CkdRecord | null;
+  leaning: string;
+  decided: boolean;
+  modality: 'HD' | 'PD' | 'TX' | 'CKM' | '';
+  accStatus: string;
+  station: CkdRrtStation;
+  next: string;
+  chips: CkdRecChips | null;
+}
+
+export interface CkdRrt {
+  date: string;
+  egfrThreshold: number;
+  hasCases: boolean;
+  rows: CkdRrtRow[];
+  tally: Record<CkdRrtStation, number>;
+  stations: Record<CkdRrtStation, string>;
+  timing: { loadMs: number; analyzeMs: number };
+}
+
+export interface CkdReportBillRow { code: string; name: string; n: number; pts: number; people: number }
+export interface CkdReportDoc { doc: string; n: number; ok: number }
+
+export interface CkdReport {
+  ym: string;
+  today: string;
+  hasCases: boolean;
+  enrolled: number; pre: number; early: number; dm: number;
+  stageCnt: Record<string, number>;
+  newM: number; newY: number;
+  closeM: Record<string, number>;
+  closeMn: number;
+  /** 結案分類中文（dead／dialysis／transfer／lapse／other） */
+  closeLabels: Record<string, string>;
+  onTime: number; over180: number; over365: number; noGap: number; grace: number;
+  annDue: number; annDone: number; annReady: number;
+  labOk: number; eg90: number; prot180: number;
+  reward: number; rewardCodes: Record<string, number>;
+  /** 透析準備門檻：與 settings.rrtEgfr 連動（原版寫死 20） */
+  rrtEgfr: number;
+  low: number; hasSdm: number; hasAcc: number;
+  billRows: CkdReportBillRow[];
+  billTot: number; billN: number; billPeople: number;
+  kpi: { n: number; ok: number; docs: CkdReportDoc[] };
+  lastYearN: number; lastYearOk: number;
+  billYear: boolean; billSpan: string; yNow: number;
+  recall: Record<CkdRecallBucket, number> | null;
+  timing: { loadMs: number; analyzeMs: number };
+}
+
+export type CkdPcheckRes = 'ok' | 'miss' | 'early' | 'none' | 'new' | 'unexp' | 'cand' | 'extra' | 'nobill';
+
+export interface CkdPcheckBill { code: string; codeName: string; doctor: string; price: number | null; n: number }
+
+export interface CkdPcheckRow {
+  kind: 'A' | 'B' | 'X';
+  mrn: string;
+  name: string;
+  no: string | null;
+  half: string | null;
+  dr: string | null;
+  bills: CkdPcheckBill[];
+  res: CkdPcheckRes;
+  note: string;
+  verdict: string;
+}
+
+export interface CkdPcheck {
+  date: string;
+  doctorSel: string;
+  otherSession: string;
+  sessions: CkdSessions;
+  hasCases: boolean;
+  hasClinic: boolean;
+  billed: boolean;
+  rows: CkdPcheckRow[];
+  extra: CkdPcheckRow[];
+  issues: number;
+  A: { total: number; ok: number; miss: number; early: number; none: number };
+  B: { total: number; new: number; cand: number; unexp: number };
+  /** res → [標籤文字, css class]（原版 PC_LBL） */
+  labels: Record<CkdPcheckRes, [string, string]>;
   timing: { loadMs: number; analyzeMs: number };
 }
 
@@ -465,6 +638,55 @@ export class CkdApiService {
 
   getWideExport(params: { scope: CkdWideScope; q: string }): Promise<CkdWideExport> {
     return firstValueFrom(this.api.get<CkdWideExport>('/ckd/wide/export', { scope: params.scope, q: params.q }));
+  }
+
+  // ---------- 階段 5 ----------
+
+  /** 召回工作清單：全部到期者（五桶），篩選在前端；不帶 date = 今天 */
+  getRecall(date?: string): Promise<CkdRecall> {
+    const params: Record<string, string> = {};
+    if (date) params['date'] = date;
+    return firstValueFrom(this.api.get<CkdRecall>('/ckd/recall', params));
+  }
+
+  /** 近日異常檢驗：全部（含已處理），篩選在前端 */
+  getAlerts(date?: string): Promise<CkdAlerts> {
+    const params: Record<string, string> = {};
+    if (date) params['date'] = date;
+    return firstValueFrom(this.api.get<CkdAlerts>('/ckd/alerts', params));
+  }
+
+  /** 標示已處理／復原（存 DB，跨使用者共享） */
+  setAlertDone(key: string, done: boolean): Promise<{ key: string; done: string | null; doneBy: CkdActor | null }> {
+    return firstValueFrom(this.api.put<{ key: string; done: string | null; doneBy: CkdActor | null }>('/ckd/alerts/done', { key, done }));
+  }
+
+  /** 一位病人的累積檢驗報告（報告日新→舊） */
+  getPatientLabs(mrn: string): Promise<CkdPatientLabs> {
+    return firstValueFrom(this.api.get<CkdPatientLabs>(`/ckd/patients/${encodeURIComponent(mrn)}/labs`));
+  }
+
+  /** 透析準備管線：全部（六站），篩選在前端 */
+  getRrt(date?: string): Promise<CkdRrt> {
+    const params: Record<string, string> = {};
+    if (date) params['date'] = date;
+    return firstValueFrom(this.api.get<CkdRrt>('/ckd/rrt', params));
+  }
+
+  /** 月報：ym = 'YYYY-MM'（不帶 = 判讀日所在月） */
+  getReport(ym?: string, date?: string): Promise<CkdReport> {
+    const params: Record<string, string> = {};
+    if (ym) params['ym'] = ym;
+    if (date) params['date'] = date;
+    return firstValueFrom(this.api.get<CkdReport>('/ckd/report', params));
+  }
+
+  /** 檢核 P 碼輸入：診次（date × doctor，同 /daily 的參數）× 當日入帳 */
+  getPcheck(date?: string, doctor?: string): Promise<CkdPcheck> {
+    const params: Record<string, string> = {};
+    if (date) params['date'] = date;
+    if (doctor) params['doctor'] = doctor;
+    return firstValueFrom(this.api.get<CkdPcheck>('/ckd/pcheck', params));
   }
 
   // ---------- 個案紀錄 ----------

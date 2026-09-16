@@ -60,31 +60,46 @@ test('檢驗：同鍵取聯集、新值覆蓋、定性與旗標跟著新值', ()
   assert.equal(s3.dup, 1, '沒有變化就算重複')
 })
 
-test('門診清單：同鍵略過；自帶 ACR/eGFR 併入檢驗（no 以 clinic| 開頭）', () => {
+test('門診清單：同鍵內容相同略過、不同以後列為準（同人同日同診號兩科 → 留後面的腎臟內科）；自帶 ACR/eGFR 併入檢驗', () => {
   const db = tempDb()
   const p = toPayload('clinic', [
     { mrn: '602991', name: 'D', date: d('2026-09-16'), no: '5', half: '上午', dept: '腎臟內科', doctor: 'X', acrDate: d('2026-08-01'), acr: 45, egfrDate: d('2026-08-01'), egfr: 38.2, birth: d('1950-01-01'), age: 76, sex: '男' },
-    { mrn: '602991', name: 'D', date: d('2026-09-16'), no: '5', half: '上午', dept: '腎臟內科', doctor: 'X' },  // 同鍵重複
+    { mrn: '602991', name: 'D', date: d('2026-09-16'), no: '5', half: '上午', dept: '腎臟內科', doctor: 'X', acrDate: d('2026-08-01'), acr: 45, egfrDate: d('2026-08-01'), egfr: 38.2, birth: d('1950-01-01'), age: 76, sex: '男' },  // 同鍵同內容 → 重複
+    // 真實案例（2026-08-28 病歷號 2456960）：同診號先掛肝膽腸胃科、後掛腎臟內科 → 原版 mergeRows 留後列
+    { mrn: '2456960', name: 'E', date: d('2026-08-28'), no: '32', half: '下午', dept: '肝膽腸胃科', doctor: '張' },
+    { mrn: '2456960', name: 'E', date: d('2026-08-28'), no: '32', half: '下午', dept: '腎臟內科', doctor: '陳' },
   ])
   assert.equal(p.extraLabs.length, 2)
   const r = ingestPayload(db, p, { fileName: 'c.xls', fileHash: 'hc' })
-  assert.deepEqual([r.stats.added, r.stats.dup], [1, 1])
+  assert.deepEqual([r.stats.added, r.stats.updated, r.stats.dup], [2, 1, 1])
   assert.equal(r.labStats.added, 2)
   assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM ckd_labs WHERE src = 'clinic' AND no LIKE 'clinic|%'`).get().n, 2)
-  assert.equal(db.prepare(`SELECT visit_date FROM ckd_clinic_visits`).get().visit_date, '2026-09-16')
+  assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM ckd_clinic_visits`).get().n, 2)
+  assert.deepEqual(db.prepare(`SELECT dept, doctor FROM ckd_clinic_visits WHERE mrn = '2456960'`).get(), { dept: '腎臟內科', doctor: '陳' }, '同鍵後列蓋前列')
+  // 重匯同一人：內容沒變 → 重複；HIS 更正科別 → 更新
+  const p2 = toPayload('clinic', [
+    { mrn: '2456960', name: 'E', date: d('2026-08-28'), no: '32', half: '下午', dept: '腎臟內科', doctor: '陳' },
+    { mrn: '602991', name: 'D', date: d('2026-09-16'), no: '5', half: '下午', dept: '腎臟內科', doctor: 'Y' },
+  ])
+  const r2 = ingestPayload(db, p2, { fileName: 'c2.xls', fileHash: 'hc2' })
+  assert.deepEqual([r2.stats.added, r2.stats.updated, r2.stats.dup], [0, 1, 1])
+  assert.equal(db.prepare(`SELECT doctor FROM ckd_clinic_visits WHERE mrn = '602991'`).get().doctor, 'Y')
   const sum = sourceSummary(db)
-  assert.equal(sum.clinic.days, 1); assert.equal(sum.lab.fromClinic, 2); assert.equal(sum.lab.rangeStart, null, '檢驗區間只算 0204 來源')
+  assert.equal(sum.clinic.days, 2); assert.equal(sum.lab.fromClinic, 2); assert.equal(sum.lab.rangeStart, null, '檢驗區間只算 0204 來源')
 })
 
-test('入帳：鍵 mrn|visit|code 略過重複；缺日期列不寫', () => {
+test('入帳：鍵 mrn|visit|code 同內容略過、不同以新列為準；缺日期列不寫', () => {
   const db = tempDb()
   const s = ingestBilling(db, [
     { mrn: '1', visit: '2026-07-07', code: 'P3403C', prog: 'pre', ctype: '追蹤', price: 600, n: 1 },
     { mrn: '1', visit: '2026-07-07', code: 'P3403C', prog: 'pre', ctype: '追蹤', price: 600, n: 1 },
     { mrn: '1', visit: '', code: 'P3406C' },
   ], 'b')
-  assert.deepEqual([s.rows, s.added, s.dup], [3, 1, 2])
+  assert.deepEqual([s.rows, s.added, s.updated, s.dup], [3, 1, 0, 1])
   assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM ckd_billing`).get().n, 1)
+  const s2 = ingestBilling(db, [{ mrn: '1', visit: '2026-07-07', code: 'P3403C', prog: 'pre', ctype: '追蹤', price: 600, n: 2 }], 'b2')
+  assert.deepEqual([s2.added, s2.updated, s2.dup], [0, 1, 0])
+  assert.equal(db.prepare(`SELECT n, batch_id FROM ckd_billing`).get().n, 2, 'HIS 重匯更正次數 → 以新列為準')
 })
 
 test('ingestCases：缺 visit 的列不寫入、dm/closed 轉 0/1', () => {

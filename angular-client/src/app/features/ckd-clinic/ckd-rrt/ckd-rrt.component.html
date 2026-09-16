@@ -1,0 +1,87 @@
+<section class="block">
+  <div class="head">
+    <h2><span class="tag-p">P</span>透析準備管線 <span class="dim sub">SDM → 血管通路 → 成熟 / 使用</span></h2>
+    <span class="dim">
+      @if (loading()) { 整理中… }
+      @else if (rrt()) { 判讀日 {{ rrt()!.date }} · 管線 {{ rrt()!.rows.length }} 人 }
+    </span>
+    <label class="cfg" title="eGFR 低於此值的已收案者進入管線">
+      eGFR &lt;
+      <input type="number" min="5" max="30" step="1" [value]="egfrThreshold()" (change)="setThreshold($any($event.target).value)" [disabled]="loading() || saving()" />
+    </label>
+    <span class="head-btns">
+      <button type="button" class="btn small" (click)="load()" [disabled]="loading()">重新整理</button>
+      <button type="button" class="btn small ghost" (click)="exportCsv()" [disabled]="!rrt()?.rows?.length" title="全部管線名單，不受篩選影響">匯出 CSV</button>
+    </span>
+  </div>
+
+  @if (error(); as err) { <div class="banner error">{{ err }}</div> }
+
+  @if (rrt(); as p) {
+    @if (!p.hasCases) {
+      <div class="empty">尚未匯入「已收案名單」。</div>
+    } @else if (!p.rows.length) {
+      <div class="empty">匯入追蹤清冊與檢驗後,eGFR 低於門檻的已收案者會列在這裡。</div>
+    } @else {
+      <div class="tally">
+        @for (t of tally(); track t.f) {
+          <button type="button" class="tl" [class]="'tl ' + t.c" [class.on]="filter() === t.f && t.f !== 'all'" (click)="clickTally(t.f)" [title]="'展開並只看:' + t.k"><span>{{ t.k }}</span><b>{{ t.v }}</b></button>
+        }
+      </div>
+
+      @if (!view().length) {
+        <div class="empty">此站目前 0 人。</div>
+      } @else {
+        <div class="tbox">
+          <table>
+            <thead>
+              <tr><th>病人</th><th>eGFR</th><th>SDM</th><th>血管通路</th><th>下一步</th><th>動作</th></tr>
+            </thead>
+            <tbody>
+              @for (v of view(); track v.r.mrn) {
+                <tr [class]="'pp-' + v.r.station">
+                  <td>
+                    <button type="button" class="nmlink" (click)="openRecords.emit(v.r.mrn)" title="查看/新增此病人的個案紀錄">{{ v.r.name || '（無姓名）' }}</button>@if (v.r.manual) { <span class="manchip">手動</span> }
+                    <div class="mrn">{{ v.r.mrn }}</div>
+                    <div class="dim">{{ v.ageProg }}</div>
+                  </td>
+                  <td class="rc-gap" [class.hot]="v.hot">{{ v.egfrText }}<div class="dim thin">{{ v.egfrSub }}</div></td>
+                  <td>
+                    @if (v.r.sdm) {
+                      <b>{{ v.sdmMain }}</b>@if (v.r.decided) { <span class="pp-ok"> 已決定</span> }
+                      <div class="dim">{{ v.sdmSub }}</div>
+                    } @else { <span class="pp-no">未談</span> }
+                  </td>
+                  <td>
+                    @if (v.r.acc) {
+                      <b>{{ v.accType }}</b> {{ v.r.accStatus }}
+                      @if (v.accSub) { <div class="dim">{{ v.accSub }}</div> }
+                    } @else if (v.accNone === '不適用') {
+                      <span class="dim">不適用</span>
+                    } @else {
+                      <span class="pp-no">未規劃</span>
+                    }
+                  </td>
+                  <td><span class="pp-stage">{{ v.stationText }}</span><div class="nxt">{{ v.r.next }}</div></td>
+                  <td class="pp-act">
+                    <button type="button" class="btn small ghost" (click)="toggleForm(v.r.mrn, 'sdm')">+ SDM</button>
+                    <button type="button" class="btn small ghost" (click)="toggleForm(v.r.mrn, 'access')">+ 通路</button>
+                  </td>
+                </tr>
+                @if (form()?.mrn === v.r.mrn) {
+                  <tr class="rc-form">
+                    <td colspan="6">
+                      <app-ckd-quick-form [type]="form()!.type" [mrn]="v.r.mrn" [defaults]="atDefaults" (saved)="onSaved()" (cancelled)="form.set(null)"></app-ckd-quick-form>
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+  } @else if (loading()) {
+    <div class="placeholder">整理中…</div>
+  }
+</section>

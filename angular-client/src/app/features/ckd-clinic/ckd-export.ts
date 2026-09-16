@@ -1,7 +1,7 @@
 // 門診 CKD：匯出（原版 app.js csv()/exportDayEnrollXlsx/btnCsvA/B/C/E、wideSheets）
 // 欄位標題、取值規則、檔名逐字照原版；日期民國 yyy/mm/dd、檔名 ISO；CSV 全欄雙引號＋BOM＋CRLF。
 // 與原版差異：不做去識別遮蔽（本站有登入與 RBAC）；xlsx 以動態 import 載入（與週排班表匯出相同慣例）。
-import type { CkdAuditRow, CkdRecTypeDef, CkdRecord, CkdRowA, CkdRowB } from '@app/core/services/ckd-api.service';
+import type { CkdAuditRow, CkdPcheckRes, CkdPcheckRow, CkdRecTypeDef, CkdRecord, CkdReport, CkdRowA, CkdRowB } from '@app/core/services/ckd-api.service';
 
 type Cell = string | number | null | undefined;
 
@@ -97,6 +97,89 @@ export function exportAuditCsv(rows: CkdAuditRow[], date: string): void {
       r.recon && r.recon.shortBilled.length ? r.recon.shortBilled.map((x) => roc(x.at) + ' 距前次' + x.gap + '天(需' + x.need + ')').join('、') : '',
       r.alerts.map((a) => '[' + a.t + ']' + a.m).join(';')])),
     `全名單_收案稽核_${date}.csv`);
+}
+
+/**
+ * 藥師名單 CSV（原版 btnPharm，app.js:1848-1871）：僅 Pre-ESRD。
+ * A 區 = 已收案且判讀日有掛號的 Pre-ESRD；B 區 = 今日判定符合 Pre-ESRD 的未收案者（排除「已於他院收案」）。
+ * Early-CKD 刻意排除（藥師收案範圍僅 Pre-ESRD）。回傳列數；0 = 本判讀日沒有 Pre-ESRD 病人。
+ * 與原版差異：不做去識別遮蔽（本站有登入與 RBAC），病歷號／姓名輸出真值；eGFR／UPCR 沿用原版輸出原始值不格式化。
+ */
+export function exportPharmCsv(A: CkdRowA[], B: CkdRowB[], date: string): number {
+  const rows: Cell[][] = [];
+  A.forEach((r) => {
+    if (r.prog !== 'pre') return;
+    rows.push([r.p?.no ?? '', r.p?.half ?? '', r.mrn, r.name, nz(r.age), r.p?.sex || '', '已收案',
+      r.egfr != null ? r.egfr : '', r.stage || '', r.upcr != null ? r.upcr : '',
+      r.lab && r.lab.date ? roc(r.lab.date) : '', STL[r.status] || '', r.isDM ? 'DM' : '', r.p?.manual ? '手動加入' : '']);
+  });
+  B.forEach((r) => {
+    if (r.verdict !== 'pre') return;
+    if (r.ext && r.ext.result === '已於他院收案') return;
+    rows.push([r.p.no, r.p.half, r.mrn, r.name, nz(r.age), r.p.sex || '', '符合待收',
+      r.egfr != null ? r.egfr : '', r.stage || '', r.upcr != null ? r.upcr : '',
+      r.lab && r.lab.date ? roc(r.lab.date) : '', '個管確認 VPN 後收案', r.p.pDM ? 'DM' : '', r.p.manual ? '手動加入' : '']);
+  });
+  if (!rows.length) return 0;
+  rows.sort((a, b) => String(a[1]).localeCompare(String(b[1]))
+    || String(a[0]).localeCompare(String(b[0]), 'zh-Hant', { numeric: true }));
+  const head: Cell[][] = [['診號', '時段', '病歷號', '姓名', '年齡', '性別', '收案狀態', 'eGFR', '分期', 'UPCR', '最近檢驗日', '追蹤/待辦', 'DM', '備註']];
+  downloadCsv(head.concat(rows), `藥師名單_PreESRD_${date}.csv`);
+  return rows.length;
+}
+
+/**
+ * 月報 CSV（原版 btnCsvM，report.js:117-136）：列序逐字照原版。
+ * 與原版差異：透析準備門檻改用回應的 rrtEgfr（原版寫死 20；本站拍板與 settings 連動，見 spec §4.7-1）。
+ */
+export function exportReportCsv(P: CkdReport): void {
+  const rows: Cell[][] = [['項目', '數值', '備註']];
+  const add = (k: string, v: Cell, n: Cell = '') => { rows.push([k, v == null ? '' : v, n]); };
+  add('基準月', P.ym);
+  add('已收案', P.enrolled);
+  add('Pre-ESRD', P.pre);
+  add('Early-CKD', P.early);
+  add('糖尿病', P.dm);
+  Object.keys(P.stageCnt || {}).forEach((k) => add('分期 ' + k, P.stageCnt[k]));
+  add('本月新收案', P.newM);
+  add('近12月新收案', P.newY);
+  add('本月結案', P.closeMn);
+  Object.keys(P.closeM || {}).forEach((k) => add('結案-' + ((P.closeLabels && P.closeLabels[k]) || k), P.closeM[k]));
+  add('準時追蹤', P.onTime, `寬限 ${P.grace} 天`);
+  add('逾期>180', P.over180);
+  add('逾期>365', P.over365);
+  add('無照護日期', P.noGap);
+  add('年度評估應評估', P.annDue);
+  add('年度評估已申報(12月)', P.annDone);
+  add('年度評估可申報', P.annReady);
+  add('Early-CKD 完整追蹤 分母', P.kpi.n);
+  add('Early-CKD 完整追蹤 達成', P.kpi.ok);
+  (P.kpi.docs || []).forEach((d) => add('完整追蹤-' + d.doc, `${d.ok}/${d.n}`));
+  add('前一年度收案本年度已追蹤', `${P.lastYearOk}/${P.lastYearN}`);
+  add('必要檢驗齊全', P.labOk);
+  add('eGFR 90天內', P.eg90);
+  add('蛋白尿 180天內', P.prot180);
+  add('獎勵候選', P.reward);
+  Object.keys(P.rewardCodes || {}).forEach((k) => add('獎勵-' + k, P.rewardCodes[k]));
+  add(`eGFR<${P.rrtEgfr}`, P.low);
+  add(`eGFR<${P.rrtEgfr} 已談SDM`, P.hasSdm);
+  add(`eGFR<${P.rrtEgfr} 已規劃通路`, P.hasAcc);
+  (P.billRows || []).forEach((r) => add(`入帳 ${r.code} ${r.name}`, r.pts, `${r.people} 人 / ${r.n} 次`));
+  add('入帳合計', P.billTot);
+  downloadCsv(rows, `CKD月報_${P.ym}.csv`);
+}
+
+/** 檢核 P 碼輸入 CSV（原版 #pcCsv，wb:651-654）：全部列（rows 接 extra），檔名用 ISO 診次日 */
+export function exportPcheckCsv(all: CkdPcheckRow[], labels: Record<CkdPcheckRes, [string, string]>, date: string): void {
+  const head: Cell[][] = [['診號', '病歷號', '姓名', '類別', '前日判定', '當日入帳', '檢核', '說明']];
+  downloadCsv(head.concat(all.map((r): Cell[] => [
+    r.no || '', r.mrn, r.name,
+    r.kind === 'A' ? '已收案' : r.kind === 'B' ? '未收案' : '名單外',
+    r.verdict || '',
+    (r.bills || []).map((b) => b.code).join(' '),
+    (labels && labels[r.res] ? labels[r.res][0] : r.res),
+    r.note,
+  ])), `檢核P碼輸入_${date}.csv`);
 }
 
 /** 個案紀錄 CSV（btnCsvE）：八類欄位聯集攤平，標題取第一個定義該欄位的類型 */

@@ -11,13 +11,16 @@ export const DEFAULT_SETTINGS = Object.freeze({
   over: 180,         // 逾期門檻（天）
   labWin: 90,        // 檢驗回溯視窗（±天）
   dept: '腎臟內科',   // 門診清單科別篩選
-  allA: false,       // 已收案者全院比對（部北：多科會收 Early-CKD）
+  allA: true,        // 已收案者全院比對（部北：多科會收 Early-CKD）；原版 #cfgAllA 預設 checked
+                     // ⚠️ 2026-09-16 用同組真檔對照原版發現此值曾誤設 false（他科掛號的已收案者會漏出 A 區）
   recallGrace: 30,   // 召回清單到期後寬限（天）
   alertWin: 14,      // 近日異常檢驗掃描天數
   rrtEgfr: 20,       // 透析準備管線 eGFR 門檻
 })
 
 const NUMERIC_KEYS = ['preGap', 'earlyNew', 'earlyGap', 'dmGap', 'over', 'labWin', 'recallGrace', 'alertWin', 'rrtEgfr']
+/* 可為 0 的數值鍵：召回寬限 0 天 = 到期即列入待聯絡（原版 #cfgRecallGrace min=0）；其餘一律正數 */
+const ZERO_OK_KEYS = new Set(['recallGrace'])
 
 export function getSettings() {
   const db = getDatabase()
@@ -31,14 +34,14 @@ export function getSettings() {
   }
 }
 
-/** 只接受已知鍵；數值鍵必須是正數，否則回預設 */
+/** 只接受已知鍵；數值鍵必須是正數（recallGrace 可為 0），否則回預設 */
 export function sanitize(input) {
   const out = {}
   if (!input || typeof input !== 'object') return out
   for (const k of NUMERIC_KEYS) {
     if (input[k] == null || input[k] === '') continue
     const n = Number(input[k])
-    if (Number.isFinite(n) && n > 0) out[k] = n
+    if (Number.isFinite(n) && (n > 0 || (n === 0 && ZERO_OK_KEYS.has(k)))) out[k] = n
   }
   if (typeof input.dept === 'string') out.dept = input.dept.trim()
   if (typeof input.allA === 'boolean') out.allA = input.allA

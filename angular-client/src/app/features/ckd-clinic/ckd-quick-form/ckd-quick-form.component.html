@@ -1,0 +1,42 @@
+<div class="rc-f">
+  @if (def(); as d) {
+    <div class="rf-h"><b>新增 {{ d.label }}</b><span class="dim">{{ mrn }}</span></div>
+    <div class="rf-grid">
+      @for (f of d.fields; track f.k) {
+        <label class="rf-f" [class.wide]="isWide(f)">
+          <span>{{ f.t }}@if (f.req) { <i> *</i> }</span>
+          @switch (f.type) {
+            @case ('select') {
+              <select [ngModel]="form()[f.k]" (ngModelChange)="setField(f.k, $event)" [name]="f.k">
+                <option value=""></option>
+                @for (o of f.opts || []; track o) { <option [value]="o">{{ o }}</option> }
+              </select>
+            }
+            @case ('checks') {
+              <span class="rf-checks">
+                @for (o of f.opts || []; track o) {
+                  <label class="chk"><input type="checkbox" [checked]="isChecked(f.k, o)" (change)="toggleCheck(f.k, o, $any($event.target).checked)" /> {{ o }}</label>
+                }
+              </span>
+            }
+            @case ('date') {
+              <input type="date" [ngModel]="form()[f.k]" (ngModelChange)="setField(f.k, $event)" [name]="f.k" />
+            }
+            @default {
+              <!-- textarea 也渲染成單行 input：列內表單欄位窄（原版 recall.js:117 刻意） -->
+              <input type="text" [placeholder]="f.ph || ''" [ngModel]="form()[f.k]" (ngModelChange)="setField(f.k, $event)" [name]="f.k" />
+            }
+          }
+        </label>
+      }
+    </div>
+    @if (formError(); as fe) { <div class="banner error">{{ fe }}</div> }
+    <div class="rf-btn">
+      <button type="button" class="btn small ghost" (click)="cancelled.emit()" [disabled]="saving()">取消</button>
+      <button type="button" class="btn small primary" (click)="save()" [disabled]="saving()">{{ saving() ? '儲存中…' : saveText() }}</button>
+    </div>
+  } @else {
+    @if (loading()) { <div class="dim">載入表單欄位…</div> }
+    @if (formError(); as fe) { <div class="banner error">{{ fe }}</div> }
+  }
+</div>

@@ -26,7 +26,7 @@
 .subtitle { color: #78909c; font-size: 0.85rem; }
 
 /* 頁內檢視切換 */
-.views { display: flex; gap: 0.3rem; border-bottom: 1px solid #dee2e6; }
+.views { display: flex; flex-wrap: wrap; gap: 0.3rem; border-bottom: 1px solid #dee2e6; }
 .view-tab {
   border: 1px solid transparent;
   border-bottom: none;

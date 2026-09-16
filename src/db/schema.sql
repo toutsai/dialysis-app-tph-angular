@@ -1091,6 +1091,18 @@ CREATE TABLE IF NOT EXISTS ckd_upload_batches (
 );
 CREATE INDEX IF NOT EXISTS idx_ckd_batches_hash ON ckd_upload_batches(file_hash);
 
+-- 近日異常檢驗「已處理」（階段 5；原版 localStorage.ckdAlertDone，改存 DB 以跨使用者共享）
+CREATE TABLE IF NOT EXISTS ckd_alert_done (
+    key TEXT PRIMARY KEY,              -- mrn|YYYY-MM-DD(報告日)|ruleId
+    mrn TEXT NOT NULL,
+    report_date TEXT NOT NULL,
+    rule_id TEXT NOT NULL,
+    done_at TEXT NOT NULL,             -- YYYY-MM-DD（標記當天）
+    done_by TEXT,                      -- JSON {uid, name}
+    created_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_ckd_alert_done_mrn ON ckd_alert_done(mrn);
+
 -- 季度造管CSV匯出的人工欄與覆寫（快照/事件欄每次載入即時重算，只存 overrides 避免資料過期）
 CREATE TABLE IF NOT EXISTS vascular_quarter_exports (
     id TEXT PRIMARY KEY,                     -- `${quarter}_${patient_id}`

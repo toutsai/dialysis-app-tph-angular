@@ -2,7 +2,7 @@ import { Component, OnInit, ViewChild, computed, inject, signal } from '@angular
 import { CommonModule } from '@angular/common';
 import { CkdApiService, CkdDaily, CkdMergedLab, CkdRecType, CkdRowA, CkdRowB } from '@app/core/services/ckd-api.service';
 import { CkdRecordsComponent } from '../ckd-records/ckd-records.component';
-import { exportACsv, exportBCsv, exportDayEnrollXlsx } from '../ckd-export';
+import { exportACsv, exportBCsv, exportDayEnrollXlsx, exportPharmCsv } from '../ckd-export';
 
 type AFilter = 'all' | 'pre' | 'early' | 'due' | 'wait' | 'ann' | 'miss' | 'alert';
 type BFilter = 'all' | 'pre' | 'early' | 'check' | 'nodata' | 'no' | 'noen' | 'closed' | 'ord' | 'ext';
@@ -170,6 +170,15 @@ export class CkdDailyComponent implements OnInit {
   exportB(): void {
     const dl = this.daily();
     if (dl) exportBCsv(dl.B, dl.date);
+  }
+
+  /** 藥師名單（原版 btnPharm）：僅 Pre-ESRD，A 區已收案 + B 區今日判定符合（排除已於他院收案） */
+  exportPharm(): void {
+    const dl = this.daily();
+    if (!dl) return;
+    this.exportMsg.set(null);
+    const n = exportPharmCsv(dl.A, dl.B, dl.date);
+    if (!n) this.exportMsg.set('本判讀日沒有 Pre-ESRD 病人(藥師名單僅含 Pre-ESRD,不含 Early-CKD)。');
   }
 
   async exportDayXlsx(): Promise<void> {

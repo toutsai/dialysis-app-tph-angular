@@ -13,9 +13,17 @@ import {
 import { CkdDailyComponent } from './ckd-daily/ckd-daily.component';
 import { CkdAuditComponent } from './ckd-audit/ckd-audit.component';
 import { CkdWideComponent } from './ckd-wide/ckd-wide.component';
+import { CkdPcheckComponent } from './ckd-pcheck/ckd-pcheck.component';
+import { CkdRecallComponent } from './ckd-recall/ckd-recall.component';
+import { CkdAlertsComponent } from './ckd-alerts/ckd-alerts.component';
+import { CkdRrtComponent } from './ckd-rrt/ckd-rrt.component';
+import { CkdReportComponent } from './ckd-report/ckd-report.component';
 
-/** 頁內檢視：daily = 明日追蹤／收案評估／個案紀錄；audit = 全名單稽核；wide = 檢驗總表；import = 匯入與設定 */
-type CkdView = 'daily' | 'audit' | 'wide' | 'import';
+/**
+ * 頁內檢視：daily = 明日追蹤／收案評估／個案紀錄；pcheck = 檢核 P 碼；recall = 召回清單；
+ * alerts = 異常檢驗；rrt = 透析準備；report = 月報；audit = 全名單稽核；wide = 檢驗總表；import = 匯入與設定
+ */
+type CkdView = 'daily' | 'pcheck' | 'recall' | 'alerts' | 'rrt' | 'report' | 'audit' | 'wide' | 'import';
 
 /** 上傳卡片：四種 HIS 報表（順序＝個管師匯入順序） */
 interface UploadCard {
@@ -50,7 +58,11 @@ const NUMERIC_SETTING_KEYS = ['preGap', 'earlyNew', 'earlyGap', 'dmGap', 'over',
 @Component({
   selector: 'app-ckd-clinic',
   standalone: true,
-  imports: [CommonModule, FormsModule, CkdDailyComponent, CkdAuditComponent, CkdWideComponent],
+  imports: [
+    CommonModule, FormsModule,
+    CkdDailyComponent, CkdPcheckComponent, CkdRecallComponent, CkdAlertsComponent,
+    CkdRrtComponent, CkdReportComponent, CkdAuditComponent, CkdWideComponent,
+  ],
   templateUrl: './ckd-clinic.component.html',
   styleUrl: './ckd-clinic.component.css',
 })

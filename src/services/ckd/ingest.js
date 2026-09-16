@@ -1,9 +1,12 @@
 // 門診 CKD：解析後資料列 → SQLite 合併寫入
 // 合併規則照原版（交接包 server.js mergeCases/mergeInto/combineLab、app.js mergeCasesSnapshot/handleFiles）：
 //   case   追蹤清冊是登錄簿快照 → 新檔出現的人，舊列整批換成新列（逐人取代，不逐鍵累積）
-//   clinic 鍵 mrn|date|no → 已有的略過（不更新）；自帶 ACR/PCR/eGFR 另併入檢驗（no 以 clinic| 開頭）
+//   clinic 鍵 mrn|date|no → 同鍵內容相同略過、內容不同以新列為準（原版 mergeRows；同一檔內後列蓋前列）；
+//          自帶 ACR/PCR/eGFR 另併入檢驗（no 以 clinic| 開頭）
+//          ⚠️ 2026-09-16 用同組真檔對照原版發現：曾寫成「已有的略過」，同人同日同診號但不同科的兩列
+//             （HIS 清單會出現）留到先到的他科列，腎臟內科那列被丟掉 → 已收案者漏出 A 區。勿改回 INSERT OR IGNORE。
 //   lab    鍵 no（mrn|date|spec）→ 同鍵取聯集，新檔的值覆蓋舊值（每日/每三日匯出同人同日項目可能分在兩檔）
-//   bill   鍵 mrn|visit|code → 已有的略過
+//   bill   鍵 mrn|visit|code → 同鍵內容相同略過、內容不同以新列為準（同 clinic，原版 KEY_BILL + mergeRows）
 //   同內容檔（sha1 相同）直接略過不重複匯入
 // 所有函式吃 db 參數（getDatabase() 或 CLI 自開連線），方便測試注入暫存 DB。
 import { v4 as uuidv4 } from 'uuid'
@@ -51,22 +54,40 @@ export function ingestCases(db, rows, batchId) {
   })()
 }
 
-/** 門診清單：鍵存在就略過 */
+/** 門診清單：同鍵（mrn|date|no）內容相同略過、不同則整列換成新列（原版 mergeRows：後到者為準） */
 export function ingestClinic(db, rows, batchId) {
+  const sel = db.prepare(`
+    SELECT id, name, id_no, sex, birth, age, half, dept, room, doctor, acr_date, acr, pcr_date, pcr, egfr_mdrd_date, egfr_mdrd, egfr_date, egfr
+    FROM ckd_clinic_visits WHERE mrn = ? AND visit_date = ? AND no = ?
+  `)
   const ins = db.prepare(`
-    INSERT OR IGNORE INTO ckd_clinic_visits
+    INSERT INTO ckd_clinic_visits
       (id, mrn, visit_date, no, name, id_no, sex, birth, age, half, dept, room, doctor, acr_date, acr, pcr_date, pcr, egfr_mdrd_date, egfr_mdrd, egfr_date, egfr, batch_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
+  const upd = db.prepare(`
+    UPDATE ckd_clinic_visits SET name = ?, id_no = ?, sex = ?, birth = ?, age = ?, half = ?, dept = ?, room = ?, doctor = ?,
+      acr_date = ?, acr = ?, pcr_date = ?, pcr = ?, egfr_mdrd_date = ?, egfr_mdrd = ?, egfr_date = ?, egfr = ?, batch_id = ?,
+      updated_at = datetime('now','localtime')
+    WHERE id = ?
+  `)
+  // 列內容（寫入 DB 的形態）：新列與舊列都正規化後比，才分得出「重複」與「更新」
+  const vals = (r) => [r.name || '', r.id || '', r.sex || '', r.birth || null, r.age ?? null, r.half || '', r.dept || '', r.room || '', r.doctor || '',
+    r.acrDate || null, r.acr ?? null, r.pcrDate || null, r.pcr ?? null, r.egfrMdrdDate || null, r.egfrMdrd ?? null, r.egfrDate || null, r.egfr ?? null]
+  const oldVals = (o) => [o.name || '', o.id_no || '', o.sex || '', o.birth || null, o.age ?? null, o.half || '', o.dept || '', o.room || '', o.doctor || '',
+    o.acr_date || null, o.acr ?? null, o.pcr_date || null, o.pcr ?? null, o.egfr_mdrd_date || null, o.egfr_mdrd ?? null, o.egfr_date || null, o.egfr ?? null]
   return db.transaction(() => {
-    let added = 0
+    let added = 0, updated = 0, dup = 0
     for (const r of rows) {
       if (!r.date) continue
-      const res = ins.run(uuidv4(), r.mrn, r.date, r.no || '', r.name || '', r.id || '', r.sex || '', r.birth || null, r.age ?? null, r.half || '', r.dept || '', r.room || '', r.doctor || '',
-        r.acrDate || null, r.acr ?? null, r.pcrDate || null, r.pcr ?? null, r.egfrMdrdDate || null, r.egfrMdrd ?? null, r.egfrDate || null, r.egfr ?? null, batchId)
-      if (res.changes) added++
+      const v = vals(r)
+      const old = sel.get(r.mrn, r.date, r.no || '')
+      if (!old) { ins.run(uuidv4(), r.mrn, r.date, r.no || '', ...v, batchId); added++; continue }
+      if (j(oldVals(old)) === j(v)) { dup++; continue }
+      upd.run(...v, batchId, old.id)
+      updated++
     }
-    return { rows: rows.length, persons: new Set(rows.map((r) => r.mrn)).size, added, dup: rows.length - added }
+    return { rows: rows.length, persons: new Set(rows.map((r) => r.mrn)).size, added, updated, dup }
   })()
 }
 
@@ -104,20 +125,31 @@ export function ingestLabs(db, rows, batchId) {
   })()
 }
 
-/** 入帳：鍵存在就略過 */
+/** 入帳：同鍵（mrn|visit|code）內容相同略過、不同則整列換成新列（原版 KEY_BILL + mergeRows） */
 export function ingestBilling(db, rows, batchId) {
+  const sel = db.prepare(`SELECT id, code_name, prog, ctype, name, doctor, dept, sex, birth, price, n FROM ckd_billing WHERE mrn = ? AND visit_date = ? AND code = ?`)
   const ins = db.prepare(`
-    INSERT OR IGNORE INTO ckd_billing (id, mrn, visit_date, code, code_name, prog, ctype, name, doctor, dept, sex, birth, price, n, batch_id)
+    INSERT INTO ckd_billing (id, mrn, visit_date, code, code_name, prog, ctype, name, doctor, dept, sex, birth, price, n, batch_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
+  const upd = db.prepare(`
+    UPDATE ckd_billing SET code_name = ?, prog = ?, ctype = ?, name = ?, doctor = ?, dept = ?, sex = ?, birth = ?, price = ?, n = ?, batch_id = ?
+    WHERE id = ?
+  `)
+  const vals = (r) => [r.codeName || '', r.prog || '', r.ctype || '', r.name || '', r.doctor || '', r.dept || '', r.sex || '', r.birth || null, r.price ?? null, r.n ?? 1]
+  const oldVals = (o) => [o.code_name || '', o.prog || '', o.ctype || '', o.name || '', o.doctor || '', o.dept || '', o.sex || '', o.birth || null, o.price ?? null, o.n ?? 1]
   return db.transaction(() => {
-    let added = 0
+    let added = 0, updated = 0, dup = 0
     for (const r of rows) {
       if (!r.visit) continue
-      const res = ins.run(uuidv4(), r.mrn, r.visit, r.code, r.codeName || '', r.prog || '', r.ctype || '', r.name || '', r.doctor || '', r.dept || '', r.sex || '', r.birth || null, r.price ?? null, r.n ?? 1, batchId)
-      if (res.changes) added++
+      const v = vals(r)
+      const old = sel.get(r.mrn, r.visit, r.code)
+      if (!old) { ins.run(uuidv4(), r.mrn, r.visit, r.code, ...v, batchId); added++; continue }
+      if (j(oldVals(old)) === j(v)) { dup++; continue }
+      upd.run(...v, batchId, old.id)
+      updated++
     }
-    return { rows: rows.length, persons: new Set(rows.map((r) => r.mrn)).size, added, dup: rows.length - added }
+    return { rows: rows.length, persons: new Set(rows.map((r) => r.mrn)).size, added, updated, dup }
   })()
 }
 

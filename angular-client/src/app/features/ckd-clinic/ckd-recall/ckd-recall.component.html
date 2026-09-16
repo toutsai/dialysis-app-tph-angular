@@ -1,0 +1,87 @@
+<section class="block">
+  <div class="head">
+    <h2><span class="tag-r">R</span>召回工作清單 <span class="dim sub">逾期未追蹤的聯絡與約診</span></h2>
+    <span class="dim">
+      @if (loading()) { 整理中… }
+      @else if (recall()) { 判讀日 {{ recall()!.date }} · 到期 {{ recall()!.rows.length }} 人 }
+    </span>
+    <label class="cfg" title="追蹤到期後幾天內先不打電話(病人多半約在下次門診)">
+      寬限
+      <input type="number" min="0" max="180" [value]="grace()" (change)="setGrace($any($event.target).value)" [disabled]="loading() || saving()" />
+      天
+    </label>
+    <span class="head-btns">
+      <button type="button" class="btn small" (click)="load()" [disabled]="loading()">重新整理</button>
+      <button type="button" class="btn small ghost" (click)="exportCsv()" [disabled]="!recall()?.rows?.length" title="只匯出目前篩選的分類；「全部到期」才是全部">匯出 CSV</button>
+    </span>
+  </div>
+
+  @if (error(); as err) { <div class="banner error">{{ err }}</div> }
+
+  @if (recall(); as r) {
+    @if (!r.hasCases) {
+      <div class="empty">尚未匯入「已收案名單」。</div>
+    } @else if (!r.rows.length) {
+      <div class="empty">匯入追蹤清冊後,這裡會列出追蹤到期而尚未回診的人。</div>
+    } @else {
+      <div class="tally">
+        @for (t of tally(); track t.f) {
+          <button type="button" class="tl" [class]="'tl ' + t.c" [class.on]="filter() === t.f && t.f !== 'all'" (click)="clickTally(t.f)" [title]="'展開並只看:' + t.k"><span>{{ t.k }}</span><b>{{ t.v }}</b></button>
+        }
+      </div>
+      @if (hint()) { <div class="note">{{ hint() }}</div> }
+
+      @if (!view().length) {
+        <div class="empty">此分類目前 0 人。</div>
+      } @else {
+        <div class="tbox">
+          <table>
+            <thead>
+              <tr><th>病人</th><th>方案 / 分期</th><th>上次照護</th><th>逾期</th><th>未來掛號</th><th>上次聯絡</th><th>動作</th></tr>
+            </thead>
+            <tbody>
+              @for (v of view(); track v.r.mrn) {
+                <tr [class.row-miss]="v.r.bucket === 'close'">
+                  <td>
+                    <button type="button" class="nmlink" (click)="openRecords.emit(v.r.mrn)" title="查看/新增此病人的個案紀錄">{{ v.r.name || '（無姓名）' }}</button>@if (v.r.manual) { <span class="manchip">手動</span> }
+                    <div class="mrn">{{ v.r.mrn }}</div>
+                    @if (v.r.age != null) { <div class="dim">{{ v.r.age }} 歲</div> }
+                  </td>
+                  <td>{{ v.prog }}<div class="dim">{{ v.sub }}</div></td>
+                  <td class="rc-last">{{ v.lastText }}<div class="dim">{{ v.lastCode }}</div></td>
+                  <td><span class="rc-gap" [class.hot]="v.hot">{{ v.gapText }}</span><div class="dim">{{ v.needText }}</div></td>
+                  <td>
+                    @if (v.apptShow) {
+                      <span class="rc-appt" [class.other]="v.apptOther">{{ v.apptMain }}</span>
+                      <div class="dim">{{ v.apptSub }}</div>
+                    } @else { <span class="dim">—</span> }
+                  </td>
+                  <td>
+                    @if (v.ctResult || v.ctLine) {
+                      <div class="rc-ct"><b>{{ v.ctResult }}</b> · {{ v.ctLine }}</div>
+                      @if (v.snoozeText) { <div class="dim">{{ v.snoozeText }}</div> }
+                      @if (v.noteShort) { <div class="dim">{{ v.noteShort }}</div> }
+                    } @else { <span class="dim">未聯絡過</span> }
+                  </td>
+                  <td><button type="button" class="btn small ghost" (click)="toggleForm(v.r.mrn)">記錄聯絡</button></td>
+                </tr>
+                @if (formMrn() === v.r.mrn) {
+                  <tr class="rc-form">
+                    <td colspan="7">
+                      <app-ckd-quick-form type="contact" [mrn]="v.r.mrn" [defaults]="contactDefaults" (saved)="onSaved()" (cancelled)="formMrn.set(null)"></app-ckd-quick-form>
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+        @if (hidden() > 0) {
+          <div class="note more">只顯示前 300 人(共 {{ filtered().length }}),可匯出 CSV 看全部。</div>
+        }
+      }
+    }
+  } @else if (loading()) {
+    <div class="placeholder">整理中…</div>
+  }
+</section>
