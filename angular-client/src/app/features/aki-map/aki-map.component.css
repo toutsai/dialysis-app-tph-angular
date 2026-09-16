@@ -153,40 +153,17 @@
 .watch-item .wname { font-weight: 600; }
 .watch-item .wmeta { color: #78909c; }
 
-/* 觀察名單（縮小）＋ AKI 比例統計 兩欄 */
-.map-top-row {
-  display: flex;
-  gap: 0.9rem;
-  align-items: stretch;
-  flex-wrap: wrap;
-  margin-bottom: 1rem;
-}
+/* 觀察名單（縮小版，單獨一列） */
 .watch.compact {
-  flex: 1 1 16rem;
-  min-width: 0;
   max-height: 9rem;
   overflow-y: auto;
-  margin-bottom: 0;
+  margin-bottom: 1rem;
 }
 .watch.compact h2 { font-size: 0.85rem; }
 .watch.compact .watch-item { font-size: 0.75rem; padding: 0.25rem 0.5rem; }
 
-/* 分期計算說明區塊 */
-.aki-help-card {
-  flex: 0 1 13rem;
-  border: 1px solid #eceff1;
-  border-radius: 8px;
-  background: #fff;
-  padding: 0.6rem 0.85rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-.aki-help-card h2 { margin: 0; font-size: 0.9rem; color: #37474f; }
-.aki-help-card p { margin: 0; font-size: 0.75rem; color: #78909c; line-height: 1.4; }
+/* 計算說明鈕（在頂部工具列） */
 .help-btn {
-  align-self: flex-start;
-  margin-top: auto;
   border-color: #1976d2;
   color: #1976d2;
   font-weight: 600;

@@ -43,6 +43,8 @@
 
       <button class="btn ghost" (click)="openBatches()">上傳紀錄</button>
       <button class="btn ghost" (click)="load()" [disabled]="loading()">重新整理</button>
+      <!-- 2026-09-16 使用者要求：計算說明收進工具列，原「分期與病程」小卡移除 -->
+      <button class="btn help-btn" (click)="showAkiHelp.set(true)">計算說明</button>
     </div>
   </header>
 
@@ -104,31 +106,22 @@
       尚無資料。請先「匯入留院清單」與「匯入檢驗明細」兩份 Excel。
     </div>
   } @else {
-    <!-- 觀察名單（縮小）＋ 計算說明 -->
-    <div class="map-top-row">
-      @if (watchList().length) {
-        <section class="watch compact">
-          <h2>⚠️ 門急觀察名單 · {{ watchList().length }}</h2>
-          <div class="watch-list">
-            @for (w of watchList(); track w.mrn) {
-              <button class="watch-item" [style.--c]="color(bucket(w))" (click)="openDetail(w.mrn)">
-                <span class="dot" [style.background]="color(bucket(w))"></span>
-                <span class="wname">{{ w.name }}</span>
-                @if (w.dialysisMode) { <span class="hd-tag" title="本院透析病人">{{ w.dialysisMode }}</span> }
-                <span class="wmeta">{{ label(bucket(w)) }} · {{ w.baselineCr }}→{{ w.peakCr }}</span>
-              </button>
-            }
-          </div>
-        </section>
-      }
-
-      <!-- 2026-09-16 使用者要求：AKI 比例統計區塊移除 -->
-      <section class="aki-help-card">
-        <h2>分期與病程</h2>
-        <p>依 KDIGO 標準，用門急住 Cr/eGFR 自動判定分期與 CKD／AKD／恢復病程。</p>
-        <button class="btn help-btn" (click)="showAkiHelp.set(true)">計算說明</button>
+    <!-- 門急觀察名單（縮小）；AKI 比例統計與「分期與病程」小卡已於 2026-09-16 依使用者要求移除 -->
+    @if (watchList().length) {
+      <section class="watch compact">
+        <h2>⚠️ 門急觀察名單 · {{ watchList().length }}</h2>
+        <div class="watch-list">
+          @for (w of watchList(); track w.mrn) {
+            <button class="watch-item" [style.--c]="color(bucket(w))" (click)="openDetail(w.mrn)">
+              <span class="dot" [style.background]="color(bucket(w))"></span>
+              <span class="wname">{{ w.name }}</span>
+              @if (w.dialysisMode) { <span class="hd-tag" title="本院透析病人">{{ w.dialysisMode }}</span> }
+              <span class="wmeta">{{ label(bucket(w)) }} · {{ w.baselineCr }}→{{ w.peakCr }}</span>
+            </button>
+          }
+        </div>
       </section>
-    </div>
+    }
 
     <!-- 依護理站分區 -->
     <section class="wards">
