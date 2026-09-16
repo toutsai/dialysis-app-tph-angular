@@ -106,13 +106,6 @@ interface WardGroup {
   patients: AkiPatient[];
 }
 
-interface WardStat {
-  ward: string;
-  total: number;
-  hit: number;
-  pct: number;
-}
-
 // 護理站顯示規則（依院方要求）：
 //   1) 第一/二/三加護病房最前  2) 5–7 樓 A–D 護理站  3) 其他(如 9A 急性精神科)  4) GC 最後
 //   隱藏：單托嬰、嬰兒病床
@@ -356,41 +349,6 @@ export class AkiMapComponent implements OnInit {
   });
 
   readonly watchList = computed(() => this.data()?.watchList || []);
-
-  // 比例統計標題：跟隨上方篩選器（Stage 3 比例 / AKI 比例 …）
-  readonly filterRatioLabel = computed(() => {
-    const cat = this.filterCategory();
-    return cat === 'all' || cat === 'aki' ? 'AKI 比例' : `${this.label(cat)} 比例`;
-  });
-
-  // 依目前篩選器計算各站命中比例，分「加護」與「一般病房」兩組各取前2（分母 ≥5 以免小病房失真）
-  // AKI 比例＝落在 Stage 1–3 桶者（本院透析病人已歸 CKD 桶，不計入）
-  readonly topWardStats = computed<{ icu: WardStat[]; ward: WardStat[] }>(() => {
-    const cat = this.filterCategory();
-    const isAkiBucket = (b: MapBucket) => b.startsWith('stage-') && b !== 'stage-0';
-    const hit = (p: AkiPatient) => {
-      const b = bucketOf(p);
-      return cat === 'all' || cat === 'aki' ? isAkiBucket(b) : b === cat;
-    };
-    const map = new Map<string, { ward: string; total: number; hit: number }>();
-    for (const p of this.visiblePatients()) {
-      let e = map.get(p.ward);
-      if (!e) {
-        e = { ward: p.ward, total: 0, hit: 0 };
-        map.set(p.ward, e);
-      }
-      e.total++;
-      if (hit(p)) e.hit++;
-    }
-    const all = [...map.values()]
-      .filter((e) => e.hit >= 1 && e.total >= 5)
-      .map((e) => ({ ...e, pct: Math.round((e.hit / e.total) * 100) }))
-      .sort((a, b) => b.pct - a.pct || b.hit - a.hit);
-    return {
-      icu: all.filter((e) => isIcuWard(e.ward)).slice(0, 2),
-      ward: all.filter((e) => !isIcuWard(e.ward)).slice(0, 2),
-    };
-  });
 
   ngOnInit(): void {
     this.load();

@@ -104,7 +104,7 @@
       尚無資料。請先「匯入留院清單」與「匯入檢驗明細」兩份 Excel。
     </div>
   } @else {
-    <!-- 觀察名單（縮小）＋ AKI 比例統計 -->
+    <!-- 觀察名單（縮小）＋ 計算說明 -->
     <div class="map-top-row">
       @if (watchList().length) {
         <section class="watch compact">
@@ -122,40 +122,7 @@
         </section>
       }
 
-      <section class="aki-stats">
-        <h2>{{ filterRatioLabel() }} · 加護前2 ＋ 病房前2</h2>
-        <div class="stat-groups">
-          <div class="stat-group">
-            <div class="stat-group-label">加護病房</div>
-            <div class="stat-cards">
-              @for (w of topWardStats().icu; track w.ward) {
-                <div class="stat-card">
-                  <div class="sc-ward">{{ wardLabel(w.ward) }}</div>
-                  <div class="sc-pct">{{ w.pct }}%</div>
-                  <div class="sc-bar"><div class="sc-fill" [style.width.%]="w.pct"></div></div>
-                  <div class="sc-n">{{ w.hit }}/{{ w.total }}</div>
-                </div>
-              }
-              @if (!topWardStats().icu.length) { <div class="stat-empty">無資料</div> }
-            </div>
-          </div>
-          <div class="stat-group">
-            <div class="stat-group-label">一般病房</div>
-            <div class="stat-cards">
-              @for (w of topWardStats().ward; track w.ward) {
-                <div class="stat-card">
-                  <div class="sc-ward">{{ wardLabel(w.ward) }}</div>
-                  <div class="sc-pct">{{ w.pct }}%</div>
-                  <div class="sc-bar"><div class="sc-fill" [style.width.%]="w.pct"></div></div>
-                  <div class="sc-n">{{ w.hit }}/{{ w.total }}</div>
-                </div>
-              }
-              @if (!topWardStats().ward.length) { <div class="stat-empty">無資料</div> }
-            </div>
-          </div>
-        </div>
-      </section>
-
+      <!-- 2026-09-16 使用者要求：AKI 比例統計區塊移除 -->
       <section class="aki-help-card">
         <h2>分期與病程</h2>
         <p>依 KDIGO 標準，用門急住 Cr/eGFR 自動判定分期與 CKD／AKD／恢復病程。</p>
