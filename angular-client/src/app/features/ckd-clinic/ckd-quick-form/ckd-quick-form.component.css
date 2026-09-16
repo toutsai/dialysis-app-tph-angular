@@ -1,0 +1,26 @@
+/* 列內快速紀錄表單（原版 .rc-f）：5 欄 grid、align-items:end */
+:host { display: block; color: #263238; }
+.rc-f { display: block; padding: 0.6rem 0.4rem 0.75rem; }
+.rf-h { display: flex; gap: 0.6rem; align-items: baseline; margin-bottom: 0.45rem; font-size: 0.9rem; }
+.dim { color: #90a4ae; }
+.rf-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.5rem 0.75rem; align-items: end; }
+.rf-f { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.78rem; color: #455a64; min-width: 0; }
+.rf-f.wide { grid-column: 1 / -1; }
+.rf-f i { color: #a8322d; font-style: normal; font-weight: 700; }
+.rf-f input, .rf-f select { border: 1px solid #cfd8dc; border-radius: 5px; padding: 0.3rem 0.45rem; font-size: 0.84rem; color: #263238; font-family: inherit; width: 100%; box-sizing: border-box; }
+.rf-f input:focus, .rf-f select:focus { outline: none; border-color: #1976d2; }
+.rf-checks { display: flex; flex-wrap: wrap; gap: 0.3rem 0.9rem; padding: 0.2rem 0; }
+.chk { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.82rem; color: #263238; }
+.rf-btn { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
+.btn { border: 1px solid #cfd8dc; background: #fff; border-radius: 6px; padding: 0.4rem 0.8rem; font-size: 0.86rem; cursor: pointer; color: #37474f; font-family: inherit; }
+.btn:hover { background: #f5f7f8; }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn.small { padding: 0.25rem 0.7rem; font-size: 0.8rem; }
+.btn.ghost { color: #607d8b; }
+.btn.primary { background: #263238; color: #fff; border-color: #263238; }
+.btn.primary:hover { background: #37474f; }
+.banner { padding: 0.4rem 0.7rem; border-radius: 6px; margin-top: 0.5rem; font-size: 0.82rem; }
+.banner.error { background: #ffebee; border: 1px solid #ef9a9a; color: #b71c1c; }
+
+@media (max-width: 1100px) { .rf-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 720px) { .rf-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

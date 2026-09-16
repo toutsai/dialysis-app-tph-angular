@@ -944,6 +944,165 @@ CREATE INDEX IF NOT EXISTS idx_vae_date ON vascular_access_events(event_date);
 CREATE INDEX IF NOT EXISTS idx_vae_patient ON vascular_access_events(patient_id);
 CREATE INDEX IF NOT EXISTS idx_vae_status ON vascular_access_events(status);
 
+-- ========================================
+-- 門診 CKD 收案追蹤（Angular 重寫版，2026-09-15 起；計畫 docs/2026-09-15-ckd-clinic-tab-plan.md）
+-- 鍵沿用單機版 parsers.js 輸出契約：mrn = 病歷號去前導 0；日期 YYYY-MM-DD。
+-- 四張報表各一表；個案紀錄／判定參數／上傳批次另三表。migrate.js 同步 CREATE IF NOT EXISTS。
+-- ========================================
+
+-- 追蹤清冊（收案登錄簿）展開的時間軸列：新收案 / 追蹤 / 結案（同人可多列）
+CREATE TABLE IF NOT EXISTS ckd_cases (
+    id TEXT PRIMARY KEY,
+    mrn TEXT NOT NULL,
+    visit_date TEXT NOT NULL,          -- 該列事件日（收案日 / 最後衛教日 / 結案日）
+    code TEXT NOT NULL DEFAULT '',     -- 給付別 P 碼（可空）
+    ctype TEXT NOT NULL,               -- 新收案 | 追蹤 | 年度 | 結案 | 獎勵 | 衛教
+    name TEXT,
+    prog TEXT,                         -- pre | early
+    cat TEXT,                          -- 收案類別原文：Pre-ESRD / Early-CKD / DKD / AKD
+    dm INTEGER DEFAULT 0,
+    enroll_date TEXT,
+    egfr REAL,
+    egfr_mdrd REAL,
+    stage TEXT,
+    doctor TEXT,
+    next_due TEXT,
+    reenroll INTEGER DEFAULT 0,
+    serial TEXT,
+    gap_days REAL,
+    closed INTEGER DEFAULT 0,
+    close_date TEXT,
+    reason TEXT,
+    batch_id TEXT,
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+    UNIQUE(mrn, visit_date, code, ctype)
+);
+CREATE INDEX IF NOT EXISTS idx_ckd_cases_mrn ON ckd_cases(mrn);
+CREATE INDEX IF NOT EXISTS idx_ckd_cases_date ON ckd_cases(visit_date);
+
+-- CKD-病患清單查詢（門診掛號列；自帶最近 ACR/PCR/eGFR）
+CREATE TABLE IF NOT EXISTS ckd_clinic_visits (
+    id TEXT PRIMARY KEY,
+    mrn TEXT NOT NULL,
+    visit_date TEXT NOT NULL,
+    no TEXT NOT NULL DEFAULT '',       -- 診號
+    name TEXT,
+    id_no TEXT,                        -- 身分證（推性別用）
+    sex TEXT,
+    birth TEXT,
+    age INTEGER,
+    half TEXT,                         -- 上午 | 下午 | 夜間
+    dept TEXT,
+    room TEXT,
+    doctor TEXT,
+    acr_date TEXT, acr REAL,
+    pcr_date TEXT, pcr REAL,
+    egfr_mdrd_date TEXT, egfr_mdrd REAL,
+    egfr_date TEXT, egfr REAL,
+    batch_id TEXT,
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+    UNIQUE(mrn, visit_date, no)
+);
+CREATE INDEX IF NOT EXISTS idx_ckd_clinic_mrn ON ckd_clinic_visits(mrn);
+CREATE INDEX IF NOT EXISTS idx_ckd_clinic_date ON ckd_clinic_visits(visit_date, doctor);
+
+-- 檢驗紀錄：每人每日一份生化(B)／尿液(U)；no = mrn|date|spec（0204）或 clinic|mrn|date|spec（門診清單自帶）
+CREATE TABLE IF NOT EXISTS ckd_labs (
+    id TEXT PRIMARY KEY,
+    no TEXT NOT NULL UNIQUE,
+    mrn TEXT NOT NULL,
+    name TEXT,
+    report_date TEXT NOT NULL,
+    spec TEXT NOT NULL,                -- B | U
+    kind TEXT,                         -- 生化 | 尿液
+    src TEXT,                          -- lab | clinic
+    values_json TEXT NOT NULL DEFAULT '{}',   -- {cr, egfr, egfrMdrd, hb, k, ... }
+    flags_json TEXT NOT NULL DEFAULT '{}',    -- {key: 'H'|'L'}
+    quals_json TEXT NOT NULL DEFAULT '{}',    -- {key: '<'|'>'}
+    batch_id TEXT,
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_ckd_labs_mrn_date ON ckd_labs(mrn, report_date);
+
+-- 醫令明細清單：P 碼入帳（健保申報實績）
+CREATE TABLE IF NOT EXISTS ckd_billing (
+    id TEXT PRIMARY KEY,
+    mrn TEXT NOT NULL,
+    visit_date TEXT NOT NULL,
+    code TEXT NOT NULL,
+    code_name TEXT,
+    prog TEXT,
+    ctype TEXT,
+    name TEXT,
+    doctor TEXT,
+    dept TEXT,
+    sex TEXT,
+    birth TEXT,
+    price REAL,
+    n INTEGER DEFAULT 1,
+    batch_id TEXT,
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    UNIQUE(mrn, visit_date, code)
+);
+CREATE INDEX IF NOT EXISTS idx_ckd_billing_mrn ON ckd_billing(mrn);
+CREATE INDEX IF NOT EXISTS idx_ckd_billing_date ON ckd_billing(visit_date);
+
+-- 個案紀錄七類（血管通路 / RRT SDM / 外院收案查核 / 追蹤聯絡 / P 碼補登更正 / 收案狀態更正 / 不予收案）；階段 3 使用
+CREATE TABLE IF NOT EXISTS ckd_records (
+    id TEXT PRIMARY KEY,
+    mrn TEXT NOT NULL,
+    name TEXT,                         -- 建檔當時查到的姓名（快照）
+    rec_type TEXT NOT NULL,            -- access | sdm | contact | extEnroll | claimFix | enrollFix | noEnroll | note
+    rec_date TEXT,                     -- 排序用日期（各類型的 when 欄）
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    created_by TEXT DEFAULT '{}',
+    updated_by TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+    deleted_at TEXT                    -- 軟刪除
+);
+CREATE INDEX IF NOT EXISTS idx_ckd_records_mrn ON ckd_records(mrn, rec_type);
+
+-- 判定參數（單一列 main；JSON；預設值見 services/ckd/settings.js）
+CREATE TABLE IF NOT EXISTS ckd_settings (
+    id TEXT PRIMARY KEY DEFAULT 'main',
+    settings_json TEXT NOT NULL DEFAULT '{}',
+    updated_by TEXT,
+    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+-- 上傳批次
+CREATE TABLE IF NOT EXISTS ckd_upload_batches (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,                -- case | clinic | lab | bill
+    file_name TEXT,
+    row_count INTEGER DEFAULT 0,
+    inserted INTEGER DEFAULT 0,
+    replaced INTEGER DEFAULT 0,
+    range_start TEXT,
+    range_end TEXT,
+    file_hash TEXT,                    -- sha1；同內容檔略過不重複匯入
+    stats_json TEXT DEFAULT '{}',      -- {rows, persons, added, updated, dup, removed, labStats}
+    uploaded_by TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_ckd_batches_hash ON ckd_upload_batches(file_hash);
+
+-- 近日異常檢驗「已處理」（階段 5；原版 localStorage.ckdAlertDone，改存 DB 以跨使用者共享）
+CREATE TABLE IF NOT EXISTS ckd_alert_done (
+    key TEXT PRIMARY KEY,              -- mrn|YYYY-MM-DD(報告日)|ruleId
+    mrn TEXT NOT NULL,
+    report_date TEXT NOT NULL,
+    rule_id TEXT NOT NULL,
+    done_at TEXT NOT NULL,             -- YYYY-MM-DD（標記當天）
+    done_by TEXT,                      -- JSON {uid, name}
+    created_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_ckd_alert_done_mrn ON ckd_alert_done(mrn);
+
 -- 季度造管CSV匯出的人工欄與覆寫（快照/事件欄每次載入即時重算，只存 overrides 避免資料過期）
 CREATE TABLE IF NOT EXISTS vascular_quarter_exports (
     id TEXT PRIMARY KEY,                     -- `${quarter}_${patient_id}`

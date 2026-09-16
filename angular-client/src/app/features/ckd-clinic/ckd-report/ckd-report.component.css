@@ -1,0 +1,36 @@
+/* 門診 CKD 月報：卡片格線與排版照原版 app_head.html 的 .mr-* */
+:host { display: block; font-size: 0.86rem; color: #263238; }
+.block { border: 1px solid #eceff1; border-radius: 8px; background: #fff; padding: 0.7rem 0.9rem; }
+.head { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
+.head h2 { margin: 0; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+.head h2 .sub { font-weight: 400; font-size: 0.78rem; }
+.head-btns { margin-left: auto; display: flex; gap: 0.3rem; }
+.tag-m { display: inline-flex; width: 1.5rem; height: 1.5rem; border-radius: 6px; align-items: center; justify-content: center; font-weight: 800; color: #fff; font-size: 0.85rem; background: #27548f; }
+.dim { color: #90a4ae; }
+.month { font-size: 0.8rem; color: #546e7a; display: inline-flex; align-items: center; gap: 0.3rem; }
+.month input { border: 1px solid #cfd8dc; border-radius: 5px; padding: 0.2rem 0.4rem; font-size: 0.85rem; color: #263238; }
+.month input:focus { outline: none; border-color: #1976d2; }
+.banner { padding: 0.5rem 0.75rem; border-radius: 6px; }
+.banner.error { background: #ffebee; border: 1px solid #ef9a9a; color: #b71c1c; }
+.empty { padding: 1.5rem; text-align: center; color: #90a4ae; background: #fafafa; border-radius: 8px; line-height: 1.6; }
+.note { font-size: 0.78rem; color: #546e7a; background: #f5f7f8; border-radius: 6px; padding: 0.4rem 0.6rem; margin-top: 0.7rem; line-height: 1.5; }
+.btn { border: 1px solid #cfd8dc; background: #fff; border-radius: 6px; padding: 0.4rem 0.8rem; font-size: 0.86rem; cursor: pointer; color: #37474f; }
+.btn:hover { background: #f5f7f8; }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn.small { padding: 0.25rem 0.6rem; font-size: 0.8rem; }
+
+/* 九張卡（原版 .mr-grid / .mr-card / .mr-h / .mr-v / .mr-s） */
+.mr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.mr-card { border: 1px solid #e3e8e4; background: #fff; padding: 10px 14px 12px; border-radius: 6px; }
+.mr-card.mr-wide { grid-column: 1 / -1; }
+.mr-h { font-family: ui-monospace, Consolas, monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #78909c; margin-bottom: 6px; }
+.mr-card table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.mr-card td { padding: 4px 0; border-bottom: 1px dashed #eceff1; vertical-align: top; }
+.mr-card td.mr-v { text-align: right; font-family: ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; padding-left: 10px; }
+.mr-card td.mr-s { text-align: right; font-family: ui-monospace, Consolas, monospace; color: #78909c; width: 48px; }
+
+/* 卡⑨ 本月入帳 */
+.mr-bill th { text-align: left; font-size: 11px; color: #78909c; border-bottom: 1px solid #d2d8d0; padding: 3px 0; }
+.mr-bill th:nth-child(n + 3) { text-align: right; }
+.mr-bill tr.tot td { border-top: 1px solid #263238; border-bottom: none; font-weight: 700; }
+.rc-last { font-family: ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; }

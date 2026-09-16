@@ -103,6 +103,13 @@ export const PAGE_ACCESS = {
     roles: STAFF_ROLES,
     roleLabel: '管理員、編輯者',
   },
+  ckdClinic: {
+    // 門診 CKD 收案追蹤（2026-09-15 起 Angular 重寫，側欄置於住院腎臟病地圖下；後端 /api/ckd 另有守門）
+    path: '/ckd-clinic',
+    title: '門診CKD收案',
+    roles: CLINICAL_ROLES,
+    roleLabel: '管理員、編輯者、貢獻者',
+  },
   kiditQuarterlyInput: {
     // 主護（contributor）為照護清單分配病人填寫季度 KiDit 表單（透析紀錄/醫療狀況評估/合併症）
     path: '/kidit-quarterly-input',

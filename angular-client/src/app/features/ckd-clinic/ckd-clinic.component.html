@@ -1,0 +1,202 @@
+<div class="ckd-page">
+  <header class="ckd-header">
+    <div class="title-block">
+      <h1>門診CKD收案</h1>
+      <span class="subtitle">CKD 收案／追蹤判讀工作台 · 個管師、醫師、護理師</span>
+      <span class="source-hint">
+        資料來源：HIS 匯出的四種報表（追蹤清冊、0204 檢驗結果病患明細、CKD-病患清單查詢、醫令明細清單）。
+        功能逐階段上線，判定規則沿用單機版工作台。
+      </span>
+    </div>
+    <div class="toolbar">
+      <button class="btn ghost" (click)="showPhases.set(!showPhases())">建置進度</button>
+      <button class="btn ghost" (click)="load()" [disabled]="loading()">{{ loading() ? '載入中…' : '重新整理' }}</button>
+    </div>
+  </header>
+
+  <!-- 頁內檢視：判讀（個管師每天的主線）／匯入與設定 -->
+  <nav class="views">
+    <button type="button" class="view-tab" [class.on]="view() === 'daily'" (click)="view.set('daily')">明日追蹤 · 收案評估 · 個案紀錄</button>
+    <button type="button" class="view-tab" [class.on]="view() === 'pcheck'" (click)="view.set('pcheck')">檢核 P 碼</button>
+    <button type="button" class="view-tab" [class.on]="view() === 'recall'" (click)="view.set('recall')">召回清單</button>
+    <button type="button" class="view-tab" [class.on]="view() === 'alerts'" (click)="view.set('alerts')">異常檢驗</button>
+    <button type="button" class="view-tab" [class.on]="view() === 'rrt'" (click)="view.set('rrt')">透析準備</button>
+    <button type="button" class="view-tab" [class.on]="view() === 'report'" (click)="view.set('report')">月報</button>
+    <button type="button" class="view-tab" [class.on]="view() === 'audit'" (click)="view.set('audit')">全名單稽核</button>
+    <button type="button" class="view-tab" [class.on]="view() === 'wide'" (click)="view.set('wide')">檢驗總表</button>
+    <button type="button" class="view-tab" [class.on]="view() === 'import'" (click)="view.set('import')">匯入與設定</button>
+  </nav>
+
+  @if (error(); as err) {
+    <div class="banner error">{{ err }}</div>
+  }
+
+  @if (view() === 'daily') {
+    <app-ckd-daily />
+  }
+  @if (view() === 'pcheck') {
+    <app-ckd-pcheck (openRecords)="goRecords($event)" />
+  }
+  @if (view() === 'recall') {
+    <app-ckd-recall (openRecords)="goRecords($event)" />
+  }
+  @if (view() === 'alerts') {
+    <app-ckd-alerts (openRecords)="goRecords($event)" />
+  }
+  @if (view() === 'rrt') {
+    <app-ckd-rrt (openRecords)="goRecords($event)" />
+  }
+  @if (view() === 'report') {
+    <app-ckd-report />
+  }
+  @if (view() === 'audit') {
+    <app-ckd-audit (openRecords)="goRecords($event)" />
+  }
+  @if (view() === 'wide') {
+    <app-ckd-wide (openRecords)="goRecords($event)" />
+  }
+
+  @if (status(); as st) {
+    @if (view() === 'import') {
+    @if (showPhases()) {
+      <section class="card phases-card">
+        <h2>建置進度</h2>
+        <ol class="phases">
+          @for (p of st.phases; track p.no) {
+            <li [class]="'phase ' + phaseClass(p.status)">
+              <span class="phase-no">{{ p.no }}</span>
+              <span class="phase-title">{{ p.title }}</span>
+              <span class="phase-status">{{ phaseLabel(p.status) }}</span>
+            </li>
+          }
+        </ol>
+      </section>
+    }
+
+    <!-- ===== 匯入 ===== -->
+    <section class="card import-card">
+      <div class="card-head">
+        <h2>匯入 HIS 報表</h2>
+        <span class="dim">拖進對應卡片或點「選檔」；也可一次選多個檔案自動分流。單檔上限 {{ uploadMaxMb() }} MB；同內容檔會自動略過。</span>
+        <label class="btn primary pick-all" [class.drag]="dragOver() === 'all'"
+               (dragover)="onDragOver($event, 'all')" (dragleave)="onDragLeave()" (drop)="onDrop($event)">
+          一次選多檔（自動辨識）
+          <input type="file" multiple accept=".xls,.xlsx,.xlsm,.csv" hidden (change)="onPick($event)" />
+        </label>
+      </div>
+
+      <div class="drop-grid">
+        @for (c of cards; track c.kind) {
+          @let src = source(c.kind);
+          <div class="drop" [class.drag]="dragOver() === c.kind" [class.has-data]="!!src?.rows"
+               (dragover)="onDragOver($event, c.kind)" (dragleave)="onDragLeave()" (drop)="onDrop($event, c.kind)">
+            <div class="drop-title">
+              <b>{{ c.title }}</b>
+              <span class="req" [class.opt]="!c.required">{{ c.required ? '必要' : '選配' }}</span>
+            </div>
+            <div class="drop-hint">{{ c.hint }}</div>
+            @if (src && src.rows) {
+              <div class="drop-stat">
+                <b>{{ src.rows }}</b> 筆 ・ <b>{{ src.persons }}</b> 人
+                @if (src.kind === 'case' && src.openRows != null) { ・ 未結案列 {{ src.openRows }} }
+                @if (src.kind === 'clinic' && src.days != null) { ・ {{ src.days }} 個看診日 }
+                @if (src.kind === 'lab' && src.fromClinic) { ・ 門診清單附帶 {{ src.fromClinic }} 份 }
+                @if (src.rangeStart) { <div class="dim">{{ src.kind === 'lab' ? '報告日' : src.kind === 'clinic' ? '看診日' : '日期' }} {{ src.rangeStart }} ~ {{ src.rangeEnd }}</div> }
+                <div class="dim">{{ src.files }} 個檔 ・ 最近 {{ src.lastFile }} {{ src.lastBy?.name || '' }} {{ fmtTime(src.lastAt) }}</div>
+              </div>
+            } @else {
+              <div class="drop-stat empty">尚未匯入</div>
+            }
+            <label class="btn small">
+              選檔
+              <input type="file" multiple accept=".xls,.xlsx,.xlsm,.csv" hidden (change)="onPick($event, c.kind)" />
+            </label>
+          </div>
+        }
+      </div>
+
+      @if (uploads().length) {
+        <div class="uploads">
+          <div class="uploads-head">
+            <b>本次上傳</b>
+            @if (uploading()) { <span class="saving">處理中…（後端逐檔解析，大檔約需數十秒）</span> }
+            @else { <button class="btn link" (click)="clearUploads()">清除清單</button> }
+          </div>
+          <ul>
+            @for (u of uploads(); track u) {
+              <li [class]="'upload ' + u.state">
+                <span class="u-state">
+                  @switch (u.state) {
+                    @case ('queued') { 排隊 }
+                    @case ('uploading') { 解析中 }
+                    @case ('done') { 完成 }
+                    @case ('dup') { 略過 }
+                    @case ('error') { 失敗 }
+                  }
+                </span>
+                <span class="u-name">{{ u.name }} <small>{{ fmtSize(u.size) }}</small></span>
+                <span class="u-msg">{{ resultLine(u) }}</span>
+              </li>
+            }
+          </ul>
+        </div>
+      }
+
+      <details class="batches" [open]="showAllBatches()">
+        <summary>上傳紀錄（最近 {{ batches().length }} 筆）@if (!showAllBatches()) { <button class="btn link" (click)="loadAllBatches(); $event.preventDefault()">看全部</button> }</summary>
+        @if (batches().length) {
+          <ul>
+            @for (b of batches(); track b.id) {
+              <li><span class="kind">{{ b.kindLabel }}</span> {{ b.fileName }} ・ {{ batchLine(b) }} ・ {{ b.uploadedBy?.name || '' }} {{ fmtTime(b.createdAt) }}</li>
+            }
+          </ul>
+        } @else {
+          <p class="dim">尚未匯入任何報表。</p>
+        }
+      </details>
+    </section>
+
+    <!-- ===== 判定參數 ===== -->
+    <section class="card settings-card">
+      <div class="card-head">
+        <h2>判定參數</h2>
+        <span class="dim">
+          @if (st.settingsUpdatedAt) { 最後更新 {{ st.settingsUpdatedBy?.name || '' }} {{ fmtTime(st.settingsUpdatedAt) }} }
+          @else { 目前為預設值（與單機版工作台相同） }
+        </span>
+      </div>
+      @if (settingsForm(); as f) {
+        <div class="settings-grid">
+          @for (s of settingLabels; track s.key) {
+            <label class="setting" [title]="s.hint">
+              <span class="s-label">{{ s.label }}</span>
+              @if (isNumericSetting(s.key)) {
+                <span class="s-input">
+                  <input type="number" min="1" step="1" [ngModel]="settingValue(s.key)" (ngModelChange)="setSetting(s.key, $event)" />
+                  @if (s.unit) { <small>{{ s.unit }}</small> }
+                </span>
+              } @else {
+                <span class="s-input"><input type="text" [ngModel]="settingValue(s.key)" (ngModelChange)="setSetting(s.key, $event)" /></span>
+              }
+              <span class="s-default" [class.diff]="!isDefault(s.key)">預設 {{ defaultValue(s.key) }}</span>
+            </label>
+          }
+          <label class="setting check" title="部北多科會收 Early-CKD：已收案者是否跨科比對門診清單">
+            <span class="s-label">已收案者全院比對</span>
+            <span class="s-input"><input type="checkbox" [ngModel]="f.allA" (ngModelChange)="setSetting('allA', $event)" /> <small>{{ f.allA ? '是' : '否' }}</small></span>
+            <span class="s-default" [class.diff]="!isDefault('allA')">預設 {{ defaultValue('allA') }}</span>
+          </label>
+        </div>
+        <div class="settings-actions">
+          <button class="btn primary" (click)="saveSettings()" [disabled]="savingSettings() || !settingsDirty()">{{ savingSettings() ? '儲存中…' : '儲存參數' }}</button>
+          <button class="btn" (click)="revertSettings()" [disabled]="!settingsDirty()">還原未存改動</button>
+          <button class="btn ghost" (click)="resetSettings()">全部回預設值</button>
+          @if (settingsSaved()) { <span class="saved">已儲存</span> }
+        </div>
+      }
+    </section>
+    }
+  } @else if (loading() && view() === 'import') {
+    <div class="placeholder">載入中…</div>
+  }
+</div>

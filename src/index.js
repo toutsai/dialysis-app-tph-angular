@@ -23,6 +23,7 @@ import akiRoutes from './routes/aki.js'
 import catastrophicIllnessRoutes from './routes/catastrophicIllness.js'
 import researchRoutes from './routes/research.js'
 import reservationsRoutes from './routes/reservations.js'
+import ckdRoutes from './routes/ckd.js'
 
 // 資料庫初始化
 import { initDatabase, getDatabase, ensureDefaultAdmin, closeDatabase } from './db/init.js'
@@ -123,6 +124,7 @@ app.use('/api/aki', akiRoutes)
 app.use('/api/catastrophic-illness', catastrophicIllnessRoutes)
 app.use('/api/research', researchRoutes)
 app.use('/api/reservations', reservationsRoutes)
+app.use('/api/ckd', ckdRoutes) // 門診 CKD 收案追蹤（admin/editor/contributor；2026-09-15 起分階段實作）
 
 // ========================================
 // Angular 前端路由別名（Firebase 遷移相容）

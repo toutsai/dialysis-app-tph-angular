@@ -1,0 +1,60 @@
+/* 門診 CKD 檢驗總表：群組色只分群不代表好壞（原版 head:442-461） */
+:host { display: block; font-size: 0.84rem; color: #263238;
+  --pre: #a8322d; --early: #1a6b66; --wait: #8a5e05; --none: #8b95a0;
+  --pre-bg: #fbeeed; --early-bg: #e9f4f2; --wait-bg: #fbf3e2; --none-bg: #f0f2f0; }
+.block { border: 1px solid #eceff1; border-radius: 8px; background: #fff; padding: 0.7rem 0.9rem; }
+.head { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.head h2 { margin: 0; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+.head h2 .sub { font-weight: 400; font-size: 0.78rem; }
+.head-btns { margin-left: auto; display: flex; gap: 0.3rem; }
+.tag-d { display: inline-flex; width: 1.5rem; height: 1.5rem; border-radius: 6px; align-items: center; justify-content: center; font-weight: 800; color: #fff; font-size: 0.85rem; background: #0f6b78; }
+.dim { color: #90a4ae; }
+.xs { font-size: 0.72rem; } .xxs { font-size: 0.62rem; } .sm { font-size: 0.78rem; }
+.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.banner { padding: 0.5rem 0.75rem; border-radius: 6px; margin-bottom: 0.4rem; }
+.banner.error { background: #ffebee; border: 1px solid #ef9a9a; color: #b71c1c; }
+.placeholder, .empty { padding: 1.5rem; text-align: center; color: #90a4ae; background: #fafafa; border-radius: 8px; }
+.note { font-size: 0.76rem; color: #546e7a; background: #f5f7f8; border-radius: 6px; padding: 0.4rem 0.6rem; margin: 0.6rem 0 0; line-height: 1.5; }
+.btn { border: 1px solid #cfd8dc; background: #fff; border-radius: 6px; padding: 0.4rem 0.8rem; font-size: 0.86rem; cursor: pointer; color: #37474f; }
+.btn:hover { background: #f5f7f8; }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn.small { padding: 0.25rem 0.6rem; font-size: 0.8rem; }
+.btn.ghost { color: #607d8b; }
+
+.tally { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.4rem; }
+.tl { border: 1px solid #dfe5e1; background: #fff; border-radius: 6px; padding: 0.25rem 0.6rem; cursor: pointer; display: inline-flex; align-items: baseline; gap: 0.35rem; font-size: 0.8rem; color: #4a5763; }
+.tl.static { cursor: default; }
+.tl b { font-size: 0.95rem; color: #263238; }
+.tl.pre b { color: var(--pre); } .tl.early b { color: var(--early); } .tl.wait b { color: var(--wait); }
+.tl.on { border-color: #263238; box-shadow: 0 0 0 1px #263238 inset; }
+.chips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; margin-bottom: 0.6rem; }
+.chips .lab { font-size: 0.74rem; margin-right: 0.1rem; }
+.chip { border: 1px solid #cfd8dc; background: #fafbfc; border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.76rem; cursor: pointer; color: #546e7a; }
+.chip.on { background: #263238; color: #fff; border-color: #263238; }
+.sep { width: 1px; height: 1.2rem; background: #dfe5e1; margin: 0 0.3rem; }
+.q { border: 1px solid #cfd8dc; border-radius: 5px; padding: 0.25rem 0.5rem; font-size: 0.82rem; width: 12rem; margin-left: 0.4rem; }
+.q:focus { outline: none; border-color: #1976d2; }
+.hint { font-size: 0.72rem; margin-left: auto; }
+
+/* 表格：病人欄與表頭凍結 */
+.tbox { overflow: auto; max-height: 70vh; border: 1px solid #eceff1; border-radius: 6px; }
+table { border-collapse: separate; border-spacing: 0; min-width: 100%; }
+th { text-align: left; font-size: 0.72rem; color: #78909c; font-weight: 600; padding: 0.25rem 0.4rem; border-bottom: 1px solid #d2d8d0; white-space: nowrap; background: #fff; position: sticky; z-index: 2; }
+tr.grp th { top: 0; text-align: center; font-size: 0.7rem; border-bottom: 1px solid #eceff1; }
+tr.col th { top: 1.55rem; }
+th.gz { color: #90a4ae; background: #fafbfc; }
+th .unit { font-weight: 400; font-size: 0.62rem; color: #b0bec5; }
+td { padding: 0.3rem 0.4rem; border-bottom: 1px solid #eef1ee; vertical-align: top; background: #fff; }
+.sticky { position: sticky; left: 0; z-index: 3; background: #fff; box-shadow: 1px 0 0 #e6eae4; min-width: 7rem; }
+th.sticky { z-index: 4; }
+th.g-kid { color: #27548f; } th.g-uri { color: #6a3d91; } th.g-hem { color: #963d6e; } th.g-met { color: #8a5a13; } th.g-ele { color: #0f6b78; }
+th.g-kid, td.g-kid { background: #eef3f9; } th.g-uri, td.g-uri { background: #f3eef8; } th.g-hem, td.g-hem { background: #fbeef4; } th.g-met, td.g-met { background: #fdf4e8; } th.g-ele, td.g-ele { background: #e9f4f3; }
+.nmlink { border: none; background: none; padding: 0; cursor: pointer; color: #1a3c6e; text-align: left; font-family: inherit; font-weight: 700; font-size: 0.88rem; }
+.nmlink:hover { text-decoration: underline; color: #1565c0; }
+.mrn { font-size: 0.72rem; color: #78909c; font-variant-numeric: tabular-nums; }
+.badge { display: inline-block; border-radius: 4px; padding: 0.05rem 0.45rem; font-size: 0.72rem; font-weight: 700; white-space: nowrap; }
+.badge.xs { font-size: 0.66rem; }
+.b-pre { background: var(--pre-bg); color: var(--pre); } .b-early { background: var(--early-bg); color: var(--early); } .b-none { background: var(--none-bg); color: var(--none); }
+.flag { font-size: 0.62rem; font-weight: 800; border-radius: 3px; padding: 0 0.25rem; margin-right: 0.15rem; }
+.flag.h { background: var(--pre-bg); color: var(--pre); } .flag.l { background: #e3f2fd; color: #1c5fa8; }
+.sl-bad { color: var(--pre); font-weight: 700; } .sl-ok { color: var(--early); }

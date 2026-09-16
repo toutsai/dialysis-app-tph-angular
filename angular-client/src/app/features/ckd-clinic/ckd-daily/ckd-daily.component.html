@@ -1,0 +1,238 @@
+<div class="daily">
+  @if (error(); as err) {
+    <div class="banner error">{{ err }}</div>
+  }
+
+  @if (daily(); as dl) {
+    <!-- 判讀日 × 醫師 按鈕列（原版 dateBar：日期｜醫師｜人數） -->
+    <div class="datebar">
+      <span class="db-t">判讀日</span>
+      @for (b of sessionButtons(); track b.date + '|' + b.doctor) {
+        <button type="button" class="db-btn" [class.on]="b.on" (click)="select(b.date, b.doctor)">
+          {{ b.date }}<span class="db-d">{{ b.label }}</span><span class="db-n">{{ b.n }} 人</span>
+        </button>
+      }
+      @if (loading()) { <span class="dim">判讀中…</span> }
+      @else { <span class="dim timing">載入 {{ dl.timing.loadMs }} ms · 判讀 {{ dl.timing.analyzeMs }} ms</span> }
+    </div>
+    @if (otherSubs().length) {
+      <div class="datebar sub">
+        <span class="db-t">他科診次</span>
+        <button type="button" class="db-btn small" [class.on]="dl.doctorSel === dl.otherSession" (click)="select(dl.date, dl.otherSession)">全部</button>
+        @for (g of otherSubs(); track g.key) {
+          <button type="button" class="db-btn small" [class.on]="dl.doctorSel === dl.otherSession + '|' + g.dept + '|' + g.doctor" (click)="selectOtherSub(g.dept, g.doctor)">
+            {{ g.dept }} {{ g.doctor }}<span class="db-n">{{ g.n }}</span>
+          </button>
+        }
+      </div>
+    }
+
+    @if (!dl.hasClinic) {
+      <div class="empty">尚未匯入「CKD-病患清單查詢」，請先到「匯入與設定」上傳門診名單。</div>
+    } @else if (dl.deptInfo.selDate && dl.deptInfo.total === 0 && dl.deptInfo.allDates.length) {
+      <div class="empty"><b>判讀日 {{ dl.deptInfo.selDate }} 在已匯入的清單中沒有掛號資料。</b><br>目前匯入的門診日期：{{ dl.deptInfo.allDates.join('、') }}，請在上方「判讀日」選擇其中一天。</div>
+    } @else if (dl.deptInfo.filter && dl.deptInfo.total > 0 && dl.deptInfo.matched === 0) {
+      <div class="empty"><b>「門診科別」設定為「{{ dl.deptInfo.filter }}」，但當日名單中沒有相符的科別。</b><br>名單中實際的科別：{{ dl.deptInfo.depts.length ? dl.deptInfo.depts.join('、') : '（未填）' }}。科別是子字串比對，請到判定參數改成一致的名稱，或清空以顯示全部 {{ dl.deptInfo.total }} 人。</div>
+    } @else {
+
+      <!-- ===== A：已收案 明日可否追蹤 ===== -->
+      <section class="block">
+        <h2><span class="tag-a">A</span>明日已收案 · 可否追蹤申報 <button type="button" class="btn-x" (click)="exportA()" [disabled]="!dl.A.length" title="全部 A 區列，不受篩選影響">匯出 CSV</button></h2>
+        <div class="tally">
+          @for (t of aTally(); track t.f) {
+            <button type="button" class="tl" [class]="'tl ' + (t.c || '')" [class.on]="aFilter() === t.f" (click)="aFilter.set(t.f)"><span>{{ t.k }}</span><b>{{ t.v }}</b></button>
+          }
+        </div>
+        @if (!dl.hasCases) {
+          <div class="empty">尚未匯入「追蹤清冊」，無法比對已收案。</div>
+        } @else if (!dl.A.length) {
+          <div class="empty">此診次沒有已收案的病人。</div>
+        } @else if (!rowsA().length) {
+          <div class="empty">此分類目前 0 人。點「已收案」可看全部。</div>
+        } @else {
+          <div class="tbox">
+            <table>
+              <thead><tr><th>診號</th><th>病人</th><th>方案</th><th>eGFR / 分期</th><th>追蹤間隔</th><th>上次 / 收案</th><th>年度評估</th><th>照護指標</th><th>明日判定</th></tr></thead>
+              <tbody>
+                @for (r of rowsA(); track r.mrn) {
+                  <tr [class.row-miss]="r.ord.length" [class.other]="r.otherDept">
+                    <td class="slot">{{ r.p?.no }}<br><small>{{ r.p?.half }}</small>@if (r.otherDept) { <br><small class="oth">{{ r.p?.dept }}</small> }</td>
+                    <td>
+                      <button type="button" class="nm nmlink" (click)="openRecords(r.mrn)" title="查看/新增此病人的個案紀錄">{{ r.name || '（無姓名）' }}</button>
+                      <div class="mrn">{{ r.mrn }}</div>
+                      <div class="dim">{{ r.age == null ? '—' : r.age }} 歲 {{ r.p?.sex }}@if (r.isDM) { · <b>DM</b> }</div>
+                      <ng-container *ngTemplateOutlet="chips; context: { $implicit: r.chips }" />
+                    </td>
+                    <td>
+                      <span class="badge" [class]="'badge b-' + r.prog">{{ r.prog === 'pre' ? 'Pre-ESRD' : 'Early-CKD' }}</span>
+                      <div class="dim xs">{{ r.code || (r.dkd ? 'DKD' : '') }}</div>
+                    </td>
+                    <td>
+                      @if (r.egfr != null) {
+                        <div class="ruler">
+                          <div class="val">{{ fmt1(r.egfr) }} <span class="dim xs">{{ r.stage }}</span></div>
+                          <div class="bar"><i class="g1"></i><i class="g2"></i><i class="g3a"></i><i class="g3b"></i><i class="g4"></i><i class="g5"></i><span class="pin" [style.left.%]="rulerPos(r.egfr)"></span></div>
+                        </div>
+                      } @else { <div class="dim">— {{ r.stage || '無資料' }}</div> }
+                      <div class="dim xs">{{ r.src }}@if (r.mdrd) { · MDRD {{ fmt1(r.mdrd) }} }</div>
+                    </td>
+                    <td>
+                      @if (r.gap != null) {
+                        <div class="gauge">
+                          <div class="cap">{{ r.gap }} <small>天</small></div>
+                          <div class="g"><i [class]="gaugeCls(r)" [style.width.%]="gaugePct(r.gap, r.need)"></i></div>
+                          <div class="foot">{{ r.code }} ≥{{ r.need }}</div>
+                        </div>
+                      } @else { <div class="dim">—</div> }
+                      <div class="dim xs">今年 {{ r.nYear }} 次 / 近12月 {{ r.n12 }} 次</div>
+                    </td>
+                    <td class="num">{{ roc(r.last?.visit) }}<br><span class="dim">收 {{ roc(r.last?.enroll) }}@if (r.tenure != null) { ({{ (r.tenure / 365).toFixed(1) }} 年) }</span></td>
+                    <td class="ann">
+                      @if (r.ann.code) { <span class="badge" [class]="'badge ' + (r.ann.ok ? 'b-pre' : 'b-none')">{{ r.ann.ok ? '可評估 ' + r.ann.code : '未到' }}</span> }
+                      @else { <span class="dim">無此項</span> }
+                      <div class="why">@for (w of r.ann.why; track $index) { <div>{{ w }}</div> }</div>
+                    </td>
+                    <td class="inds">
+                      @if (r.inds.length) { @for (i of r.inds; track i.n) { <span class="ind" [class.good]="i.ok" [class.bad]="!i.ok">{{ i.n }} {{ i.v }}</span> } }
+                      @else { <span class="dim">—</span> }
+                      @if (r.slope) { <div class="dim xs">eGFR {{ r.slope.v >= 0 ? '+' : '' }}{{ fmt1(r.slope.v) }}/年 ({{ r.slope.mo }} 月)</div> }
+                    </td>
+                    <td class="vcell">
+                      <div class="vd" [class]="'vd ' + r.box.tone">
+                        <div class="vd-a">{{ r.box.head }}</div>
+                        <div class="vd-b">{{ r.box.sub }}</div>
+                        @if (r.box.act; as act) {
+                          @if (act.vpn || act.rec) { <button type="button" class="vd-x clickable" [class]="'vd-x clickable ' + act.cls" (click)="onAct(r.mrn, act)"><b>{{ act.lab }}</b>{{ act.txt }}</button> }
+                          @else { <div class="vd-x" [class]="'vd-x ' + act.cls"><b>{{ act.lab }}</b>{{ act.txt }}</div> }
+                        }
+                        @if (!(r.box.act?.cls === 'miss')) {
+                          @if (r.ord.length) { <div class="vd-x miss"><b>須開單</b>{{ r.ord.join('、') }}</div> }
+                          @if (!r.ord.length && r.unk.length) { <div class="vd-x"><b>待核對</b>{{ r.unk.join('、') }}（未匯入檢驗報告）</div> }
+                        }
+                        <button type="button" class="more" (click)="toggle(r.mrn)">{{ expanded().has(r.mrn) ? '收合' : '判定依據' }}</button>
+                        @if (expanded().has(r.mrn)) {
+                          <div class="detail">
+                            <div class="missbox">
+                              <div class="mb-h">{{ missHead(r) }}</div>
+                              @if (r.ord.length) { <div class="mb-r"><b class="mb-lab">須開單</b>@for (x of r.ord; track x) { <i class="c-ord">{{ x }}</i> }</div> }
+                              @if (r.bed.length) { <div class="mb-r"><b class="mb-bed">診間登錄</b>@for (x of r.bed; track x) { <i class="c-bed">{{ x }}</i> }<span class="mb-t">匯出檔無此欄，診間登錄時確認</span></div> }
+                              @if (r.unk.length) { <div class="mb-r"><b class="mb-unk">待核對</b>@for (x of r.unk; track x) { <i class="c-unk">{{ x }}</i> }<span class="mb-t">未匯入檢驗報告，無法確認</span></div> }
+                            </div>
+                            <div class="why">@for (w of r.why; track $index) { <div>{{ w }}</div> }</div>
+                            @for (a of r.alerts; track $index) { <div class="alert" [class]="'alert ' + alertCls(a.t)"><b>{{ a.t }}</b> {{ a.m }}</div> }
+                            @if (r.timeline.length) {
+                              <div class="timeline">
+                                <b>照護時間軸</b>
+                                @for (t of r.timeline.slice(0, 8); track $index) { <span class="tl-i" [class.bill]="t.src === 'bill'">{{ roc(t.visit) }} {{ t.code || t.ctype }}@if (t.src === 'bill') { <small>入帳</small> }</span> }
+                                @if (r.timeline.length > 8) { <span class="dim">… 共 {{ r.timeline.length }} 筆</span> }
+                              </div>
+                            }
+                          </div>
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+
+      <!-- ===== B：未收案 是否符合收案 ===== -->
+      <section class="block">
+        <h2><span class="tag-b">B</span>未收案 · 是否符合收案條件
+          <button type="button" class="btn-x" (click)="exportB()" [disabled]="!dl.B.length" title="全部 B 區列（含不予收案與他院收案者）">匯出 CSV</button>
+          <button type="button" class="btn-x primary" (click)="exportDayXlsx()" [disabled]="!dl.B.length" title="單日可收案名單：看診醫師/日期/診號/病歷號/姓名/收案別/本次收案階段（已排除他院收案與不予收案者）">匯出當日收案名單 XLSX</button>
+          <button type="button" class="btn-x" (click)="exportPharm()" title="僅 Pre-ESRD：已收案回診者＋今日判定符合待收者（已於他院收案自動排除），交付藥師收案與衛教">藥師名單</button>
+          @if (exportMsg(); as m) { <span class="export-msg">{{ m }}</span> }
+        </h2>
+        <div class="tally">
+          @for (t of bTally(); track t.f) {
+            <button type="button" class="tl" [class]="'tl ' + (t.c || '')" [class.on]="bFilter() === t.f" (click)="bFilter.set(t.f)"><span>{{ t.k }}</span><b>{{ t.v }}</b></button>
+          }
+        </div>
+        @if (!dl.B.length) {
+          <div class="empty">此診次的病人都已收案。</div>
+        } @else if (!rowsB().length) {
+          <div class="empty">此分類目前 0 人。點「未收案」可看全部。</div>
+        } @else {
+          <div class="tbox">
+            <table>
+              <thead><tr><th>診號</th><th>病人</th><th>eGFR / 分期</th><th>尿蛋白</th><th>其他檢驗</th><th>檢驗日</th><th>收案判定</th></tr></thead>
+              <tbody>
+                @for (r of rowsB(); track r.mrn) {
+                  <tr [class.row-miss]="(r.verdict === 'pre' || r.verdict === 'early') && !r.noEn && r.ord.length">
+                    <td class="slot">{{ r.p.no }}<br><small>{{ r.p.half }}</small></td>
+                    <td>
+                      <button type="button" class="nm nmlink" (click)="openRecords(r.mrn)" title="查看/新增此病人的個案紀錄">{{ r.name || '（無姓名）' }}</button>
+                      <div class="mrn">{{ r.mrn }}</div>
+                      <div class="dim">{{ r.age == null ? '—' : r.age }} 歲 {{ r.p.sex }}@if (r.p.pDM) { · <b>DM</b> }</div>
+                      <ng-container *ngTemplateOutlet="chips; context: { $implicit: r.chips }" />
+                    </td>
+                    <td>
+                      @if (r.egfr != null) {
+                        <div class="ruler">
+                          <div class="val">{{ fmt1(r.egfr) }} <span class="dim xs">{{ r.stage }}</span></div>
+                          <div class="bar"><i class="g1"></i><i class="g2"></i><i class="g3a"></i><i class="g3b"></i><i class="g4"></i><i class="g5"></i><span class="pin" [style.left.%]="rulerPos(r.egfr)"></span></div>
+                        </div>
+                        <div class="dim xs">{{ r.from }}</div>
+                      } @else { <div class="dim">— {{ r.stage || '無資料' }}</div> }
+                    </td>
+                    <td class="labs">
+                      UPCR @if (lv(r.lab, 'upcr'); as x) { @if (x.flag) { <span class="flag" [class]="'flag ' + x.flag.toLowerCase()">{{ x.flag }}</span> }<span class="num">{{ x.v }}</span> <small>mg/gm</small>@if (r.lab?.calcUpcr) { <small class="dim"> 算</small> } } @else { <span class="dim">—</span> }<br>
+                      UACR @if (lv(r.lab, 'uacr'); as x) { @if (x.flag) { <span class="flag" [class]="'flag ' + x.flag.toLowerCase()">{{ x.flag }}</span> }<span class="num">{{ x.v }}</span> <small>mg/gm</small> } @else { <span class="dim">—</span> }
+                    </td>
+                    <td class="labs">
+                      Cr @if (lv(r.lab, 'cr'); as x) { <span class="num">{{ x.v }}</span> } @else { <span class="dim">—</span> } · K @if (lv(r.lab, 'k'); as x) { <span class="num">{{ x.v }}</span> } @else { <span class="dim">—</span> }<br>
+                      LDL @if (lv(r.lab, 'ldl'); as x) { <span class="num">{{ x.v }}</span> } @else { <span class="dim">—</span> } · A1c @if (lv(r.lab, 'a1c'); as x) { <span class="num">{{ x.v }}</span> } @else { <span class="dim">—</span> }
+                    </td>
+                    <td class="num">@if (r.lab?.date) { {{ roc(r.lab!.date) }}<br><span class="dim xs">{{ r.lab!.kinds.join('+') }}@if (r.lab!.src > 1) { ×{{ r.lab!.src }} }</span> } @else { <span class="dim">—</span> }</td>
+                    <td class="vcell">
+                      <div class="vd" [class]="'vd ' + r.box.tone">
+                        <div class="vd-a">{{ r.box.head }}</div>
+                        <div class="vd-b">{{ r.box.sub }}</div>
+                        @if (r.box.act; as act) {
+                          @if (act.vpn || act.rec) { <button type="button" class="vd-x clickable" [class]="'vd-x clickable ' + act.cls" (click)="onAct(r.mrn, act)"><b>{{ act.lab }}</b>{{ act.txt }}</button> }
+                          @else { <div class="vd-x" [class]="'vd-x ' + act.cls"><b>{{ act.lab }}</b>{{ act.txt }}</div> }
+                        }
+                        @if (!(r.box.act?.cls === 'miss') && !(r.verdict === 'no' || r.noEn || r.closeKind === 'dialysis' || r.closeKind === 'dead')) {
+                          @if (r.ord.length) { <div class="vd-x miss"><b>須開單</b>{{ r.ord.join('、') }}</div> }
+                          @if (!r.ord.length && r.unk.length) { <div class="vd-x"><b>待核對</b>{{ r.unk.join('、') }}（未匯入檢驗報告）</div> }
+                        }
+                        <button type="button" class="more" (click)="toggle(r.mrn)">{{ expanded().has(r.mrn) ? '收合' : '判定依據' }}</button>
+                        @if (expanded().has(r.mrn)) {
+                          <div class="detail">
+                            <div class="why">@for (w of r.why; track $index) { <div>{{ w }}</div> }</div>
+                            @if (vpnNote(r); as vn) { <button type="button" class="vpnnote" [class]="'vpnnote ' + vn.cls" (click)="openRecords(r.mrn, 'extEnroll')" title="點此更新外院收案查核">{{ vn.text }}</button> }
+                          </div>
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+    }
+  } @else if (loading()) {
+    <div class="placeholder">判讀中…</div>
+  }
+
+  <!-- ===== E：個案紀錄（原版第五區；姓名／行動列可跳進來） ===== -->
+  <app-ckd-records (changed)="onRecordsChanged()" />
+</div>
+
+<!-- 姓名下方的小標記（原版 recChips：通路／SDM／外院收案／紀錄數） -->
+<ng-template #chips let-c>
+  @if (c) {
+    <div class="rchips">
+      @if (c.access) { <i class="rchip c-acc" [title]="c.access.type">通路 {{ c.access.status }}</i> }
+      @if (c.sdm) { <i class="rchip c-sdm" [title]="c.sdm.at">SDM {{ c.sdm.leaning }}</i> }
+      @if (c.extPos) { <i class="rchip c-ext" [title]="c.extHospital">外院收案</i> }
+      @if (c.notes) { <i class="rchip c-note">紀錄 {{ c.notes }}</i> }
+    </div>
+  }
+</ng-template>

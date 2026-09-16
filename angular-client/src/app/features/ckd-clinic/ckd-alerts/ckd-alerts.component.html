@@ -1,0 +1,135 @@
+<section class="block">
+  <div class="head">
+    <h2><span class="tag-l">L</span>近日異常檢驗 <span class="dim sub">已收案者的危急值與腎功能急降</span></h2>
+    <span class="dim">
+      @if (loading()) { 掃描中… }
+      @else if (alerts()) { 判讀日 {{ alerts()!.date }} · 近 {{ alerts()!.win }} 天 {{ alerts()!.rows.length }} 筆 }
+    </span>
+    <label class="cfg" title="只看判讀日往前這些天內的報告">
+      近
+      <input type="number" min="1" max="90" [value]="win()" (change)="setWin($any($event.target).value)" [disabled]="loading() || saving()" />
+      天
+    </label>
+    <span class="head-btns">
+      <button type="button" class="btn small" (click)="load()" [disabled]="loading()">重新整理</button>
+      <button type="button" class="btn small ghost" (click)="exportCsv()" [disabled]="!alerts()?.rows?.length" title="全部異常，不受篩選影響">匯出 CSV</button>
+    </span>
+  </div>
+
+  @if (error(); as err) { <div class="banner error">{{ err }}</div> }
+
+  @if (alerts(); as al) {
+    @if (!al.hasCases) {
+      <div class="empty">尚未匯入「已收案名單」。</div>
+    } @else if (!al.rows.length) {
+      <div class="empty">匯入追蹤清冊與檢驗報告後,這裡會列出近日異常。</div>
+    } @else {
+      <div class="tally">
+        @for (t of tally(); track t.f) {
+          <button type="button" class="tl" [class]="'tl ' + t.c" [class.on]="filter() === t.f" (click)="setFilter(t.f)" [title]="'展開並只看:' + t.k"><span>{{ t.k }}</span><b>{{ t.v }}</b></button>
+        }
+      </div>
+
+      @if (!view().length) {
+        <div class="empty">{{ emptyText() }}</div>
+      } @else {
+        <div class="tbox">
+          <table>
+            <thead>
+              <tr><th>病人</th><th>異常(點一下看累積報告)</th><th>報告日</th><th>說明</th><th>方案 / 收案醫師 / 最近照護</th><th>處理</th></tr>
+            </thead>
+            <tbody>
+              @for (v of view(); track v.a.key) {
+                <tr [class.row-miss]="v.a.sev === 'crit' && !v.a.done">
+                  <td>
+                    <button type="button" class="nmlink" (click)="openRecords.emit(v.a.mrn)" title="查看/新增此病人的個案紀錄">{{ v.a.name || '（無姓名）' }}</button>
+                    <div class="mrn">{{ v.a.mrn }}</div>
+                  </td>
+                  <td class="la-k" [class.on]="flowKey() === v.a.key" (click)="toggleFlow(v.a)" title="點一下展開這位病人的累積報告">
+                    <span class="la-sev" [class]="'la-sev ' + v.a.sev">{{ v.sevText }}</span> <b>{{ v.a.t }}</b>
+                  </td>
+                  <td class="rc-last">{{ v.dateText }}</td>
+                  <td class="la-m">{{ v.a.m }}</td>
+                  <td>
+                    @if (v.a.aud) {
+                      {{ v.prog }} · @if (v.caseDoctor) { <b>{{ v.caseDoctor }}</b> } @else { <span class="dim">收案醫師未註明</span> }
+                      <div class="dim">{{ v.careLine }}</div>
+                    } @else { <span class="dim">—</span> }
+                  </td>
+                  <td class="la-act">
+                    @if (v.a.done) {
+                      <span class="dim">已處理 {{ v.doneText }}</span>
+                      <button type="button" class="btn small ghost" (click)="setDone(v.a, false)">復原</button>
+                    } @else {
+                      <button type="button" class="btn small" (click)="setDone(v.a, true)">標示已處理</button>
+                      <button type="button" class="btn small ghost" (click)="toggleForm(v.a)">記錄聯絡</button>
+                    }
+                  </td>
+                </tr>
+
+                @if (flowKey() === v.a.key) {
+                  <tr class="rc-form la-flow">
+                    <td colspan="6">
+                      <div class="wbdet">
+                        @if (flowLoading()) { <div class="dim">載入累積報告…</div> }
+                        @if (flowError(); as fe) { <div class="banner error">{{ fe }}</div> }
+                        @if (flowLabs(); as fl) {
+                          <div class="flow-head">
+                            <b>{{ fl.name || '（無姓名）' }}</b> <span class="mrn">{{ fl.mrn }}</span>
+                            <span class="dim">共 {{ fl.rows.length }} 份報告</span>
+                            <button type="button" class="btn small ghost" (click)="exportFlowCsv()" [disabled]="!fl.rows.length">匯出 CSV</button>
+                          </div>
+                          @if (!fl.rows.length) {
+                            <div class="empty">這位病人沒有檢驗報告。</div>
+                          } @else {
+                            <div class="tbox">
+                              <table class="flow">
+                                <thead>
+                                  <tr>
+                                    <th class="sticky">報告日</th>
+                                    @for (x of fl.labs; track x[0]) { <th [class]="'g-' + x[3]">{{ x[1] }}<div class="unit">{{ x[2] }}</div></th> }
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  @for (row of fl.rows; track $index) {
+                                    <tr>
+                                      <td class="sticky rc-last">{{ roc(row.date) }}</td>
+                                      @for (x of fl.labs; track x[0]) {
+                                        <td class="num">
+                                          @if (row[x[0]] != null) {
+                                            @if (row[x[0] + '_f']) { <span class="flag" [class.h]="row[x[0] + '_f'] === 'H'" [class.l]="row[x[0] + '_f'] === 'L'">{{ row[x[0] + '_f'] }}</span> }{{ row[x[0] + '_q'] || '' }}{{ row[x[0]] }}
+                                          } @else { <span class="dim">·</span> }
+                                        </td>
+                                      }
+                                    </tr>
+                                  }
+                                </tbody>
+                              </table>
+                            </div>
+                          }
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                }
+
+                @if (formKey() === v.a.key) {
+                  <tr class="rc-form">
+                    <td colspan="6">
+                      <app-ckd-quick-form type="contact" [mrn]="v.a.mrn" [defaults]="formDefaults()" (saved)="onSaved(v.a)" (cancelled)="formKey.set(null)"></app-ckd-quick-form>
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+        @if (hidden() > 0) {
+          <div class="note more">只顯示前 300 筆(共 {{ filtered().length }}),可匯出 CSV。</div>
+        }
+      }
+    }
+  } @else if (loading()) {
+    <div class="placeholder">掃描中…</div>
+  }
+</section>
