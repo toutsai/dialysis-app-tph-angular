@@ -36,12 +36,12 @@ const CRRT_CHECK_ITEMS: CrrtCheckItem[] = [
   { field: 'brainInjury', label: '腦損傷／肝衰竭', pts: '直接', hint: '急性腦損傷／顱內壓升高／急性肝衰竭：KDIGO 2012 建議 CRRT（2B），不計分直接建議' },
 ];
 
-// AKI 分期徽章色（與 aki-map.component 的 CATEGORY_DEFS 對齊）
+// AKI 分期徽章色（與 aki-map.component 的 BUCKET_DEFS 對齊）
+// 2026-09-16 使用者指示：不再顯示「疑似 ESRD」（透析病人全段 Cr≥4 是常態，徽章無意義）；只標 Stage 1–3
 const AKI_BADGE: Record<string, { label: string; bg: string; fg: string }> = {
-  'stage-3': { label: 'AKI S3', bg: '#d32f2f', fg: '#fff' },
+  'stage-3': { label: 'AKI S3', bg: '#e53935', fg: '#fff' },
   'stage-2': { label: 'AKI S2', bg: '#f57c00', fg: '#fff' },
-  'stage-1': { label: 'AKI S1', bg: '#fdd835', fg: '#424242' },
-  esrd: { label: '疑似 ESRD', bg: '#7b1fa2', fg: '#fff' },
+  'stage-1': { label: 'AKI S1', bg: '#fdd835', fg: '#3e2723' },
 };
 
 type CrrtLevel = 'hi' | 'mid' | 'lo';
