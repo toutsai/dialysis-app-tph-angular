@@ -27,6 +27,21 @@ import {
   type ConsumableItemMappings,
 } from '@app/components/dialogs/consumable-item-mapping-dialog/consumable-item-mapping-dialog.component';
 import { InjectionUncertainListDialogComponent } from '@app/components/dialogs/injection-uncertain-list-dialog/injection-uncertain-list-dialog.component';
+import { InjectionMonthlyViewComponent } from './injection-monthly-view.component';
+import { UploadChangesPanelComponent } from './upload-changes-panel.component';
+import { InjectionHistoryPanelComponent } from './injection-history-panel.component';
+import {
+  REVIEW_LABEL,
+  RULE_KIND_LABEL,
+  changePillClass,
+  changeTypeLabel,
+  formatFieldChange,
+  orderTypeLabel,
+  type InjectionFieldChange,
+  type InjectionHistoryResponse,
+  type InjectionUploadReport,
+  type InjectionUploadSummary,
+} from './injection-shared';
 
 interface MedicationMaster {
   code: string;
@@ -77,7 +92,11 @@ interface UploadResult {
     autoMapped: { from: string; to: string }[];
     kept: string[];
   };
+  /** 藥囑上傳（POST /orders/process）：與前一批次比對的解讀報告（首批為 null） */
+  report?: InjectionUploadReport | null;
 }
+
+type OrdersTab = 'query' | 'dialysis' | 'monthly' | 'changes' | 'upload';
 
 /** 透析醫囑檢視列（GET /orders/dialysis-orders 回傳，orders key 對齊 DialysisOrderModal） */
 interface DialysisOrderRow {
@@ -98,7 +117,15 @@ interface DialysisOrderRow {
 @Component({
   selector: 'app-orders',
   standalone: true,
-  imports: [CommonModule, FormsModule, ConsumableItemMappingDialogComponent, InjectionUncertainListDialogComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    ConsumableItemMappingDialogComponent,
+    InjectionUncertainListDialogComponent,
+    InjectionMonthlyViewComponent,
+    UploadChangesPanelComponent,
+    InjectionHistoryPanelComponent,
+  ],
   templateUrl: './orders.component.html',
   styleUrl: './orders.component.css',
 })
@@ -116,8 +143,17 @@ export class OrdersComponent implements OnInit {
   private readonly ordersApi: ApiManager<OrderRecord>;
 
   // --- Component State ---
-  readonly activeTab = signal<'query' | 'dialysis' | 'upload'>('query');
+  readonly activeTab = signal<OrdersTab>('query');
+  /** 當月針劑總覽 / 上傳異動紀錄：第一次切到才建立子元件（子元件 ngOnInit 自行載入） */
+  readonly monthlyVisited = signal(false);
+  readonly changesVisited = signal(false);
   readonly isLoading = signal(false);
+  /** 個人搜尋：找到的病人（藥物時間軸用） */
+  readonly individualFoundName = signal('');
+  readonly individualHistory = signal<InjectionHistoryResponse | null>(null);
+  readonly isHistoryLoading = signal(false);
+  /** 上傳解讀報告：前 200 筆異動清單展開/收合 */
+  readonly reportChangesExpanded = signal(false);
   /** 針劑疑慮清單（全院）：頻率/備註判不出星期幾、系統未列入應打清單的處方 */
   readonly isUncertainDialogVisible = signal(false);
   readonly searchPerformed = signal(false);
@@ -284,6 +320,86 @@ export class OrdersComponent implements OnInit {
     this.patientStore.fetchPatientsIfNeeded();
   }
 
+  /** 切頁籤；總覽/異動紀錄首次進入時標記 visited 讓子元件實例化 */
+  openTab(tab: OrdersTab): void {
+    if (tab === 'dialysis') {
+      this.openDialysisTab();
+      return;
+    }
+    this.activeTab.set(tab);
+    if (tab === 'monthly') this.monthlyVisited.set(true);
+    if (tab === 'changes') this.changesVisited.set(true);
+  }
+
+  // --- 上傳解讀報告 / 異動 pill 顯示輔助（與子元件共用 injection-shared） ---
+  changeTypeLabel(type: string): string {
+    return changeTypeLabel(type);
+  }
+
+  changePillClass(type: string): string {
+    return changePillClass(type);
+  }
+
+  orderTypeLabel(type: string): string {
+    return orderTypeLabel(type);
+  }
+
+  formatFieldChange(change: InjectionFieldChange): string {
+    return formatFieldChange(change);
+  }
+
+  /** 解讀統計：[{label, value}]（每週/隔週/指定日期/hold/判不出） */
+  reportInterpretation(summary: InjectionUploadSummary | undefined): { label: string; value: number }[] {
+    const i = summary?.interpretation;
+    if (!i) return [];
+    return (['weekly', 'interval', 'dates', 'hold', 'uncertain'] as const).map((k) => ({
+      label: RULE_KIND_LABEL[k],
+      value: i[k] ?? 0,
+    }));
+  }
+
+  /** 需複核統計：[{label, value}]（判不出/日期用盡/星期不符/非洗腎日） */
+  reportReview(summary: InjectionUploadSummary | undefined): { label: string; value: number }[] {
+    const r = summary?.review;
+    if (!r) return [];
+    return (['uncertain', 'dates_exhausted', 'weekday_mismatch', 'date_not_dialysis_day'] as const).map((k) => ({
+      label: REVIEW_LABEL[k],
+      value: r[k] ?? 0,
+    }));
+  }
+
+  /** 警示統計（後端 warnings: Record<code, count>），只列非 0 */
+  reportWarnings(summary: InjectionUploadSummary | undefined): { label: string; value: number }[] {
+    const w = summary?.warnings;
+    if (!w) return [];
+    return Object.entries(w)
+      .filter(([, v]) => (v ?? 0) > 0)
+      .map(([k, v]) => ({ label: REVIEW_LABEL[k] ?? k, value: v }));
+  }
+
+  /** GET /medications/injection-history/:patientId → 藥物時間軸 */
+  private async loadIndividualHistory(patientId: string): Promise<void> {
+    this.isHistoryLoading.set(true);
+    try {
+      const res = await fetch(
+        `${this.firebaseService.apiBaseUrl}/medications/injection-history/${encodeURIComponent(patientId)}`,
+        { headers: this.firebaseService.getHeaders() },
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = (await res.json()) as InjectionHistoryResponse;
+      this.individualHistory.set({
+        patientId: body.patientId || patientId,
+        orders: Array.isArray(body.orders) ? body.orders : [],
+        changes: Array.isArray(body.changes) ? body.changes : [],
+      });
+    } catch (error) {
+      console.warn('載入藥物歷程失敗:', error);
+      this.individualHistory.set(null);
+    } finally {
+      this.isHistoryLoading.set(false);
+    }
+  }
+
   // --- Helper Functions ---
   formatShift(shiftIndex: number): string {
     return this.SHIFT_INDEX_MAP[shiftIndex] ?? 'N/A';
@@ -337,6 +453,8 @@ export class OrdersComponent implements OnInit {
     this.isLoading.set(true);
     this.searchPerformed.set(true);
     this.searchResult.set([]);
+    this.individualHistory.set(null);
+    this.individualFoundName.set('');
     try {
       if (this.searchType() === 'group') {
         await this.searchGroupOrders();
@@ -449,8 +567,14 @@ export class OrdersComponent implements OnInit {
 
     if (!foundPatient) {
       this.searchResult.set([]);
+      this.individualFoundName.set('');
+      this.individualHistory.set(null);
       return;
     }
+
+    this.individualFoundName.set(foundPatient.name || '');
+    // 藥物時間軸：與月表並行載入，失敗只影響時間軸區塊
+    if (foundPatient.id) void this.loadIndividualHistory(String(foundPatient.id));
 
     const year = this.individualSearchYear();
 
@@ -661,6 +785,7 @@ export class OrdersComponent implements OnInit {
     }
     this.isUploading.set(true);
     this.uploadResult.set(null);
+    this.reportChangesExpanded.set(false);
     try {
       const fileContentBase64 = await this.toBase64(file);
       const res = await fetch(`${this.firebaseService.apiBaseUrl}/orders/process`, {

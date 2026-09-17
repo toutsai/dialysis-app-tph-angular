@@ -13,10 +13,10 @@
             (click)="openUncertain()"
             class="btn-uncertain"
             [class.has-items]="(uncertainCount() ?? 0) > 0"
-            title="頻率/備註判不出星期幾、系統未列入應打清單的處方；點開逐筆確認"
+            title="判不出星期幾 / 日期已用盡 / 星期與洗腎日不符 / 日期非洗腎日的針劑處方；點開逐筆審核確認"
           >
-            <i class="fas fa-exclamation-triangle"></i>
-            疑慮清單
+            <i class="fas fa-clipboard-check"></i>
+            待審清單
             @if (uncertainCount() !== null) {
               <span class="uncertain-badge">{{ uncertainCount() }}</span>
             }
@@ -77,7 +77,7 @@
       @if (uncertainCount(); as count) {
         <div class="uncertain-note">
           <i class="fas fa-exclamation-triangle"></i>
-          另有 {{ count }} 筆針劑處方頻率/備註看不出星期幾，系統未列入，請點「疑慮清單」確認。
+          另有 {{ count }} 筆針劑處方需審核（判不出星期幾 / 日期用盡 / 與洗腎日不符），系統未列入或可能有誤，請點「待審清單」確認。
         </div>
       }
 

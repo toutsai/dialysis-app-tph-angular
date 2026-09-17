@@ -1,0 +1,136 @@
+<div class="monthly-view">
+  <!-- 工具列 -->
+  <div class="search-controls">
+    <div class="group-filters">
+      <input type="month" [ngModel]="month()" (ngModelChange)="onMonthChange($event)" [disabled]="isLoading()" />
+      <select [ngModel]="shift()" (ngModelChange)="onShiftChange($event)" [disabled]="isLoading()">
+        <option value="all">全部班別</option>
+        <option value="early">早班</option>
+        <option value="noon">午班</option>
+        <option value="late">晚班</option>
+      </select>
+    </div>
+
+    <div class="chip-group" *ngIf="meds().length > 0">
+      <span class="chip-group-label">藥品</span>
+      <button
+        *ngFor="let med of meds()"
+        type="button"
+        class="filter-chip"
+        [class.active]="isMedActive(med.code)"
+        (click)="toggleMed(med.code)"
+        [disabled]="isLoading()"
+        [title]="med.code + (med.unit ? '（' + med.unit + '）' : '')"
+      >
+        {{ med.name }}
+      </button>
+    </div>
+
+    <div class="chip-group">
+      <span class="chip-group-label">頻率型態</span>
+      <button
+        *ngFor="let kind of KIND_OPTIONS"
+        type="button"
+        class="filter-chip"
+        [class.active]="isKindActive(kind.value)"
+        (click)="toggleKind(kind.value)"
+        [disabled]="isLoading()"
+      >
+        {{ kind.label }}
+      </button>
+    </div>
+
+    <button (click)="load()" [disabled]="isLoading()" class="search-btn">
+      <i class="fas fa-rotate"></i> {{ isLoading() ? '載入中...' : '重新整理' }}
+    </button>
+    <button (click)="print()" [disabled]="isLoading() || rows().length === 0" class="print-btn">
+      <i class="fas fa-print"></i> 列印
+    </button>
+  </div>
+
+  <!-- 筆數 + 圖例 -->
+  <div class="legend-bar">
+    <span class="row-count">共 {{ rows().length }} 人</span>
+    <span class="legend-item"><span class="legend-swatch dialysis"></span>洗腎日</span>
+    <span class="legend-item"><span class="legend-swatch today"></span>今日</span>
+    <span class="legend-item"><span class="legend-swatch weekend"></span>週末</span>
+    <span class="legend-item"><span class="legend-chip">NESP 20</span>當日應打（縮寫 + 劑量）</span>
+    <span class="legend-item"><span class="legend-chip mismatch">Fe 100</span>非洗腎日（紅框）</span>
+    <span class="legend-item"><span class="warn-mark">⚠</span>判不出 / hold / 有警示（滑鼠查看）</span>
+  </div>
+
+  <!-- 內容 -->
+  <div class="results-display">
+    <div *ngIf="isLoading()" class="loading-state">
+      <div class="loading-spinner"></div>
+      正在載入當月針劑總覽...
+    </div>
+    <div *ngIf="!isLoading() && errorMessage()" class="empty-state error">{{ errorMessage() }}</div>
+    <div *ngIf="!isLoading() && !errorMessage() && loaded() && rows().length === 0" class="empty-state">
+      {{ month() }} 無符合條件的針劑處方。
+    </div>
+
+    <div *ngIf="!isLoading() && !errorMessage() && rows().length > 0" class="table-container">
+      <table class="monthly-table">
+        <thead>
+          <tr>
+            <th class="sticky-col col-shift">班別</th>
+            <th class="sticky-col col-bed">床號</th>
+            <th class="sticky-col col-name">姓名</th>
+            <th class="sticky-col col-freq">洗腎日</th>
+            <th class="sticky-col col-summary">處方摘要</th>
+            <th
+              *ngFor="let day of days(); trackBy: trackDay"
+              class="day-col"
+              [class.weekend]="isWeekend(day)"
+              [class.today]="isToday(day)"
+              [title]="day.date"
+            >
+              <span class="day-num">{{ day.day }}</span>
+              <span class="day-dow">{{ dowLabel(day.dow) }}</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of rows(); trackBy: trackRow">
+            <td class="sticky-col col-shift">{{ shiftLabel(row.shift) }}</td>
+            <td class="sticky-col col-bed">{{ row.bedNum ?? '-' }}</td>
+            <td class="sticky-col col-name" [title]="row.medicalRecordNumber">{{ row.patientName }}</td>
+            <td class="sticky-col col-freq">{{ row.freq || '-' }}</td>
+            <td class="sticky-col col-summary">
+              <div
+                *ngFor="let order of row.orders"
+                class="order-line"
+                [class.attention]="orderNeedsAttention(order)"
+                [title]="orderTooltip(order)"
+              >
+                <span *ngIf="orderNeedsAttention(order)" class="warn-mark">⚠</span>
+                <span class="order-text">{{ orderLine(order) }}</span>
+                <span *ngIf="order.ruleKind === 'uncertain' || order.ruleKind === 'hold'" class="kind-tag">
+                  {{ ruleKindLabel(order.ruleKind) }}
+                </span>
+              </div>
+              <span *ngIf="row.orders.length === 0" class="muted">-</span>
+            </td>
+            <td
+              *ngFor="let day of days(); trackBy: trackDay"
+              class="day-col"
+              [class.weekend]="isWeekend(day)"
+              [class.today]="isToday(day)"
+              [class.dialysis]="isDialysisDay(row, day)"
+            >
+              <span
+                *ngFor="let cell of cellsOf(row, day)"
+                class="inj-chip"
+                [class.mismatch]="cell.mismatch"
+                [title]="chipTitle(cell)"
+              >
+                {{ chipLabel(cell) }}
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

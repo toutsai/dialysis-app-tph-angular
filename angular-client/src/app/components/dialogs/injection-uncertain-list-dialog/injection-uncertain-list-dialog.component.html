@@ -3,10 +3,10 @@
     <div class="unc-modal">
       <div class="unc-header">
         <h3>
-          <i class="fas fa-exclamation-triangle"></i>
-          針劑疑慮清單
+          <i class="fas fa-clipboard-check"></i>
+          針劑待審清單
           @if (titleDate) {
-            <span class="unc-sub">- {{ titleDate }} ({{ rows().length }} 筆・{{ scopeLabel }})</span>
+            <span class="unc-sub">- {{ titleDate }} ({{ counts().total }} 筆・{{ scopeLabel }})</span>
           }
         </h3>
         <div class="unc-actions">
@@ -24,10 +24,31 @@
       </div>
 
       <div class="unc-hint">
-        以下處方 HIS 的「頻率服法」與「備註」都看不出星期幾，系統不自行判定，也不會列入應打清單。
+        以下針劑處方系統無法自行確定施打日，需人工審核：
+        <span class="unc-pill unc-cat-uncertain">判不出星期幾</span> HIS 頻率服法與備註都看不出星期幾，未列入應打清單；
+        <span class="unc-pill unc-cat-dates_exhausted">日期已用盡</span> 備註指定的日期都已過去、HIS 沒填停止日，系統已不會再列出這筆；
+        <span class="unc-pill unc-cat-weekday_mismatch">星期與洗腎日不符</span> 規則的星期與總表洗腎日不同，可能打不到人；
+        <span class="unc-pill unc-cat-date_not_dialysis_day">日期非洗腎日</span> 備註指定的日期不是該病人的洗腎日。
         請在 HIS 備註補上規則後重新上傳，或在此輸入規則確認（例：<code>W4</code>、<code>QW135</code>、<code>Q2W4</code>、<code>0923.0930</code>、<code>hold</code>）。
-        在此確認的規則會持續套用到同一筆處方，直到 HIS 該筆處方停止或備註補上為止。
+        在此確認的規則會持續套用到同一筆處方，直到 HIS 該筆處方停止或備註補上為止；已確認仍有警告者可「取消確認」。
       </div>
+
+      @if (!loading() && !errorMsg() && counts().total > 0) {
+        <div class="unc-filter">
+          @for (chip of chips(); track chip.key) {
+            <button
+              type="button"
+              class="unc-chip"
+              [class]="'unc-chip-' + chip.key"
+              [class.active]="filter() === chip.key"
+              (click)="setFilter(chip.key)"
+            >
+              {{ chip.label }}
+              <span class="unc-chip-count">{{ chip.count }}</span>
+            </button>
+          }
+        </div>
+      }
 
       <div class="unc-body">
         @if (loading()) {
@@ -35,7 +56,9 @@
         } @else if (errorMsg()) {
           <div class="unc-empty unc-error">{{ errorMsg() }}</div>
         } @else if (rows().length === 0) {
-          <div class="unc-empty"><i class="fas fa-check-circle"></i> 目前沒有疑慮項目</div>
+          <div class="unc-empty"><i class="fas fa-check-circle"></i> 目前沒有待審項目</div>
+        } @else if (filteredRows().length === 0) {
+          <div class="unc-empty">此類別沒有項目</div>
         } @else {
           <table class="unc-table">
             <thead>
@@ -47,14 +70,15 @@
                 <th>頻率服法</th>
                 <th>備註</th>
                 <th>開始日</th>
-                <th>原因</th>
+                <th>洗腎日</th>
+                <th>類別 / 說明</th>
                 @if (canConfirm) {
                   <th class="unc-col-rule">確認規則</th>
                 }
               </tr>
             </thead>
             <tbody>
-              @for (row of rows(); track row.overrideKey) {
+              @for (row of filteredRows(); track row.overrideKey) {
                 <tr>
                   <td>{{ row.patientName }}</td>
                   <td class="unc-mono">{{ row.medicalRecordNumber }}</td>
@@ -63,14 +87,36 @@
                   <td class="unc-mono">{{ row.frequency || '—' }}</td>
                   <td>{{ row.note || '（空白）' }}</td>
                   <td class="unc-mono">{{ row.startDate }}</td>
-                  <td class="unc-reason">{{ row.reason }}</td>
+                  <td class="unc-mono">{{ row.masterFreq || '—' }}</td>
+                  <td class="unc-category">
+                    <span class="unc-pill" [class]="'unc-cat-' + row.category">{{ row.categoryLabel }}</span>
+                    @if (row.detail) {
+                      <div class="unc-detail">{{ row.detail }}</div>
+                    }
+                    @if (row.overrideId) {
+                      <div class="unc-confirmed">
+                        <span class="unc-confirmed-tag" title="已由使用者確認的規則">已確認：{{ row.effectiveRule || '—' }}</span>
+                        @if (canConfirm) {
+                          <button
+                            type="button"
+                            class="unc-link"
+                            (click)="removeOverride(row)"
+                            [disabled]="row.saving"
+                            title="刪除此已確認規則，回到依 HIS 判讀"
+                          >
+                            取消確認
+                          </button>
+                        }
+                      </div>
+                    }
+                  </td>
                   @if (canConfirm) {
                     <td class="unc-col-rule">
                       <div class="unc-rule-row">
                         <input
                           type="text"
                           [(ngModel)]="row.ruleInput"
-                          placeholder="例：W4"
+                          [placeholder]="row.placeholder"
                           [disabled]="row.saving"
                           (keyup.enter)="confirmRow(row)"
                         />

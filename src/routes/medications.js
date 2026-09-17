@@ -10,9 +10,93 @@ import {
   upsertInjectionRuleOverride,
   deleteInjectionRuleOverride,
 } from '../services/dailyInjectionService.js'
+import {
+  getInjectionReview,
+  getMonthlyInjectionMatrix,
+  getPatientMedicationHistory,
+  listUploadBatches,
+  listBatchChanges,
+} from '../services/injectionRulesService.js'
 import { getTaipeiTodayString } from '../utils/dateUtils.js'
 
 const router = Router()
+
+/**
+ * POST /api/medications/daily-injections/review
+ * 針劑待審清單（解讀層）：判不出星期幾 + 交叉檢查警告（星期與洗腎日不符 / 日期非洗腎日 / 日期已用盡）。
+ * body: { targetDate?: YYYY-MM-DD（預設今天）, patientIds?: string[]（省略=全院） }
+ * 回 { targetDate, items:[{...InjectionRecord, category, categoryLabel, warnings:[{code,message}], reason, dialysisDays, masterFreq}], counts:{uncertain,dates_exhausted,weekday_mismatch,date_not_dialysis_day,total}, latestBatch }
+ */
+router.post('/daily-injections/review', authenticate, (req, res) => {
+  try {
+    const targetDate = req.body?.targetDate || getTaipeiTodayString()
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
+      return res.status(400).json({ error: true, message: '請提供有效的目標日期 (YYYY-MM-DD)' })
+    }
+    const patientIds = Array.isArray(req.body?.patientIds) ? req.body.patientIds : null
+    return res.json(getInjectionReview(getDatabase(), targetDate, patientIds))
+  } catch (error) {
+    console.error('查詢針劑待審清單錯誤:', error)
+    res.status(500).json({ error: true, message: '查詢針劑待審清單失敗' })
+  }
+})
+
+/**
+ * GET /api/medications/injection-monthly?month=YYYY-MM&shift=early|noon|late&codes=IFER2,ICAC&kinds=weekly,interval,dates
+ * 醫師當月針劑總覽：列＝病人（班別/床位排序）、欄＝每天、格＝當天該打的針劑。
+ */
+router.get('/injection-monthly', authenticate, (req, res) => {
+  try {
+    const month = String(req.query.month || getTaipeiTodayString().slice(0, 7))
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+      return res.status(400).json({ error: true, message: 'month 須為 YYYY-MM' })
+    }
+    const split = (v) => (v ? String(v).split(',').map((s) => s.trim()).filter(Boolean) : null)
+    const shift = req.query.shift && req.query.shift !== 'all' ? String(req.query.shift) : null
+    return res.json(
+      getMonthlyInjectionMatrix(getDatabase(), month, { shift, codes: split(req.query.codes), kinds: split(req.query.kinds) }),
+    )
+  } catch (error) {
+    console.error('查詢當月針劑總覽錯誤:', error)
+    res.status(500).json({ error: true, message: '查詢當月針劑總覽失敗' })
+  }
+})
+
+/** GET /api/medications/injection-history/:patientId — 個人藥物歷史（所有處方區間 + 歷次上傳異動） */
+router.get('/injection-history/:patientId', authenticate, (req, res) => {
+  try {
+    return res.json(getPatientMedicationHistory(getDatabase(), req.params.patientId))
+  } catch (error) {
+    console.error('查詢個人藥物歷史錯誤:', error)
+    res.status(500).json({ error: true, message: '查詢個人藥物歷史失敗' })
+  }
+})
+
+/** GET /api/medications/injection-upload-batches?limit=50 — 歷次藥囑上傳批次與摘要 */
+router.get('/injection-upload-batches', authenticate, (req, res) => {
+  try {
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200)
+    return res.json(listUploadBatches(getDatabase(), limit))
+  } catch (error) {
+    console.error('查詢上傳批次錯誤:', error)
+    res.status(500).json({ error: true, message: '查詢上傳批次失敗' })
+  }
+})
+
+/** GET /api/medications/injection-upload-batches/:id/changes?patientId=&orderType=injection|oral — 該批次逐筆異動 */
+router.get('/injection-upload-batches/:id/changes', authenticate, (req, res) => {
+  try {
+    const rows = listBatchChanges(getDatabase(), req.params.id, {
+      patientId: req.query.patientId ? String(req.query.patientId) : null,
+      orderType: req.query.orderType ? String(req.query.orderType) : null,
+    })
+    if (rows === null) return res.status(404).json({ error: true, message: '找不到該批次' })
+    return res.json(rows)
+  } catch (error) {
+    console.error('查詢批次異動錯誤:', error)
+    res.status(500).json({ error: true, message: '查詢批次異動失敗' })
+  }
+})
 
 /**
  * POST /api/medications/daily-injections

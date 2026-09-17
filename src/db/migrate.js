@@ -1313,6 +1313,74 @@ export function runMigrations() {
       migrationsApplied++
     }
 
+    // ========================================
+    // 針劑解讀層（2026-09-18）：
+    //  injection_order_rules   — 每筆處方的正規化施打規則快照（由 injection_orders + 覆寫 重建）
+    //  injection_rules_meta    — 重建戳記（orders/overrides 變動或解析器版本更新即重建）
+    //  injection_upload_batches / injection_upload_changes — 每次藥囑上傳的摘要與逐筆異動（個人累積紀錄來源）
+    // ========================================
+    const rulesTableExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='injection_order_rules'")
+      .get()
+    if (!rulesTableExists) {
+      console.log('📋 建立針劑解讀層表格（injection_order_rules / upload_batches / upload_changes）...')
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS injection_order_rules (
+          order_id TEXT PRIMARY KEY,
+          order_key TEXT NOT NULL,
+          patient_id TEXT NOT NULL,
+          order_code TEXT NOT NULL,
+          start_date TEXT NOT NULL DEFAULT '',
+          end_date TEXT NOT NULL DEFAULT '',
+          dose TEXT NOT NULL DEFAULT '',
+          frequency TEXT NOT NULL DEFAULT '',
+          note TEXT NOT NULL DEFAULT '',
+          rule_kind TEXT NOT NULL,
+          rule_source TEXT,
+          rule_text TEXT NOT NULL DEFAULT '',
+          rule_json TEXT NOT NULL,
+          reason TEXT NOT NULL DEFAULT '',
+          override_id TEXT,
+          parser_version TEXT NOT NULL,
+          updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_injection_order_rules_patient ON injection_order_rules(patient_id);
+        CREATE INDEX IF NOT EXISTS idx_injection_order_rules_kind ON injection_order_rules(rule_kind);
+        CREATE TABLE IF NOT EXISTS injection_rules_meta (
+          key TEXT PRIMARY KEY,
+          value TEXT
+        );
+        CREATE TABLE IF NOT EXISTS injection_upload_batches (
+          id TEXT PRIMARY KEY,
+          source_file TEXT,
+          uploaded_by_id TEXT,
+          uploaded_by_name TEXT,
+          uploaded_at TEXT DEFAULT (datetime('now', 'localtime')),
+          row_count INTEGER DEFAULT 0,
+          summary_json TEXT NOT NULL DEFAULT '{}'
+        );
+        CREATE TABLE IF NOT EXISTS injection_upload_changes (
+          id TEXT PRIMARY KEY,
+          batch_id TEXT NOT NULL,
+          patient_id TEXT NOT NULL,
+          patient_name TEXT,
+          medical_record_number TEXT,
+          order_code TEXT NOT NULL,
+          order_name TEXT,
+          order_type TEXT,
+          start_date TEXT NOT NULL DEFAULT '',
+          change_type TEXT NOT NULL,
+          changes_json TEXT NOT NULL DEFAULT '[]',
+          before_json TEXT,
+          after_json TEXT,
+          created_at TEXT DEFAULT (datetime('now', 'localtime'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_injection_upload_changes_batch ON injection_upload_changes(batch_id);
+        CREATE INDEX IF NOT EXISTS idx_injection_upload_changes_patient ON injection_upload_changes(patient_id);
+      `)
+      migrationsApplied++
+    }
+
     if (migrationsApplied > 0) {
       console.log(`✅ 已完成 ${migrationsApplied} 項遷移`)
     } else {
