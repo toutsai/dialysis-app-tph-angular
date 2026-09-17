@@ -50,6 +50,9 @@ export interface ReviewInjection {
   warnings: ReviewWarning[];
   dialysisDays: number[] | null;
   masterFreq: string;
+  /** 總表班別 early|noon|late，無總表為 '' */
+  shift: string;
+  bedNum: number | null;
 }
 
 export interface ReviewCounts {
@@ -154,6 +157,11 @@ export class InjectionUncertainListDialogComponent implements OnChanges {
 
   get scopeLabel(): string {
     return this.hasScope && !this.showAll() ? '本班病人' : '全部病人';
+  }
+
+  shiftLabel(shift: string | undefined): string {
+    const map: Record<string, string> = { early: '早', noon: '午', late: '晚' };
+    return (shift && map[shift]) || '—';
   }
 
   get titleDate(): string {

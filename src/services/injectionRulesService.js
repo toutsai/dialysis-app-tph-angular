@@ -41,6 +41,20 @@ function dowOf(dateStr) {
   return new Date(`${dateStr}T00:00:00Z`).getUTCDay() || 7
 }
 
+/** 床號排序值：主床 1..N 在前，外圍床（peripheral-X / 外X）排在 1000+X，無床號 9999 */
+export function bedSortValue(bedNum) {
+  if (bedNum === null || bedNum === undefined || bedNum === '') return 9999
+  const s = String(bedNum).trim()
+  if (/^\d+$/.test(s)) return parseInt(s, 10)
+  const m = s.match(/^(?:peripheral-?|外)(\d+)$/i)
+  if (m) return 1000 + parseInt(m[1], 10)
+  return 9998
+}
+
+export function isPeripheralBed(bedNum) {
+  return /^(?:peripheral-?|外)\d+$/i.test(String(bedNum ?? '').trim())
+}
+
 // ---------------------------------------------------------------------------
 // 交叉檢查
 // ---------------------------------------------------------------------------
@@ -136,6 +150,8 @@ export function getInjectionReview(db, targetDate, patientIds = null) {
   for (const row of rows) {
     if (deleted.has(row.patient_id)) continue
     const mr = master[row.patient_id]
+    // 外圍床位病人不列入待審清單（使用者 2026-09-18 指定）
+    if (isPeripheralBed(mr?.bedNum)) continue
     row.masterFreq = mr?.freq || ''
     const dialysisDays = dialysisDaysOf(mr)
     const warnings = computeWarnings(row, row.rule, dialysisDays, today)
@@ -149,11 +165,22 @@ export function getInjectionReview(db, targetDate, patientIds = null) {
       warnings,
       dialysisDays,
       masterFreq: row.masterFreq,
+      shift: mr && mr.shiftIndex !== undefined ? SHIFTS[mr.shiftIndex] || '' : '',
+      bedNum: mr?.bedNum ?? null,
     })
   }
+  // 排序：頻率（一三五 → 二四六 → 其他 → 無總表）→ 班別（早午晚）→ 床號 → 姓名/藥碼（使用者 2026-09-18 指定）
+  const freqRank = (f) => (f === '一三五' ? 0 : f === '二四六' ? 1 : f ? 2 : 3)
+  const shiftRank = { early: 0, noon: 1, late: 2, '': 3 }
   items.sort((a, b) => {
-    const c = CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category)
-    return c !== 0 ? c : sortByPatientThenCode(a, b)
+    const f = freqRank(a.masterFreq) - freqRank(b.masterFreq)
+    if (f !== 0) return f
+    if (a.masterFreq !== b.masterFreq) return String(a.masterFreq).localeCompare(String(b.masterFreq), 'zh-Hant')
+    const s = (shiftRank[a.shift] ?? 3) - (shiftRank[b.shift] ?? 3)
+    if (s !== 0) return s
+    const bed = bedSortValue(a.bedNum) - bedSortValue(b.bedNum)
+    if (bed !== 0) return bed
+    return sortByPatientThenCode(a, b)
   })
   const counts = {}
   for (const c of CATEGORY_ORDER) counts[c] = items.filter((i) => i.category === c).length
@@ -268,9 +295,8 @@ export function getMonthlyInjectionMatrix(db, month, options = {}) {
   result.sort((a, b) => {
     const s = shiftOrder[a.shift] - shiftOrder[b.shift]
     if (s !== 0) return s
-    const ba = a.bedNum === null ? 9999 : Number(a.bedNum)
-    const bb = b.bedNum === null ? 9999 : Number(b.bedNum)
-    if (ba !== bb) return ba - bb
+    const bed = bedSortValue(a.bedNum) - bedSortValue(b.bedNum)
+    if (bed !== 0) return bed
     return String(a.patientName).localeCompare(String(b.patientName), 'zh-Hant')
   })
   const meds = Object.entries(INJECTION_MEDS).map(([code, m]) => ({ code, name: m.tradeName, unit: m.unit }))

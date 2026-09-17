@@ -63,6 +63,9 @@
           <table class="unc-table">
             <thead>
               <tr>
+                <th>洗腎日</th>
+                <th>班別</th>
+                <th>床號</th>
                 <th>姓名</th>
                 <th>病歷號</th>
                 <th>藥品</th>
@@ -70,7 +73,6 @@
                 <th>頻率服法</th>
                 <th>備註</th>
                 <th>開始日</th>
-                <th>洗腎日</th>
                 <th>類別 / 說明</th>
                 @if (canConfirm) {
                   <th class="unc-col-rule">確認規則</th>
@@ -80,14 +82,16 @@
             <tbody>
               @for (row of filteredRows(); track row.overrideKey) {
                 <tr>
-                  <td>{{ row.patientName }}</td>
+                  <td class="unc-nowrap">{{ row.masterFreq || '—' }}</td>
+                  <td class="unc-nowrap">{{ shiftLabel(row.shift) }}</td>
+                  <td class="unc-mono">{{ row.bedNum ?? '—' }}</td>
+                  <td class="unc-nowrap">{{ row.patientName }}</td>
                   <td class="unc-mono">{{ row.medicalRecordNumber }}</td>
                   <td>{{ row.orderName }}</td>
                   <td>{{ row.dose }} {{ row.unit }}</td>
                   <td class="unc-mono">{{ row.frequency || '—' }}</td>
                   <td>{{ row.note || '（空白）' }}</td>
                   <td class="unc-mono">{{ row.startDate }}</td>
-                  <td class="unc-mono">{{ row.masterFreq || '—' }}</td>
                   <td class="unc-category">
                     <span class="unc-pill" [class]="'unc-cat-' + row.category">{{ row.categoryLabel }}</span>
                     @if (row.detail) {

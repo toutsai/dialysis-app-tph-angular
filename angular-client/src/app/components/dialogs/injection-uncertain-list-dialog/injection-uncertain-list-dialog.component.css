@@ -133,9 +133,8 @@
   font-family: Consolas, 'Courier New', monospace;
 }
 
-/* 姓名 / 洗腎日 欄不直排 */
-.unc-table td:first-child,
-.unc-table td:nth-child(8) {
+/* 洗腎日 / 班別 / 姓名 欄不直排 */
+.unc-nowrap {
   white-space: nowrap;
 }
 
