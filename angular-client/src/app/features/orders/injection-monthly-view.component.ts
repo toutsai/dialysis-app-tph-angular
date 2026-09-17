@@ -36,6 +36,8 @@ export class InjectionMonthlyViewComponent implements OnInit {
 
   readonly month = signal(formatDateToYYYYMM(new Date()));
   readonly shift = signal<'all' | 'early' | 'noon' | 'late'>('all');
+  /** 洗腎頻率篩選（前端過濾，與藥囑查詢的群組搜尋同一組選項）：一三五 / 二四六 / 其他 */
+  readonly freq = signal<'all' | '一三五' | '二四六' | 'other'>('all');
   /** 已知藥品（來自回應；套藥品篩選後回應可能只剩部分，故採聯集保留 chips） */
   readonly meds = signal<InjectionMonthlyMed[]>([]);
   /** 停用的藥碼（預設全選 → 空集合） */
@@ -55,7 +57,13 @@ export class InjectionMonthlyViewComponent implements OnInit {
   readonly today = getToday();
 
   readonly days = computed<InjectionMonthlyDay[]>(() => this.data()?.days ?? []);
-  readonly rows = computed<InjectionMonthlyRow[]>(() => this.data()?.rows ?? []);
+  readonly rows = computed<InjectionMonthlyRow[]>(() => {
+    const all = this.data()?.rows ?? [];
+    const f = this.freq();
+    if (f === 'all') return all;
+    if (f === 'other') return all.filter((r) => r.freq !== '一三五' && r.freq !== '二四六');
+    return all.filter((r) => r.freq === f);
+  });
   readonly activeMeds = computed(() => this.meds().filter((m) => !this.disabledCodes().has(m.code)));
 
   ngOnInit(): void {
@@ -72,6 +80,15 @@ export class InjectionMonthlyViewComponent implements OnInit {
   onShiftChange(value: string): void {
     this.shift.set((value as 'all' | 'early' | 'noon' | 'late') || 'all');
     void this.load();
+  }
+
+  onFreqChange(value: string): void {
+    this.freq.set((value as 'all' | '一三五' | '二四六' | 'other') || 'all');
+  }
+
+  freqLabel(): string {
+    const f = this.freq();
+    return f === 'all' ? '全部頻率' : f === 'other' ? '其他頻率' : f;
   }
 
   isMedActive(code: string): boolean {
@@ -224,7 +241,8 @@ export class InjectionMonthlyViewComponent implements OnInit {
   // ---------- 列印：另開視窗輸出純表格（避免動到全域樣式） ----------
   print(): void {
     const data = this.data();
-    if (!data || !data.rows.length) {
+    const printRows = this.rows();
+    if (!data || !printRows.length) {
       alert('沒有可列印的資料。');
       return;
     }
@@ -241,7 +259,7 @@ export class InjectionMonthlyViewComponent implements OnInit {
           `<th class="day${this.isWeekend(d) ? ' weekend' : ''}">${d.day}<br><small>${esc(this.dowLabel(d.dow))}</small></th>`,
       )
       .join('');
-    const bodyRows = data.rows
+    const bodyRows = printRows
       .map((row) => {
         const summary = row.orders
           .map((o) => `<div>${this.orderNeedsAttention(o) ? '⚠ ' : ''}${esc(this.orderLine(o))}</div>`)
@@ -276,7 +294,7 @@ export class InjectionMonthlyViewComponent implements OnInit {
   tr { page-break-inside: avoid; }
 </style></head><body>
 <h2>當月針劑總覽 ${esc(data.month)}</h2>
-<div class="meta">${esc(shiftText)}　藥品：${esc(this.activeMeds().map((m) => m.name).join('、') || '-')}　共 ${data.rows.length} 人　列印時間 ${esc(new Date().toLocaleString('sv-SE').slice(0, 16))}</div>
+<div class="meta">${esc(shiftText)}　${esc(this.freqLabel())}　藥品：${esc(this.activeMeds().map((m) => m.name).join('、') || '-')}　共 ${printRows.length} 人　列印時間 ${esc(new Date().toLocaleString('sv-SE').slice(0, 16))}</div>
 <table><thead><tr><th>班別</th><th>床號</th><th>姓名</th><th>洗腎日</th><th>處方摘要</th>${headDays}</tr></thead><tbody>${bodyRows}</tbody></table>
 <script>window.onload = function(){ window.print(); };</script>
 </body></html>`;
