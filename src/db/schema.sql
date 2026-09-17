@@ -628,6 +628,25 @@ CREATE INDEX IF NOT EXISTS idx_injection_orders_patient ON injection_orders(pati
 CREATE INDEX IF NOT EXISTS idx_injection_orders_month ON injection_orders(upload_month);
 CREATE INDEX IF NOT EXISTS idx_injection_orders_type ON injection_orders(order_type);
 
+-- 針劑施打規則覆寫（疑慮清單確認）：備註與頻率欄都判不出星期幾的處方，
+-- 由使用者確認規則後存此表；以處方自然鍵對應，藥囑整表重傳後仍能對回同一筆。
+CREATE TABLE IF NOT EXISTS injection_rule_overrides (
+    id TEXT PRIMARY KEY,
+    patient_id TEXT NOT NULL,
+    order_code TEXT NOT NULL,
+    start_date TEXT NOT NULL,
+    dose TEXT NOT NULL DEFAULT '',
+    frequency TEXT NOT NULL DEFAULT '',
+    rule TEXT NOT NULL,
+    confirmed_by_id TEXT,
+    confirmed_by_name TEXT,
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+    UNIQUE(patient_id, order_code, start_date, dose, frequency)
+);
+
+CREATE INDEX IF NOT EXISTS idx_injection_rule_overrides_patient ON injection_rule_overrides(patient_id);
+
 -- 透析醫囑（HIS「備藥前置作業」Excel 匯入）。全數保留歷次醫囑；
 -- 同病人 + 同醫囑日期(effective_date) 視為同一筆（UNIQUE，重傳更新不重複累積）
 CREATE TABLE IF NOT EXISTS dialysis_order_uploads (

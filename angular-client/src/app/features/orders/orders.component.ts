@@ -26,6 +26,7 @@ import {
   type ConsumableItemMappingRequest,
   type ConsumableItemMappings,
 } from '@app/components/dialogs/consumable-item-mapping-dialog/consumable-item-mapping-dialog.component';
+import { InjectionUncertainListDialogComponent } from '@app/components/dialogs/injection-uncertain-list-dialog/injection-uncertain-list-dialog.component';
 
 interface MedicationMaster {
   code: string;
@@ -97,7 +98,7 @@ interface DialysisOrderRow {
 @Component({
   selector: 'app-orders',
   standalone: true,
-  imports: [CommonModule, FormsModule, ConsumableItemMappingDialogComponent],
+  imports: [CommonModule, FormsModule, ConsumableItemMappingDialogComponent, InjectionUncertainListDialogComponent],
   templateUrl: './orders.component.html',
   styleUrl: './orders.component.css',
 })
@@ -117,6 +118,8 @@ export class OrdersComponent implements OnInit {
   // --- Component State ---
   readonly activeTab = signal<'query' | 'dialysis' | 'upload'>('query');
   readonly isLoading = signal(false);
+  /** 針劑疑慮清單（全院）：頻率/備註判不出星期幾、系統未列入應打清單的處方 */
+  readonly isUncertainDialogVisible = signal(false);
   readonly searchPerformed = signal(false);
   readonly searchType = signal<'group' | 'individual'>('group');
 
@@ -270,6 +273,11 @@ export class OrdersComponent implements OnInit {
       this.apiManagerService.create<FirestoreRecord>('base_schedules');
     this.ordersApi =
       this.apiManagerService.create<OrderRecord>('medication_orders');
+  }
+
+  /** 疑慮清單有確認規則 → 各頁「應打針劑」快取失效，下次開啟重算 */
+  onUncertainRulesChanged(): void {
+    this.medicationStore.clearCache();
   }
 
   ngOnInit(): void {

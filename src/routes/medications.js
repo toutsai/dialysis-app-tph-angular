@@ -3,15 +3,23 @@ import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../db/init.js'
 import { authenticate, isEditor, logAudit } from '../middleware/auth.js'
-import { getDailyInjections } from '../services/dailyInjectionService.js'
+import {
+  getDailyInjections,
+  getUncertainInjections,
+  listInjectionRuleOverrides,
+  upsertInjectionRuleOverride,
+  deleteInjectionRuleOverride,
+} from '../services/dailyInjectionService.js'
 import { getTaipeiTodayString } from '../utils/dateUtils.js'
 
 const router = Router()
 
 /**
  * POST /api/medications/daily-injections
- * 計算每日應打針劑（實際邏輯在 dailyInjectionService.getDailyInjections / shouldAdministerOnDate）
- * 支援：QW規則 (QW135, QW 135, QW3.6, QW3,6, QW3、6, QW 1 & 5) 和日期規則 (MM/DD, MMDD, YYYY-MM-DD)
+ * 計算每日應打針劑（實際邏輯在 dailyInjectionService.getDailyInjections / resolveInjectionSchedule）
+ * 支援：QW規則 (QW135, QW 135, QW3.6, QW3,6, QW3、6, QW 1 & 5)、Q{N}W 間隔週、中文「每周三」、
+ * 日期規則 (MM/DD, MMDD, 民國年, YYYY-MM-DD)；備註無規則時改讀「頻率服法」欄；
+ * 兩邊都判不出星期幾 → 不列，改進疑慮清單（/daily-injections/uncertain）。
  */
 router.post('/daily-injections', authenticate, async (req, res) => {
   try {
@@ -28,6 +36,72 @@ router.post('/daily-injections', authenticate, async (req, res) => {
   } catch (error) {
     console.error('計算每日應打針劑錯誤:', error)
     res.status(500).json({ error: true, message: '計算每日應打針劑失敗' })
+  }
+})
+
+/**
+ * POST /api/medications/daily-injections/uncertain
+ * 疑慮清單：targetDate（預設今天）仍有效、但備註與頻率欄都判不出星期幾的針劑處方。
+ * body.patientIds 省略 → 全部未刪除病人。
+ */
+router.post('/daily-injections/uncertain', authenticate, (req, res) => {
+  try {
+    const targetDate = req.body?.targetDate || getTaipeiTodayString()
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
+      return res.status(400).json({ error: true, message: '請提供有效的目標日期 (YYYY-MM-DD)' })
+    }
+    const patientIds = Array.isArray(req.body?.patientIds) ? req.body.patientIds : null
+    const db = getDatabase()
+    return res.json(getUncertainInjections(db, targetDate, patientIds))
+  } catch (error) {
+    console.error('查詢針劑疑慮清單錯誤:', error)
+    res.status(500).json({ error: true, message: '查詢針劑疑慮清單失敗' })
+  }
+})
+
+/** GET /api/medications/injection-rule-overrides — 已確認的施打規則覆寫 */
+router.get('/injection-rule-overrides', authenticate, (req, res) => {
+  try {
+    return res.json(listInjectionRuleOverrides(getDatabase()))
+  } catch (error) {
+    console.error('查詢施打規則覆寫錯誤:', error)
+    res.status(500).json({ error: true, message: '查詢施打規則覆寫失敗' })
+  }
+})
+
+/**
+ * PUT /api/medications/injection-rule-overrides — 疑慮清單確認（新增或更新）
+ * body: { patientId, orderCode, startDate, dose, frequency, rule }
+ * rule 須可判讀（W4 / QW135 / Q2W4 / 0923.0930 / hold），否則 400。
+ */
+router.put('/injection-rule-overrides', isEditor, async (req, res) => {
+  try {
+    const db = getDatabase()
+    const saved = upsertInjectionRuleOverride(db, req.body || {}, req.user)
+    await logAudit('INJECTION_RULE_OVERRIDE', req.user.id, req.user.name, 'injection_rule_overrides', saved.id, {
+      patientId: saved.patientId,
+      orderCode: saved.orderCode,
+      startDate: saved.startDate,
+      rule: saved.rule,
+    })
+    return res.json(saved)
+  } catch (error) {
+    console.error('儲存施打規則覆寫錯誤:', error)
+    res.status(400).json({ error: true, message: error.message || '儲存施打規則覆寫失敗' })
+  }
+})
+
+/** DELETE /api/medications/injection-rule-overrides/:id */
+router.delete('/injection-rule-overrides/:id', isEditor, async (req, res) => {
+  try {
+    const db = getDatabase()
+    const changes = deleteInjectionRuleOverride(db, req.params.id)
+    if (!changes) return res.status(404).json({ error: true, message: '找不到該筆覆寫' })
+    await logAudit('INJECTION_RULE_OVERRIDE_DELETE', req.user.id, req.user.name, 'injection_rule_overrides', req.params.id, {})
+    return res.json({ success: true })
+  } catch (error) {
+    console.error('刪除施打規則覆寫錯誤:', error)
+    res.status(500).json({ error: true, message: '刪除施打規則覆寫失敗' })
   }
 })
 

@@ -82,6 +82,57 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+.btn-uncertain {
+  padding: 0.45rem 0.8rem;
+  background: none;
+  border: 1px solid #dee2e6;
+  border-radius: 5px;
+  color: #6c757d;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.95rem;
+}
+.btn-uncertain.has-items {
+  border-color: #e67e22;
+  color: #d35400;
+  background: #fff8e1;
+}
+.btn-uncertain:hover {
+  background-color: #e9ecef;
+}
+.btn-uncertain.has-items:hover {
+  background-color: #ffe9c6;
+}
+.uncertain-badge {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 0 0.4em;
+  border-radius: 999px;
+  background: #adb5bd;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.5;
+}
+.btn-uncertain.has-items .uncertain-badge {
+  background: #e67e22;
+}
+.uncertain-note {
+  margin: 0 1.5rem 1rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 6px;
+  background: #fff8e1;
+  border: 1px solid #ffe0b2;
+  color: #6d4c41;
+  font-size: 0.9rem;
+}
+.uncertain-note i {
+  color: #e67e22;
+  margin-right: 0.3rem;
+}
 
 /* 元件特定樣式 */
 .injection-table {

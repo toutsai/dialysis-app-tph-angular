@@ -898,6 +898,7 @@
     [injections]="filteredDailyInjections()"
     [isLoading]="isInjectionLoading()"
     [targetDate]="injectionDialogDate()"
+    [patientIds]="injectionDialogPatientIds()"
     [filterActive]="filterSpecificInjections()"
     [showFilter]="true"
     (closeEvent)="isInjectionDialogVisible.set(false)"

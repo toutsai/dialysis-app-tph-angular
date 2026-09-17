@@ -265,6 +265,8 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
   readonly injectionDialogDate = signal('');
   readonly filterSpecificInjections = signal(false);
   readonly lastInjectionShiftCode = signal('');
+  /** 應打針劑彈窗涵蓋的病人（本班），供疑慮清單縮小範圍 */
+  readonly injectionDialogPatientIds = signal<string[]>([]);
   readonly filteredDailyInjections = computed(() => {
     if (!this.filterSpecificInjections()) return this.allDailyInjections();
     const specificMedCodes = ['ICAC', 'IFER2', 'IPAR1'];
@@ -486,6 +488,7 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
 
     this.lastInjectionShiftCode.set(shiftCode);
     this.injectionDialogDate.set(this.selectedDate());
+    this.injectionDialogPatientIds.set([...patientIds]);
     this.isInjectionDialogVisible.set(true);
     this.isInjectionLoading.set(true);
     this.allDailyInjections.set([]);

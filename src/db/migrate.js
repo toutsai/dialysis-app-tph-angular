@@ -1283,6 +1283,36 @@ export function runMigrations() {
       if (!ckdAlertDoneExists) migrationsApplied++
     }
 
+    // ========================================
+    // 針劑施打規則覆寫（疑慮清單確認，2026-09-17）：
+    // 備註與頻率欄都判不出星期幾的處方，由使用者確認規則後存此表；
+    // 以處方自然鍵對應，藥囑整表重傳後仍能對回同一筆。
+    // ========================================
+    const injectionOverrideExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='injection_rule_overrides'")
+      .get()
+    if (!injectionOverrideExists) {
+      console.log('📋 建立 injection_rule_overrides 表格（針劑施打規則覆寫）...')
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS injection_rule_overrides (
+          id TEXT PRIMARY KEY,
+          patient_id TEXT NOT NULL,
+          order_code TEXT NOT NULL,
+          start_date TEXT NOT NULL,
+          dose TEXT NOT NULL DEFAULT '',
+          frequency TEXT NOT NULL DEFAULT '',
+          rule TEXT NOT NULL,
+          confirmed_by_id TEXT,
+          confirmed_by_name TEXT,
+          created_at TEXT DEFAULT (datetime('now', 'localtime')),
+          updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+          UNIQUE(patient_id, order_code, start_date, dose, frequency)
+        );
+        CREATE INDEX IF NOT EXISTS idx_injection_rule_overrides_patient ON injection_rule_overrides(patient_id);
+      `)
+      migrationsApplied++
+    }
+
     if (migrationsApplied > 0) {
       console.log(`✅ 已完成 ${migrationsApplied} 項遷移`)
     } else {

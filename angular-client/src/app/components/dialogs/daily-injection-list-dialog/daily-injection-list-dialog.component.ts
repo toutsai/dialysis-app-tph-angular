@@ -1,24 +1,65 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { firstValueFrom } from 'rxjs';
+import { ApiService } from '@app/core/services/api.service';
+import { InjectionUncertainListDialogComponent } from '../injection-uncertain-list-dialog/injection-uncertain-list-dialog.component';
 
 @Component({
   selector: 'app-daily-injection-list-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, InjectionUncertainListDialogComponent],
   templateUrl: './daily-injection-list-dialog.component.html',
   styleUrl: './daily-injection-list-dialog.component.css'
 })
-export class DailyInjectionListDialogComponent {
+export class DailyInjectionListDialogComponent implements OnChanges {
+  private readonly api = inject(ApiService);
+
   @Input() isVisible = false;
   @Input() injections: any[] = [];
   @Input() isLoading = false;
   @Input() targetDate = '';
   @Input() filterActive = false;
   @Input() showFilter = false;
+  /** 本清單涵蓋的病人（本班/本組）；疑慮清單預設以此範圍查詢，可切「全部病人」 */
+  @Input() patientIds: string[] | null = null;
   @Output() closeEvent = new EventEmitter<void>();
   @Output() filterActiveChange = new EventEmitter<boolean>();
   @Output() refreshEvent = new EventEmitter<void>();
+
+  /** 疑慮筆數（頻率/備註判不出星期幾、系統未列入者）；null = 尚未查詢。用 signal 保證 HTTP 回來後重繪 */
+  readonly uncertainCount = signal<number | null>(null);
+  readonly isUncertainVisible = signal(false);
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (!this.isVisible) return;
+    if (changes['isVisible'] || changes['targetDate'] || changes['patientIds']) {
+      void this.loadUncertainCount();
+    }
+  }
+
+  async loadUncertainCount(): Promise<void> {
+    try {
+      const body: { targetDate?: string; patientIds?: string[] } = {};
+      if (this.targetDate) body.targetDate = this.targetDate;
+      if (this.patientIds && this.patientIds.length > 0) body.patientIds = this.patientIds;
+      const list = await firstValueFrom(this.api.post<unknown[]>('/medications/daily-injections/uncertain', body));
+      this.uncertainCount.set(Array.isArray(list) ? list.length : 0);
+    } catch (e) {
+      console.error('[DailyInjectionListDialog] 查詢疑慮筆數失敗:', e);
+      this.uncertainCount.set(null);
+    }
+  }
+
+  openUncertain(): void {
+    this.isUncertainVisible.set(true);
+  }
+
+  onUncertainChanged(): void {
+    // 使用者確認了規則 → 應打清單要重算（父層清快取重抓）
+    void this.loadUncertainCount();
+    this.refreshEvent.emit();
+  }
 
   get titleDate(): string {
     if (!this.targetDate) return '';

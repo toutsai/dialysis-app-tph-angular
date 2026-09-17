@@ -676,6 +676,7 @@
     [isLoading]="isInjectionLoading"
     [injections]="dailyInjections"
     [targetDate]="formatDate(currentDate)"
+    [patientIds]="injectionDialogPatientIds"
     [showFilter]="false"
     (closeEvent)="isInjectionDialogVisible = false"
     (refreshEvent)="refreshInjections()"
