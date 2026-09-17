@@ -214,6 +214,8 @@ export class StatsComponent implements OnInit, OnDestroy {
   dailyConsultPhysicians: any = { morning: null, afternoon: null, night: null };
 
   isInjectionDialogVisible = false;
+  /** 應打針劑彈窗涵蓋的病人（本組/本班），供疑慮清單縮小範圍 */
+  injectionDialogPatientIds: string[] = [];
   dailyInjections: any[] = [];
   isInjectionLoading = false;
   lastInjectionTeamData: any = null;
@@ -1508,6 +1510,7 @@ export class StatsComponent implements OnInit, OnDestroy {
     }
     const patientIdArray = Array.from(patientIdsToFetch);
 
+    this.injectionDialogPatientIds = patientIdArray;
     this.isInjectionDialogVisible = true;
     this.isInjectionLoading = true;
     this.dailyInjections = [];

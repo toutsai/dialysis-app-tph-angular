@@ -1,0 +1,94 @@
+@if (isVisible) {
+  <div class="unc-overlay">
+    <div class="unc-modal">
+      <div class="unc-header">
+        <h3>
+          <i class="fas fa-exclamation-triangle"></i>
+          針劑疑慮清單
+          @if (titleDate) {
+            <span class="unc-sub">- {{ titleDate }} ({{ rows().length }} 筆・{{ scopeLabel }})</span>
+          }
+        </h3>
+        <div class="unc-actions">
+          @if (hasScope) {
+            <label class="unc-toggle">
+              <input type="checkbox" [checked]="showAll()" (change)="toggleShowAll($any($event.target).checked)" />
+              顯示全部病人
+            </label>
+          }
+          <button class="unc-refresh" (click)="load()" [disabled]="loading()" title="重新載入">
+            <i class="fas fa-sync-alt" [class.fa-spin]="loading()"></i>
+          </button>
+          <button class="unc-close" (click)="closeDialog()" title="關閉">×</button>
+        </div>
+      </div>
+
+      <div class="unc-hint">
+        以下處方 HIS 的「頻率服法」與「備註」都看不出星期幾，系統不自行判定，也不會列入應打清單。
+        請在 HIS 備註補上規則後重新上傳，或在此輸入規則確認（例：<code>W4</code>、<code>QW135</code>、<code>Q2W4</code>、<code>0923.0930</code>、<code>hold</code>）。
+        在此確認的規則會持續套用到同一筆處方，直到 HIS 該筆處方停止或備註補上為止。
+      </div>
+
+      <div class="unc-body">
+        @if (loading()) {
+          <div class="unc-empty">載入中…</div>
+        } @else if (errorMsg()) {
+          <div class="unc-empty unc-error">{{ errorMsg() }}</div>
+        } @else if (rows().length === 0) {
+          <div class="unc-empty"><i class="fas fa-check-circle"></i> 目前沒有疑慮項目</div>
+        } @else {
+          <table class="unc-table">
+            <thead>
+              <tr>
+                <th>姓名</th>
+                <th>病歷號</th>
+                <th>藥品</th>
+                <th>劑量</th>
+                <th>頻率服法</th>
+                <th>備註</th>
+                <th>開始日</th>
+                <th>原因</th>
+                @if (canConfirm) {
+                  <th class="unc-col-rule">確認規則</th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of rows(); track row.overrideKey) {
+                <tr>
+                  <td>{{ row.patientName }}</td>
+                  <td class="unc-mono">{{ row.medicalRecordNumber }}</td>
+                  <td>{{ row.orderName }}</td>
+                  <td>{{ row.dose }} {{ row.unit }}</td>
+                  <td class="unc-mono">{{ row.frequency || '—' }}</td>
+                  <td>{{ row.note || '（空白）' }}</td>
+                  <td class="unc-mono">{{ row.startDate }}</td>
+                  <td class="unc-reason">{{ row.reason }}</td>
+                  @if (canConfirm) {
+                    <td class="unc-col-rule">
+                      <div class="unc-rule-row">
+                        <input
+                          type="text"
+                          [(ngModel)]="row.ruleInput"
+                          placeholder="例：W4"
+                          [disabled]="row.saving"
+                          (keyup.enter)="confirmRow(row)"
+                        />
+                        <button class="unc-confirm" (click)="confirmRow(row)" [disabled]="row.saving || !row.ruleInput.trim()">
+                          {{ row.saving ? '儲存中' : '確認' }}
+                        </button>
+                      </div>
+                      @if (row.error) {
+                        <div class="unc-row-error">{{ row.error }}</div>
+                      }
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+    </div>
+  </div>
+}

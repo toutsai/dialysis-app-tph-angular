@@ -74,6 +74,14 @@
         >
           <i class="fas fa-file-excel"></i> 匯出 Excel
         </button>
+
+        <button
+          (click)="isUncertainDialogVisible.set(true)"
+          class="uncertain-btn"
+          title="頻率/備註判不出星期幾、系統未列入應打清單的針劑處方（全院）"
+        >
+          <i class="fas fa-exclamation-triangle"></i> 針劑疑慮清單
+        </button>
       </div>
 
       <!-- 2. 查詢結果顯示區 -->
@@ -375,4 +383,12 @@
     (confirm)="onDialysisItemMappingConfirm($event)"
     (cancel)="onDialysisItemMappingCancel()"
   ></app-consumable-item-mapping-dialog>
+
+  <!-- 針劑疑慮清單（全院）：確認規則後清當日針劑快取，各頁應打清單重算 -->
+  <app-injection-uncertain-list-dialog
+    [isVisible]="isUncertainDialogVisible()"
+    [patientIds]="null"
+    (closeEvent)="isUncertainDialogVisible.set(false)"
+    (changed)="onUncertainRulesChanged()"
+  ></app-injection-uncertain-list-dialog>
 </div>

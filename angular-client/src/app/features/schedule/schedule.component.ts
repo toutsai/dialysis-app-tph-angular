@@ -373,6 +373,8 @@ export class ScheduleComponent implements OnInit, OnDestroy {
   readonly injectionDialogDate = signal('');
   readonly filterSpecificInjections = signal(false);
   readonly lastInjectionShiftCode = signal('');
+  /** 應打針劑彈窗涵蓋的病人（本班），供疑慮清單縮小範圍 */
+  readonly injectionDialogPatientIds = signal<string[]>([]);
   readonly sortedSlotsForModal = signal<Record<string, unknown>[]>([]);
   readonly currentPatientIndexForModal = signal(0);
   readonly editingPatientForOrder = signal<any>(null);
@@ -1768,6 +1770,7 @@ export class ScheduleComponent implements OnInit, OnDestroy {
 
     this.lastInjectionShiftCode.set(shiftCode);
     this.injectionDialogDate.set(this.formatDate(this.currentDate()));
+    this.injectionDialogPatientIds.set([...patientIds]);
     this.isInjectionDialogVisible.set(true);
     this.isInjectionLoading.set(true);
     this.allDailyInjections.set([]);
