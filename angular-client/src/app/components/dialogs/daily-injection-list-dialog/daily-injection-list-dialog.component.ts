@@ -21,13 +21,16 @@ export class DailyInjectionListDialogComponent implements OnChanges {
   @Input() targetDate = '';
   @Input() filterActive = false;
   @Input() showFilter = false;
-  /** 本清單涵蓋的病人（本班/本組）；疑慮清單預設以此範圍查詢，可切「全部病人」 */
+  /** 本清單涵蓋的病人（本班/本組）；待審清單預設以此範圍查詢，可切「全部病人」 */
   @Input() patientIds: string[] | null = null;
   @Output() closeEvent = new EventEmitter<void>();
   @Output() filterActiveChange = new EventEmitter<boolean>();
   @Output() refreshEvent = new EventEmitter<void>();
 
-  /** 疑慮筆數（頻率/備註判不出星期幾、系統未列入者）；null = 尚未查詢。用 signal 保證 HTTP 回來後重繪 */
+  /**
+   * 待審筆數（/review 的 counts.total：判不出星期幾 / 日期已用盡 / 星期與洗腎日不符 / 日期非洗腎日）；
+   * null = 尚未查詢或查詢失敗。用 signal 保證 HTTP 回來後重繪
+   */
   readonly uncertainCount = signal<number | null>(null);
   readonly isUncertainVisible = signal(false);
 
@@ -43,10 +46,13 @@ export class DailyInjectionListDialogComponent implements OnChanges {
       const body: { targetDate?: string; patientIds?: string[] } = {};
       if (this.targetDate) body.targetDate = this.targetDate;
       if (this.patientIds && this.patientIds.length > 0) body.patientIds = this.patientIds;
-      const list = await firstValueFrom(this.api.post<unknown[]>('/medications/daily-injections/uncertain', body));
-      this.uncertainCount.set(Array.isArray(list) ? list.length : 0);
+      const res = await firstValueFrom(
+        this.api.post<{ items?: unknown[]; counts?: { total?: number } }>('/medications/daily-injections/review', body),
+      );
+      const total = typeof res?.counts?.total === 'number' ? res.counts.total : Array.isArray(res?.items) ? res.items.length : 0;
+      this.uncertainCount.set(total);
     } catch (e) {
-      console.error('[DailyInjectionListDialog] 查詢疑慮筆數失敗:', e);
+      console.error('[DailyInjectionListDialog] 查詢待審筆數失敗:', e);
       this.uncertainCount.set(null);
     }
   }

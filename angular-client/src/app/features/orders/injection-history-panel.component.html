@@ -1,0 +1,118 @@
+<section class="history-panel">
+  <div class="panel-header">
+    <h4 class="panel-title">
+      <i class="fas fa-timeline"></i> 藥物時間軸
+      <span class="patient-name" *ngIf="displayName()">{{ displayName() }}</span>
+    </h4>
+    <span class="axis-range" *ngIf="orders().length > 0">{{ axisStartLabel() }} ～ {{ axisEndLabel() }}</span>
+  </div>
+
+  <div *ngIf="isLoading" class="loading-state">
+    <div class="loading-spinner"></div>
+    載入藥物歷程中...
+  </div>
+
+  <div *ngIf="!isLoading && !hasData()" class="empty-state">此病人尚無藥囑歷程資料。</div>
+
+  <ng-container *ngIf="!isLoading && hasData()">
+    <!-- 時間軸 -->
+    <div class="timeline-wrap" *ngIf="groups().length > 0">
+      <table class="timeline-table">
+        <thead>
+          <tr>
+            <th class="col-drug">藥品</th>
+            <th class="col-track">
+              <div class="axis">
+                <span
+                  *ngFor="let tick of ticks()"
+                  class="axis-tick"
+                  [class.labeled]="tick.showLabel"
+                  [style.left.%]="tick.left"
+                  [title]="tick.label"
+                >
+                  <span class="axis-label" *ngIf="tick.showLabel">{{ tick.label }}</span>
+                </span>
+                <span class="today-line axis-today" [style.left.%]="todayLeft()" title="今天"></span>
+              </div>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let group of groups(); trackBy: trackGroup">
+            <td class="col-drug">
+              <div class="drug-name">{{ group.orderName }}</div>
+              <div class="drug-meta">
+                <span class="type-tag" [class.oral]="group.orderType === 'oral'">{{ orderTypeLabel(group.orderType) }}</span>
+                <span class="drug-code">{{ group.orderCode }}</span>
+              </div>
+            </td>
+            <td class="col-track">
+              <div class="track" [style.height.px]="trackHeight(group)">
+                <span *ngFor="let tick of ticks()" class="grid-line" [style.left.%]="tick.left"></span>
+                <span class="today-line" [style.left.%]="todayLeft()"></span>
+                <div
+                  *ngFor="let seg of group.segments; trackBy: trackSegment"
+                  class="segment"
+                  [class.oral]="seg.orderType === 'oral'"
+                  [class.open]="seg.openEnded"
+                  [class.attention]="seg.attention"
+                  [style.left.%]="seg.left"
+                  [style.width.%]="seg.width"
+                  [style.top.px]="segmentTop(seg)"
+                  [title]="seg.title"
+                >
+                  <span class="segment-label">{{ seg.label }}</span>
+                </div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="timeline-legend">
+        <span class="legend-item"><span class="legend-seg"></span>針劑</span>
+        <span class="legend-item"><span class="legend-seg oral"></span>口服</span>
+        <span class="legend-item"><span class="legend-seg open"></span>持續中（延伸至軸尾）</span>
+        <span class="legend-item"><span class="legend-seg attention"></span>判不出 / hold</span>
+        <span class="legend-item"><span class="legend-today"></span>今天</span>
+        <span class="legend-hint">滑鼠停留區段可看完整處方（含開立醫師、異動日）</span>
+      </div>
+    </div>
+
+    <!-- 異動紀錄（最新在前） -->
+    <div class="changes-block">
+      <div class="changes-title">異動紀錄 <span class="count">{{ changes().length }} 筆</span></div>
+      <div *ngIf="changes().length === 0" class="empty-inline">尚無上傳比對產生的異動紀錄。</div>
+      <table *ngIf="changes().length > 0" class="changes-table">
+        <thead>
+          <tr>
+            <th>上傳時間</th>
+            <th>藥品</th>
+            <th>類型</th>
+            <th>開始日</th>
+            <th>異動</th>
+            <th class="col-detail">內容</th>
+            <th>來源</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let c of changes(); trackBy: trackChange">
+            <td>{{ formatUploadedAt(c.uploadedAt) }}</td>
+            <td [title]="c.orderCode">{{ c.orderName || c.orderCode }}</td>
+            <td>{{ orderTypeLabel(c.orderType) }}</td>
+            <td>{{ c.startDate || '-' }}</td>
+            <td><span [class]="changePillClass(c.changeType)">{{ changeTypeLabel(c.changeType) }}</span></td>
+            <td class="col-detail">
+              <ng-container *ngIf="c.changes?.length; else noDetail">
+                <div *ngFor="let fc of c.changes" class="field-change">{{ formatFieldChange(fc) }}</div>
+              </ng-container>
+              <ng-template #noDetail><span class="muted">-</span></ng-template>
+            </td>
+            <td class="col-source" [title]="c.sourceFile">
+              {{ c.sourceFile || '-' }}<span *ngIf="c.uploadedByName" class="muted">（{{ c.uploadedByName }}）</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </ng-container>
+</section>

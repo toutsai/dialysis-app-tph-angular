@@ -1,0 +1,335 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+.monthly-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 0.75rem;
+}
+
+/* --- 工具列（比照 orders.component 的 .search-controls） --- */
+.search-controls {
+  flex-shrink: 0;
+  display: flex;
+  gap: 0.75rem 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e9ecef;
+}
+.group-filters {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.group-filters select,
+.group-filters input {
+  padding: 0.5rem;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  font-size: 1rem;
+  height: 38px;
+  box-sizing: border-box;
+}
+.chip-group {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.chip-group-label {
+  font-size: 0.85rem;
+  color: #6c757d;
+  margin-right: 0.15rem;
+  white-space: nowrap;
+}
+.filter-chip {
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid #adb5bd;
+  background: #fff;
+  color: #6c757d;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1.2;
+  transition: all 0.15s;
+}
+.filter-chip.active {
+  background: #e7f1ff;
+  border-color: #007bff;
+  color: #0056b3;
+  font-weight: 600;
+}
+.filter-chip:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.search-btn,
+.print-btn {
+  padding: 0.5rem 1.2rem;
+  border-radius: 4px;
+  border: 1px solid #007bff;
+  background-color: #007bff;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 38px;
+  box-sizing: border-box;
+}
+.print-btn {
+  background-color: #6c757d;
+  border-color: #6c757d;
+}
+.search-btn:disabled,
+.print-btn:disabled {
+  background-color: #adb5bd;
+  border-color: #adb5bd;
+  cursor: not-allowed;
+}
+
+/* --- 筆數 + 圖例 --- */
+.legend-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.25rem;
+  font-size: 0.85rem;
+  color: #495057;
+}
+.row-count {
+  font-weight: 600;
+  color: #212529;
+}
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.legend-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 14px;
+  border: 1px solid #dee2e6;
+  border-radius: 3px;
+}
+.legend-swatch.dialysis {
+  background: #eaf4ff;
+}
+.legend-swatch.today {
+  background: #fff3cd;
+  border-color: #ffc107;
+}
+.legend-swatch.weekend {
+  background: #f1f3f5;
+}
+.legend-chip,
+.inj-chip {
+  display: inline-block;
+  padding: 0 4px;
+  border: 1px solid #6c8ebf;
+  border-radius: 4px;
+  background: #fff;
+  color: #1f3b6e;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  white-space: nowrap;
+  margin: 1px 0;
+}
+.legend-chip.mismatch,
+.inj-chip.mismatch {
+  border: 2px solid #dc3545;
+  color: #a71d2a;
+  background: #fff5f5;
+}
+.warn-mark {
+  color: #d35400;
+  font-weight: 700;
+  margin-right: 2px;
+}
+
+/* --- 內容區 --- */
+.results-display {
+  flex-grow: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.loading-state,
+.empty-state {
+  text-align: center;
+  color: #6c757d;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+.empty-state.error {
+  color: #a71d2a;
+}
+.loading-spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+.table-container {
+  flex-grow: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+}
+
+/* --- 矩陣表 --- */
+.monthly-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: max-content;
+  min-width: 100%;
+  font-size: 0.85rem;
+}
+.monthly-table th,
+.monthly-table td {
+  padding: 0.3rem 0.4rem;
+  border-right: 1px solid #e9ecef;
+  border-bottom: 1px solid #e9ecef;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: top;
+}
+.monthly-table thead th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.monthly-table thead th.sticky-col {
+  z-index: 30;
+}
+.monthly-table .sticky-col {
+  position: sticky;
+  z-index: 10;
+  background-color: #fff;
+  text-align: left;
+}
+.monthly-table thead .sticky-col {
+  background-color: #f8f9fa;
+}
+.monthly-table tbody tr:nth-child(even) .sticky-col {
+  background-color: #f8f9fa;
+}
+.monthly-table .col-shift {
+  left: 0;
+  min-width: 48px;
+  width: 48px;
+}
+.monthly-table .col-bed {
+  left: 48px;
+  min-width: 56px;
+  width: 56px;
+}
+.monthly-table .col-name {
+  left: 104px;
+  min-width: 96px;
+  width: 96px;
+  font-weight: 600;
+}
+.monthly-table .col-freq {
+  left: 200px;
+  min-width: 70px;
+  width: 70px;
+}
+.monthly-table .col-summary {
+  left: 270px;
+  min-width: 260px;
+  max-width: 320px;
+  box-shadow: 2px 0 0 #dee2e6;
+}
+.order-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  line-height: 1.4;
+}
+.order-line .order-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
+}
+.order-line.attention .order-text {
+  color: #a04000;
+}
+.kind-tag {
+  font-size: 0.7rem;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: #ffe9c6;
+  color: #a04000;
+  border: 1px solid #e67e22;
+}
+.muted {
+  color: #adb5bd;
+}
+
+.monthly-table .day-col {
+  min-width: 58px;
+  padding: 0.2rem 0.25rem;
+}
+.monthly-table thead th.day-col .day-num {
+  display: block;
+  font-size: 0.9rem;
+}
+.monthly-table thead th.day-col .day-dow {
+  display: block;
+  font-size: 0.72rem;
+  color: #6c757d;
+  font-weight: 400;
+}
+.monthly-table thead th.day-col.weekend {
+  background-color: #eceff1;
+}
+.monthly-table thead th.day-col.weekend .day-dow {
+  color: #c0392b;
+}
+.monthly-table tbody td.day-col.weekend {
+  background-color: #f1f3f5;
+}
+.monthly-table tbody td.day-col.dialysis {
+  background-color: #eaf4ff;
+}
+.monthly-table tbody td.day-col.weekend.dialysis {
+  background-color: #e3eefb;
+}
+.monthly-table thead th.day-col.today {
+  background-color: #fff3cd;
+  box-shadow: inset 0 -3px 0 #ffc107;
+}
+.monthly-table tbody td.day-col.today {
+  box-shadow: inset 2px 0 0 #ffc107, inset -2px 0 0 #ffc107;
+}
+.monthly-table tbody td.day-col .inj-chip {
+  display: block;
+}

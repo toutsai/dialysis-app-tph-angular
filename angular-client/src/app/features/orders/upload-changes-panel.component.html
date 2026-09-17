@@ -1,0 +1,124 @@
+<div class="changes-layout">
+  <!-- 左：批次清單 -->
+  <aside class="batch-list-pane">
+    <div class="pane-header">
+      <span class="pane-title">上傳批次（最近 50 筆）</span>
+      <button type="button" class="icon-btn" (click)="loadBatches()" [disabled]="isLoadingBatches()" title="重新整理">
+        <i class="fas fa-rotate"></i>
+      </button>
+    </div>
+    <div class="batch-list">
+      <div *ngIf="isLoadingBatches() && batches().length === 0" class="loading-state">
+        <div class="loading-spinner"></div>
+        載入批次中...
+      </div>
+      <div *ngIf="!isLoadingBatches() && batchesError()" class="empty-state error">{{ batchesError() }}</div>
+      <div *ngIf="!isLoadingBatches() && !batchesError() && batchesLoaded() && batches().length === 0" class="empty-state">
+        尚無藥囑上傳批次紀錄。
+      </div>
+      <button
+        *ngFor="let batch of batches(); trackBy: trackBatch"
+        type="button"
+        class="batch-item"
+        [class.selected]="batch.id === selectedBatchId()"
+        (click)="selectBatch(batch)"
+      >
+        <div class="batch-line1">
+          <span class="batch-time">{{ formatUploadedAt(batch.uploadedAt) }}</span>
+          <span class="batch-by">{{ batch.uploadedByName || '-' }}</span>
+        </div>
+        <div class="batch-file" [title]="batch.sourceFile">{{ batch.sourceFile || '(未記錄檔名)' }}</div>
+        <div class="batch-line3">
+          <span>{{ batch.rowCount }} 列</span>
+          <span>異動 {{ batch.changeCount }}</span>
+          <span *ngIf="batch.summary?.isFirstBatch" class="first-tag" title="首次上傳為基準批次，無前一批可比對">基準</span>
+        </div>
+        <div class="batch-counts" *ngIf="batch.summary?.counts as c">
+          <span class="change-pill change-new">新增 {{ c.new ?? 0 }}</span>
+          <span class="change-pill change-stopped">停止 {{ c.stopped ?? 0 }}</span>
+          <span class="change-pill change-modified">修改 {{ c.modified ?? 0 }}</span>
+          <span class="change-pill change-removed">移除 {{ c.removed ?? 0 }}</span>
+        </div>
+        <div class="batch-interp">{{ interpretationText(batch.summary) }}</div>
+        <div class="batch-review" *ngIf="reviewText(batch.summary) as review">{{ review }}</div>
+      </button>
+    </div>
+  </aside>
+
+  <!-- 右：批次異動明細 -->
+  <section class="changes-pane">
+    <div class="search-controls">
+      <div class="search-type-toggle">
+        <button type="button" [class.active]="typeFilter() === 'all'" (click)="typeFilter.set('all')">全部</button>
+        <button type="button" [class.active]="typeFilter() === 'injection'" (click)="typeFilter.set('injection')">針劑</button>
+        <button type="button" [class.active]="typeFilter() === 'oral'" (click)="typeFilter.set('oral')">口服</button>
+      </div>
+      <input
+        type="text"
+        class="text-filter"
+        [ngModel]="textFilter()"
+        (ngModelChange)="textFilter.set($event)"
+        placeholder="篩選姓名 / 病歷號 / 藥品..."
+      />
+      <span class="count-text" *ngIf="selectedBatch()">
+        顯示 {{ filteredChanges().length }} / {{ changes().length }} 筆
+      </span>
+    </div>
+
+    <div class="results-display">
+      <div *ngIf="!selectedBatch() && !isLoadingBatches()" class="placeholder-text">請從左側選擇一個上傳批次。</div>
+      <div *ngIf="isLoadingChanges()" class="loading-state">
+        <div class="loading-spinner"></div>
+        載入異動明細中...
+      </div>
+      <div *ngIf="!isLoadingChanges() && changesError()" class="empty-state error">{{ changesError() }}</div>
+      <div
+        *ngIf="!isLoadingChanges() && !changesError() && selectedBatch() && changes().length === 0"
+        class="empty-state"
+      >
+        <ng-container *ngIf="selectedBatch()!.summary?.isFirstBatch; else noChanges">
+          此批次為首次上傳（基準批次），系統以它作為後續比對的起點，因此沒有異動紀錄。
+        </ng-container>
+        <ng-template #noChanges>此批次與前一批次相比沒有任何異動。</ng-template>
+      </div>
+      <div
+        *ngIf="!isLoadingChanges() && !changesError() && changes().length > 0 && filteredChanges().length === 0"
+        class="empty-state"
+      >
+        沒有符合篩選條件的異動。
+      </div>
+
+      <div *ngIf="!isLoadingChanges() && !changesError() && filteredChanges().length > 0" class="table-container">
+        <table class="changes-table">
+          <thead>
+            <tr>
+              <th class="sticky-col col-patient">病人</th>
+              <th>病歷號</th>
+              <th>藥品</th>
+              <th>類型</th>
+              <th>開始日</th>
+              <th>異動</th>
+              <th class="col-detail">內容</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let c of filteredChanges(); trackBy: trackChange">
+              <td class="sticky-col col-patient">{{ c.patientName || '-' }}</td>
+              <td>{{ c.medicalRecordNumber || '-' }}</td>
+              <td [title]="c.orderCode">{{ c.orderName || c.orderCode }}</td>
+              <td>{{ orderTypeLabel(c.orderType) }}</td>
+              <td>{{ c.startDate || '-' }}</td>
+              <td><span [class]="changePillClass(c.changeType)">{{ changeTypeLabel(c.changeType) }}</span></td>
+              <td class="col-detail">
+                <ng-container *ngIf="c.changes?.length; else noDetail">
+                  <div *ngFor="let fc of c.changes" class="field-change">{{ formatFieldChange(fc) }}</div>
+                </ng-container>
+                <ng-template #noDetail><span class="muted">-</span></ng-template>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>

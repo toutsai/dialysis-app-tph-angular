@@ -9,6 +9,7 @@ import { getTaipeiMonthString, getTaipeiTodayString } from '../utils/dateUtils.j
 import { normalizeDialysisMode, normalizeDialysisOrdersMode } from '../utils/dialysisMode.js'
 import { FREQ_MAP_TO_DAY_INDEX } from '../utils/scheduleUtils.js'
 import { saveDialysisOrder } from '../services/dialysisOrderService.js'
+import { snapshotOrdersForDiff, recordUploadBatch } from '../services/injectionRulesService.js'
 import {
   createInventoryItemResolver,
   applyPendingItemChanges,
@@ -2156,6 +2157,9 @@ router.post('/medications/upload', ...isDoctorRole, async (req, res) => {
       }
     }
 
+    // 區間格式：寫入前先取整表快照，寫入後做 diff（個人藥物累積紀錄）+ 重建解讀層
+    const diffSnapshot = isIntervalFormat && ordersToInsert.length > 0 ? snapshotOrdersForDiff(db) : null
+
     // 批次寫入資料庫
     if (ordersToInsert.length > 0) {
       const insertStmt = db.prepare(`
@@ -2209,6 +2213,24 @@ router.post('/medications/upload', ...isDoctorRole, async (req, res) => {
 
     invalidateListCache() // 匯入後立即清快取，避免「匯入卻看不到」
 
+    let uploadReport = null
+    if (diffSnapshot) {
+      try {
+        uploadReport = recordUploadBatch(db, {
+          sourceFile: fileName,
+          user: req.user,
+          beforeMap: diffSnapshot,
+          rowCount: ordersToInsert.length,
+        })
+        console.log(
+          `[ProcessOrders] 解讀報告：新增 ${uploadReport.summary.counts.new}、停止 ${uploadReport.summary.counts.stopped}、修改 ${uploadReport.summary.counts.modified}、移除 ${uploadReport.summary.counts.removed}；待審 ${uploadReport.summary.review.total}`,
+        )
+      } catch (reportError) {
+        // 報告失敗不影響匯入本身
+        console.error('[ProcessOrders] 建立上傳報告失敗:', reportError)
+      }
+    }
+
     await logAudit(
       'MEDICATION_ORDERS_UPLOAD',
       req.user.id,
@@ -2231,6 +2253,8 @@ router.post('/medications/upload', ...isDoctorRole, async (req, res) => {
       processedCount,
       errorCount: errors.length,
       errors: errors.slice(0, 50),
+      // 區間格式才有：{ batchId, summary:{counts,interpretation,warnings,review,isFirstBatch}, changeCount, changes:[前200筆] }
+      report: uploadReport,
     })
   } catch (error) {
     console.error('[ProcessOrders] 處理檔案時發生錯誤:', error)

@@ -133,9 +133,144 @@
   font-family: Consolas, 'Courier New', monospace;
 }
 
-.unc-reason {
-  color: #c0392b;
+/* 洗腎日 / 班別 / 姓名 欄不直排 */
+.unc-nowrap {
   white-space: nowrap;
+}
+
+/* 類別篩選 chips */
+.unc-filter {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 20px 0;
+}
+
+.unc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 999px;
+  background: #fff;
+  color: #495057;
+  font-size: 0.9rem;
+  cursor: pointer;
+  --chip-color: #546e7a;
+}
+
+.unc-chip:hover {
+  background: #f1f3f5;
+}
+
+.unc-chip.active {
+  border-color: var(--chip-color);
+  background: var(--chip-color);
+  color: #fff;
+}
+
+.unc-chip-count {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 0 0.4em;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.08);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.unc-chip.active .unc-chip-count {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.unc-chip-uncertain { --chip-color: #e67e22; }
+.unc-chip-dates_exhausted { --chip-color: #c0392b; }
+.unc-chip-weekday_mismatch { --chip-color: #8e44ad; }
+.unc-chip-date_not_dialysis_day { --chip-color: #2980b9; }
+
+/* 類別 pill：橙 = 判不出星期幾、紅 = 日期已用盡、紫 = 星期與洗腎日不符、藍 = 日期非洗腎日 */
+.unc-pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  line-height: 1.6;
+}
+
+.unc-cat-uncertain {
+  background: #fdebd0;
+  color: #b9770e;
+}
+
+.unc-cat-dates_exhausted {
+  background: #fadbd8;
+  color: #a93226;
+}
+
+.unc-cat-weekday_mismatch {
+  background: #e8daef;
+  color: #6c3483;
+}
+
+.unc-cat-date_not_dialysis_day {
+  background: #d6eaf8;
+  color: #1f618d;
+}
+
+.unc-hint .unc-pill {
+  margin-right: 2px;
+}
+
+.unc-category {
+  min-width: 180px;
+}
+
+.unc-detail {
+  color: #6d4c41;
+  font-size: 0.85rem;
+  margin-top: 3px;
+  line-height: 1.4;
+}
+
+.unc-confirmed {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.unc-confirmed-tag {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid #a5d6a7;
+  border-radius: 3px;
+  background: #e8f5e9;
+  color: #2e7d32;
+  font-size: 0.8rem;
+  font-family: Consolas, 'Courier New', monospace;
+}
+
+.unc-link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: #1f618d;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.unc-link:disabled {
+  color: #adb5bd;
+  cursor: not-allowed;
+  text-decoration: none;
 }
 
 .unc-col-rule {

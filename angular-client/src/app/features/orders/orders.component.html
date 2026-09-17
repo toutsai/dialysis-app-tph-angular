@@ -13,6 +13,12 @@
     <button [class.active]="activeTab() === 'dialysis'" (click)="openDialysisTab()">
       醫囑檢視
     </button>
+    <button [class.active]="activeTab() === 'monthly'" (click)="openTab('monthly')">
+      當月針劑總覽
+    </button>
+    <button [class.active]="activeTab() === 'changes'" (click)="openTab('changes')">
+      上傳異動紀錄
+    </button>
     <button [class.active]="activeTab() === 'upload'" (click)="activeTab.set('upload')">
       資料上傳
     </button>
@@ -78,14 +84,17 @@
         <button
           (click)="isUncertainDialogVisible.set(true)"
           class="uncertain-btn"
-          title="頻率/備註判不出星期幾、系統未列入應打清單的針劑處方（全院）"
+          title="判不出星期幾 / 日期已用盡 / 與洗腎日不符的針劑處方（全院），逐筆審核確認"
         >
-          <i class="fas fa-exclamation-triangle"></i> 針劑疑慮清單
+          <i class="fas fa-clipboard-check"></i> 針劑待審清單
         </button>
       </div>
 
-      <!-- 2. 查詢結果顯示區 -->
-      <div class="results-display">
+      <!-- 2. 查詢結果顯示區（個人搜尋找到病人時：月表 + 藥物時間軸一起捲動） -->
+      <div
+        class="results-display"
+        [class.with-timeline]="searchType() === 'individual' && !isLoading() && searchPerformed() && individualFoundName()"
+      >
         <div *ngIf="isLoading()" class="loading-state">
           <div class="loading-spinner"></div>
           正在查詢藥囑資料...
@@ -137,6 +146,14 @@
             </tbody>
           </table>
         </div>
+
+        <!-- 3. 藥物時間軸（個人搜尋找到病人後；資料來自 GET /medications/injection-history/:patientId） -->
+        <app-injection-history-panel
+          *ngIf="searchType() === 'individual' && !isLoading() && searchPerformed() && individualFoundName()"
+          [history]="individualHistory()"
+          [patientName]="individualFoundName()"
+          [isLoading]="isHistoryLoading()"
+        ></app-injection-history-panel>
       </div>
     </div>
 
@@ -254,6 +271,20 @@
       </div>
     </div>
 
+    <!-- (B2) 當月針劑總覽（病人 × 日期矩陣；首次進入才建立子元件） -->
+    <div class="tab-panel query-panel" [style.display]="activeTab() === 'monthly' ? 'flex' : 'none'">
+      @if (monthlyVisited()) {
+        <app-injection-monthly-view></app-injection-monthly-view>
+      }
+    </div>
+
+    <!-- (B3) 上傳異動紀錄（批次清單 + 異動明細） -->
+    <div class="tab-panel query-panel" [style.display]="activeTab() === 'changes' ? 'flex' : 'none'">
+      @if (changesVisited()) {
+        <app-upload-changes-panel></app-upload-changes-panel>
+      }
+    </div>
+
     <!-- (C) 資料上傳頁籤 -->
     <div class="tab-panel upload-panel" [style.display]="activeTab() === 'upload' ? 'flex' : 'none'">
       <div class="upload-core-panel">
@@ -312,6 +343,107 @@
             </li>
           </ul>
         </div>
+
+        <!-- 解讀報告：與前一批次比對的異動統計（首次上傳 report 為 null 不顯示） -->
+        @if (uploadResult()?.report; as report) {
+          <div class="upload-report">
+            <div class="upload-report-title">
+              <i class="fas fa-clipboard-check"></i> 解讀報告
+              <span class="upload-report-sub">
+                共 {{ report.changeCount }} 筆異動
+                <ng-container *ngIf="report.summary.isFirstBatch">（首次上傳，作為後續比對基準）</ng-container>
+              </span>
+            </div>
+
+            <div class="upload-report-section">
+              <span class="upload-report-label">異動</span>
+              <span class="change-pill change-new">新增 {{ report.summary.counts.new ?? 0 }}</span>
+              <span class="change-pill change-stopped">停止 {{ report.summary.counts.stopped ?? 0 }}</span>
+              <span class="change-pill change-modified">修改 {{ report.summary.counts.modified ?? 0 }}</span>
+              <span class="change-pill change-removed">移除 {{ report.summary.counts.removed ?? 0 }}</span>
+            </div>
+
+            <div class="upload-report-section">
+              <span class="upload-report-label">針劑規則解讀</span>
+              @for (item of reportInterpretation(report.summary); track item.label) {
+                <span class="stat-chip" [class.warn]="item.label === '判不出' && item.value > 0">
+                  {{ item.label }} <strong>{{ item.value }}</strong>
+                </span>
+              }
+              <span class="stat-chip total">合計 <strong>{{ report.summary.interpretation.total ?? 0 }}</strong></span>
+            </div>
+
+            <div class="upload-report-section">
+              <span class="upload-report-label">需複核</span>
+              @for (item of reportReview(report.summary); track item.label) {
+                <span class="stat-chip" [class.warn]="item.value > 0">
+                  {{ item.label }} <strong>{{ item.value }}</strong>
+                </span>
+              }
+              <span class="stat-chip total" [class.warn]="(report.summary.review.total ?? 0) > 0">
+                合計 <strong>{{ report.summary.review.total ?? 0 }}</strong>
+              </span>
+              <span class="upload-report-hint" *ngIf="(report.summary.review.total ?? 0) > 0">
+                請至「藥囑查詢 → 針劑疑慮清單」確認規則
+              </span>
+            </div>
+
+            @if (reportWarnings(report.summary).length > 0) {
+              <div class="upload-report-section">
+                <span class="upload-report-label">警示</span>
+                @for (item of reportWarnings(report.summary); track item.label) {
+                  <span class="stat-chip warn">{{ item.label }} <strong>{{ item.value }}</strong></span>
+                }
+              </div>
+            }
+
+            @if (report.changes && report.changes.length > 0) {
+              <button type="button" class="report-toggle" (click)="reportChangesExpanded.set(!reportChangesExpanded())">
+                <i class="fas" [class.fa-chevron-down]="!reportChangesExpanded()" [class.fa-chevron-up]="reportChangesExpanded()"></i>
+                {{ reportChangesExpanded() ? '收合異動清單' : '展開異動清單' }}
+                （顯示前 {{ report.changes.length }} 筆<ng-container *ngIf="report.changeCount > report.changes.length">，共 {{ report.changeCount }} 筆，完整清單見「上傳異動紀錄」頁籤</ng-container>）
+              </button>
+              @if (reportChangesExpanded()) {
+                <div class="report-changes-container">
+                  <table class="report-changes-table">
+                    <thead>
+                      <tr>
+                        <th>病人</th>
+                        <th>病歷號</th>
+                        <th>藥品</th>
+                        <th>類型</th>
+                        <th>開始日</th>
+                        <th>異動</th>
+                        <th class="col-detail">內容</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (c of report.changes; track $index) {
+                        <tr>
+                          <td>{{ c.patientName || '-' }}</td>
+                          <td>{{ c.medicalRecordNumber || '-' }}</td>
+                          <td [title]="c.orderCode">{{ c.orderName || c.orderCode }}</td>
+                          <td>{{ orderTypeLabel(c.orderType) }}</td>
+                          <td>{{ c.startDate || '-' }}</td>
+                          <td><span [class]="changePillClass(c.changeType)">{{ changeTypeLabel(c.changeType) }}</span></td>
+                          <td class="col-detail">
+                            @if (c.changes?.length) {
+                              @for (fc of c.changes; track $index) {
+                                <div class="field-change">{{ formatFieldChange(fc) }}</div>
+                              }
+                            } @else {
+                              <span class="muted">-</span>
+                            }
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            }
+          </div>
+        }
       </div>
 
       <div class="upload-core-panel">

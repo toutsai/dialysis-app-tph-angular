@@ -647,6 +647,68 @@ CREATE TABLE IF NOT EXISTS injection_rule_overrides (
 
 CREATE INDEX IF NOT EXISTS idx_injection_rule_overrides_patient ON injection_rule_overrides(patient_id);
 
+-- 針劑解讀層：每筆處方的正規化施打規則快照（由 injection_orders + injection_rule_overrides 重建，
+-- injection_rules_meta 存重建戳記）；每日應打/月總覽/待審清單都讀這裡，不再各自解析文字。
+CREATE TABLE IF NOT EXISTS injection_order_rules (
+    order_id TEXT PRIMARY KEY,
+    order_key TEXT NOT NULL,
+    patient_id TEXT NOT NULL,
+    order_code TEXT NOT NULL,
+    start_date TEXT NOT NULL DEFAULT '',
+    end_date TEXT NOT NULL DEFAULT '',
+    dose TEXT NOT NULL DEFAULT '',
+    frequency TEXT NOT NULL DEFAULT '',
+    note TEXT NOT NULL DEFAULT '',
+    rule_kind TEXT NOT NULL,            -- hold | dates | weekly | interval | uncertain
+    rule_source TEXT,                   -- override | note | frequency
+    rule_text TEXT NOT NULL DEFAULT '',
+    rule_json TEXT NOT NULL,
+    reason TEXT NOT NULL DEFAULT '',
+    override_id TEXT,
+    parser_version TEXT NOT NULL,
+    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_injection_order_rules_patient ON injection_order_rules(patient_id);
+CREATE INDEX IF NOT EXISTS idx_injection_order_rules_kind ON injection_order_rules(rule_kind);
+
+CREATE TABLE IF NOT EXISTS injection_rules_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT
+);
+
+-- 藥囑 Excel 每次上傳的摘要（解讀統計）與逐筆異動（新增/停止/移除/改劑量/改備註/改頻率），
+-- 是「個人藥物修改累積紀錄」的來源；injection_orders 整表覆蓋後歷史仍在這裡。
+CREATE TABLE IF NOT EXISTS injection_upload_batches (
+    id TEXT PRIMARY KEY,
+    source_file TEXT,
+    uploaded_by_id TEXT,
+    uploaded_by_name TEXT,
+    uploaded_at TEXT DEFAULT (datetime('now', 'localtime')),
+    row_count INTEGER DEFAULT 0,
+    summary_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE IF NOT EXISTS injection_upload_changes (
+    id TEXT PRIMARY KEY,
+    batch_id TEXT NOT NULL,
+    patient_id TEXT NOT NULL,
+    patient_name TEXT,
+    medical_record_number TEXT,
+    order_code TEXT NOT NULL,
+    order_name TEXT,
+    order_type TEXT,
+    start_date TEXT NOT NULL DEFAULT '',
+    change_type TEXT NOT NULL,          -- new | stopped | removed | modified
+    changes_json TEXT NOT NULL DEFAULT '[]',
+    before_json TEXT,
+    after_json TEXT,
+    created_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_injection_upload_changes_batch ON injection_upload_changes(batch_id);
+CREATE INDEX IF NOT EXISTS idx_injection_upload_changes_patient ON injection_upload_changes(patient_id);
+
 -- 透析醫囑（HIS「備藥前置作業」Excel 匯入）。全數保留歷次醫囑；
 -- 同病人 + 同醫囑日期(effective_date) 視為同一筆（UNIQUE，重傳更新不重複累積）
 CREATE TABLE IF NOT EXISTS dialysis_order_uploads (
