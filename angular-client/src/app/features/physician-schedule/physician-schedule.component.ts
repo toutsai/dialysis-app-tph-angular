@@ -395,7 +395,9 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
       let unavailable: any[] = [];
 
       if (existingSchedule) {
-        if (Array.isArray(existingSchedule.unavailableDates)) unavailable = existingSchedule.unavailableDates;
+        if (Array.isArray(existingSchedule.unavailableDates)) {
+          unavailable = existingSchedule.unavailableDates.filter((u: any) => u && u.physicianId && typeof u.startDate === 'string');
+        }
         if (existingSchedule.schedule) {
           for (const day in existingSchedule.schedule) {
             if (blankSchedule[day]) Object.assign(blankSchedule[day], existingSchedule.schedule[day]);

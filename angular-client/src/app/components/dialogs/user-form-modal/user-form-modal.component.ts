@@ -130,6 +130,8 @@ export class UserFormModalComponent implements OnChanges {
       delete dataToSave.defaultSchedules;
       delete dataToSave.defaultConsultationSchedules;
     }
+    // 院外支援只在醫師班表頁維護；此表單不編輯它，別把開表單當時的舊值送回去蓋掉
+    delete (dataToSave as any).outsideSupport;
     this.saved.emit(dataToSave);
   }
 
