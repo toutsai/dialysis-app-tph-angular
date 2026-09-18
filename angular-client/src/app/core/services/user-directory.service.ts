@@ -69,6 +69,20 @@ export class UserDirectoryService {
     this.allUsers().filter((u) => u.isActive !== false),
   );
 
+  /**
+   * 會診醫師選單：使用者管理「職稱=主治醫師」且啟用者的姓名（與病人表單的會診/收案醫師同一來源、同一排序）。
+   * 需先呼叫 fetchUsersIfNeeded()；未載入前為空陣列。
+   */
+  readonly attendingPhysicianNames = computed<string[]>(() => {
+    const order = ['廖丁瑩', '蔡宜潔', '蘇哲弘', '蔡亨政', '林天佑', '陳怡汝'];
+    const names = this.activeUsers()
+      .filter((u) => u.title === '主治醫師')
+      .map((u) => u.name)
+      .filter((name): name is string => !!name);
+    const rank = (n: string) => (order.indexOf(n) === -1 ? order.length : order.indexOf(n));
+    return Array.from(new Set(names)).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  });
+
   // -----------------------------------------------------------------------
   // Internal state
   // -----------------------------------------------------------------------

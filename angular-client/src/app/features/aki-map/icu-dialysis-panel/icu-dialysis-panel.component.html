@@ -16,6 +16,14 @@
         <a class="btn ghost" [href]="boardPath" target="_blank" rel="noopener"
            title="免登入、唯讀、姓名與病歷號去識別的獨立頁面，可把網址分享給 ICU 專師／護理長">分享頁（唯讀）</a>
       }
+      @if (!readOnly) {
+        <button class="btn add-cand" (click)="openCandidate(null)"
+                title="已會診、可能需要 HD／SLED／CVVHDF 的 ICU 病人。也可從 AKI／CKD 關懷名單勾「高機率透析」帶入">＋ 新增待評估</button>
+      }
+      @if (candidates().length) {
+        <button type="button" class="cand-total" (click)="scrollToCandidates(candSection)"
+                title="已會診、可能需要透析的 ICU 病人；點一下捲到名單">待透析評估 {{ candidates().length }} 人</button>
+      }
       @if (crrtFlagTotal()) {
         <span class="crrt-total" title="HD/SLED 病人達 CRRT 風險門檻或直接考慮者">疑需 CRRT {{ crrtFlagTotal() }} 人</span>
       }
@@ -133,6 +141,82 @@
       </div>
     }
   </div>
+
+  <!-- 待透析評估（已會診、可能需要 HD／SLED／CVVHDF）：虛線框卡片，與上方「透析中」的實心色卡區分；三欄對齊三個圓 -->
+  <section #candSection class="cand" [hidden]="readOnly && !candidates().length">
+    <div class="cand-head">
+      <h3>待透析評估<small>已會診・可能需要 HD／SLED／CVVHDF</small></h3>
+      <span class="cand-n">{{ candidates().length }} 人</span>
+      @if (startedCandidateCount()) {
+        <span class="cand-started" title="病人已出現在上方「透析中」名單，請點卡片結案">{{ startedCandidateCount() }} 人已開始透析，待結案</span>
+      }
+      @if (!readOnly) {
+        <span class="cand-hint">點卡片編輯／結案。來源：本頁「＋ 新增待評估」，或 AKI／CKD 關懷名單勾「高機率透析」</span>
+      }
+    </div>
+
+    @if (!candidates().length) {
+      <div class="cand-empty">目前沒有待評估病人。</div>
+    }
+
+    @if (unplacedCandidates().length) {
+      <div class="cand-unplaced">
+        <div class="cand-col-head warn">床位待確認<small>關懷名單帶入，但住院資料顯示不在 ICU → 請指定加護單位與床號，或結案</small></div>
+        <div class="cand-cards">
+          @for (c of unplacedCandidates(); track c.id) {
+            <ng-container *ngTemplateOutlet="candCard; context: { $implicit: c }"></ng-container>
+          }
+        </div>
+      </div>
+    }
+
+    @if (candidates().length) {
+      <div class="cand-cols">
+        @for (col of candidateColumns(); track col.key) {
+          <div class="cand-col">
+            <div class="cand-col-head">{{ col.key }}<small>{{ col.list.length }} 人</small></div>
+            <div class="cand-cards">
+              @for (c of col.list; track c.id) {
+                <ng-container *ngTemplateOutlet="candCard; context: { $implicit: c }"></ng-container>
+              } @empty {
+                <div class="cand-col-empty">—</div>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+  </section>
+
+  <ng-template #candCard let-c>
+    <button type="button" [class]="'cand-card ' + candidateModeClass(c)" [class.ro]="readOnly" [class.started]="c.startedDialysis"
+            [attr.aria-label]="(c.bedNo || '床位待確認') + ' ' + c.name + ' 預計 ' + (c.plannedMode || '模式未定')"
+            (click)="openCandidate(c)">
+      <span class="cc-top">
+        <span class="cc-bed">{{ c.unit ? (c.bedNo || '床號未填') : (c.bedNo || '床位待確認') }}</span>
+        <b class="cc-name">{{ c.name }}</b>
+        <span [class]="'mode ' + candidateModeClass(c)">{{ c.plannedMode || '模式未定' }}</span>
+        @if (c.urgency && c.urgency !== '觀察中') { <span class="tag urg" [class.today]="c.urgency === '今日'">{{ c.urgency }}</span> }
+        @if (c.status === '已排定') { <span class="tag sched">已排定</span> }
+      </span>
+      <span class="cc-tags">
+        @if (c.startedDialysis; as s) { <span class="tag started">已開始透析（{{ s.mode }}）→ 請結案</span> }
+        @if (c.needsAssessment) { <span class="tag need">待補評估</span> }
+        @if (candidateAkiBadge(c); as b) { <span class="tag aki" [style.background]="b.bg" [style.color]="b.fg">{{ b.label }}</span> }
+        @if (c.latestCr != null) { <span class="tag cr" [title]="'最近 Cr ' + (c.latestCrDate || '')">Cr {{ c.latestCr }}</span> }
+        @if (c.riskFlags.length) {
+          <span class="tag lean" title="依血行動力學勾選的模式提示（沿用 CRRT 風險配分，非驗證分數）">傾向 {{ c.suggestedMode }}{{ c.riskDirect ? '' : '・' + c.riskScore + ' 分' }}</span>
+        }
+      </span>
+      @if (c.indications.length) { <span class="cc-line"><i>適應症</i>{{ c.indications.join('、') }}</span> }
+      <span class="cc-line">
+        <i>會診</i>{{ c.consultPhysician || '—' }} {{ fmtDay(c.consultDate) }}
+        @if (c.physician) { <i class="sep">主治</i>{{ c.physician }} }
+        @if (c.vascularAccess) { <i class="sep">導管</i>{{ c.vascularAccess }} }
+      </span>
+      @if (c.note) { <span class="cc-line note" [title]="c.note"><i>備註</i>{{ c.note }}</span> }
+    </button>
+  </ng-template>
 
   <!-- 滑過摘要浮窗（唯讀） -->
   @if (pop(); as h) {
@@ -389,5 +473,9 @@
   <!-- 月／年統計彈窗（免登入分享頁不提供：統計端點需登入） -->
   @if (showStats()) {
     <app-icu-dialysis-stats-dialog (closed)="showStats.set(false)"></app-icu-dialysis-stats-dialog>
+  }
+
+  @if (candidateDialog().open) {
+    <app-icu-candidate-dialog [candidate]="candidateDialog().candidate" (closed)="closeCandidateDialog()" (changed)="load()"></app-icu-candidate-dialog>
   }
 </section>

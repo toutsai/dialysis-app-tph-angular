@@ -9,6 +9,10 @@ import { parseInpatientsRows, parseLabsRows, stageForSeries, analyzeSeries, AKI_
 
 import { parseFirstSheet } from '../services/spreadsheetParser.js'
 import { getIcuDialysisStats } from '../services/icuDialysisDaily.js'
+import {
+  listActiveCandidates, loadActiveCandidateMap, getActiveCandidateByMrn, createCandidate, updateCandidate, deleteCandidate,
+  syncConsultPhysicianFromCare, mrnKey, CANDIDATE_RISK_ITEMS, CANDIDATE_INDICATIONS,
+} from '../services/icuCandidates.js'
 
 const router = Router()
 
@@ -229,7 +233,7 @@ const CARE_COLUMNS = `ckd_history AS ckdHistory, nephrology_consult AS nephrolog
        preesrd_enrolled AS preesrdEnrolled, ckd_education AS ckdEducation, vascular_prep AS vascularPrep,
        followup_appt AS followupAppt, followup_appt_date AS followupApptDate, followup_lab AS followupLab,
        contact_status AS contactStatus, closure_status AS closureStatus,
-       care_physician AS carePhysician, signed_at AS signedAt`
+       care_physician AS carePhysician, signed_at AS signedAt, consult_physician AS consultPhysician`
 
 // 一次載入全部關懷紀錄（名單歸類要用到人工 CKD 病史，逐筆查會 N+1）
 function loadCareRecords(db) {
@@ -241,6 +245,7 @@ function loadCareRecords(db) {
 function careFields(care) {
   return {
     ckdHistory: care?.ckdHistory || '',
+    consultPhysician: care?.consultPhysician || '',
     nephrologyConsult: care?.nephrologyConsult || '',
     akiCause: care?.akiCause || '',
     dialysisStatus: care?.dialysisStatus || '',
@@ -422,8 +427,14 @@ function buildCareCandidates(db, snapshotDate) {
   })
 }
 
-function toCareItem(c) {
+// candidateMap：病歷號(去前導0) → 進行中的 ICU 待透析評估紀錄；「高機率透析」＝名單上有他
+function toCareItem(c, candidateMap) {
+  const candidate = candidateMap?.get(mrnKey(c.p.mrn)) || null
   return {
+    highDialysisProbability: !!candidate,
+    icuCandidate: candidate
+      ? { id: candidate.id, status: candidate.status, plannedMode: candidate.plannedMode, unit: candidate.unit, bedNo: candidate.bedNo, needsAssessment: candidate.needsAssessment }
+      : null,
     mrn: c.p.mrn,
     name: c.p.name,
     ward: c.p.ward,
@@ -439,6 +450,8 @@ function toCareItem(c) {
     ckdBasis: c.analysis?.ckd?.basis || (c.analysis?.isEsrd ? '全段 Cr≥4.0 疑似 ESRD' : null),
     autoDialysisMode: c.dialysisMode,
     ...careFields(c.care),
+    // ICU 頁直接新建時病人可能還沒有關懷紀錄列（同步是純 UPDATE）→ 以待評估紀錄上的會診醫師補顯示
+    consultPhysician: c.care?.consultPhysician || candidate?.consultPhysician || '',
   }
 }
 
@@ -458,9 +471,10 @@ router.get('/care-list', (req, res) => {
     const snapshotDate = resolveSnapshotDate(db, req)
     if (!snapshotDate) return res.json({ snapshotDate: null, items: [] })
 
+    const candidateMap = loadActiveCandidateMap(db)
     const items = buildCareCandidates(db, snapshotDate)
       .filter((c) => c.inAki)
-      .map(toCareItem)
+      .map((c) => toCareItem(c, candidateMap))
     items.sort(
       (a, b) =>
         String(b.akiOnsetDate || '').localeCompare(String(a.akiOnsetDate || '')) ||
@@ -480,9 +494,10 @@ router.get('/ckd-care-list', (req, res) => {
     const snapshotDate = resolveSnapshotDate(db, req)
     if (!snapshotDate) return res.json({ snapshotDate: null, items: [] })
 
+    const candidateMap = loadActiveCandidateMap(db)
     const items = buildCareCandidates(db, snapshotDate)
       .filter((c) => c.inCkd)
-      .map(toCareItem)
+      .map((c) => toCareItem(c, candidateMap))
     items.sort(
       (a, b) =>
         (CKD_RANK[a.ckdBand] ?? 9) - (CKD_RANK[b.ckdBand] ?? 9) ||
@@ -560,6 +575,7 @@ router.get('/discharged-care-list', (req, res) => {
 const CARE_FIELD_MAP = {
   ckdHistory: 'ckd_history',
   nephrologyConsult: 'nephrology_consult',
+  consultPhysician: 'consult_physician',
   akiCause: 'aki_cause',
   dialysisStatus: 'dialysis_status',
   careResult: 'care_result',
@@ -586,6 +602,7 @@ router.put('/care/:mrn', (req, res) => {
     const updatedBy = req.user?.name || req.user?.username || ''
 
     db.prepare('INSERT OR IGNORE INTO aki_care_records (id, mrn) VALUES (?, ?)').run(uuidv4(), mrn)
+    const prevConsultPhysician = getCareRecord(db, mrn)?.consultPhysician || ''
     const sets = []
     const vals = []
     for (const [key, col] of Object.entries(CARE_FIELD_MAP)) {
@@ -604,10 +621,49 @@ router.put('/care/:mrn', (req, res) => {
       db.prepare(`UPDATE aki_care_records SET care_physician = '', signed_at = NULL WHERE mrn = ?`).run(mrn)
     }
 
+    // 會診醫師與 ICU 待透析評估紀錄雙向同步。前端只在使用者真的改這一格時才送此欄位
+    // （整列存檔不帶，免得名單開太久的舊值把醫師剛在 ICU 頁填的洗掉）；這裡再擋一次「值沒變就不同步」
+    const nextConsultPhysician = b.consultPhysician !== undefined ? String(b.consultPhysician ?? '').trim() : prevConsultPhysician
+    if (nextConsultPhysician !== prevConsultPhysician) syncConsultPhysicianFromCare(db, mrn, nextConsultPhysician, updatedBy)
+
+    // 「高機率透析」＝ICU 待透析評估名單上有他：勾→帶基本資料建一筆（預計模式未定＝待補評估）；
+    // 取消→把進行中那筆結案為「不需透析」（不刪，留紀錄）。快照顯示不在 ICU 時單位留空，ICU 頁列「床位待確認」。
+    if (b.highDialysisProbability !== undefined) {
+      const active = getActiveCandidateByMrn(db, mrn)
+      if (b.highDialysisProbability && !active) {
+        const inpatient = latestInpatientRow(db, mrn)
+        const icu = parseIcuWard(inpatient?.bed) || parseIcuWard(inpatient?.ward)
+        createCandidate(
+          db,
+          {
+            mrn,
+            name: inpatient?.name || String(b.name ?? '').trim() || mrn,
+            unit: icu && ICU_UNITS.some((u) => u.key === icu.unit) ? icu.unit : '',
+            bedNo: icu ? candidateBedNo(icu) : [inpatient?.ward, inpatient?.bed].filter(Boolean).join(' '),
+            physician: inpatient?.physician || '',
+            consultPhysician: getCareRecord(db, mrn)?.consultPhysician || '',
+            consultDate: getTaipeiTodayString(),
+          },
+          updatedBy,
+          { requireIcuUnit: false, source: 'aki' },
+        )
+      } else if (!b.highDialysisProbability && active) {
+        updateCandidate(db, active.id, { status: '不需透析' }, updatedBy)
+      }
+    }
+
     logAuditWithRequest(req, 'AKI_CARE_SAVE', 'aki_care_records', mrn, { sign: !!b.sign })
-    res.json({ success: true, care: getCareRecord(db, mrn) })
+    const candidate = getActiveCandidateByMrn(db, mrn)
+    res.json({
+      success: true,
+      care: getCareRecord(db, mrn),
+      highDialysisProbability: !!candidate,
+      icuCandidate: candidate
+        ? { id: candidate.id, status: candidate.status, plannedMode: candidate.plannedMode, unit: candidate.unit, bedNo: candidate.bedNo, needsAssessment: candidate.needsAssessment }
+        : null,
+    })
   } catch (error) {
-    res.status(500).json({ error: true, message: error.message || '儲存關懷紀錄失敗' })
+    res.status(error.status || 500).json({ error: true, message: error.message || '儲存關懷紀錄失敗' })
   }
 })
 
@@ -629,6 +685,13 @@ function parseIcuWard(wardNumber) {
   const bedSort = m[2] ? Number(m[2]) : 999
   const bedNo = m[2] ? `${unit}-${String(bedSort).padStart(2, '0')}` : unit
   return { unit, bedNo, bedSort }
+}
+
+// 待評估紀錄的單位與床號分兩欄存：三個收案單位內床號只留兩碼（'08'），免得畫面組成 "ICUA-ICUA-08"；
+// 其他 ICU（單位會留空＝床位待確認）保留完整床位字串供辨識
+function candidateBedNo(icu) {
+  if (!ICU_UNITS.some((u) => u.key === icu.unit)) return icu.bedNo
+  return icu.bedSort === 999 ? '' : String(icu.bedSort).padStart(2, '0')
 }
 
 function safeObj(s) {
@@ -795,7 +858,10 @@ export function buildIcuDialysisData(db) {
     const others = items.filter((i) => !ICU_UNITS.some((u) => u.key === i.unit))
     if (others.length) units.push({ key: 'OTHER', label: '其他加護單位', patients: others })
 
-    return { units, total: items.length }
+    // 待透析評估（已會診、可能需要透析）：與「透析中」病人同頁呈現；免登入展示頁回傳前同樣要遮罩
+    const candidates = listActiveCandidates(db).map((c) => enrichCandidate(db, c, items))
+
+    return { units, total: items.length, candidates }
 }
 
 // GET /api/aki/icu-dialysis —— 目前在 ICU 的透析病人，依 ICUA / ICUB / ICUD 分區
@@ -804,6 +870,119 @@ router.get('/icu-dialysis', (req, res) => {
     res.json(buildIcuDialysisData(getDatabase()))
   } catch (error) {
     res.status(500).json({ error: true, message: error.message || '取得 ICU 透析病人失敗' })
+  }
+})
+
+// ---------- ICU 待透析評估名單（已會診、可能需要 HD／SLED／CVVHDF） ----------
+
+// 最新住院快照裡的這位病人（AKI 檔病歷號 10 碼補零；人工輸入可能沒補零）
+function latestInpatientRow(db, mrn) {
+  const key = mrnKey(mrn)
+  if (!key) return null
+  return (
+    db
+      .prepare(
+        `SELECT mrn, name, ward, bed, physician FROM aki_inpatients
+          WHERE mrn IN (?, ?, ?) ORDER BY snapshot_date DESC LIMIT 1`,
+      )
+      .get(String(mrn).trim(), key, key.padStart(10, '0')) || null
+  )
+}
+
+// 待評估病人附加資訊：AKI 分期／最近 Cr；若已出現在「ICU 透析中」名單＝已開始透析，前端提示結案
+function enrichCandidate(db, candidate, dialysisItems) {
+  const key = mrnKey(candidate.mrn)
+  const pts = key ? getPointsByMrn(db, key.padStart(10, '0')) : []
+  const staging = pts.length ? stageForSeries(pts) : null
+  const started = dialysisItems.find((i) => mrnKey(i.mrn) === key) || null
+  return {
+    ...candidate,
+    akiCategory: staging?.category ?? null,
+    akiStage: staging?.stage ?? null,
+    latestCr: staging?.latest?.value ?? null,
+    latestCrDate: staging?.latest?.date ?? null,
+    startedDialysis: started ? { mode: started.mode, bedNo: started.bedNo } : null,
+  }
+}
+
+// GET /api/aki/icu-candidates/options —— 表單選項（適應症／血行動力學項目與配分），前後端共用同一份定義
+router.get('/icu-candidates/options', (req, res) => {
+  res.json({ indications: CANDIDATE_INDICATIONS, riskItems: CANDIDATE_RISK_ITEMS })
+})
+
+// GET /api/aki/icu-candidates/lookup?q= —— 新增時用病歷號／姓名從最新住院快照帶入基本資料（查不到仍可手動填）
+router.get('/icu-candidates/lookup', (req, res) => {
+  try {
+    const db = getDatabase()
+    const q = String(req.query.q || '').trim()
+    if (q.length < 2) return res.json({ items: [] })
+    const latest = db.prepare('SELECT snapshot_date FROM aki_inpatients ORDER BY snapshot_date DESC LIMIT 1').get()?.snapshot_date
+    if (!latest) return res.json({ items: [] })
+    const key = mrnKey(q)
+    const rows = db
+      .prepare(
+        `SELECT mrn, name, ward, bed, physician FROM aki_inpatients
+          WHERE snapshot_date = ? AND (name LIKE ? OR mrn LIKE ?)
+          ORDER BY bed LIMIT 12`,
+      )
+      .all(latest, `%${q}%`, `%${key || q}%`)
+    const activeMap = loadActiveCandidateMap(db)
+    res.json({
+      snapshotDate: latest,
+      items: rows.map((r) => {
+        const icu = parseIcuWard(r.bed) || parseIcuWard(r.ward)
+        const inIcu = !!icu && ICU_UNITS.some((u) => u.key === icu.unit)
+        return {
+          mrn: r.mrn,
+          name: r.name,
+          ward: r.ward,
+          bed: r.bed,
+          physician: r.physician,
+          unit: inIcu ? icu.unit : '',
+          bedNo: inIcu ? candidateBedNo(icu) : '',
+          alreadyListed: activeMap.has(mrnKey(r.mrn)),
+        }
+      }),
+    })
+  } catch (error) {
+    res.status(500).json({ error: true, message: error.message || '查詢住院病人失敗' })
+  }
+})
+
+// POST /api/aki/icu-candidates —— ICU 透析頁由醫師直接新增（必選 ICUA／ICUB／ICUD）
+router.post('/icu-candidates', (req, res) => {
+  try {
+    const db = getDatabase()
+    const userName = req.user?.name || req.user?.username || ''
+    const candidate = createCandidate(db, req.body || {}, userName, { requireIcuUnit: true, source: 'icu' })
+    logAuditWithRequest(req, 'ICU_CANDIDATE_CREATE', 'icu_dialysis_candidates', candidate.id, { mrn: candidate.mrn })
+    res.status(201).json({ success: true, candidate })
+  } catch (error) {
+    res.status(error.status || 500).json({ error: true, message: error.message || '新增待評估病人失敗', existing: error.existing })
+  }
+})
+
+// PUT /api/aki/icu-candidates/:id —— 部分更新（含結案／重新開啟）
+router.put('/icu-candidates/:id', (req, res) => {
+  try {
+    const db = getDatabase()
+    const userName = req.user?.name || req.user?.username || ''
+    const candidate = updateCandidate(db, req.params.id, req.body || {}, userName)
+    logAuditWithRequest(req, 'ICU_CANDIDATE_UPDATE', 'icu_dialysis_candidates', candidate.id, { fields: Object.keys(req.body || {}) })
+    res.json({ success: true, candidate })
+  } catch (error) {
+    res.status(error.status || 500).json({ error: true, message: error.message || '更新待評估病人失敗', existing: error.existing })
+  }
+})
+
+// DELETE /api/aki/icu-candidates/:id —— 誤建才刪；正常流程請用結案狀態
+router.delete('/icu-candidates/:id', (req, res) => {
+  try {
+    const removed = deleteCandidate(getDatabase(), req.params.id)
+    logAuditWithRequest(req, 'ICU_CANDIDATE_DELETE', 'icu_dialysis_candidates', removed.id, { mrn: removed.mrn, name: removed.name })
+    res.json({ success: true })
+  } catch (error) {
+    res.status(error.status || 500).json({ error: true, message: error.message || '刪除待評估病人失敗' })
   }
 })
 

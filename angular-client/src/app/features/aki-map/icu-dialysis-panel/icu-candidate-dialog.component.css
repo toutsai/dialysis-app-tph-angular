@@ -1,0 +1,297 @@
+.cand-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  background: rgba(38, 50, 56, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+/* flex 直排＋body 自己捲：min-height:0 才不會把表單壓扁或撐出視窗 */
+.cand-modal {
+  width: min(46rem, 100%);
+  max-height: calc(100vh - 2rem);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+.cand-head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid #eceff1;
+  background: #f5f7f8;
+}
+.cand-head h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  color: #263238;
+}
+.src-tag {
+  padding: 0.1rem 0.55rem;
+  border-radius: 10px;
+  background: #e3f2fd;
+  color: #0d47a1;
+  font-size: 0.78rem;
+}
+.src-tag.aki {
+  background: #fff3e0;
+  color: #e65100;
+}
+.close-btn {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  font-size: 1.6rem;
+  line-height: 1;
+  color: #78909c;
+  cursor: pointer;
+}
+.close-btn:hover { color: #263238; }
+
+.cand-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.9rem 1rem 1rem;
+}
+.banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.banner.error { background: #ffebee; color: #b71c1c; }
+.banner.warn { background: #fff8e1; color: #8d6e00; }
+.banner.started { background: #e8f5e9; color: #1b5e20; }
+
+.fld-label {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #546e7a;
+}
+.fld-label em {
+  color: #e53935;
+  font-style: normal;
+}
+.inp {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.42rem 0.6rem;
+  border: 1px solid #cfd8dc;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  color: #263238;
+  background: #fff;
+}
+.inp:focus {
+  outline: none;
+  border-color: #1976d2;
+  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.15);
+}
+.inp.ro {
+  background: #f5f7f8;
+  color: #607d8b;
+}
+.inp.note { resize: vertical; font-family: inherit; }
+
+.lookup {
+  position: relative;
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px dashed #cfd8dc;
+}
+.lookup-list {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  max-height: 13rem;
+  overflow: auto;
+  border: 1px solid #cfd8dc;
+  border-radius: 6px;
+}
+.lookup-list li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.75rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.lookup-list li + li { border-top: 1px solid #eceff1; }
+.lookup-list li:hover { background: #e3f2fd; }
+.lookup-list li.disabled {
+  color: #b0bec5;
+  cursor: not-allowed;
+  background: #fafafa;
+}
+.lk-name { font-weight: 600; min-width: 4.5rem; }
+.lk-mrn { color: #607d8b; font-variant-numeric: tabular-nums; }
+.lk-bed { color: #37474f; }
+.lk-doc { color: #78909c; }
+.lk-tag {
+  margin-left: auto;
+  padding: 0 0.45rem;
+  border-radius: 8px;
+  background: #cfd8dc;
+  color: #37474f;
+  font-size: 0.75rem;
+}
+.lk-tag.off { background: #ffe0b2; color: #e65100; }
+.hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  color: #78909c;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 1rem;
+  margin-bottom: 0.9rem;
+}
+@media (max-width: 640px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.block { margin-bottom: 0.9rem; }
+
+.seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 1px solid #cfd8dc;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.seg button {
+  border: none;
+  background: #fff;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.92rem;
+  color: #455a64;
+  cursor: pointer;
+}
+.seg button + button { border-left: 1px solid #cfd8dc; }
+.seg button.on {
+  background: #1976d2;
+  color: #fff;
+  font-weight: 600;
+}
+/* 預計模式沿用 ICU 透析頁的紅黃綠 */
+.seg button.on[data-mode='HD'] { background: #43a047; }
+.seg button.on[data-mode='SLED'] { background: #fdd835; color: #3e2723; }
+.seg button.on[data-mode='CVVHDF'] { background: #e53935; }
+.seg button.on[data-mode=''] { background: #78909c; }
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.chip {
+  border: 1px solid #cfd8dc;
+  border-radius: 16px;
+  background: #fff;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.9rem;
+  color: #455a64;
+  cursor: pointer;
+}
+.chip small { margin-left: 0.2rem; color: #90a4ae; }
+.chip:hover:not(:disabled) { background: #f5f7f8; }
+.chip.on {
+  border-color: #1976d2;
+  background: #e3f2fd;
+  color: #0d47a1;
+  font-weight: 600;
+}
+.chip.risk.on {
+  border-color: #e65100;
+  background: #fff3e0;
+  color: #bf360c;
+}
+.chip.risk.direct.on {
+  border-color: #c62828;
+  background: #ffebee;
+  color: #b71c1c;
+}
+.chip.on small { color: inherit; }
+.chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.suggest {
+  margin: 0.55rem 0 0;
+  padding: 0.45rem 0.7rem;
+  border-left: 4px solid #43a047;
+  border-radius: 4px;
+  background: #f5f7f8;
+  font-size: 0.88rem;
+  color: #37474f;
+  line-height: 1.5;
+}
+.suggest[data-mode='SLED'] { border-left-color: #fdd835; }
+.suggest[data-mode='CVVHDF'] { border-left-color: #e53935; }
+.suggest .disclaimer {
+  display: block;
+  color: #90a4ae;
+  font-size: 0.8rem;
+}
+.meta {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #90a4ae;
+}
+
+.cand-foot {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.7rem 1rem;
+  border-top: 1px solid #eceff1;
+  background: #fafbfc;
+}
+.close-case {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  font-size: 0.88rem;
+  color: #607d8b;
+}
+.spacer { flex: 1; }
+.btn {
+  border: 1px solid #cfd8dc;
+  border-radius: 6px;
+  background: #fff;
+  padding: 0.45rem 1rem;
+  font-size: 0.92rem;
+  color: #37474f;
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) { background: #f5f7f8; }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn.small { padding: 0.3rem 0.65rem; font-size: 0.85rem; }
+.btn.primary {
+  border-color: #1976d2;
+  background: #1976d2;
+  color: #fff;
+  font-weight: 600;
+}
+.btn.primary:hover:not(:disabled) { background: #1565c0; }
+.btn.danger { border-color: #ef9a9a; color: #c62828; }
+.btn.danger:hover:not(:disabled) { background: #ffebee; }

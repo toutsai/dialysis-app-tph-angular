@@ -297,7 +297,17 @@ router.get('/icu-dialysis-board', (req, res) => {
         statusUpdatedBy: '',
       })),
     }))
-    res.json({ units, total: data.total, generatedAt: new Date().toLocaleString('sv-SE') })
+    // 待透析評估名單同樣去識別：不回傳真實 id、建立／更新者與備註（自由文字可能含個資）
+    const candidates = (data.candidates || []).map((c, i) => ({
+      ...c,
+      id: `candidate-${i}`,
+      name: maskName(c.name),
+      mrn: maskMrn(c.mrn),
+      note: '',
+      createdBy: '',
+      updatedBy: '',
+    }))
+    res.json({ units, total: data.total, candidates, generatedAt: new Date().toLocaleString('sv-SE') })
   } catch (error) {
     res.status(500).json({ error: true, message: error.message || '取得 ICU 透析病人失敗' })
   }

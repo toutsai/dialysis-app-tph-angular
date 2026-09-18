@@ -12,6 +12,7 @@ import {
   AkiUploadBatch,
 } from '@app/core/services/aki-api.service';
 import { IcuDialysisPanelComponent } from './icu-dialysis-panel/icu-dialysis-panel.component';
+import { UserDirectoryService } from '@app/core/services/user-directory.service';
 
 // 主篩選（與分期色碼篩選 AND 疊加）
 type CourseFilter = 'all' | 'ckd' | 'admission-aki' | 'today-aki';
@@ -144,6 +145,10 @@ function compareWard(a: string, b: string): number {
 })
 export class AkiMapComponent implements OnInit {
   private readonly akiApi = inject(AkiApiService);
+  private readonly userDirectory = inject(UserDirectoryService);
+
+  /** 關懷名單「會診醫師」選單（使用者管理「主治醫師」名單） */
+  readonly physicianNames = this.userDirectory.attendingPhysicianNames;
 
   readonly loading = signal(false);
   readonly message = signal<{ type: 'info' | 'error'; text: string } | null>(null);
@@ -354,6 +359,7 @@ export class AkiMapComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+    void this.userDirectory.fetchUsersIfNeeded();
   }
 
   /** 地圖六桶歸類（床卡／觀察名單／詳情共用） */
@@ -555,6 +561,8 @@ export class AkiMapComponent implements OnInit {
       const res = await this.akiApi.saveCare(item.mrn, {
         ckdHistory: item.ckdHistory,
         nephrologyConsult: item.nephrologyConsult,
+        // consultPhysician 刻意不放進整列存檔：它與 ICU 待透析評估紀錄雙向同步，
+        // 只在使用者真的改這一格時才送（見模板），免得名單開太久的舊值把 ICU 頁剛填的洗掉
         akiCause: item.akiCause,
         dialysisStatus: item.dialysisStatus,
         careResult: item.careResult,
@@ -574,10 +582,31 @@ export class AkiMapComponent implements OnInit {
         item.carePhysician = res.care.carePhysician || '';
         item.signedAt = res.care.signedAt || null;
       }
+      // 「高機率透析」以後端為準（＝ICU 待透析評估名單上有沒有這位病人）
+      if (res && 'highDialysisProbability' in res) {
+        item.highDialysisProbability = !!res.highDialysisProbability;
+        item.icuCandidate = res.icuCandidate ?? null;
+      }
       this.careSavedMrn.set(item.mrn);
     } catch (e: any) {
       this.message.set({ type: 'error', text: e?.error?.message || e?.message || '儲存失敗' });
     }
+  }
+
+  /**
+   * 高機率透析：勾＝列入 ICU 透析頁「待透析評估」名單（後端帶基本資料建一筆）；
+   * 取消＝把進行中那筆結案為「不需透析」，先確認（醫師可能已在 ICU 頁補了評估內容）。
+   */
+  async toggleHighDialysis(item: AkiCareItem, event: Event): Promise<void> {
+    const box = event.target as HTMLInputElement;
+    const checked = box.checked;
+    if (!checked && !window.confirm(`取消「高機率透析」會把 ${item.name} 在 ICU 透析頁的待透析評估紀錄結案為「不需透析」，確定嗎？`)) {
+      box.checked = true;
+      return;
+    }
+    await this.saveCareRow(item, { highDialysisProbability: checked });
+    // 存檔失敗時 saveCareRow 不會更新旗標 → 把勾選框拉回實際狀態
+    box.checked = !!item.highDialysisProbability;
   }
 
   sign(item: AkiCareItem): void {

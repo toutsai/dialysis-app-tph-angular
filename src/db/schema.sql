@@ -963,6 +963,7 @@ CREATE TABLE IF NOT EXISTS aki_care_records (
     closure_status TEXT,               -- 結案狀態（持續追蹤/已結案·恢復/已結案·轉腎臟科/死亡）
     care_physician TEXT,               -- 關懷醫師簽核（姓名）
     signed_at TEXT,                    -- 簽核時間
+    consult_physician TEXT,            -- 會診醫師（與 ICU 待透析評估紀錄雙向同步）
     updated_by TEXT,
     updated_at TEXT DEFAULT (datetime('now', 'localtime')),
     created_at TEXT DEFAULT (datetime('now', 'localtime'))
@@ -1007,6 +1008,34 @@ CREATE TABLE IF NOT EXISTS icu_dialysis_daily (
     last_seen_at TEXT DEFAULT (datetime('now', 'localtime')),
     PRIMARY KEY (date, patient_id)
 );
+-- ICU 待透析評估名單（已會診、可能需要 HD／SLED／CVVHDF）：ICU 透析頁醫師直接新增，或 AKI 關懷名單勾「高機率透析」帶入；
+-- mrn_key＝去前導 0 的病歷號（AKI 檔 10 碼補零、透析病人 6~7 碼）；unit 空字串＝AKI 帶入但快照不在 ICU（床位待確認）
+CREATE TABLE IF NOT EXISTS icu_dialysis_candidates (
+    id TEXT PRIMARY KEY,
+    mrn TEXT NOT NULL,
+    mrn_key TEXT NOT NULL,
+    name TEXT,
+    unit TEXT NOT NULL DEFAULT '',
+    bed_no TEXT,
+    physician TEXT,
+    consult_physician TEXT,
+    consult_date TEXT,
+    planned_mode TEXT NOT NULL DEFAULT '',     -- HD / SLED / CVVHDF / ''(未定)
+    indications TEXT NOT NULL DEFAULT '[]',    -- JSON array
+    risk_flags TEXT NOT NULL DEFAULT '[]',     -- JSON array：vasopressor/vasoHigh/mapLow/lactateHigh/ventilator/ecmo/brainInjury
+    urgency TEXT,
+    vascular_access TEXT,
+    note TEXT,
+    status TEXT NOT NULL DEFAULT '觀察中',     -- 觀察中/已排定（進行中）｜已開始透析/不需透析/轉出／死亡（結案）
+    source TEXT NOT NULL DEFAULT 'icu',        -- icu＝ICU 透析頁新增；aki＝AKI 關懷帶入
+    created_by TEXT,
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    updated_by TEXT,
+    updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+    closed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_icu_candidates_mrn_key ON icu_dialysis_candidates(mrn_key, status);
+
 -- 有跑過記錄的日期：名單為空時分辨「當天 ICU 0 人」與「沒記錄到」
 CREATE TABLE IF NOT EXISTS icu_dialysis_daily_runs (
     date TEXT PRIMARY KEY,

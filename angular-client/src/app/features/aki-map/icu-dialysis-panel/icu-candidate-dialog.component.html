@@ -1,0 +1,184 @@
+<div class="cand-backdrop" (click)="closed.emit()">
+  <div class="cand-modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+    <header class="cand-head">
+      <h3>{{ isEdit ? '待透析評估' : '新增待透析評估病人' }}</h3>
+      @if (candidate; as c) {
+        <span class="src-tag" [class.aki]="c.source === 'aki'">{{ c.source === 'aki' ? 'AKI 關懷帶入' : 'ICU 透析頁新增' }}</span>
+      }
+      <button type="button" class="close-btn" (click)="closed.emit()" aria-label="關閉">×</button>
+    </header>
+
+    <div class="cand-body">
+      @if (error(); as msg) { <div class="banner error">{{ msg }}</div> }
+
+      @if (candidate?.startedDialysis; as s) {
+        <div class="banner started">
+          這位病人已出現在「透析中」名單（{{ s.bedNo }}／{{ s.mode }}），可直接結案。
+          <button type="button" class="btn small" [disabled]="saving()" (click)="closeCase('已開始透析')">結案為「已開始透析」</button>
+        </div>
+      }
+      @if (candidate && !candidate.unit) {
+        <div class="banner warn">床位待確認：由 AKI 關懷名單帶入時，住院資料顯示病人不在 ICU。請確認後選擇加護單位與床號。</div>
+      }
+
+      <!-- 從住院快照帶入（僅新增） -->
+      @if (!isEdit) {
+        <section class="lookup">
+          <label class="fld-label" for="cand-lookup">從住院資料帶入</label>
+          <input id="cand-lookup" class="inp" [(ngModel)]="lookupQuery" (input)="onLookupInput()" placeholder="輸入病歷號或姓名（至少 2 個字）" autocomplete="off" />
+          @if (lookupItems().length) {
+            <ul class="lookup-list">
+              @for (it of lookupItems(); track it.mrn) {
+                <li [class.disabled]="it.alreadyListed" (click)="applyLookup(it)">
+                  <span class="lk-name">{{ it.name }}</span>
+                  <span class="lk-mrn">{{ it.mrn }}</span>
+                  <span class="lk-bed">{{ it.unit ? it.unit + '-' + it.bedNo : (it.ward || '') + ' ' + (it.bed || '') }}</span>
+                  <span class="lk-doc">{{ it.physician }}</span>
+                  @if (it.alreadyListed) { <span class="lk-tag">已在名單</span> }
+                  @else if (!it.unit) { <span class="lk-tag off">不在 ICU</span> }
+                </li>
+              }
+            </ul>
+          } @else if (lookupDone()) {
+            <p class="hint">住院資料查不到（{{ lookupSnapshot() ? '快照 ' + lookupSnapshot() : '尚無快照' }}），可直接在下方手動填寫。</p>
+          }
+        </section>
+      }
+
+      <section class="grid">
+        <div class="fld">
+          <label class="fld-label" for="cand-mrn">病歷號 <em>*</em></label>
+          <input id="cand-mrn" class="inp" [(ngModel)]="form.mrn" [readonly]="isEdit" [class.ro]="isEdit" />
+        </div>
+        <div class="fld">
+          <label class="fld-label" for="cand-name">姓名 <em>*</em></label>
+          <input id="cand-name" class="inp" [(ngModel)]="form.name" />
+        </div>
+        <div class="fld">
+          <span class="fld-label">加護單位 <em>*</em></span>
+          <div class="seg">
+            @for (u of units; track u) {
+              <button type="button" [class.on]="form.unit === u" (click)="form.unit = u">{{ u }}</button>
+            }
+          </div>
+        </div>
+        <div class="fld">
+          <label class="fld-label" for="cand-bed">床號</label>
+          <input id="cand-bed" class="inp" [(ngModel)]="form.bedNo" placeholder="例：08" />
+        </div>
+        <div class="fld">
+          <label class="fld-label" for="cand-doc">主治醫師</label>
+          <input id="cand-doc" class="inp" [(ngModel)]="form.physician" />
+        </div>
+        <div class="fld">
+          <label class="fld-label" for="cand-consult">會診醫師</label>
+          <select id="cand-consult" class="inp" [(ngModel)]="form.consultPhysician">
+            <option value="">— 未指定 —</option>
+            <!-- 既有紀錄的醫師已不在名單（離職／舊的手打值）仍保留顯示，不讓選單變空白 -->
+            @if (form.consultPhysician && !physicianNames().includes(form.consultPhysician)) {
+              <option [value]="form.consultPhysician">{{ form.consultPhysician }}</option>
+            }
+            @for (n of physicianNames(); track n) {
+              <option [value]="n">{{ n }}</option>
+            }
+          </select>
+        </div>
+        <div class="fld">
+          <label class="fld-label" for="cand-date">會診日期</label>
+          <input id="cand-date" class="inp" type="date" [(ngModel)]="form.consultDate" />
+        </div>
+        <div class="fld">
+          <span class="fld-label">緊急程度</span>
+          <div class="seg">
+            @for (u of urgencies; track u) {
+              <button type="button" [class.on]="form.urgency === u" (click)="form.urgency = form.urgency === u ? '' : u">{{ u }}</button>
+            }
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <span class="fld-label">適應症（可複選）</span>
+        <div class="chips">
+          @for (o of indicationOptions(); track o) {
+            <button type="button" class="chip" [class.on]="hasIndication(o)" (click)="toggleIndication(o)">{{ o }}</button>
+          }
+        </div>
+      </section>
+
+      <section class="block">
+        <span class="fld-label">血行動力學／器官支持</span>
+        <div class="chips">
+          @for (r of riskItems(); track r.key) {
+            <button type="button" class="chip risk" [class.on]="riskFlags().has(r.key)" [class.direct]="r.direct" [disabled]="riskDisabled(r)"
+                    [title]="riskDisabled(r) ? '需先勾「使用升壓劑」' : ''" (click)="toggleRisk(r)">
+              {{ r.label }} <small>{{ riskPts(r) }}</small>
+            </button>
+          }
+        </div>
+        @if (suggestion(); as s) {
+          @if (s.any) {
+            <p class="suggest" [attr.data-mode]="s.mode">
+              模式提示：傾向 <b>{{ s.mode }}</b>
+              <span>（{{ s.direct ? '腦損傷／肝衰竭直接建議 CRRT' : s.score + ' 分' }}；≥4 分→CVVHDF、2–3→SLED、0–1→HD）</span>
+              <span class="disclaimer">沿用 ICU 透析卡片的 CRRT 風險配分，非驗證分數，僅供參考。</span>
+            </p>
+          }
+        }
+      </section>
+
+      <section class="grid">
+        <div class="fld">
+          <span class="fld-label">預計模式</span>
+          <div class="seg">
+            @for (m of modes; track m.key) {
+              <button type="button" [class.on]="form.plannedMode === m.key" [attr.data-mode]="m.key" (click)="form.plannedMode = m.key">{{ m.label }}</button>
+            }
+          </div>
+        </div>
+        <div class="fld">
+          <span class="fld-label">血管通路（雙腔導管）</span>
+          <div class="seg">
+            @for (a of accessOptions; track a) {
+              <button type="button" [class.on]="form.vascularAccess === a" (click)="form.vascularAccess = form.vascularAccess === a ? '' : a">{{ a }}</button>
+            }
+          </div>
+        </div>
+        <div class="fld">
+          <span class="fld-label">狀態</span>
+          <div class="seg">
+            @for (s of activeStatuses; track s) {
+              <button type="button" [class.on]="form.status === s" (click)="form.status = s">{{ s }}</button>
+            }
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <label class="fld-label" for="cand-note">備註</label>
+        <textarea id="cand-note" class="inp note" rows="2" [(ngModel)]="form.note" maxlength="1000"></textarea>
+      </section>
+
+      @if (candidate; as c) {
+        <p class="meta">
+          建立：{{ c.createdBy || '—' }} {{ c.createdAt }}　最後更新：{{ c.updatedBy || '—' }} {{ c.updatedAt }}
+        </p>
+      }
+    </div>
+
+    <footer class="cand-foot">
+      @if (isEdit) {
+        <div class="close-case">
+          <span>結案：</span>
+          @for (s of closeStatuses; track s) {
+            <button type="button" class="btn small" [disabled]="saving()" (click)="closeCase(s)">{{ s }}</button>
+          }
+        </div>
+        <button type="button" class="btn small danger" [disabled]="saving()" (click)="remove()" title="只用於誤建；正常流程請用結案">刪除</button>
+      }
+      <span class="spacer"></span>
+      <button type="button" class="btn" [disabled]="saving()" (click)="closed.emit()">取消</button>
+      <button type="button" class="btn primary" [disabled]="saving()" (click)="save()">{{ saving() ? '儲存中…' : '儲存' }}</button>
+    </footer>
+  </div>
+</div>

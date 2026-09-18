@@ -290,7 +290,8 @@
                 @if (isDischargedView()) {
                   <th>出院日</th><th>回診安排</th><th>回診日期</th><th>追蹤抽血</th><th>電訪</th><th>結案</th>
                 } @else {
-                  <th>CKD 病史</th><th>腎臟科會診</th>
+                  <th>CKD 病史</th><th>腎臟科會診</th><th class="nowrap">會診醫師</th>
+                  <th class="nowrap" title="勾選＝列入 ICU 透析頁「待透析評估」名單（只帶基本資料，預計模式與適應症由醫師到 ICU 透析頁補）；取消勾選＝該筆結案為不需透析">高機率透析</th>
                   @if (isCkdView()) {
                     <th>Pre-ESRD 收案</th><th>衛教</th><th>透析準備</th>
                   } @else {
@@ -366,6 +367,26 @@
                         <option value="">—</option>
                         @for (o of nephrologyOptions; track o) { <option [value]="o">{{ o }}</option> }
                       </select>
+                    </td>
+                    <td>
+                      <select class="cell-input narrow" [(ngModel)]="it.consultPhysician" (change)="saveCareRow(it, { consultPhysician: it.consultPhysician })">
+                        <option value="">—</option>
+                        <!-- 已不在名單的舊值（離職／先前手打）保留顯示 -->
+                        @if (it.consultPhysician && !physicianNames().includes(it.consultPhysician)) {
+                          <option [value]="it.consultPhysician">{{ it.consultPhysician }}</option>
+                        }
+                        @for (n of physicianNames(); track n) { <option [value]="n">{{ n }}</option> }
+                      </select>
+                    </td>
+                    <td class="nowrap hi-dialysis-cell">
+                      <label class="hi-dialysis" [title]="it.highDialysisProbability ? '已列入 ICU 透析頁「待透析評估」名單；取消勾選＝結案為不需透析' : '勾選＝列入 ICU 透析頁「待透析評估」名單'">
+                        <input type="checkbox" [checked]="it.highDialysisProbability" (change)="toggleHighDialysis(it, $event)" />
+                        @if (it.icuCandidate; as c) {
+                          <span class="hi-dialysis-tag" [class.pending]="c.needsAssessment || !c.unit">
+                            {{ !c.unit ? '床位待確認' : c.needsAssessment ? '待補評估' : (c.plannedMode || '模式未定') }}
+                          </span>
+                        }
+                      </label>
                     </td>
                     @if (isCkdView()) {
                       <td>

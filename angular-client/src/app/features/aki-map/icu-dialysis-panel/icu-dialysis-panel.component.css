@@ -353,6 +353,122 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .tag.lock { background: #eceff1; color: #455a64; }
 .tag.aki { color: #fff; }
 .tag.first { background: #e1f5fe; color: #01579b; }
+
+/* ---------- 待透析評估（已會診）：虛線框卡片，與上方「透析中」的實心色卡區分 ---------- */
+.btn.add-cand { border-color: #1976d2; color: #1565c0; font-weight: 600; }
+.btn.add-cand:hover { background: #e3f2fd; }
+.cand-total {
+  border: 1px dashed #5c6bc0;
+  border-radius: 4px;
+  background: #e8eaf6;
+  color: #283593;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  padding: 0.18rem 0.6rem;
+  cursor: pointer;
+}
+.cand-total:hover { background: #c5cae9; }
+
+.cand {
+  margin-top: 1.25rem;
+  padding: 0.9rem 1rem 1rem;
+  border: 2px dashed #b0bec5;
+  border-radius: 12px;
+  background: #fafbfc;
+  scroll-margin-top: 0.75rem;
+}
+.cand[hidden] { display: none; }
+.cand-head { display: flex; align-items: baseline; gap: 0.4rem 0.9rem; flex-wrap: wrap; margin-bottom: 0.7rem; }
+.cand-head h3 { margin: 0; font-size: 1.3rem; font-weight: 800; color: #283593; }
+.cand-head h3 small { margin-left: 0.6rem; font-size: 0.9rem; font-weight: 600; color: #607d8b; }
+.cand-n { font-size: 1.05rem; font-weight: 700; color: #546e7a; }
+.cand-started { font-size: 0.88rem; font-weight: 700; background: #e8f5e9; color: #1b5e20; border-radius: 4px; padding: 0.08rem 0.5rem; }
+.cand-hint { font-size: 0.82rem; color: #90a4ae; }
+.cand-empty { color: #90a4ae; text-align: center; padding: 0.9rem 0; }
+
+.cand-cols {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+  align-items: start;
+}
+@media (max-width: 1100px) { .cand-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 720px) { .cand-cols { grid-template-columns: 1fr; } }
+.cand-col-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid #cfd8dc;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #1565c0;
+}
+.cand-col-head small { font-size: 0.82rem; font-weight: 600; color: #78909c; }
+.cand-col-head.warn { color: #e65100; border-bottom-color: #ffcc80; }
+.cand-col-empty { color: #b0bec5; text-align: center; padding: 0.4rem 0; }
+.cand-unplaced {
+  margin-bottom: 0.9rem;
+  padding: 0.6rem 0.75rem 0.7rem;
+  border-radius: 8px;
+  background: #fff8e1;
+}
+.cand-unplaced .cand-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); }
+.cand-cards { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.cand-card {
+  --m: #b0bec5;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.22rem;
+  padding: 0.5rem 0.65rem 0.5rem 0.75rem;
+  border: 2px dashed #90a4ae;
+  border-left: 6px solid var(--m);
+  border-radius: 8px;
+  background: #fff;
+  color: #263238;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: box-shadow 0.12s ease, transform 0.12s ease;
+}
+.cand-card:hover, .cand-card:focus-visible { box-shadow: 0 3px 10px rgba(38, 50, 56, 0.18); transform: translateY(-1px); outline: none; }
+.cand-card.ro { cursor: default; }
+.cand-card.ro:hover { box-shadow: none; transform: none; }
+.cand-card.mode-hd { --m: var(--hd); }
+.cand-card.mode-sled { --m: var(--sled); }
+.cand-card.mode-cvvhdf { --m: var(--cvvhdf); }
+.cand-card.started { background: #f1f8e9; border-color: #66bb6a; border-left-color: var(--m); }
+.mode.mode-none { background: #eceff1; color: #546e7a; }
+.cc-top, .cc-tags { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; }
+.cc-tags:empty { display: none; }
+.cc-bed { font-size: 0.85rem; font-weight: 800; color: #455a64; letter-spacing: 0.3px; }
+.cc-name { font-size: 1.05rem; font-weight: 800; }
+.cc-line {
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: #455a64;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cc-line i { font-style: normal; color: #90a4ae; margin-right: 0.3rem; }
+.cc-line i.sep { margin-left: 0.6rem; }
+.tag.urg { background: #ffe0b2; color: #e65100; }
+.tag.urg.today { background: #c62828; color: #fff; }
+.tag.sched { background: #e3f2fd; color: #0d47a1; }
+.tag.started { background: #2e7d32; color: #fff; }
+.tag.need { background: #fff3e0; color: #e65100; }
+.tag.cr { background: #eceff1; color: #37474f; }
+.tag.lean { background: #ede7f6; color: #4527a0; }
+
 .flags { margin-left: auto; display: inline-flex; gap: 0.25rem; flex-wrap: wrap; }
 .flag {
   font-size: 0.74rem;
