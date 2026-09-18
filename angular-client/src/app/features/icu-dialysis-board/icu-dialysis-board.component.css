@@ -1,0 +1,39 @@
+.board-page {
+  min-height: 100vh;
+  background-color: #f0f2f5;
+  padding: 1.25rem 2rem 3rem;
+  font-family: 'Microsoft JhengHei', 'Segoe UI', sans-serif;
+  color: #212529;
+}
+
+.board-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.board-header h1 {
+  margin: 0;
+  font-size: 1.6rem;
+  color: #0056b3;
+}
+
+.board-note {
+  color: #6c757d;
+  font-size: 0.92rem;
+}
+
+.board-body {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  padding: 1rem 1.25rem 1.5rem;
+}
+
+@media (max-width: 700px) {
+  .board-page { padding: 0.75rem 0.75rem 2rem; }
+  .board-body { padding: 0.6rem; }
+}

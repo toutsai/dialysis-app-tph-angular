@@ -27,6 +27,7 @@
 .legend { display: inline-flex; gap: 0.3rem; }
 .loaded { color: #90a4ae; font-size: 0.82rem; }
 
+a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .btn {
   border: 1px solid #cfd8dc;
   border-radius: 6px;
@@ -422,6 +423,21 @@
   background: #fff;
 }
 .detail { flex: 1 1 8rem; min-width: 6rem; }
+/* 唯讀展示（免登入分享頁）：登錄值以文字呈現 */
+.ro-val {
+  display: inline-block;
+  border-radius: 6px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  background: #e8f5e9;
+  color: #2e7d32;
+  flex-shrink: 0;
+}
+.ro-val.ro-yes { background: #c62828; color: #fff; }
+.ro-val.ro-none { background: #eceff1; color: #90a4ae; font-weight: 500; }
+.ro-val.ro-mini { padding: 0.1rem 0.5rem; font-size: 0.84rem; }
+.ro-detail { color: #263238; font-size: 0.94rem; }
 .o2 { flex-shrink: 0; }
 .detail:focus, .o2:focus { outline: none; border-color: #1976d2; }
 

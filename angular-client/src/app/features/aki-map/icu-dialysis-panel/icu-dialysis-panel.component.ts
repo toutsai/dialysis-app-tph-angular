@@ -1,14 +1,19 @@
-import { Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, Input, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
   AkiApiService,
   IcuDialysisPatient,
+  IcuDialysisResponse,
   IcuDialysisUnit,
   IcuStatusSavePayload,
   IcuYesNo,
 } from '@app/core/services/aki-api.service';
+import { ApiConfigService } from '@services/api-config.service';
 import { ORDERED_SHIFT_CODES, getShiftDisplayName } from '@/constants/scheduleConstants';
+
+/** 免登入唯讀展示頁路由（app.routes.ts 掛在 main layout 之外） */
+export const ICU_BOARD_PATH = '/icu-dialysis-board';
 
 type YesNoField = 'vasopressor' | 'ecmo' | 'ufDifficulty' | 'vasoHigh' | 'mapLow' | 'lactateHigh' | 'brainInjury';
 type DetailField = 'vasopressorDetail' | 'ecmoDetail' | 'oxygenDetail' | 'ufDetail';
@@ -80,6 +85,18 @@ const POP_H = 360;
 })
 export class IcuDialysisPanelComponent implements OnInit {
   private readonly akiApi = inject(AkiApiService);
+  private readonly apiConfig = inject(ApiConfigService);
+
+  /**
+   * 免登入唯讀展示頁模式（2026-09-18，分享給 ICU 專師／護理長）：
+   * 資料改打免驗證的 /dashboard/icu-dialysis-board（後端已遮罩姓名／病歷號），且不顯示任何編輯控制項。
+   * 用 raw fetch：ApiService 會把 401 導回登入頁。
+   */
+  @Input() publicBoard = false;
+  /** 唯讀：完整卡片只顯示登錄值，不出現是／否鈕、下拉與輸入框 */
+  @Input() readOnly = false;
+
+  readonly boardPath = ICU_BOARD_PATH;
 
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
@@ -167,7 +184,7 @@ export class IcuDialysisPanelComponent implements OnInit {
     this.loading.set(true);
     this.error.set(null);
     try {
-      const res = await this.akiApi.getIcuDialysis();
+      const res = this.publicBoard ? await this.fetchPublicBoard() : await this.akiApi.getIcuDialysis();
       const units = res.units || [];
       this.units.set(units);
       this.total.set(res.total || 0);
@@ -183,6 +200,18 @@ export class IcuDialysisPanelComponent implements OnInit {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  private async fetchPublicBoard(): Promise<IcuDialysisResponse> {
+    const res = await fetch(`${this.apiConfig.apiBaseUrl}/dashboard/icu-dialysis-board`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.message || '讀取 ICU 透析病人失敗');
+    return data as IcuDialysisResponse;
+  }
+
+  /** 唯讀顯示用：'有' / '無' / 未評估 */
+  yesNoText(v: string | null | undefined): string {
+    return v === '有' || v === '無' ? v : '未評估';
   }
 
   // ---------- 滑過摘要浮窗 / 完整卡片 ----------

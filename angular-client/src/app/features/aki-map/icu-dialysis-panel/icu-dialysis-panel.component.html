@@ -3,9 +3,17 @@
     <div class="icu-title">
       ICU 透析病人
       <span class="icu-count">共 {{ total() }} 人</span>
-      <span class="icu-hint">依病人清單「住院／急診＋病房號 ICUA / ICUB / ICUD」即時取得；滑過卡片看摘要、點選卡片登錄評估</span>
+      @if (readOnly) {
+        <span class="icu-hint">唯讀展示：滑過卡片看摘要、點選卡片看完整資料；姓名與病歷號已去識別</span>
+      } @else {
+        <span class="icu-hint">依病人清單「住院／急診＋病房號 ICUA / ICUB / ICUD」即時取得；滑過卡片看摘要、點選卡片登錄評估</span>
+      }
     </div>
     <div class="icu-actions">
+      @if (!publicBoard) {
+        <a class="btn ghost" [href]="boardPath" target="_blank" rel="noopener"
+           title="免登入、唯讀、姓名與病歷號去識別的獨立頁面，可把網址分享給 ICU 專師／護理長">分享頁（唯讀）</a>
+      }
       @if (crrtFlagTotal()) {
         <span class="crrt-total" title="HD/SLED 病人達 CRRT 風險門檻或直接考慮者">疑需 CRRT {{ crrtFlagTotal() }} 人</span>
       }
@@ -182,7 +190,7 @@
         @if (h.p.statusUpdatedAt) {
           <span>最後更新 {{ h.p.statusUpdatedBy }} {{ fmtTime(h.p.statusUpdatedAt) }}</span>
         }
-        <span class="pop-tip">點選卡片登錄評估</span>
+        <span class="pop-tip">{{ readOnly ? '點選卡片看完整資料' : '點選卡片登錄評估' }}</span>
       </div>
     </div>
   }
@@ -233,6 +241,33 @@
             @if (p.inpatientReason) { <span class="reason"><i>住院原因</i>{{ p.inpatientReason }}</span> }
           </div>
 
+          @if (readOnly) {
+            <!-- 唯讀（免登入展示頁）：只顯示登錄值 -->
+            <div class="assess">
+              <div class="row">
+                <span class="lbl">升壓劑</span>
+                <span class="ro-val" [class.ro-yes]="p.vasopressor === '有'" [class.ro-none]="!p.vasopressor">{{ yesNoText(p.vasopressor) }}</span>
+                @if (p.vasopressorDetail) { <span class="ro-detail">{{ p.vasopressorDetail }}</span> }
+              </div>
+              <div class="row">
+                <span class="lbl">ECMO</span>
+                <span class="ro-val" [class.ro-yes]="p.ecmo === '有'" [class.ro-none]="!p.ecmo">{{ yesNoText(p.ecmo) }}</span>
+                @if (p.ecmoDetail) { <span class="ro-detail">{{ p.ecmoDetail }}</span> }
+              </div>
+              <div class="row">
+                <span class="lbl">氧氣</span>
+                <span class="ro-val" [class.ro-yes]="!!p.oxygen && p.oxygen !== '室內空氣'" [class.ro-none]="!p.oxygen">{{ p.oxygen || '未評估' }}</span>
+                @if (p.oxygenDetail) { <span class="ro-detail">{{ p.oxygenDetail }}</span> }
+              </div>
+              @if (showUfRow(p)) {
+                <div class="row">
+                  <span class="lbl">脫水困難</span>
+                  <span class="ro-val" [class.ro-yes]="p.ufDifficulty === '有'" [class.ro-none]="!p.ufDifficulty">{{ yesNoText(p.ufDifficulty) }}</span>
+                  @if (p.ufDetail) { <span class="ro-detail">{{ p.ufDetail }}</span> }
+                </div>
+              }
+            </div>
+          } @else {
           <div class="assess">
             <!-- 1. 升壓劑 -->
             <div class="row">
@@ -294,6 +329,7 @@
               </div>
             }
           </div>
+          }
 
           <!-- CRRT 需求風險檢核（HD / SLED 適用；門檻由後端回傳） -->
           @if (p.crrtApplicable) {
@@ -317,12 +353,16 @@
                   @if (!c.needsVaso || p.vasopressor === '有') {
                     <div class="crrt-check" [title]="c.hint">
                       <span class="clbl">{{ c.label }} <small>{{ c.pts }}</small></span>
-                      <span class="seg mini-seg">
-                        @for (v of yesNoOptions; track v) {
-                          <button type="button" [class.on-yes]="v === '有' && p[c.field] === v" [class.on-no]="v === '無' && p[c.field] === v"
-                                  (click)="setYesNo(p, c.field, v)">{{ v }}</button>
-                        }
-                      </span>
+                      @if (readOnly) {
+                        <span class="ro-val ro-mini" [class.ro-yes]="p[c.field] === '有'" [class.ro-none]="!p[c.field]">{{ yesNoText(p[c.field]) }}</span>
+                      } @else {
+                        <span class="seg mini-seg">
+                          @for (v of yesNoOptions; track v) {
+                            <button type="button" [class.on-yes]="v === '有' && p[c.field] === v" [class.on-no]="v === '無' && p[c.field] === v"
+                                    (click)="setYesNo(p, c.field, v)">{{ v }}</button>
+                          }
+                        </span>
+                      }
                     </div>
                   }
                 }
