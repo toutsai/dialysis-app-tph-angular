@@ -524,6 +524,24 @@
 .cell-input.narrow { width: 5.5rem; }
 .cell-input:focus { outline: none; border-color: #1976d2; }
 
+/* 高機率透析：勾選＝列入 ICU 透析頁「待透析評估」名單；旁邊的小標顯示那筆紀錄的進度 */
+.hi-dialysis {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+}
+.hi-dialysis input { width: 1.05rem; height: 1.05rem; cursor: pointer; }
+.hi-dialysis-tag {
+  padding: 0.05rem 0.45rem;
+  border-radius: 8px;
+  background: #e3f2fd;
+  color: #0d47a1;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.hi-dialysis-tag.pending { background: #fff3e0; color: #e65100; }
+
 .link {
   border: none;
   background: none;

@@ -176,6 +176,11 @@ export interface AkiCareItem extends AkiCourseFields {
   closureStatus: string;
   carePhysician: string;
   signedAt: string | null;
+  /** 會診醫師（與 ICU 待透析評估紀錄雙向同步） */
+  consultPhysician: string;
+  /** 高機率透析＝ICU 透析頁「待透析評估」名單上有這位病人（後端推導，不是獨立欄位） */
+  highDialysisProbability?: boolean;
+  icuCandidate?: IcuCandidateBrief | null;
   dischargeDate?: string | null;
   lastSeenDate?: string | null;
 }
@@ -206,6 +211,8 @@ export interface AkiCareSavePayload {
   followupLab?: string;
   contactStatus?: string;
   closureStatus?: string;
+  consultPhysician?: string;
+  highDialysisProbability?: boolean;
   sign?: boolean;
   clearSign?: boolean;
 }
@@ -281,6 +288,105 @@ export interface IcuDialysisUnit {
 export interface IcuDialysisResponse {
   units: IcuDialysisUnit[];
   total: number;
+  /** 待透析評估名單（已會診、可能需要 HD／SLED／CVVHDF） */
+  candidates?: IcuCandidate[];
+}
+
+// ---------- ICU 待透析評估名單（已會診、可能需要 HD／SLED／CVVHDF） ----------
+
+export type IcuCandidateMode = '' | 'HD' | 'SLED' | 'CVVHDF';
+export type IcuCandidateStatus = '觀察中' | '已排定' | '已開始透析' | '不需透析' | '轉出／死亡';
+
+export interface IcuCandidate {
+  id: string;
+  mrn: string;
+  name: string;
+  /** ICUA／ICUB／ICUD；空字串＝AKI 帶入但快照顯示不在 ICU（床位待確認） */
+  unit: string;
+  bedNo: string;
+  physician: string;
+  consultPhysician: string;
+  consultDate: string;
+  /** 空字串＝未定 */
+  plannedMode: IcuCandidateMode;
+  indications: string[];
+  riskFlags: string[];
+  urgency: string;
+  vascularAccess: string;
+  note: string;
+  status: IcuCandidateStatus;
+  active: boolean;
+  source: 'icu' | 'aki';
+  /** AKI 帶入後醫師還沒補預計模式／適應症／血行動力學 */
+  needsAssessment: boolean;
+  /** 依血行動力學勾選的模式提示（非驗證分數） */
+  suggestedMode: 'HD' | 'SLED' | 'CVVHDF';
+  riskScore: number;
+  riskDirect: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedBy: string;
+  updatedAt: string;
+  closedAt: string | null;
+  akiCategory?: AkiCategory | null;
+  akiStage?: number | null;
+  latestCr?: number | null;
+  latestCrDate?: string | null;
+  /** 已出現在「透析中」名單＝已開始透析，提示結案 */
+  startedDialysis?: { mode: string; bedNo: string } | null;
+}
+
+/** AKI 關懷名單上顯示用的精簡版 */
+export interface IcuCandidateBrief {
+  id: string;
+  status: IcuCandidateStatus;
+  plannedMode: IcuCandidateMode;
+  unit: string;
+  bedNo: string;
+  needsAssessment: boolean;
+}
+
+export interface IcuCandidatePayload {
+  mrn: string;
+  name: string;
+  unit: string;
+  bedNo: string;
+  physician: string;
+  consultPhysician: string;
+  consultDate: string;
+  plannedMode: IcuCandidateMode;
+  indications: string[];
+  riskFlags: string[];
+  urgency: string;
+  vascularAccess: string;
+  note: string;
+  status: IcuCandidateStatus;
+}
+
+export interface IcuCandidateRiskItem {
+  key: string;
+  label: string;
+  pts: number;
+  /** 需先勾這一項才計分（NE 高劑量 ← 使用升壓劑） */
+  needs?: string;
+  /** 不計分、直接建議 CRRT */
+  direct?: boolean;
+}
+
+export interface IcuCandidateOptions {
+  indications: string[];
+  riskItems: IcuCandidateRiskItem[];
+}
+
+export interface IcuCandidateLookupItem {
+  mrn: string;
+  name: string;
+  ward: string;
+  bed: string;
+  physician: string;
+  unit: string;
+  bedNo: string;
+  alreadyListed: boolean;
 }
 
 /** ICU 透析月／年統計：各模式人數（OTHER＝HD/SLED/CVVHDF 以外） */
@@ -360,7 +466,7 @@ export class AkiApiService {
 
   saveCare(mrn: string, payload: AkiCareSavePayload) {
     return firstValueFrom(
-      this.api.put<{ success: boolean; care: any }>(`/aki/care/${mrn}`, payload),
+      this.api.put<{ success: boolean; care: any; highDialysisProbability?: boolean; icuCandidate?: IcuCandidateBrief | null }>(`/aki/care/${mrn}`, payload),
     );
   }
 
@@ -374,6 +480,26 @@ export class AkiApiService {
     if (month) params.push(`month=${month}`);
     if (unit) params.push(`unit=${encodeURIComponent(unit)}`);
     return firstValueFrom(this.api.get<IcuDialysisStats>(`/aki/icu-dialysis/stats?${params.join('&')}`));
+  }
+
+  getIcuCandidateOptions(): Promise<IcuCandidateOptions> {
+    return firstValueFrom(this.api.get<IcuCandidateOptions>('/aki/icu-candidates/options'));
+  }
+
+  lookupIcuCandidate(q: string): Promise<{ snapshotDate?: string; items: IcuCandidateLookupItem[] }> {
+    return firstValueFrom(this.api.get<{ snapshotDate?: string; items: IcuCandidateLookupItem[] }>(`/aki/icu-candidates/lookup?q=${encodeURIComponent(q)}`));
+  }
+
+  createIcuCandidate(payload: IcuCandidatePayload) {
+    return firstValueFrom(this.api.post<{ success: boolean; candidate: IcuCandidate }>('/aki/icu-candidates', payload));
+  }
+
+  updateIcuCandidate(id: string, payload: Partial<IcuCandidatePayload>) {
+    return firstValueFrom(this.api.put<{ success: boolean; candidate: IcuCandidate }>(`/aki/icu-candidates/${id}`, payload));
+  }
+
+  deleteIcuCandidate(id: string) {
+    return firstValueFrom(this.api.delete<{ success: boolean }>(`/aki/icu-candidates/${id}`));
   }
 
   saveIcuStatus(patientId: string, payload: IcuStatusSavePayload) {

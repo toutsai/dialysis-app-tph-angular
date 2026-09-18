@@ -1051,6 +1051,50 @@ export function runMigrations() {
     }
 
     // ========================================
+    // icu_dialysis_candidates：ICU 待透析評估名單（已會診、可能需要 HD／SLED／CVVHDF，2026-09-19）
+    // 雙入口單一名單：ICU 透析頁醫師直接新增，或 AKI 關懷名單勾「高機率透析」帶入（＝此病歷號有進行中紀錄）。
+    // aki_care_records.consult_physician：會診醫師，與待評估紀錄雙向同步。
+    // ========================================
+    const icuCandidatesExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='icu_dialysis_candidates'")
+      .get()
+    if (!icuCandidatesExists) {
+      console.log('📋 建立 icu_dialysis_candidates 表格...')
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS icu_dialysis_candidates (
+          id TEXT PRIMARY KEY,
+          mrn TEXT NOT NULL,
+          mrn_key TEXT NOT NULL,
+          name TEXT,
+          unit TEXT NOT NULL DEFAULT '',
+          bed_no TEXT,
+          physician TEXT,
+          consult_physician TEXT,
+          consult_date TEXT,
+          planned_mode TEXT NOT NULL DEFAULT '',
+          indications TEXT NOT NULL DEFAULT '[]',
+          risk_flags TEXT NOT NULL DEFAULT '[]',
+          urgency TEXT,
+          vascular_access TEXT,
+          note TEXT,
+          status TEXT NOT NULL DEFAULT '觀察中',
+          source TEXT NOT NULL DEFAULT 'icu',
+          created_by TEXT,
+          created_at TEXT DEFAULT (datetime('now', 'localtime')),
+          updated_by TEXT,
+          updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+          closed_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_icu_candidates_mrn_key ON icu_dialysis_candidates(mrn_key, status);
+      `)
+      migrationsApplied++
+    }
+    const careTableForConsult = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='aki_care_records'")
+      .get()
+    if (careTableForConsult && addColumnIfNotExists(db, 'aki_care_records', 'consult_physician', 'TEXT')) migrationsApplied++
+
+    // ========================================
     // consumables_reports：report_data 補上 ranges（各上傳區間明細，2026-09-01）
     // 改制前同月同類別再上傳會整批覆蓋；改為以「起日-迄日」為 key 去重+累積，月聚合欄位由 ranges 加總重算。
     // 既有列沒有 ranges → 由 source_file 檔名的 MMDD-MMDD 推出區間（A2...0824-0828.xls → 20260824-20260828），

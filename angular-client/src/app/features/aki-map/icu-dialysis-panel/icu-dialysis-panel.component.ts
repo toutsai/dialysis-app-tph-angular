@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
   AkiApiService,
+  IcuCandidate,
   IcuDialysisPatient,
   IcuDialysisResponse,
   IcuDialysisUnit,
@@ -12,6 +13,7 @@ import {
 import { ApiConfigService } from '@services/api-config.service';
 import { ORDERED_SHIFT_CODES, getShiftDisplayName } from '@/constants/scheduleConstants';
 import { IcuDialysisStatsDialogComponent } from './icu-dialysis-stats-dialog.component';
+import { IcuCandidateDialogComponent } from './icu-candidate-dialog.component';
 
 /** 免登入唯讀展示頁路由（app.routes.ts 掛在 main layout 之外） */
 export const ICU_BOARD_PATH = '/icu-dialysis-board';
@@ -69,6 +71,9 @@ interface HoverPop {
 const POP_W = 352;
 const POP_H = 360;
 
+/** 待透析評估區的欄位順序（與三個圓對齊）；名單只收 ICU，後端已驗證單位 */
+const CANDIDATE_UNIT_KEYS = ['ICUA', 'ICUB', 'ICUD'];
+
 /**
  * 腎臟病地圖 → ICU 透析病人頁籤
  * 2026-09-15 改版（使用者/長官需求）：ICUA / ICUB / ICUD 三大圓形區塊；
@@ -80,7 +85,7 @@ const POP_H = 360;
 @Component({
   selector: 'app-icu-dialysis-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule, IcuDialysisStatsDialogComponent],
+  imports: [CommonModule, FormsModule, IcuDialysisStatsDialogComponent, IcuCandidateDialogComponent],
   templateUrl: './icu-dialysis-panel.component.html',
   styleUrl: './icu-dialysis-panel.component.css',
 })
@@ -116,6 +121,20 @@ export class IcuDialysisPanelComponent implements OnInit {
   readonly showCrrtHelp = signal(false);
   /** 月／年統計彈窗（Esc／背景關閉由彈窗自己處理） */
   readonly showStats = signal(false);
+
+  // ---------- 待透析評估（已會診、可能需要 HD／SLED／CVVHDF；2026-09-19） ----------
+  readonly candidates = signal<IcuCandidate[]>([]);
+  /** 新增／編輯視窗：open=false 關閉；candidate=null 表示新增 */
+  readonly candidateDialog = signal<{ open: boolean; candidate: IcuCandidate | null }>({ open: false, candidate: null });
+
+  /** 依 ICUA／ICUB／ICUD 分欄（與上方三個圓對齊） */
+  readonly candidateColumns = computed(() =>
+    CANDIDATE_UNIT_KEYS.map((key) => ({ key, list: this.candidates().filter((c) => c.unit === key) })),
+  );
+  /** AKI 關懷帶入、但住院資料顯示不在 ICU → 等醫師指定床位或結案 */
+  readonly unplacedCandidates = computed(() => this.candidates().filter((c) => !CANDIDATE_UNIT_KEYS.includes(c.unit)));
+  /** 已出現在「透析中」名單 → 提示結案 */
+  readonly startedCandidateCount = computed(() => this.candidates().filter((c) => !!c.startedDialysis).length);
 
   // ---------- 互動：滑過摘要 / 點選開完整卡片 ----------
   readonly pop = signal<HoverPop | null>(null);
@@ -190,6 +209,7 @@ export class IcuDialysisPanelComponent implements OnInit {
       const res = this.publicBoard ? await this.fetchPublicBoard() : await this.akiApi.getIcuDialysis();
       const units = res.units || [];
       this.units.set(units);
+      this.candidates.set(res.candidates || []);
       this.total.set(res.total || 0);
       this.loadedAt.set(new Date());
       // 重新整理後把開著的完整卡片指回新物件（病人已不在 ICU → 關閉）
@@ -255,6 +275,38 @@ export class IcuDialysisPanelComponent implements OnInit {
   @HostListener('document:keydown.escape')
   onEscape(): void {
     if (this.selected()) this.close();
+  }
+
+  // ---------- 待透析評估 ----------
+
+  /** 唯讀展示頁不開視窗（卡片上已列出全部可公開的內容） */
+  openCandidate(c: IcuCandidate | null): void {
+    if (this.readOnly) return;
+    this.hidePop();
+    this.candidateDialog.set({ open: true, candidate: c });
+  }
+
+  closeCandidateDialog(): void {
+    this.candidateDialog.set({ open: false, candidate: null });
+  }
+
+  scrollToCandidates(el: HTMLElement): void {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  /** 卡片左側色條／模式 chip：預計模式未定 → 灰 */
+  candidateModeClass(c: IcuCandidate): string {
+    return c.plannedMode ? this.modeClass(c.plannedMode) : 'mode-none';
+  }
+
+  candidateAkiBadge(c: IcuCandidate): { label: string; bg: string; fg: string } | null {
+    return (c.akiCategory && AKI_BADGE[c.akiCategory]) || null;
+  }
+
+  /** 'YYYY-MM-DD' → 'MM/DD' */
+  fmtDay(s: string | null | undefined): string {
+    const m = String(s || '').match(/^\d{4}-(\d{2})-(\d{2})/);
+    return m ? `${m[1]}/${m[2]}` : '';
   }
 
   // ---------- 顯示輔助 ----------
