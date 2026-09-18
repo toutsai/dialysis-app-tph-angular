@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../db/init.js'
-import { isAdmin, isTokenBlacklisted, logAudit, verifyToken } from '../middleware/auth.js'
+import { isAdmin, logAudit } from '../middleware/auth.js'
 import { loginRateLimit } from '../middleware/rateLimit.js'
 import { getDashboardData, normalizeBedKey, formatBedLabel } from '../services/dashboardDataService.js'
 import {
@@ -21,12 +21,6 @@ const router = Router()
 const JWT_SECRET = process.env.JWT_SECRET || 'dialysis-local-secret-key-change-in-production'
 const DASHBOARD_TOKEN_EXPIRES_IN = process.env.DASHBOARD_TOKEN_EXPIRES_IN || '30d'
 
-function getBearerToken(req) {
-  const authHeader = req.headers.authorization || ''
-  if (!authHeader.startsWith('Bearer ')) return null
-  return authHeader.split(' ')[1]
-}
-
 function generateDashboardToken(device) {
   return jwt.sign(
     {
@@ -40,48 +34,35 @@ function generateDashboardToken(device) {
   )
 }
 
-function verifyDashboardAccess(req, bedKey) {
-  const token = getBearerToken(req)
-  if (!token) {
-    return { ok: false, status: 401, message: '缺少登入憑證' }
+/**
+ * 床邊儀表板回傳前的去識別（2026-09-18 使用者拍板：儀表板比照 ICU 分享頁，免登入＋姓名／病歷號遮罩）。
+ * 姓名 → 林○南、病歷號 → 只留末 3 碼；不回傳 patientId 與原始排程 slot。
+ * 一律在後端做，不論有無員工 token（平板放在床邊，旁人看得到畫面）。
+ */
+function maskDashboardData(data) {
+  const { slot: _slot, ...rest } = data
+  return {
+    ...rest,
+    shiftCandidates: (data.shiftCandidates || []).map((c) => ({
+      ...c,
+      patientId: null,
+      patientName: maskName(c.patientName),
+    })),
+    patient: data.patient
+      ? {
+          ...data.patient,
+          id: '',
+          name: maskName(data.patient.name),
+          medicalRecordNumber: maskMrn(data.patient.medicalRecordNumber),
+        }
+      : null,
+    medicationsToday: (data.medicationsToday || []).map((m) => ({
+      ...m,
+      patientId: '',
+      patientName: maskName(m.patientName),
+      medicalRecordNumber: maskMrn(m.medicalRecordNumber),
+    })),
   }
-
-  let decoded = null
-  try {
-    decoded = jwt.verify(token, JWT_SECRET)
-  } catch {
-    return { ok: false, status: 401, message: '床位儀表板登入已過期，請重新輸入 PIN' }
-  }
-
-  if (decoded?.type === 'bed_dashboard') {
-    const db = getDatabase()
-    const device = db
-      .prepare('SELECT * FROM bed_dashboard_devices WHERE id = ? AND is_active = 1')
-      .get(decoded.deviceId)
-
-    if (!device) {
-      return { ok: false, status: 401, message: '床位裝置未啟用' }
-    }
-
-    if (device.bed_key !== bedKey) {
-      return { ok: false, status: 403, message: '此裝置無權限查看其他床位' }
-    }
-
-    return { ok: true, type: 'bed_dashboard', device }
-  }
-
-  if (isTokenBlacklisted(token)) {
-    return { ok: false, status: 401, message: '使用者憑證已失效' }
-  }
-
-  const user = verifyToken(token)
-  if (!user) {
-    return { ok: false, status: 401, message: '使用者憑證無效' }
-  }
-
-  req.user = user
-  req.token = token
-  return { ok: true, type: 'staff', user }
 }
 
 function mapDevice(row) {
@@ -227,16 +208,13 @@ router.post('/bed-login', loginRateLimit, async (req, res) => {
   }
 })
 
+// 床邊儀表板資料：2026-09-18 起免登入（不再驗 PIN token／員工 token），回傳前一律遮罩姓名與病歷號。
+// PIN 登入（/bed-login）與後台 PIN 清單端點保留但已不再是看板的守門。
 router.get('/bed/:bedKey', (req, res) => {
   try {
     const bedKey = normalizeBedKey(req.params.bedKey)
     if (!bedKey) {
       return res.status(400).json({ error: true, message: '床位格式不正確' })
-    }
-
-    const access = verifyDashboardAccess(req, bedKey)
-    if (!access.ok) {
-      return res.status(access.status).json({ error: true, message: access.message })
     }
 
     const { date, shift = 'auto' } = req.query
@@ -251,7 +229,7 @@ router.get('/bed/:bedKey', (req, res) => {
       shift: String(shift),
     })
 
-    res.json(data)
+    res.json(maskDashboardData(data))
   } catch (error) {
     console.error('[Dashboard] get bed data error:', error)
     res.status(500).json({ error: true, message: '讀取床邊儀表板資料失敗' })

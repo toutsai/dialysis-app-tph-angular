@@ -31,12 +31,9 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
   readonly bedKey = signal('');
   readonly selectedDate = signal(formatDateToYYYYMMDD());
   readonly selectedShift = signal<DashboardShift>('auto');
-  readonly pin = signal('');
   readonly data = signal<DashboardData | null>(null);
   readonly isLoading = signal(false);
-  readonly isLoggingIn = signal(false);
   readonly errorMessage = signal('');
-  readonly needsPin = signal(false);
   readonly lastRefreshLabel = signal('');
   readonly completingId = signal<string | null>(null);
 
@@ -97,7 +94,8 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
     if (document.visibilityState === 'visible') void this.requestWakeLock();
   };
 
-  // 只有員工帳號登入時才顯示交班留言的「已讀」按鈕（床邊 PIN 裝置維持唯讀）。
+  // 只有員工帳號登入時才顯示交班留言的「已讀」與「返回」（床邊平板維持唯讀）。
+  // 2026-09-18 起儀表板免登入（比照 ICU 分享頁）：不再有 PIN 畫面，資料由後端遮罩姓名／病歷號。
   readonly canManage = computed(() => this.dashboardService.hasStaffToken());
 
   readonly hasPatient = computed(() => !!this.data()?.patient);
@@ -115,7 +113,6 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.route.paramMap.subscribe((params) => {
       this.bedKey.set(params.get('bedKey') || '');
-      this.needsPin.set(!this.dashboardService.hasStoredToken(this.bedKey()) && !this.dashboardService.hasStaffToken());
       void this.loadDashboard();
     });
 
@@ -130,9 +127,9 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
       void this.loadDashboard();
     });
 
-    // 每 30 秒重抓資料（頁面在前景且已登入時）；跨日時先把日期切到今天再抓。
+    // 每 30 秒重抓資料（頁面在前景時）；跨日時先把日期切到今天再抓。
     this.refreshTimer = setInterval(() => {
-      if (document.hidden || this.needsPin()) return;
+      if (document.hidden) return;
       if (this.rollOverToTodayIfNeeded()) return;
       void this.loadDashboard(false);
     }, 30_000);
@@ -206,29 +203,9 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
     }
   }
 
-  async login(): Promise<void> {
-    if (!this.pin().trim()) {
-      this.errorMessage.set('請輸入床位 PIN');
-      return;
-    }
-
-    this.isLoggingIn.set(true);
-    this.errorMessage.set('');
-    try {
-      await this.dashboardService.loginBed(this.bedKey(), this.pin().trim());
-      this.pin.set('');
-      this.needsPin.set(false);
-      await this.loadDashboard();
-    } catch (error) {
-      this.errorMessage.set(error instanceof Error ? error.message : '床位登入失敗');
-    } finally {
-      this.isLoggingIn.set(false);
-    }
-  }
-
   async loadDashboard(showLoading = true): Promise<void> {
     const bedKey = this.bedKey();
-    if (!bedKey || this.needsPin()) return;
+    if (!bedKey) return;
 
     if (showLoading) this.isLoading.set(true);
     this.errorMessage.set('');
@@ -244,9 +221,6 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
     } catch (error) {
       const message = error instanceof Error ? error.message : '讀取床邊儀表板失敗';
       this.errorMessage.set(message);
-      if (!this.dashboardService.hasStaffToken()) {
-        this.needsPin.set(true);
-      }
     } finally {
       if (showLoading) this.isLoading.set(false);
     }
@@ -317,15 +291,6 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
     return true;
   }
 
-  /** 鎖定會清掉床位 token，固定床邊裝置之後要重輸 PIN 才能用，故先確認避免誤觸。 */
-  lockDevice(): void {
-    const confirmed = window.confirm('確定要鎖定此床邊裝置？\n鎖定後必須重新輸入床位 PIN 才能再看儀表板。');
-    if (!confirmed) return;
-    this.dashboardService.clearStoredToken(this.bedKey());
-    this.needsPin.set(!this.dashboardService.hasStaffToken());
-    this.data.set(null);
-  }
-
   goBack(): void {
     void this.router.navigate(['/my-patients']);
   }
@@ -363,17 +328,6 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
 
   private updateViewportLabel(): void {
     this.viewportLabel.set(`${window.innerWidth}×${window.innerHeight}`);
-  }
-
-  maskPatientName(name?: string | null): string {
-    const trimmed = (name || '').trim();
-    if (!trimmed) return '';
-
-    const chars = Array.from(trimmed);
-    if (chars.length === 1) return `${chars[0]}O`;
-    if (chars.length === 2) return `${chars[0]}O`;
-
-    return `${chars[0]}${'O'.repeat(chars.length - 2)}${chars[chars.length - 1]}`;
   }
 
   formatAgeGender(age?: number | null, gender?: string): string {
