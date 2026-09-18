@@ -993,6 +993,28 @@ CREATE TABLE IF NOT EXISTS icu_dialysis_status (
 );
 CREATE INDEX IF NOT EXISTS idx_icu_dialysis_status_patient ON icu_dialysis_status(patient_id);
 
+-- 每日 ICU 透析病人名單（ICU 透析頁「月／年統計」用）：每小時 cron upsert 此刻在 ICU 的透析病人，
+-- 一位病人一天一列，模式／單位取當天最後一次看到的值；病房號無變更歷史，只能自上線日起累積
+CREATE TABLE IF NOT EXISTS icu_dialysis_daily (
+    date TEXT NOT NULL,
+    patient_id TEXT NOT NULL,
+    patient_name TEXT,
+    unit TEXT NOT NULL,
+    bed_no TEXT,
+    mode TEXT NOT NULL DEFAULT '',
+    seen_count INTEGER NOT NULL DEFAULT 1,
+    first_seen_at TEXT DEFAULT (datetime('now', 'localtime')),
+    last_seen_at TEXT DEFAULT (datetime('now', 'localtime')),
+    PRIMARY KEY (date, patient_id)
+);
+-- 有跑過記錄的日期：名單為空時分辨「當天 ICU 0 人」與「沒記錄到」
+CREATE TABLE IF NOT EXISTS icu_dialysis_daily_runs (
+    date TEXT PRIMARY KEY,
+    run_count INTEGER NOT NULL DEFAULT 1,
+    first_run_at TEXT DEFAULT (datetime('now', 'localtime')),
+    last_run_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
 -- ========================================
 -- 血管通路事件（主護填寫 → 組長確認 → KiDit 造管申報）
 -- 唯一權威來源；工作日誌與 KiDit 清單皆為視圖，勿寫回 daily_logs 的 vascular_access_log JSON

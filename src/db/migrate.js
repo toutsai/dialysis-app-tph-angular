@@ -1009,6 +1009,48 @@ export function runMigrations() {
     }
 
     // ========================================
+    // icu_dialysis_daily：每日 ICU 透析病人名單（2026-09-19，ICU 透析頁「月／年統計」用）
+    // 每小時 cron 把「此刻在 ICU 的透析病人」upsert 進當日名單 → 當天曾在 ICU 的病人都算（含白天洗完、晚上已轉出者）。
+    // 病房號變更沒有歷史可倒推，所以只能自上線日起累積；一位病人一天一列，模式／單位取當天最後一次看到的值。
+    // ========================================
+    const icuDailyExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='icu_dialysis_daily'")
+      .get()
+    if (!icuDailyExists) {
+      console.log('📋 建立 icu_dialysis_daily 表格...')
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS icu_dialysis_daily (
+          date TEXT NOT NULL,
+          patient_id TEXT NOT NULL,
+          patient_name TEXT,
+          unit TEXT NOT NULL,
+          bed_no TEXT,
+          mode TEXT NOT NULL DEFAULT '',
+          seen_count INTEGER NOT NULL DEFAULT 1,
+          first_seen_at TEXT DEFAULT (datetime('now', 'localtime')),
+          last_seen_at TEXT DEFAULT (datetime('now', 'localtime')),
+          PRIMARY KEY (date, patient_id)
+        );
+      `)
+      migrationsApplied++
+    }
+    // 有跑過記錄的日期：名單為空時靠它分辨「當天 ICU 0 人」與「沒記錄到（伺服器沒開）」
+    const icuDailyRunsExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='icu_dialysis_daily_runs'")
+      .get()
+    if (!icuDailyRunsExists) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS icu_dialysis_daily_runs (
+          date TEXT PRIMARY KEY,
+          run_count INTEGER NOT NULL DEFAULT 1,
+          first_run_at TEXT DEFAULT (datetime('now', 'localtime')),
+          last_run_at TEXT DEFAULT (datetime('now', 'localtime'))
+        );
+      `)
+      migrationsApplied++
+    }
+
+    // ========================================
     // consumables_reports：report_data 補上 ranges（各上傳區間明細，2026-09-01）
     // 改制前同月同類別再上傳會整批覆蓋；改為以「起日-迄日」為 key 去重+累積，月聚合欄位由 ranges 加總重算。
     // 既有列沒有 ranges → 由 source_file 檔名的 MMDD-MMDD 推出區間（A2...0824-0828.xls → 20260824-20260828），

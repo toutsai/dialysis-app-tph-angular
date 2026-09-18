@@ -16,6 +16,8 @@ import { recordPatientHistory, createPatientSnapshot } from './patientHistory.js
 import { hourlyNurseAssignmentSnapshot } from './nurseAssignmentRevisions.js'
 import { countCurrentCensus, recordDailyCensus } from './patientCensus.js'
 import { deleteFutureScheduleExceptionsForPatient } from './patientOrderEffects.js'
+import { recordIcuDialysisSnapshot } from './icuDialysisDaily.js'
+import { buildIcuDialysisData } from '../routes/aki.js'
 
 // 狀態碼中文對照（與 routes/patients.js 一致）
 const SCHED_STATUS_MAP = { opd: '門診', ipd: '住院', er: '急診' }
@@ -960,6 +962,22 @@ function scheduledPatientCensus() {
 }
 
 // ========================================
+// 每日 ICU 透析病人名單（ICU 透析頁「月／年統計」用）
+// 每小時把此刻在 ICU 的透析病人併入當日名單；判定條件與 ICU 透析頁完全相同（共用 buildIcuDialysisData）
+// ========================================
+
+function scheduledIcuDialysisSnapshot() {
+  try {
+    const db = getDatabase()
+    const today = getTaipeiTodayString()
+    const patients = buildIcuDialysisData(db).units.flatMap((u) => u.patients)
+    recordIcuDialysisSnapshot(db, today, patients)
+  } catch (error) {
+    console.error('[Scheduler] ❌ ICU 透析病人每日名單記錄失敗:', error)
+  }
+}
+
+// ========================================
 // 啟動所有定時任務
 // ========================================
 
@@ -1021,6 +1039,16 @@ export function startScheduler() {
     timezone: 'Asia/Taipei',
   })
   console.log('📅 [Scheduler] 病人數快照 - 23:45 (Asia/Taipei)')
+
+  // 每小時 :10 ＋ 每日 23:55 - ICU 透析病人每日名單；啟動時先記一次，重啟當下的名單不漏
+  cron.schedule('10 * * * *', scheduledIcuDialysisSnapshot, {
+    timezone: 'Asia/Taipei',
+  })
+  cron.schedule('55 23 * * *', scheduledIcuDialysisSnapshot, {
+    timezone: 'Asia/Taipei',
+  })
+  scheduledIcuDialysisSnapshot()
+  console.log('📅 [Scheduler] ICU 透析病人每日名單 - 每小時 :10 ＋ 23:55 (Asia/Taipei)')
 
   console.log('========================================\n')
 }
