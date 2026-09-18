@@ -11,6 +11,8 @@
     </div>
     <div class="icu-actions">
       @if (!publicBoard) {
+        <button class="btn ghost" (click)="showStats.set(true)"
+                title="每日 ICU 的 HD／SLED／CVVHDF 病人數，月檢視看每日、年檢視看各月">月／年統計</button>
         <a class="btn ghost" [href]="boardPath" target="_blank" rel="noopener"
            title="免登入、唯讀、姓名與病歷號去識別的獨立頁面，可把網址分享給 ICU 專師／護理長">分享頁（唯讀）</a>
       }
@@ -382,5 +384,10 @@
         </article>
       </div>
     </div>
+  }
+
+  <!-- 月／年統計彈窗（免登入分享頁不提供：統計端點需登入） -->
+  @if (showStats()) {
+    <app-icu-dialysis-stats-dialog (closed)="showStats.set(false)"></app-icu-dialysis-stats-dialog>
   }
 </section>

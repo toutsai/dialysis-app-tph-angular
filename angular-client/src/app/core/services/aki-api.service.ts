@@ -283,6 +283,44 @@ export interface IcuDialysisResponse {
   total: number;
 }
 
+/** ICU 透析月／年統計：各模式人數（OTHER＝HD/SLED/CVVHDF 以外） */
+export interface IcuModeCounts {
+  HD: number;
+  SLED: number;
+  CVVHDF: number;
+  OTHER: number;
+  total: number;
+}
+export interface IcuStatsSummary {
+  /** 有記錄的天數（上線前、未來、伺服器沒開的日子不算） */
+  daysWithData: number;
+  /** 人日＝每日人數加總 */
+  patientDays: IcuModeCounts;
+  /** 平均每日人數（人日／有記錄天數） */
+  avg: IcuModeCounts;
+  max: Record<keyof IcuModeCounts, { count: number; date: string } | null>;
+  /** 期間內不重複病人數 */
+  distinctPatients: IcuModeCounts;
+}
+export interface IcuStatsDay extends IcuModeCounts {
+  date: string;
+  hasData: boolean;
+}
+export interface IcuStatsMonth extends IcuStatsSummary {
+  month: number;
+}
+export interface IcuDialysisStats {
+  year: number;
+  month: number | null;
+  unit: string | null;
+  today: string;
+  /** 開始累積資料的第一天（更早的日期沒有資料） */
+  firstDataDate: string;
+  days?: IcuStatsDay[];
+  months?: IcuStatsMonth[];
+  summary: IcuStatsSummary;
+}
+
 export type IcuStatusSavePayload = Partial<Omit<IcuDialysisStatusFields, 'statusUpdatedBy' | 'statusUpdatedAt'>>;
 
 @Injectable({ providedIn: 'root' })
@@ -328,6 +366,14 @@ export class AkiApiService {
 
   getIcuDialysis(): Promise<IcuDialysisResponse> {
     return firstValueFrom(this.api.get<IcuDialysisResponse>('/aki/icu-dialysis'));
+  }
+
+  /** ICU 透析病人月／年統計：month 有值＝該月每日人數；無＝該年 12 個月彙總。unit＝ICUA/ICUB/ICUD/OTHER */
+  getIcuDialysisStats(year: number, month: number | null, unit: string | null): Promise<IcuDialysisStats> {
+    const params = [`year=${year}`];
+    if (month) params.push(`month=${month}`);
+    if (unit) params.push(`unit=${encodeURIComponent(unit)}`);
+    return firstValueFrom(this.api.get<IcuDialysisStats>(`/aki/icu-dialysis/stats?${params.join('&')}`));
   }
 
   saveIcuStatus(patientId: string, payload: IcuStatusSavePayload) {

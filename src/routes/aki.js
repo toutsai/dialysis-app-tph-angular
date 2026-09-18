@@ -8,6 +8,7 @@ import { normalizeDialysisMode } from '../utils/dialysisMode.js'
 import { parseInpatientsRows, parseLabsRows, stageForSeries, analyzeSeries, AKI_CATEGORIES } from '../services/akiService.js'
 
 import { parseFirstSheet } from '../services/spreadsheetParser.js'
+import { getIcuDialysisStats } from '../services/icuDialysisDaily.js'
 
 const router = Router()
 
@@ -803,6 +804,32 @@ router.get('/icu-dialysis', (req, res) => {
     res.json(buildIcuDialysisData(getDatabase()))
   } catch (error) {
     res.status(500).json({ error: true, message: error.message || '取得 ICU 透析病人失敗' })
+  }
+})
+
+// GET /api/aki/icu-dialysis/stats?year=2026[&month=9][&unit=ICUA] —— ICU 透析病人月／年統計
+// month 有值＝回該月每日 HD/SLED/CVVHDF 人數；無＝回該年 12 個月彙總。資料自上線日起由 scheduler 每小時累積，
+// 今天則把此刻名單疊上去（唯讀，不在 GET 寫 DB）。
+router.get('/icu-dialysis/stats', (req, res) => {
+  try {
+    const today = getTaipeiTodayString()
+    const year = Number(req.query.year || today.slice(0, 4))
+    const month = req.query.month ? Number(req.query.month) : null
+    const unit = req.query.unit ? String(req.query.unit).toUpperCase() : null
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+      return res.status(400).json({ error: true, message: '年份不正確' })
+    }
+    if (month !== null && (!Number.isInteger(month) || month < 1 || month > 12)) {
+      return res.status(400).json({ error: true, message: '月份不正確' })
+    }
+    if (unit && ![...ICU_UNITS.map((u) => u.key), 'OTHER'].includes(unit)) {
+      return res.status(400).json({ error: true, message: '加護單位不正確' })
+    }
+    const db = getDatabase()
+    const livePatients = buildIcuDialysisData(db).units.flatMap((u) => u.patients)
+    res.json(getIcuDialysisStats(db, { year, month, unit, today, livePatients }))
+  } catch (error) {
+    res.status(500).json({ error: true, message: error.message || '取得 ICU 透析統計失敗' })
   }
 })
 

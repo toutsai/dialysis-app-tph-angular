@@ -11,6 +11,7 @@ import {
 } from '@app/core/services/aki-api.service';
 import { ApiConfigService } from '@services/api-config.service';
 import { ORDERED_SHIFT_CODES, getShiftDisplayName } from '@/constants/scheduleConstants';
+import { IcuDialysisStatsDialogComponent } from './icu-dialysis-stats-dialog.component';
 
 /** 免登入唯讀展示頁路由（app.routes.ts 掛在 main layout 之外） */
 export const ICU_BOARD_PATH = '/icu-dialysis-board';
@@ -79,7 +80,7 @@ const POP_H = 360;
 @Component({
   selector: 'app-icu-dialysis-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, IcuDialysisStatsDialogComponent],
   templateUrl: './icu-dialysis-panel.component.html',
   styleUrl: './icu-dialysis-panel.component.css',
 })
@@ -113,6 +114,8 @@ export class IcuDialysisPanelComponent implements OnInit {
   readonly crrtCheckItems = CRRT_CHECK_ITEMS;
   /** CRRT 風險檢核說明（摺疊） */
   readonly showCrrtHelp = signal(false);
+  /** 月／年統計彈窗（Esc／背景關閉由彈窗自己處理） */
+  readonly showStats = signal(false);
 
   // ---------- 互動：滑過摘要 / 點選開完整卡片 ----------
   readonly pop = signal<HoverPop | null>(null);

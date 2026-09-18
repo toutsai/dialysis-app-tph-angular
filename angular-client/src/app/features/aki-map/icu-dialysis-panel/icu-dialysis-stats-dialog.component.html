@@ -1,0 +1,172 @@
+<div class="stats-backdrop" (click)="closed.emit()">
+  <div class="stats-modal" (click)="$event.stopPropagation()">
+    <header class="stats-head">
+      <h3>ICU 透析病人統計</h3>
+      <div class="seg">
+        <button [class.on]="view() === 'month'" (click)="setView('month')">月</button>
+        <button [class.on]="view() === 'year'" (click)="setView('year')">年</button>
+      </div>
+      <div class="nav">
+        <button class="nav-btn" (click)="shift(-1)" [title]="view() === 'month' ? '上個月' : '上一年'">&#10094;</button>
+        <span class="period">{{ periodLabel() }}</span>
+        <button class="nav-btn" (click)="shift(1)" [title]="view() === 'month' ? '下個月' : '下一年'">&#10095;</button>
+        <button class="btn ghost" (click)="goToday()">{{ view() === 'month' ? '本月' : '今年' }}</button>
+      </div>
+      <div class="seg units">
+        @for (u of unitOptions; track u.label) {
+          <button [class.on]="unit() === u.key" (click)="setUnit(u.key)">{{ u.label }}</button>
+        }
+      </div>
+      <button class="close-btn" (click)="closed.emit()" title="關閉（Esc）">×</button>
+    </header>
+
+    <div class="stats-body">
+      @if (error(); as err) {
+        <div class="banner error">{{ err }}</div>
+      }
+
+      @if (data(); as s) {
+        <p class="note">
+          自 <strong>{{ s.firstDataDate }}</strong> 起開始記錄（更早的日期沒有資料）。系統每小時記一次，
+          <strong>當天曾在 ICU 的透析病人都算</strong>（一人一天算一次，模式取當天最後的狀態）；今天含此刻名單。
+        </p>
+
+        <div class="cards">
+          <div class="card">
+            <span class="card-label">平均每日</span>
+            <span class="card-value">{{ s.summary.avg.total }} <small>人</small></span>
+            <span class="card-sub">
+              @for (m of modes(); track m.key) {
+                <span><i [style.background]="m.color"></i>{{ m.label }} {{ count(s.summary.avg, m.key) }}</span>
+              }
+            </span>
+          </div>
+          <div class="card">
+            <span class="card-label">單日最高</span>
+            <span class="card-value">{{ s.summary.max.total?.count ?? '—' }} <small>人</small></span>
+            <span class="card-sub">
+              @for (m of modes(); track m.key) {
+                <span><i [style.background]="m.color"></i>{{ m.label }} {{ maxText(s.summary.max[m.key]) }}</span>
+              }
+            </span>
+          </div>
+          <div class="card">
+            <span class="card-label">人日合計</span>
+            <span class="card-value">{{ s.summary.patientDays.total }} <small>人日</small></span>
+            <span class="card-sub">
+              @for (m of modes(); track m.key) {
+                <span><i [style.background]="m.color"></i>{{ m.label }} {{ count(s.summary.patientDays, m.key) }}</span>
+              }
+            </span>
+          </div>
+          <div class="card">
+            <span class="card-label">不重複病人</span>
+            <span class="card-value">{{ s.summary.distinctPatients.total }} <small>人</small></span>
+            <span class="card-sub">
+              @for (m of modes(); track m.key) {
+                <span><i [style.background]="m.color"></i>{{ m.label }} {{ count(s.summary.distinctPatients, m.key) }}</span>
+              }
+              <span class="muted">有記錄 {{ s.summary.daysWithData }} 天</span>
+            </span>
+          </div>
+        </div>
+      }
+
+      <!-- canvas 常駐（ViewChild 穩定），沒資料時整塊藏起來 -->
+      <div class="chart-wrap" [hidden]="!hasAnyData()">
+        <canvas #chartCanvas></canvas>
+      </div>
+      @if (data() && !hasAnyData() && !loading()) {
+        <div class="empty">{{ periodLabel() }}沒有記錄。</div>
+      }
+
+      @if (data(); as s) {
+        @if (s.days; as days) {
+          <div class="table-wrap">
+            <table class="stats-table">
+              <thead>
+                <tr>
+                  <th>日期</th>
+                  @for (m of modes(); track m.key) {
+                    <th><i [style.background]="m.color"></i>{{ m.label }}</th>
+                  }
+                  <th>合計</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (d of days; track d.date) {
+                  <tr [class.no-data]="!d.hasData" [class.weekend]="isWeekend(d)" [class.today]="d.date === s.today">
+                    <td class="date-cell">{{ dayLabel(d) }}<small>（{{ weekdayOf(d) }}）</small>@if (d.date === s.today) {<span class="today-tag">今天</span>}</td>
+                    @if (d.hasData) {
+                      @for (m of modes(); track m.key) {
+                        <td [class.zero]="!count(d, m.key)">{{ count(d, m.key) }}</td>
+                      }
+                      <td class="total-cell">{{ d.total }}</td>
+                    } @else {
+                      <td class="reason" [attr.colspan]="modes().length + 1">— {{ noDataReason(d) }}</td>
+                    }
+                  </tr>
+                }
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td>平均每日</td>
+                  @for (m of modes(); track m.key) {
+                    <td>{{ count(s.summary.avg, m.key) }}</td>
+                  }
+                  <td class="total-cell">{{ s.summary.avg.total }}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        }
+
+        @if (s.months; as months) {
+          <div class="table-wrap">
+            <table class="stats-table">
+              <thead>
+                <tr>
+                  <th rowspan="2">月份</th>
+                  <th rowspan="2">有記錄天數</th>
+                  <th [attr.colspan]="modes().length + 1">平均每日人數</th>
+                  <th rowspan="2">單日最高</th>
+                  <th rowspan="2">人日合計</th>
+                  <th rowspan="2">不重複病人</th>
+                </tr>
+                <tr>
+                  @for (m of modes(); track m.key) {
+                    <th><i [style.background]="m.color"></i>{{ m.label }}</th>
+                  }
+                  <th>合計</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (mo of months; track trackMonth($index, mo)) {
+                  <tr [class.no-data]="!mo.daysWithData" class="clickable" (click)="openMonth(mo.month)" title="點選看該月每日明細">
+                    <td class="date-cell">{{ mo.month }} 月</td>
+                    @if (mo.daysWithData) {
+                      <td>{{ mo.daysWithData }}</td>
+                      @for (m of modes(); track m.key) {
+                        <td [class.zero]="!count(mo.avg, m.key)">{{ count(mo.avg, m.key) }}</td>
+                      }
+                      <td class="total-cell">{{ mo.avg.total }}</td>
+                      <td>{{ maxText(mo.max.total) }}</td>
+                      <td>{{ mo.patientDays.total }}</td>
+                      <td>{{ mo.distinctPatients.total }}</td>
+                    } @else {
+                      <td class="reason" [attr.colspan]="modes().length + 5">— 沒有記錄</td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+
+      @if (loading()) {
+        <div class="loading-mask">載入中…</div>
+      }
+    </div>
+  </div>
+</div>
