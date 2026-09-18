@@ -96,12 +96,14 @@
                 <td
                   *ngFor="let day of week; let dayIndex = index"
                   [ngClass]="[getPhysicianClass(day, 'early', 'dialysis'), getShiftCellClass(day)]"
+                  [class.has-cell-warning]="!!getCellWarning(day, 'early', 'dialysis')"
                 >
                   <select
                     *ngIf="day.day && scheduleData[day.day]"
                     [disabled]="!canManagePhysicianSchedule"
                     [ngModel]="scheduleData[day.day].early.physicianId"
                     (ngModelChange)="onPhysicianSelected($event, day, 'early')"
+                    [title]="getCellWarning(day, 'early', 'dialysis')"
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
@@ -109,6 +111,7 @@
                       {{ getDisplayName(doc) }}
                     </option>
                   </select>
+                  <span class="cell-warning" *ngIf="getCellWarning(day, 'early', 'dialysis')">&#9888;</span>
                   <span class="mobile-readonly-text">{{
                     getPhysicianDisplayName(day, 'early', 'dialysis')
                   }}</span>
@@ -119,12 +122,14 @@
                 <td
                   *ngFor="let day of week; let dayIndex = index"
                   [ngClass]="[getPhysicianClass(day, 'noon', 'dialysis'), getShiftCellClass(day)]"
+                  [class.has-cell-warning]="!!getCellWarning(day, 'noon', 'dialysis')"
                 >
                   <select
                     *ngIf="day.day && scheduleData[day.day]"
                     [disabled]="!canManagePhysicianSchedule"
                     [ngModel]="scheduleData[day.day].noon.physicianId"
                     (ngModelChange)="onPhysicianSelected($event, day, 'noon')"
+                    [title]="getCellWarning(day, 'noon', 'dialysis')"
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
@@ -132,6 +137,7 @@
                       {{ getDisplayName(doc) }}
                     </option>
                   </select>
+                  <span class="cell-warning" *ngIf="getCellWarning(day, 'noon', 'dialysis')">&#9888;</span>
                   <span class="mobile-readonly-text">{{
                     getPhysicianDisplayName(day, 'noon', 'dialysis')
                   }}</span>
@@ -142,12 +148,14 @@
                 <td
                   *ngFor="let day of week; let dayIndex = index"
                   [ngClass]="[getPhysicianClass(day, 'late', 'dialysis'), getShiftCellClass(day)]"
+                  [class.has-cell-warning]="!!getCellWarning(day, 'late', 'dialysis')"
                 >
                   <select
                     *ngIf="day.day && scheduleData[day.day]"
                     [disabled]="!canManagePhysicianSchedule"
                     [ngModel]="scheduleData[day.day].late.physicianId"
                     (ngModelChange)="onPhysicianSelected($event, day, 'late')"
+                    [title]="getCellWarning(day, 'late', 'dialysis')"
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
@@ -155,6 +163,7 @@
                       {{ getDisplayName(doc) }}
                     </option>
                   </select>
+                  <span class="cell-warning" *ngIf="getCellWarning(day, 'late', 'dialysis')">&#9888;</span>
                   <span class="mobile-readonly-text">{{
                     getPhysicianDisplayName(day, 'late', 'dialysis')
                   }}</span>
@@ -231,12 +240,14 @@
                 <td
                   *ngFor="let day of week; let dayIndex = index"
                   [ngClass]="[getPhysicianClass(day, 'morning', 'consultation'), getShiftCellClass(day)]"
+                  [class.has-cell-warning]="!!getCellWarning(day, 'morning', 'consultation')"
                 >
                   <select
                     *ngIf="day.day && consultationScheduleData[day.day]"
                     [disabled]="!canManagePhysicianSchedule"
                     [ngModel]="consultationScheduleData[day.day].morning.physicianId"
                     (ngModelChange)="onPhysicianSelected($event, day, 'morning')"
+                    [title]="getCellWarning(day, 'morning', 'consultation')"
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
@@ -244,6 +255,7 @@
                       {{ getDisplayName(doc) }}
                     </option>
                   </select>
+                  <span class="cell-warning" *ngIf="getCellWarning(day, 'morning', 'consultation')">&#9888;</span>
                   <span class="mobile-readonly-text">{{
                     getPhysicianDisplayName(day, 'morning', 'consultation')
                   }}</span>
@@ -254,12 +266,14 @@
                 <td
                   *ngFor="let day of week; let dayIndex = index"
                   [ngClass]="[getPhysicianClass(day, 'afternoon', 'consultation'), getShiftCellClass(day)]"
+                  [class.has-cell-warning]="!!getCellWarning(day, 'afternoon', 'consultation')"
                 >
                   <select
                     *ngIf="day.day && consultationScheduleData[day.day]"
                     [disabled]="!canManagePhysicianSchedule"
                     [ngModel]="consultationScheduleData[day.day].afternoon.physicianId"
                     (ngModelChange)="onPhysicianSelected($event, day, 'afternoon')"
+                    [title]="getCellWarning(day, 'afternoon', 'consultation')"
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
@@ -267,6 +281,7 @@
                       {{ getDisplayName(doc) }}
                     </option>
                   </select>
+                  <span class="cell-warning" *ngIf="getCellWarning(day, 'afternoon', 'consultation')">&#9888;</span>
                   <span class="mobile-readonly-text">{{
                     getPhysicianDisplayName(day, 'afternoon', 'consultation')
                   }}</span>
@@ -277,12 +292,14 @@
                 <td
                   *ngFor="let day of week; let dayIndex = index"
                   [ngClass]="[getPhysicianClass(day, 'night', 'consultation'), getShiftCellClass(day)]"
+                  [class.has-cell-warning]="!!getCellWarning(day, 'night', 'consultation')"
                 >
                   <select
                     *ngIf="day.day && consultationScheduleData[day.day]"
                     [disabled]="!canManagePhysicianSchedule"
                     [ngModel]="consultationScheduleData[day.day].night.physicianId"
                     (ngModelChange)="onPhysicianSelected($event, day, 'night')"
+                    [title]="getCellWarning(day, 'night', 'consultation')"
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
@@ -290,6 +307,7 @@
                       {{ getDisplayName(doc) }}
                     </option>
                   </select>
+                  <span class="cell-warning" *ngIf="getCellWarning(day, 'night', 'consultation')">&#9888;</span>
                   <span class="mobile-readonly-text">{{
                     getPhysicianDisplayName(day, 'night', 'consultation')
                   }}</span>
