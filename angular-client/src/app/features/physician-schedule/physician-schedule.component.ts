@@ -44,6 +44,8 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   isSidebarLoading = signal(true);
   selectedDate = signal(new Date());
   availablePhysicians = signal<any[]>([]);
+  // 全部主治醫師（含「不列入排班」者），順序同 availablePhysicians；供顏色對照與歷史班表顯示
+  allPhysicians = signal<any[]>([]);
   scheduleData: Record<string, any> = {};
   consultationScheduleData: Record<string, any> = {};
   emergencyRecords: any[] = [];
@@ -265,9 +267,37 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
     });
   });
 
+  // 班表格子（下拉選項／顯示名／匯出）用的醫師名單＝可排班醫師＋「本月班表裡實際出現過」的其他醫師：
+  // ・勾了「不列入排班」的醫師（離職等）→ 歷史月份照常顯示，沒排過他的月份下拉不會出現
+  // ・帳號已刪除／停用、目錄查不到的 → 用班表裡存的姓名補一個佔位，避免歷史格子變空白
+  schedulePhysicians = computed(() => {
+    this.scheduleDataRevision();
+    const available = this.availablePhysicians();
+    const known = new Map<string, any>(this.allPhysicians().map((p: any) => [p.id, p]));
+    const included = new Set<string>(available.map((p: any) => p.id));
+    const legacy: any[] = [];
+    const consider = (physicianId: any, storedName: any) => {
+      if (!physicianId || included.has(physicianId)) return;
+      included.add(physicianId);
+      const doc = known.get(physicianId);
+      if (doc) legacy.push(doc);
+      else if (storedName) legacy.push({ id: physicianId, name: storedName });
+    };
+    for (const data of [this.scheduleData, this.consultationScheduleData]) {
+      for (const dayKey of Object.keys(data)) {
+        const day = data[dayKey];
+        if (!day || typeof day !== 'object') continue;
+        for (const shift of Object.keys(day)) consider(day[shift]?.physicianId, day[shift]?.name);
+      }
+    }
+    this.emergencyRecords.forEach((r: any) => consider(r?.physicianId, r?.physicianName));
+    return legacy.length > 0 ? [...available, ...legacy] : available;
+  });
+
   physicianClassMap = computed(() => {
     const map = new Map<string, string>();
-    this.availablePhysicians().forEach((doc: any, index: number) => {
+    // 以全部主治醫師排序指定顏色：勾「不列入排班」不會讓其他醫師的顏色位移，歷史格子也保有原色
+    this.allPhysicians().forEach((doc: any, index: number) => {
       map.set(doc.id, this.physicianColorClasses[index % this.physicianColorClasses.length]);
     });
     return map;
@@ -487,9 +517,10 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   }
 
   saveScheduleOnly(): Promise<any> {
-    const physicianMap = this.physicianNameById.size > 0
-      ? this.physicianNameById
-      : new Map(this.availablePhysicians().map((p: any) => [p.id, p.name]));
+    // 姓名對照：全部主治醫師（含不列入排班）＋本月班表裡出現過、但目錄已查不到的醫師（帳號已刪除／停用，
+    // 姓名取自班表原存值）→ 歷史月份重新存檔不會把離職醫師的 name 洗成 null
+    const physicianMap = new Map<string, string>(this.schedulePhysicians().map((p: any) => [p.id, p.name]));
+    this.physicianNameById.forEach((name, id) => physicianMap.set(id, name));
     const dataToSave: any = {
       year: this.selectedYear(), month: this.selectedMonth(),
       schedule: {}, consultationSchedule: {},
@@ -528,14 +559,10 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
       await this.userDirectory.fetchUsersIfNeeded();
       const allPhysicians = this.userDirectory.allUsers()
         .filter(u => u.title === '主治醫師') as any[];
-      // 使用者管理勾「不列入排班」的醫師：本頁完全不顯示（圖例/門診/PD/統計/下拉/不排班登記）；
-      // 但存檔時仍要查得到姓名，避免舊月份裡曾排過的班被存成 name: null
-      this.physicianNameById = new Map(allPhysicians.map((p: any) => [p.id, p.name]));
-      const physicians = allPhysicians.filter((p: any) => !p.excludeFromSchedule);
       // 順序同時決定底色（physicianColorClasses 依 index 指定）；
       // 新醫師請加在最後，既有醫師的顏色才不會位移
       const desiredOrder = ['廖丁瑩', '蔡宜潔', '蘇哲弘', '蔡亨政', '林天佑', '陳怡汝', '賴昱鈞'];
-      physicians.sort((a: any, b: any) => {
+      allPhysicians.sort((a: any, b: any) => {
         const indexA = desiredOrder.indexOf(a.name);
         const indexB = desiredOrder.indexOf(b.name);
         if (indexA !== -1 && indexB !== -1) return indexA - indexB;
@@ -543,6 +570,11 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
         if (indexB !== -1) return 1;
         return a.name.localeCompare(b.name, 'zh-Hant');
       });
+      // 使用者管理勾「不列入排班」的醫師（如離職）：右欄面板與新排班的下拉都不出現；
+      // 但歷史月份裡他排過的班仍要照常顯示 → 全名單另存，見 schedulePhysicians
+      this.allPhysicians.set(allPhysicians);
+      this.physicianNameById = new Map(allPhysicians.map((p: any) => [p.id, p.name]));
+      const physicians = allPhysicians.filter((p: any) => !p.excludeFromSchedule);
       const clinicSelections: Record<string, string[]> = {};
       physicians.forEach((doc: any) => {
         const hours = Array.isArray(doc.clinicHours) ? doc.clinicHours : [];
@@ -1051,7 +1083,7 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
     const targetSchedule = scheduleType === 'dialysis' ? this.scheduleData : this.consultationScheduleData;
     const physicianId = targetSchedule[day.day]?.[shift]?.physicianId;
     if (physicianId) {
-      const physician = this.availablePhysicians().find((doc: any) => doc.id === physicianId);
+      const physician = this.schedulePhysicians().find((doc: any) => doc.id === physicianId);
       return physician ? this.getDisplayName(physician) : '--';
     }
     return '--';
@@ -1105,7 +1137,7 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
 
   getPhysicianNameById(physicianId: string): string {
     if (!physicianId) return '未指定';
-    const physician = this.availablePhysicians().find((p: any) => p.id === physicianId);
+    const physician = this.schedulePhysicians().find((p: any) => p.id === physicianId);
     return physician ? (physician as any).name : '未知醫師';
   }
 }
