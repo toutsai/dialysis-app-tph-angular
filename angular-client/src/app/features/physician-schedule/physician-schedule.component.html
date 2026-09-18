@@ -518,9 +518,16 @@
     <!-- 右欄：所有輔助面板 (完全共用) -->
     <div class="panels-container">
       <div class="desktop-panels">
+        <!-- 桌機右欄各面板預設收合，點標題展開（各自獨立，不互斥） -->
         <div class="physician-legend-panel">
-          <h2>醫師資訊與門診設定</h2>
-          <div class="legend-table-wrapper">
+          <h2
+            class="collapsible-title"
+            [class.is-collapsed]="!isDesktopPanelOpen('physicians')"
+            (click)="toggleDesktopPanel('physicians')"
+          >
+            醫師資訊與門診設定<i class="fas fa-chevron-down"></i>
+          </h2>
+          <div class="legend-table-wrapper" [style.display]="isDesktopPanelOpen('physicians') ? '' : 'none'">
             <table class="legend-table styled-legend">
               <thead>
                 <tr>
@@ -611,8 +618,14 @@
           </div>
         </div>
         <div class="pd-clinic-panel">
-          <h2>腹膜透析(PD)門診</h2>
-          <div class="pd-clinic-grid">
+          <h2
+            class="collapsible-title"
+            [class.is-collapsed]="!isDesktopPanelOpen('pd')"
+            (click)="toggleDesktopPanel('pd')"
+          >
+            腹膜透析(PD)門診<i class="fas fa-chevron-down"></i>
+          </h2>
+          <div class="pd-clinic-grid" [style.display]="isDesktopPanelOpen('pd') ? '' : 'none'">
             <div *ngFor="let doc of availablePhysicians()" class="pd-clinic-row">
               <span class="pd-doctor-name">{{ doc.name }}</span>
               <div class="pd-input-group">
@@ -655,9 +668,15 @@
           </div>
         </div>
         <div class="statistics-panel">
-          <div class="stats-header">
-            <h2>排班統計</h2>
-            <div class="stats-mode-toggle">
+          <div class="stats-header" [class.is-collapsed]="!isDesktopPanelOpen('stats')">
+            <h2
+              class="collapsible-title"
+              [class.is-collapsed]="!isDesktopPanelOpen('stats')"
+              (click)="toggleDesktopPanel('stats')"
+            >
+              排班統計<i class="fas fa-chevron-down"></i>
+            </h2>
+            <div class="stats-mode-toggle" [style.display]="isDesktopPanelOpen('stats') ? '' : 'none'">
               <button
                 [ngClass]="{ active: statsViewMode() === 'monthly' }"
                 (click)="statsViewMode.set('monthly')"
@@ -671,7 +690,7 @@
               </button>
             </div>
           </div>
-          <table class="stats-table">
+          <table class="stats-table" [style.display]="isDesktopPanelOpen('stats') ? '' : 'none'">
             <thead *ngIf="statsViewMode() === 'monthly'">
               <tr>
                 <th>醫師姓名</th>
@@ -709,15 +728,21 @@
           </table>
         </div>
         <div class="special-dates-panel">
-          <h2>註記日期</h2>
-          <div class="date-input-group">
+          <h2
+            class="collapsible-title"
+            [class.is-collapsed]="!isDesktopPanelOpen('specialDates')"
+            (click)="toggleDesktopPanel('specialDates')"
+          >
+            註記日期<i class="fas fa-chevron-down"></i>
+          </h2>
+          <div class="date-input-group" [style.display]="isDesktopPanelOpen('specialDates') ? '' : 'none'">
             <label>月抽血日：</label><input type="date" [(ngModel)]="bloodDrawDate1" (ngModelChange)="markUnsaved()" /><input
               type="date"
               [(ngModel)]="bloodDrawDate2"
               (ngModelChange)="markUnsaved()"
             />
           </div>
-          <div class="date-input-group">
+          <div class="date-input-group" [style.display]="isDesktopPanelOpen('specialDates') ? '' : 'none'">
             <label>解釋報告日：</label><input type="date" [(ngModel)]="reportDate1" (ngModelChange)="markUnsaved()" /><input
               type="date"
               [(ngModel)]="reportDate2"
@@ -726,8 +751,15 @@
           </div>
         </div>
         <div class="notes-panel">
-          <h2>排班規則與備註</h2>
+          <h2
+            class="collapsible-title"
+            [class.is-collapsed]="!isDesktopPanelOpen('notes')"
+            (click)="toggleDesktopPanel('notes')"
+          >
+            排班規則與備註<i class="fas fa-chevron-down"></i>
+          </h2>
           <textarea
+            [style.display]="isDesktopPanelOpen('notes') ? '' : 'none'"
             [(ngModel)]="scheduleNotes"
             (ngModelChange)="markUnsaved()"
             class="notes-textarea"
@@ -736,8 +768,14 @@
           ></textarea>
         </div>
         <div class="notes-panel">
-          <h2>國定假日管理 (本月)</h2>
-          <div class="holiday-manager">
+          <h2
+            class="collapsible-title"
+            [class.is-collapsed]="!isDesktopPanelOpen('holidays')"
+            (click)="toggleDesktopPanel('holidays')"
+          >
+            國定假日管理 (本月)<i class="fas fa-chevron-down"></i>
+          </h2>
+          <div class="holiday-manager" [style.display]="isDesktopPanelOpen('holidays') ? '' : 'none'">
             <div class="holiday-sync-row" *ngIf="canManagePhysicianSchedule">
               <button
                 (click)="syncGovernmentHolidays()"

@@ -58,6 +58,8 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   yearScheduleData = signal<Record<string, any>>({});
   mobileDisplayMode = signal<'day' | 'week'>('day');
   activeMobilePanel = signal<string | null>('physicians');
+  // 桌機右欄：已展開的面板（預設全部收合，各面板獨立開合）
+  openDesktopPanels = signal<ReadonlySet<string>>(new Set());
   activeTab = signal<'dialysis' | 'consultation' | 'emergency'>('dialysis');
 
   // Patient search
@@ -882,6 +884,17 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
       return physician ? this.getDisplayName(physician) : '--';
     }
     return '--';
+  }
+
+  isDesktopPanelOpen(panelName: string): boolean {
+    return this.openDesktopPanels().has(panelName);
+  }
+
+  toggleDesktopPanel(panelName: string): void {
+    const next = new Set(this.openDesktopPanels());
+    if (next.has(panelName)) next.delete(panelName);
+    else next.add(panelName);
+    this.openDesktopPanels.set(next);
   }
 
   toggleMobilePanel(panelName: string): void {

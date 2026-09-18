@@ -507,6 +507,31 @@ tr.date-row {
   padding-bottom: 0.5rem;
   border-bottom: 1px solid #e9ecef;
 }
+.desktop-panels h2.collapsible-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.desktop-panels h2.collapsible-title .fa-chevron-down {
+  font-size: 0.85rem;
+  color: #6c757d;
+  transition: transform 0.2s;
+  transform: rotate(180deg);
+}
+.desktop-panels h2.collapsible-title.is-collapsed {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.desktop-panels h2.collapsible-title.is-collapsed .fa-chevron-down {
+  transform: rotate(0deg);
+}
+.desktop-panels h2.collapsible-title:hover {
+  color: #0d6efd;
+}
 .legend-table-wrapper {
   overflow-x: auto;
 }
@@ -596,6 +621,9 @@ tr.date-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+.stats-header h2.collapsible-title.is-collapsed {
+  flex: 1;
 }
 .stats-mode-toggle {
   display: flex;
