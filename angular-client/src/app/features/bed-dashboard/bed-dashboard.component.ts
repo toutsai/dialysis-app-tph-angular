@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DashboardData, DashboardHandoverItem, DashboardService, DashboardShift } from '@services/dashboard.service';
 import { formatDateToYYYYMMDD } from '@/utils/dateUtils';
+import { formatInjectionRuleText, type DailyInjectionRuleFields } from '@app/features/orders/injection-shared';
 
 /** Screen Wake Lock 的最小型別（避免依賴各版 TS lib.dom 是否內建）。 */
 interface WakeLockSentinelLike {
@@ -382,8 +383,8 @@ export class BedDashboardComponent implements OnInit, OnDestroy {
     return parts.join('/');
   }
 
-  formatMedication(med: { orderName?: string; orderCode?: string; dose?: string; unit?: string; note?: string }): string {
-    return [med.orderName || med.orderCode || '藥物', `${med.dose || ''}${med.unit || ''}`.trim(), med.note]
+  formatMedication(med: { orderName?: string; orderCode?: string; dose?: string; unit?: string } & DailyInjectionRuleFields): string {
+    return [med.orderName || med.orderCode || '藥物', `${med.dose || ''}${med.unit || ''}`.trim(), formatInjectionRuleText(med)]
       .filter(Boolean)
       .join(' / ');
   }

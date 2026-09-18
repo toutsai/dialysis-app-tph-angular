@@ -38,6 +38,7 @@ import {
   updatePatient as optimizedUpdatePatient,
 } from '@/services/optimizedApiService';
 import { fetchEffectiveOrders } from '@/services/effectiveOrdersService';
+import { formatInjectionRuleText } from '@app/features/orders/injection-shared';
 import { localApi } from '@/services/localApiClient';
 import { kiditService } from '@/services/kiditService';
 
@@ -841,7 +842,7 @@ export class MyPatientsComponent implements OnInit, OnDestroy {
     const parts = [
       displayName,
       `${injection.dose || ''} ${injection.unit || ''}`.trim(),
-      injection.note || '',
+      formatInjectionRuleText(injection),
     ];
     return parts.filter((part) => part).join(' / ');
   }
