@@ -83,6 +83,20 @@
               </div>
 
               @if (form.title === '主治醫師') {
+              <!-- 不列入排班：勾選後醫師班表頁不顯示此醫師 -->
+              <div class="form-group">
+                <div class="checkbox-wrapper exclude-schedule-toggle">
+                  <input
+                    type="checkbox"
+                    id="excludeFromSchedule"
+                    name="excludeFromSchedule"
+                    [(ngModel)]="form.excludeFromSchedule"
+                  />
+                  <label for="excludeFromSchedule">不列入排班</label>
+                </div>
+                <small class="field-hint">勾選後，醫師班表不顯示此醫師的姓名、門診設定與排班選項；病人主治醫師等其他功能不受影響。</small>
+              </div>
+
               <!-- 預設查房班表設定 UI (僅主治醫師) -->
               <div class="form-group">
                 <label>預設查房班表 (洗腎室/ICU)</label>

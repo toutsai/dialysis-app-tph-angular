@@ -411,6 +411,9 @@ export function runMigrations() {
     // 每週院外支援時段（醫師班表排到該時段會提醒，2026-09-19）
     if (addColumnIfNotExists(db, 'physicians', 'outside_support', "TEXT DEFAULT '[]'"))
       migrationsApplied++
+    // 不列入排班（使用者管理勾選 → 醫師班表頁不顯示該醫師，2026-09-19）
+    if (addColumnIfNotExists(db, 'physicians', 'exclude_from_schedule', 'INTEGER DEFAULT 0'))
+      migrationsApplied++
 
     // ========================================
     // Users 表格遷移 (B級資安合規 - 登入失敗鎖定)

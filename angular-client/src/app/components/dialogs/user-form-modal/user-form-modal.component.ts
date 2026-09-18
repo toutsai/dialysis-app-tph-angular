@@ -41,6 +41,8 @@ export class UserFormModalComponent implements OnChanges {
       clinicHours: [],
       defaultSchedules: [],
       defaultConsultationSchedules: [],
+      // 不列入排班：勾選後醫師班表頁不顯示此醫師（姓名、門診、下拉、統計）
+      excludeFromSchedule: false,
     };
   }
 
@@ -87,6 +89,7 @@ export class UserFormModalComponent implements OnChanges {
           clinicHours: this.user.clinicHours || [],
           defaultSchedules: this.user.defaultSchedules || [],
           defaultConsultationSchedules: this.user.defaultConsultationSchedules || [],
+          excludeFromSchedule: !!this.user.excludeFromSchedule,
         };
         this.form.password = '';
       } else {
@@ -111,6 +114,7 @@ export class UserFormModalComponent implements OnChanges {
       this.form.clinicHours = [];
       this.form.defaultSchedules = [];
       this.form.defaultConsultationSchedules = [];
+      this.form.excludeFromSchedule = false;
     }
   }
 
@@ -129,6 +133,7 @@ export class UserFormModalComponent implements OnChanges {
       delete dataToSave.clinicHours;
       delete dataToSave.defaultSchedules;
       delete dataToSave.defaultConsultationSchedules;
+      delete dataToSave.excludeFromSchedule;
     }
     // 院外支援只在醫師班表頁維護；此表單不編輯它，別把開表單當時的舊值送回去蓋掉
     delete (dataToSave as any).outsideSupport;

@@ -6,6 +6,7 @@ import { AuthService } from '@app/core/services/auth.service';
 import { ApiManagerService, type FirestoreRecord } from '@app/core/services/api-manager.service';
 import { ApiConfigService } from '@app/core/services/api-config.service';
 import { NotificationService } from '@app/core/services/notification.service';
+import { UserDirectoryService } from '@app/core/services/user-directory.service';
 import { AlertDialogComponent } from '@app/components/dialogs/alert-dialog/alert-dialog.component';
 import { ConfirmDialogComponent } from '@app/components/dialogs/confirm-dialog/confirm-dialog.component';
 import { UserFormModalComponent } from '@app/components/dialogs/user-form-modal/user-form-modal.component';
@@ -70,6 +71,7 @@ export class UserManagementComponent implements OnInit {
   private readonly apiManager = inject(ApiManagerService);
   private readonly firebase = inject(ApiConfigService);
   private readonly notificationService = inject(NotificationService);
+  private readonly userDirectory = inject(UserDirectoryService);
 
   private readonly usersApi = this.apiManager.create<UserRecord>('users');
 
@@ -424,6 +426,8 @@ export class UserManagementComponent implements OnInit {
         }
       }
       this.isModalVisible.set(false);
+      // 使用者目錄是全站快取：更新後重抓，醫師班表等頁面不必 F5 就能反映（如「不列入排班」）
+      void this.userDirectory.refresh();
     } catch (error) {
       this.showAlert('儲存失敗', '儲存使用者資料時發生錯誤。');
     } finally {
