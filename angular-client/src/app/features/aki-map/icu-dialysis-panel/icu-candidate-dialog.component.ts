@@ -6,6 +6,7 @@ import {
   IcuCandidateRiskItem, IcuCandidateStatus,
 } from '@app/core/services/aki-api.service';
 import { AuthService } from '@app/core/services/auth.service';
+import { UserDirectoryService } from '@app/core/services/user-directory.service';
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
@@ -24,6 +25,10 @@ const pad2 = (n: number) => String(n).padStart(2, '0');
 export class IcuCandidateDialogComponent implements OnInit {
   private readonly akiApi = inject(AkiApiService);
   private readonly auth = inject(AuthService);
+  private readonly userDirectory = inject(UserDirectoryService);
+
+  /** 會診醫師選單（使用者管理「主治醫師」名單） */
+  readonly physicianNames = this.userDirectory.attendingPhysicianNames;
 
   /** null＝新增 */
   @Input() candidate: IcuCandidate | null = null;
@@ -78,6 +83,7 @@ export class IcuCandidateDialogComponent implements OnInit {
       this.indicationOptions.set(o.indications);
       this.riskItems.set(o.riskItems);
     }).catch(() => this.error.set('載入表單選項失敗，請關閉後重試'));
+    void this.userDirectory.fetchUsersIfNeeded();
 
     const c = this.candidate;
     if (c) {
@@ -186,14 +192,23 @@ export class IcuCandidateDialogComponent implements OnInit {
 
   async save(statusOverride?: IcuCandidateStatus): Promise<void> {
     if (!this.form.mrn.trim() || !this.form.name.trim()) { this.error.set('請填病歷號與姓名'); return; }
-    if (!this.form.unit) { this.error.set('請選擇加護單位（本名單只收 ICU 病人）'); return; }
+    // 「床位待確認」的紀錄可以不補床位直接結案（病人其實沒進 ICU）
+    const closing = !!statusOverride && this.closeStatuses.includes(statusOverride);
+    if (!this.form.unit && !closing) { this.error.set('請選擇加護單位（本名單只收 ICU 病人）'); return; }
     this.saving.set(true);
     this.error.set(null);
     try {
       const payload = { ...this.form, status: statusOverride ?? this.form.status };
       if (this.candidate) {
-        const { mrn: _mrn, ...patch } = payload; // 病歷號建立後不改（換病人請另建一筆）
-        await this.akiApi.updateIcuCandidate(this.candidate.id, patch);
+        // 只送這次真的改過的欄位：會診醫師與 AKI 關懷雙向同步，整張表單送回去會用開窗時的舊值
+        // 把別人剛在 AKI 名單填的洗掉。病歷號建立後不改（換病人請另建一筆）。
+        const original = this.candidate as unknown as Record<string, unknown>;
+        const patch: Partial<IcuCandidatePayload> = {};
+        for (const [key, value] of Object.entries(payload)) {
+          if (key === 'mrn' || JSON.stringify(value) === JSON.stringify(original[key])) continue;
+          (patch as Record<string, unknown>)[key] = value;
+        }
+        if (Object.keys(patch).length > 0) await this.akiApi.updateIcuCandidate(this.candidate.id, patch);
       } else {
         await this.akiApi.createIcuCandidate(payload);
       }

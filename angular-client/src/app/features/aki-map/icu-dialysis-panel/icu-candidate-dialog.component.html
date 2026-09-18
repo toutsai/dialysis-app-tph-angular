@@ -72,7 +72,16 @@
         </div>
         <div class="fld">
           <label class="fld-label" for="cand-consult">會診醫師</label>
-          <input id="cand-consult" class="inp" [(ngModel)]="form.consultPhysician" />
+          <select id="cand-consult" class="inp" [(ngModel)]="form.consultPhysician">
+            <option value="">— 未指定 —</option>
+            <!-- 既有紀錄的醫師已不在名單（離職／舊的手打值）仍保留顯示，不讓選單變空白 -->
+            @if (form.consultPhysician && !physicianNames().includes(form.consultPhysician)) {
+              <option [value]="form.consultPhysician">{{ form.consultPhysician }}</option>
+            }
+            @for (n of physicianNames(); track n) {
+              <option [value]="n">{{ n }}</option>
+            }
+          </select>
         </div>
         <div class="fld">
           <label class="fld-label" for="cand-date">會診日期</label>

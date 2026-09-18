@@ -12,6 +12,7 @@ import {
   AkiUploadBatch,
 } from '@app/core/services/aki-api.service';
 import { IcuDialysisPanelComponent } from './icu-dialysis-panel/icu-dialysis-panel.component';
+import { UserDirectoryService } from '@app/core/services/user-directory.service';
 
 // 主篩選（與分期色碼篩選 AND 疊加）
 type CourseFilter = 'all' | 'ckd' | 'admission-aki' | 'today-aki';
@@ -144,6 +145,10 @@ function compareWard(a: string, b: string): number {
 })
 export class AkiMapComponent implements OnInit {
   private readonly akiApi = inject(AkiApiService);
+  private readonly userDirectory = inject(UserDirectoryService);
+
+  /** 關懷名單「會診醫師」選單（使用者管理「主治醫師」名單） */
+  readonly physicianNames = this.userDirectory.attendingPhysicianNames;
 
   readonly loading = signal(false);
   readonly message = signal<{ type: 'info' | 'error'; text: string } | null>(null);
@@ -354,6 +359,7 @@ export class AkiMapComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+    void this.userDirectory.fetchUsersIfNeeded();
   }
 
   /** 地圖六桶歸類（床卡／觀察名單／詳情共用） */

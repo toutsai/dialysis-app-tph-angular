@@ -450,6 +450,8 @@ function toCareItem(c, candidateMap) {
     ckdBasis: c.analysis?.ckd?.basis || (c.analysis?.isEsrd ? '全段 Cr≥4.0 疑似 ESRD' : null),
     autoDialysisMode: c.dialysisMode,
     ...careFields(c.care),
+    // ICU 頁直接新建時病人可能還沒有關懷紀錄列（同步是純 UPDATE）→ 以待評估紀錄上的會診醫師補顯示
+    consultPhysician: c.care?.consultPhysician || candidate?.consultPhysician || '',
   }
 }
 
@@ -619,8 +621,8 @@ router.put('/care/:mrn', (req, res) => {
       db.prepare(`UPDATE aki_care_records SET care_physician = '', signed_at = NULL WHERE mrn = ?`).run(mrn)
     }
 
-    // 會診醫師與 ICU 待透析評估紀錄雙向同步。整列存檔每次都會帶這個欄位，
-    // 只在「這次真的改了」才同步，免得名單開太久的舊值把醫師剛在 ICU 頁填的洗掉
+    // 會診醫師與 ICU 待透析評估紀錄雙向同步。前端只在使用者真的改這一格時才送此欄位
+    // （整列存檔不帶，免得名單開太久的舊值把醫師剛在 ICU 頁填的洗掉）；這裡再擋一次「值沒變就不同步」
     const nextConsultPhysician = b.consultPhysician !== undefined ? String(b.consultPhysician ?? '').trim() : prevConsultPhysician
     if (nextConsultPhysician !== prevConsultPhysician) syncConsultPhysicianFromCare(db, mrn, nextConsultPhysician, updatedBy)
 
@@ -637,7 +639,7 @@ router.put('/care/:mrn', (req, res) => {
             mrn,
             name: inpatient?.name || String(b.name ?? '').trim() || mrn,
             unit: icu && ICU_UNITS.some((u) => u.key === icu.unit) ? icu.unit : '',
-            bedNo: icu ? icu.bedNo : [inpatient?.ward, inpatient?.bed].filter(Boolean).join(' '),
+            bedNo: icu ? candidateBedNo(icu) : [inpatient?.ward, inpatient?.bed].filter(Boolean).join(' '),
             physician: inpatient?.physician || '',
             consultPhysician: getCareRecord(db, mrn)?.consultPhysician || '',
             consultDate: getTaipeiTodayString(),
@@ -661,7 +663,7 @@ router.put('/care/:mrn', (req, res) => {
         : null,
     })
   } catch (error) {
-    res.status(500).json({ error: true, message: error.message || '儲存關懷紀錄失敗' })
+    res.status(error.status || 500).json({ error: true, message: error.message || '儲存關懷紀錄失敗' })
   }
 })
 
@@ -683,6 +685,13 @@ function parseIcuWard(wardNumber) {
   const bedSort = m[2] ? Number(m[2]) : 999
   const bedNo = m[2] ? `${unit}-${String(bedSort).padStart(2, '0')}` : unit
   return { unit, bedNo, bedSort }
+}
+
+// 待評估紀錄的單位與床號分兩欄存：三個收案單位內床號只留兩碼（'08'），免得畫面組成 "ICUA-ICUA-08"；
+// 其他 ICU（單位會留空＝床位待確認）保留完整床位字串供辨識
+function candidateBedNo(icu) {
+  if (!ICU_UNITS.some((u) => u.key === icu.unit)) return icu.bedNo
+  return icu.bedSort === 999 ? '' : String(icu.bedSort).padStart(2, '0')
 }
 
 function safeObj(s) {
@@ -930,7 +939,7 @@ router.get('/icu-candidates/lookup', (req, res) => {
           bed: r.bed,
           physician: r.physician,
           unit: inIcu ? icu.unit : '',
-          bedNo: inIcu ? icu.bedNo : '',
+          bedNo: inIcu ? candidateBedNo(icu) : '',
           alreadyListed: activeMap.has(mrnKey(r.mrn)),
         }
       }),

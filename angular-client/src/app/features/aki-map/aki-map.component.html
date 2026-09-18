@@ -368,7 +368,16 @@
                         @for (o of nephrologyOptions; track o) { <option [value]="o">{{ o }}</option> }
                       </select>
                     </td>
-                    <td><input class="cell-input narrow" [(ngModel)]="it.consultPhysician" (change)="saveCareRow(it, { consultPhysician: it.consultPhysician })" placeholder="會診醫師" /></td>
+                    <td>
+                      <select class="cell-input narrow" [(ngModel)]="it.consultPhysician" (change)="saveCareRow(it, { consultPhysician: it.consultPhysician })">
+                        <option value="">—</option>
+                        <!-- 已不在名單的舊值（離職／先前手打）保留顯示 -->
+                        @if (it.consultPhysician && !physicianNames().includes(it.consultPhysician)) {
+                          <option [value]="it.consultPhysician">{{ it.consultPhysician }}</option>
+                        }
+                        @for (n of physicianNames(); track n) { <option [value]="n">{{ n }}</option> }
+                      </select>
+                    </td>
                     <td class="nowrap hi-dialysis-cell">
                       <label class="hi-dialysis" [title]="it.highDialysisProbability ? '已列入 ICU 透析頁「待透析評估」名單；取消勾選＝結案為不需透析' : '勾選＝列入 ICU 透析頁「待透析評估」名單'">
                         <input type="checkbox" [checked]="it.highDialysisProbability" (change)="toggleHighDialysis(it, $event)" />
