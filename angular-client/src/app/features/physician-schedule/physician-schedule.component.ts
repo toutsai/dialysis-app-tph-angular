@@ -75,6 +75,10 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   reportDate2 = '';
   managedHolidays: any[] = [];
   holidayForm = { name: '', customName: '', date: '' };
+  // 不排班日期（隨當月班表一起存在 schedule_data.unavailableDates；整日、不分班別）
+  // 每筆：{ physicianId, physicianName, startDate, endDate, note }，單日時 endDate === startDate
+  unavailableDates: any[] = [];
+  unavailableForm = { physicianId: '', startDate: '', endDate: '', note: '' };
 
   // 年度假日主檔（後端同步的政府行政機關辦公日曆表；key = 西元年）
   holidayMasterCache = signal<Record<number, { holidays: { name: string; date: string }[]; syncedAt: string | null; source: string | null }>>({});
@@ -139,6 +143,11 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   selectedYear = computed(() => this.selectedDate().getFullYear());
   selectedMonth = computed(() => this.selectedDate().getMonth() + 1);
   selectedYearMonth = computed(() => `${this.selectedYear()}-${String(this.selectedMonth()).padStart(2, '0')}`);
+  // 不排班日期的日期選擇器限制在當月（資料跟著當月班表存，跨月請到該月份另外登記）
+  monthDateBounds = computed(() => {
+    const lastDay = new Date(this.selectedYear(), this.selectedMonth(), 0).getDate();
+    return { min: `${this.selectedYearMonth()}-01`, max: `${this.selectedYearMonth()}-${String(lastDay).padStart(2, '0')}` };
+  });
 
   clinicOptions = computed(() => {
     const weekdays = ['一', '二', '三', '四', '五', '六'];
@@ -377,8 +386,10 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
       let notes = '';
       let bd1 = '', bd2 = '', rp1 = '', rp2 = '';
       let holidays: any[] = [];
+      let unavailable: any[] = [];
 
       if (existingSchedule) {
+        if (Array.isArray(existingSchedule.unavailableDates)) unavailable = existingSchedule.unavailableDates;
         if (existingSchedule.schedule) {
           for (const day in existingSchedule.schedule) {
             if (blankSchedule[day]) Object.assign(blankSchedule[day], existingSchedule.schedule[day]);
@@ -417,6 +428,8 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
       this.reportDate1 = rp1;
       this.reportDate2 = rp2;
       this.managedHolidays = holidays;
+      this.unavailableDates = unavailable;
+      this.unavailableForm = { physicianId: '', startDate: '', endDate: '', note: '' };
       this.monthlyPdClinicSelections = pdSelections;
       this.scheduleDataRevision.update(v => v + 1);
     } catch (error: any) {
@@ -425,6 +438,7 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
       this.scheduleData = {};
       this.consultationScheduleData = {};
       this.emergencyRecords = [];
+      this.unavailableDates = [];
       this.scheduleDataRevision.update(v => v + 1);
     } finally {
       this.isLoading.set(false);
@@ -458,6 +472,7 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
       notes: this.scheduleNotes,
       specialDates: { bloodDraw1: this.bloodDrawDate1, bloodDraw2: this.bloodDrawDate2, report1: this.reportDate1, report2: this.reportDate2 },
       pdClinicHours: {}, managedHolidays: this.managedHolidays,
+      unavailableDates: this.unavailableDates,
     };
     for (const docId in this.monthlyPdClinicSelections) {
       const validPdHours = this.monthlyPdClinicSelections[docId].filter((pd: any) => pd.date && pd.shift);
@@ -699,8 +714,70 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
     this.showAlert('帶入完成', `已帶入 ${addedCount} 個本月國定假日（既有設定不變動），請記得按「儲存」。`);
   }
 
-  checkClinicConflict(event: Event, day: any, shift: string): void {
-    const newPhysicianId = (event.target as HTMLSelectElement).value;
+  addUnavailableDate(): void {
+    const { physicianId, note } = this.unavailableForm;
+    let { startDate, endDate } = this.unavailableForm;
+    if (!physicianId || !startDate) { this.showAlert('輸入不完整', '請選擇醫師，並至少填第一格日期（單日只填第一格，區間再填第二格）。'); return; }
+    if (!endDate) endDate = startDate;
+    if (endDate < startDate) [startDate, endDate] = [endDate, startDate];
+    const { min, max } = this.monthDateBounds();
+    if (startDate < min || endDate > max) {
+      this.showAlert('日期超出本月', `不排班日期跟著當月班表儲存，請選 ${this.selectedMonth()} 月內的日期；跨月的部分請切到該月份另外登記。`);
+      return;
+    }
+    const physician = this.availablePhysicians().find((p: any) => p.id === physicianId);
+    if (!physician) return;
+    if (this.unavailableDates.some((u: any) => u.physicianId === physicianId && u.startDate === startDate && u.endDate === endDate)) {
+      this.showAlert('重複登記', `${physician.name} 醫師已登記過這段不排班日期。`);
+      return;
+    }
+    this.unavailableDates.push({ physicianId, physicianName: physician.name, startDate, endDate, note: (note || '').trim() });
+    this.unavailableDates.sort((a: any, b: any) => a.startDate.localeCompare(b.startDate) || a.endDate.localeCompare(b.endDate));
+    this.unavailableForm = { physicianId, startDate: '', endDate: '', note: '' };
+    this.markUnsaved();
+
+    // 登記當下若該醫師在這幾天已經有班，順便提醒（只提醒、不自動改班）
+    const shiftLabels: Array<[Record<string, any>, string, string]> = [
+      [this.scheduleData, 'early', '查房早班'], [this.scheduleData, 'noon', '查房午班'], [this.scheduleData, 'late', '查房夜班'],
+      [this.consultationScheduleData, 'morning', '會診早班'], [this.consultationScheduleData, 'afternoon', '會診午班'], [this.consultationScheduleData, 'night', '會診夜班'],
+    ];
+    const alreadyAssigned: string[] = [];
+    for (let d = Number(startDate.slice(8)); d <= Number(endDate.slice(8)); d++) {
+      const hits = shiftLabels.filter(([data, shift]) => data[d]?.[shift]?.physicianId === physicianId).map(([, , label]) => label);
+      if (hits.length > 0) alreadyAssigned.push(`${this.selectedMonth()}/${d} ${hits.join('、')}`);
+    }
+    if (alreadyAssigned.length > 0) {
+      this.showAlert('已排班提醒', `${physician.name} 醫師在不排班期間已經有班：${alreadyAssigned.join('；')}。請記得調整。`);
+    }
+  }
+
+  removeUnavailableDate(index: number): void {
+    this.unavailableDates.splice(index, 1);
+    this.markUnsaved();
+  }
+
+  getUnavailablePhysicianName(entry: any): string {
+    const physician = this.availablePhysicians().find((p: any) => p.id === entry.physicianId);
+    return physician?.name || entry.physicianName || '(已離職醫師)';
+  }
+
+  formatUnavailableRange(entry: any): string {
+    const fmt = (dateStr: string) => `${Number(dateStr.slice(5, 7))}/${Number(dateStr.slice(8, 10))}`;
+    return entry.endDate && entry.endDate !== entry.startDate ? `${fmt(entry.startDate)}～${fmt(entry.endDate)}` : fmt(entry.startDate);
+  }
+
+  // 班表下拉選單改選醫師。用 [ngModel]+(ngModelChange) 拿「真正的醫師 id」與改選前的值；
+  // 舊寫法讀 (change) 的 event.target.value，[ngValue] 選項的 DOM 值是 "7: <id>" 對不到醫師，
+  // 門診衝突提醒因此從未跳出（2026-09-19 修）。
+  onPhysicianSelected(newPhysicianId: string | null, day: any, shift: string): void {
+    const targetSchedule = this.activeTab() === 'dialysis' ? this.scheduleData : this.consultationScheduleData;
+    const originalPhysicianId = targetSchedule[day.day][shift].physicianId ?? null;
+    targetSchedule[day.day][shift].physicianId = newPhysicianId;
+    this.markUnsaved();
+    this.checkClinicConflict(newPhysicianId, originalPhysicianId, day, shift);
+  }
+
+  checkClinicConflict(newPhysicianId: string | null, originalPhysicianId: string | null, day: any, shift: string): void {
     if (!newPhysicianId) return;
     const physician = this.availablePhysicians().find((p: any) => p.id === newPhysicianId);
     if (!physician) return;
@@ -713,15 +790,20 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
     const regularConflictCode = `${dayOfWeek === 0 ? 7 : dayOfWeek}-${currentShiftCode}`;
     if ((this.physicianClinicSelections[newPhysicianId] || []).includes(regularConflictCode)) conflictType = '常規門診';
     if ((this.monthlyPdClinicSelections[newPhysicianId] || []).some((pd: any) => pd.date === dateStr && pd.shift === currentShiftCode)) conflictType = 'PD 門診';
-    if (conflictType) {
+    // 不排班日期：整日、不分班別，比照門診衝突只提醒、可強制排
+    const unavailable = this.unavailableDates.find((u: any) => u.physicianId === newPhysicianId && u.startDate <= dateStr && dateStr <= (u.endDate || u.startDate));
+    if (conflictType || unavailable) {
       const targetSchedule = this.activeTab() === 'dialysis' ? this.scheduleData : this.consultationScheduleData;
-      const originalPhysicianId = targetSchedule[day.day][shift].physicianId;
-      this.confirmDialogTitle.set('門診時間衝突');
-      this.confirmDialogMessage.set(`提醒：${(physician as any).name} 醫師在該時段有${conflictType}，您確定要排此班嗎？`);
+      const reasons: string[] = [];
+      if (unavailable) reasons.push(`已登記 ${this.formatUnavailableRange(unavailable)} 不排班${unavailable.note ? `（${unavailable.note}）` : ''}`);
+      if (conflictType) reasons.push(`在該時段有${conflictType}`);
+      this.confirmDialogTitle.set(unavailable ? '不排班日期提醒' : '門診時間衝突');
+      this.confirmDialogMessage.set(`提醒：${(physician as any).name} 醫師${reasons.join('，且')}，您確定要排此班嗎？`);
       this.confirmAction.set(() => { this.isConfirmDialogVisible.set(false); });
       this.cancelAction.set(() => {
+        // 取消＝還原成改選前的醫師；[ngModel] 單向綁定會把下拉選單畫面一併帶回
         targetSchedule[day.day][shift].physicianId = originalPhysicianId;
-        (event.target as HTMLSelectElement).value = originalPhysicianId;
+        this.scheduleDataRevision.update(v => v + 1);
         this.isConfirmDialogVisible.set(false);
       });
       this.isConfirmDialogVisible.set(true);

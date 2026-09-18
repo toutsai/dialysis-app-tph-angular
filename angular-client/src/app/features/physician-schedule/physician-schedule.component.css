@@ -695,6 +695,67 @@ tr.date-row {
   border-radius: 4px;
   font-size: 0.85rem;
 }
+.unavailable-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 1rem;
+}
+.unavailable-date-range,
+.unavailable-note-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.unavailable-date-range .holiday-input,
+.unavailable-note-row .holiday-input {
+  min-width: 0;
+}
+.unavailable-hint {
+  margin: -2px 0 0;
+  font-size: 0.8rem;
+  color: #6c757d;
+}
+.unavailable-list {
+  margin-bottom: 1rem;
+}
+.unavailable-entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-width: 0;
+}
+.unavailable-chip {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background-color: #e9ecef;
+}
+.unavailable-note {
+  color: #495057;
+  font-size: 0.9rem;
+  word-break: break-word;
+}
+.unavailable-notes-label {
+  display: block;
+  margin: 0.25rem 0 0.4rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #495057;
+}
+.panel-count {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 8px;
+  border-radius: 10px;
+  background-color: #dc3545;
+  color: #fff;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  vertical-align: middle;
+}
 .holiday-sync-row {
   display: flex;
   flex-wrap: wrap;
