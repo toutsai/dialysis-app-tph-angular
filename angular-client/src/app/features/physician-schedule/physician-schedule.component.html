@@ -107,7 +107,7 @@
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
-                    <option *ngFor="let doc of availablePhysicians()" [ngValue]="doc.id">
+                    <option *ngFor="let doc of schedulePhysicians()" [ngValue]="doc.id">
                       {{ getDisplayName(doc) }}
                     </option>
                   </select>
@@ -133,7 +133,7 @@
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
-                    <option *ngFor="let doc of availablePhysicians()" [ngValue]="doc.id">
+                    <option *ngFor="let doc of schedulePhysicians()" [ngValue]="doc.id">
                       {{ getDisplayName(doc) }}
                     </option>
                   </select>
@@ -159,7 +159,7 @@
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
-                    <option *ngFor="let doc of availablePhysicians()" [ngValue]="doc.id">
+                    <option *ngFor="let doc of schedulePhysicians()" [ngValue]="doc.id">
                       {{ getDisplayName(doc) }}
                     </option>
                   </select>
@@ -251,7 +251,7 @@
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
-                    <option *ngFor="let doc of availablePhysicians()" [ngValue]="doc.id">
+                    <option *ngFor="let doc of schedulePhysicians()" [ngValue]="doc.id">
                       {{ getDisplayName(doc) }}
                     </option>
                   </select>
@@ -277,7 +277,7 @@
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
-                    <option *ngFor="let doc of availablePhysicians()" [ngValue]="doc.id">
+                    <option *ngFor="let doc of schedulePhysicians()" [ngValue]="doc.id">
                       {{ getDisplayName(doc) }}
                     </option>
                   </select>
@@ -303,7 +303,7 @@
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
-                    <option *ngFor="let doc of availablePhysicians()" [ngValue]="doc.id">
+                    <option *ngFor="let doc of schedulePhysicians()" [ngValue]="doc.id">
                       {{ getDisplayName(doc) }}
                     </option>
                   </select>
@@ -449,7 +449,7 @@
                         class="emergency-input"
                       >
                         <option [ngValue]="null">請選擇</option>
-                        <option *ngFor="let doc of availablePhysicians()" [ngValue]="doc.id">
+                        <option *ngFor="let doc of schedulePhysicians()" [ngValue]="doc.id">
                           {{ doc.name }}
                         </option>
                       </select>
