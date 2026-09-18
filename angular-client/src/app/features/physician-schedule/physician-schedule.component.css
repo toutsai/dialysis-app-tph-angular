@@ -507,6 +507,31 @@ tr.date-row {
   padding-bottom: 0.5rem;
   border-bottom: 1px solid #e9ecef;
 }
+.desktop-panels h2.collapsible-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.desktop-panels h2.collapsible-title .fa-chevron-down {
+  font-size: 0.85rem;
+  color: #6c757d;
+  transition: transform 0.2s;
+  transform: rotate(180deg);
+}
+.desktop-panels h2.collapsible-title.is-collapsed {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.desktop-panels h2.collapsible-title.is-collapsed .fa-chevron-down {
+  transform: rotate(0deg);
+}
+.desktop-panels h2.collapsible-title:hover {
+  color: #0d6efd;
+}
 .legend-table-wrapper {
   overflow-x: auto;
 }
@@ -597,6 +622,9 @@ tr.date-row {
   justify-content: space-between;
   align-items: center;
 }
+.stats-header h2.collapsible-title.is-collapsed {
+  flex: 1;
+}
 .stats-mode-toggle {
   display: flex;
   border: 1px solid #ced4da;
@@ -666,6 +694,81 @@ tr.date-row {
   border: 1px solid #ced4da;
   border-radius: 4px;
   font-size: 0.85rem;
+}
+.outside-support-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(0, 0, 0, 0.18);
+}
+.outside-support-label {
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #495057;
+}
+.unavailable-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 1rem;
+}
+.unavailable-date-range,
+.unavailable-note-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.unavailable-date-range .holiday-input,
+.unavailable-note-row .holiday-input {
+  min-width: 0;
+}
+.unavailable-hint {
+  margin: -2px 0 0;
+  font-size: 0.8rem;
+  color: #6c757d;
+}
+.unavailable-list {
+  margin-bottom: 1rem;
+}
+.unavailable-entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-width: 0;
+}
+.unavailable-chip {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background-color: #e9ecef;
+}
+.unavailable-note {
+  color: #495057;
+  font-size: 0.9rem;
+  word-break: break-word;
+}
+.unavailable-notes-label {
+  display: block;
+  margin: 0.25rem 0 0.4rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #495057;
+}
+.panel-count {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 8px;
+  border-radius: 10px;
+  background-color: #dc3545;
+  color: #fff;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  vertical-align: middle;
 }
 .holiday-sync-row {
   display: flex;

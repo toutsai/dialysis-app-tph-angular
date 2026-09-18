@@ -100,9 +100,8 @@
                   <select
                     *ngIf="day.day && scheduleData[day.day]"
                     [disabled]="!canManagePhysicianSchedule"
-                    [(ngModel)]="scheduleData[day.day].early.physicianId"
-                    (change)="checkClinicConflict($event, day, 'early')"
-                    (ngModelChange)="markUnsaved()"
+                    [ngModel]="scheduleData[day.day].early.physicianId"
+                    (ngModelChange)="onPhysicianSelected($event, day, 'early')"
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
@@ -124,9 +123,8 @@
                   <select
                     *ngIf="day.day && scheduleData[day.day]"
                     [disabled]="!canManagePhysicianSchedule"
-                    [(ngModel)]="scheduleData[day.day].noon.physicianId"
-                    (change)="checkClinicConflict($event, day, 'noon')"
-                    (ngModelChange)="markUnsaved()"
+                    [ngModel]="scheduleData[day.day].noon.physicianId"
+                    (ngModelChange)="onPhysicianSelected($event, day, 'noon')"
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
@@ -148,9 +146,8 @@
                   <select
                     *ngIf="day.day && scheduleData[day.day]"
                     [disabled]="!canManagePhysicianSchedule"
-                    [(ngModel)]="scheduleData[day.day].late.physicianId"
-                    (change)="checkClinicConflict($event, day, 'late')"
-                    (ngModelChange)="markUnsaved()"
+                    [ngModel]="scheduleData[day.day].late.physicianId"
+                    (ngModelChange)="onPhysicianSelected($event, day, 'late')"
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
@@ -238,9 +235,8 @@
                   <select
                     *ngIf="day.day && consultationScheduleData[day.day]"
                     [disabled]="!canManagePhysicianSchedule"
-                    [(ngModel)]="consultationScheduleData[day.day].morning.physicianId"
-                    (change)="checkClinicConflict($event, day, 'morning')"
-                    (ngModelChange)="markUnsaved()"
+                    [ngModel]="consultationScheduleData[day.day].morning.physicianId"
+                    (ngModelChange)="onPhysicianSelected($event, day, 'morning')"
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
@@ -262,9 +258,8 @@
                   <select
                     *ngIf="day.day && consultationScheduleData[day.day]"
                     [disabled]="!canManagePhysicianSchedule"
-                    [(ngModel)]="consultationScheduleData[day.day].afternoon.physicianId"
-                    (change)="checkClinicConflict($event, day, 'afternoon')"
-                    (ngModelChange)="markUnsaved()"
+                    [ngModel]="consultationScheduleData[day.day].afternoon.physicianId"
+                    (ngModelChange)="onPhysicianSelected($event, day, 'afternoon')"
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
@@ -286,9 +281,8 @@
                   <select
                     *ngIf="day.day && consultationScheduleData[day.day]"
                     [disabled]="!canManagePhysicianSchedule"
-                    [(ngModel)]="consultationScheduleData[day.day].night.physicianId"
-                    (change)="checkClinicConflict($event, day, 'night')"
-                    (ngModelChange)="markUnsaved()"
+                    [ngModel]="consultationScheduleData[day.day].night.physicianId"
+                    (ngModelChange)="onPhysicianSelected($event, day, 'night')"
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
@@ -515,12 +509,101 @@
       </div>
     </div>
 
+    <!-- 院外支援（每週固定時段）：接在各醫師門診下拉下方，桌機與手機共用 -->
+    <ng-template #outsideSupportRow let-doc>
+      <div class="outside-support-row" *ngIf="physicianOutsideSupport[doc.id]">
+        <span class="outside-support-label">院外支援</span>
+        <select
+          *ngFor="let slot of [0, 1]"
+          [disabled]="!canManagePhysicianSchedule"
+          [(ngModel)]="physicianOutsideSupport[doc.id][slot]"
+          (ngModelChange)="markUnsaved()"
+          class="clinic-select"
+        >
+          <option value="">{{ slot === 0 ? '支援一' : '支援二' }}</option>
+          <option *ngFor="let option of outsideSupportOptions" [value]="option.value">{{ option.text }}</option>
+        </select>
+      </div>
+    </ng-template>
+
+    <!-- 不排班日期／備註：桌機與手機面板共用同一份內容 -->
+    <ng-template #unavailablePanelBody>
+      <div class="unavailable-form" *ngIf="canManagePhysicianSchedule">
+        <select [(ngModel)]="unavailableForm.physicianId" class="holiday-input">
+          <option value="">選擇醫師</option>
+          <option *ngFor="let doc of availablePhysicians()" [value]="doc.id">{{ doc.name }}</option>
+        </select>
+        <div class="unavailable-date-range">
+          <input
+            type="date"
+            [(ngModel)]="unavailableForm.startDate"
+            [min]="monthDateBounds().min"
+            [max]="monthDateBounds().max"
+            class="holiday-input"
+            title="不排班日期（單日只填這格）"
+          /><span>～</span
+          ><input
+            type="date"
+            [(ngModel)]="unavailableForm.endDate"
+            [min]="unavailableForm.startDate || monthDateBounds().min"
+            [max]="monthDateBounds().max"
+            class="holiday-input"
+            title="區間結束日（選填；不填＝單日）"
+          />
+        </div>
+        <p class="unavailable-hint">單日只填第一格；填第二格＝日期區間。</p>
+        <div class="unavailable-note-row">
+          <input
+            type="text"
+            [(ngModel)]="unavailableForm.note"
+            (keydown.enter)="addUnavailableDate()"
+            placeholder="備註（選填，例：出國、開會）"
+            class="holiday-input"
+          /><button (click)="addUnavailableDate()" class="add-holiday-btn">新增</button>
+        </div>
+      </div>
+      <ul *ngIf="unavailableDates.length > 0" class="holiday-list unavailable-list">
+        <li *ngFor="let entry of unavailableDates; let index = index">
+          <span class="unavailable-entry">
+            <span class="unavailable-chip" [ngClass]="getPhysicianClassById(entry.physicianId)">{{
+              getUnavailablePhysicianName(entry)
+            }}</span>
+            <strong>{{ formatUnavailableRange(entry) }}</strong>
+            <span class="unavailable-note" *ngIf="entry.note">{{ entry.note }}</span>
+          </span>
+          <button
+            *ngIf="canManagePhysicianSchedule"
+            (click)="removeUnavailableDate(index)"
+            class="remove-holiday-btn"
+          >
+            &times;
+          </button>
+        </li>
+      </ul>
+      <p *ngIf="unavailableDates.length === 0" class="no-holidays-text">本月沒有登記不排班日期。</p>
+      <label class="unavailable-notes-label">其他備註</label>
+      <textarea
+        [(ngModel)]="scheduleNotes"
+        (ngModelChange)="markUnsaved()"
+        class="notes-textarea"
+        rows="4"
+        placeholder="其他排班規則、想排班的日期等文字備註..."
+      ></textarea>
+    </ng-template>
+
     <!-- 右欄：所有輔助面板 (完全共用) -->
     <div class="panels-container">
       <div class="desktop-panels">
+        <!-- 桌機右欄各面板預設收合，點標題展開（各自獨立，不互斥） -->
         <div class="physician-legend-panel">
-          <h2>醫師資訊與門診設定</h2>
-          <div class="legend-table-wrapper">
+          <h2
+            class="collapsible-title"
+            [class.is-collapsed]="!isDesktopPanelOpen('physicians')"
+            (click)="toggleDesktopPanel('physicians')"
+          >
+            醫師資訊與門診設定<i class="fas fa-chevron-down"></i>
+          </h2>
+          <div class="legend-table-wrapper" [style.display]="isDesktopPanelOpen('physicians') ? '' : 'none'">
             <table class="legend-table styled-legend">
               <thead>
                 <tr>
@@ -603,6 +686,7 @@
                           </option>
                         </select>
                       </div>
+                      <ng-container *ngTemplateOutlet="outsideSupportRow; context: { $implicit: doc }"></ng-container>
                     </td>
                   </tr>
                 </ng-container>
@@ -611,8 +695,14 @@
           </div>
         </div>
         <div class="pd-clinic-panel">
-          <h2>腹膜透析(PD)門診</h2>
-          <div class="pd-clinic-grid">
+          <h2
+            class="collapsible-title"
+            [class.is-collapsed]="!isDesktopPanelOpen('pd')"
+            (click)="toggleDesktopPanel('pd')"
+          >
+            腹膜透析(PD)門診<i class="fas fa-chevron-down"></i>
+          </h2>
+          <div class="pd-clinic-grid" [style.display]="isDesktopPanelOpen('pd') ? '' : 'none'">
             <div *ngFor="let doc of availablePhysicians()" class="pd-clinic-row">
               <span class="pd-doctor-name">{{ doc.name }}</span>
               <div class="pd-input-group">
@@ -655,9 +745,15 @@
           </div>
         </div>
         <div class="statistics-panel">
-          <div class="stats-header">
-            <h2>排班統計</h2>
-            <div class="stats-mode-toggle">
+          <div class="stats-header" [class.is-collapsed]="!isDesktopPanelOpen('stats')">
+            <h2
+              class="collapsible-title"
+              [class.is-collapsed]="!isDesktopPanelOpen('stats')"
+              (click)="toggleDesktopPanel('stats')"
+            >
+              排班統計<i class="fas fa-chevron-down"></i>
+            </h2>
+            <div class="stats-mode-toggle" [style.display]="isDesktopPanelOpen('stats') ? '' : 'none'">
               <button
                 [ngClass]="{ active: statsViewMode() === 'monthly' }"
                 (click)="statsViewMode.set('monthly')"
@@ -671,7 +767,7 @@
               </button>
             </div>
           </div>
-          <table class="stats-table">
+          <table class="stats-table" [style.display]="isDesktopPanelOpen('stats') ? '' : 'none'">
             <thead *ngIf="statsViewMode() === 'monthly'">
               <tr>
                 <th>醫師姓名</th>
@@ -709,15 +805,21 @@
           </table>
         </div>
         <div class="special-dates-panel">
-          <h2>註記日期</h2>
-          <div class="date-input-group">
+          <h2
+            class="collapsible-title"
+            [class.is-collapsed]="!isDesktopPanelOpen('specialDates')"
+            (click)="toggleDesktopPanel('specialDates')"
+          >
+            註記日期<i class="fas fa-chevron-down"></i>
+          </h2>
+          <div class="date-input-group" [style.display]="isDesktopPanelOpen('specialDates') ? '' : 'none'">
             <label>月抽血日：</label><input type="date" [(ngModel)]="bloodDrawDate1" (ngModelChange)="markUnsaved()" /><input
               type="date"
               [(ngModel)]="bloodDrawDate2"
               (ngModelChange)="markUnsaved()"
             />
           </div>
-          <div class="date-input-group">
+          <div class="date-input-group" [style.display]="isDesktopPanelOpen('specialDates') ? '' : 'none'">
             <label>解釋報告日：</label><input type="date" [(ngModel)]="reportDate1" (ngModelChange)="markUnsaved()" /><input
               type="date"
               [(ngModel)]="reportDate2"
@@ -726,18 +828,30 @@
           </div>
         </div>
         <div class="notes-panel">
-          <h2>排班規則與備註</h2>
-          <textarea
-            [(ngModel)]="scheduleNotes"
-            (ngModelChange)="markUnsaved()"
-            class="notes-textarea"
-            rows="5"
-            placeholder="請在此輸入排班規則、醫師預約不值班等備註事項..."
-          ></textarea>
+          <h2
+            class="collapsible-title"
+            [class.is-collapsed]="!isDesktopPanelOpen('notes')"
+            (click)="toggleDesktopPanel('notes')"
+          >
+            <span
+              >不排班日期／備註<span class="panel-count" *ngIf="unavailableDates.length > 0">{{
+                unavailableDates.length
+              }}</span></span
+            ><i class="fas fa-chevron-down"></i>
+          </h2>
+          <div [style.display]="isDesktopPanelOpen('notes') ? '' : 'none'">
+            <ng-container *ngTemplateOutlet="unavailablePanelBody"></ng-container>
+          </div>
         </div>
         <div class="notes-panel">
-          <h2>國定假日管理 (本月)</h2>
-          <div class="holiday-manager">
+          <h2
+            class="collapsible-title"
+            [class.is-collapsed]="!isDesktopPanelOpen('holidays')"
+            (click)="toggleDesktopPanel('holidays')"
+          >
+            國定假日管理 (本月)<i class="fas fa-chevron-down"></i>
+          </h2>
+          <div class="holiday-manager" [style.display]="isDesktopPanelOpen('holidays') ? '' : 'none'">
             <div class="holiday-sync-row" *ngIf="canManagePhysicianSchedule">
               <button
                 (click)="syncGovernmentHolidays()"
@@ -896,6 +1010,7 @@
                               </option>
                             </select>
                           </div>
+                          <ng-container *ngTemplateOutlet="outsideSupportRow; context: { $implicit: doc }"></ng-container>
                         </td>
                       </tr>
                     </ng-container>
@@ -1039,17 +1154,11 @@
           </div>
           <div class="panel notes-panel">
             <button class="panel-toggle" (click)="toggleMobilePanel('notes')">
-              <h2>排班規則與備註</h2>
+              <h2>不排班日期／備註</h2>
               <i class="fas fa-chevron-down"></i>
             </button>
             <div class="panel-content" [style.display]="activeMobilePanel() === 'notes' ? '' : 'none'">
-              <textarea
-                [(ngModel)]="scheduleNotes"
-                (ngModelChange)="markUnsaved()"
-                class="notes-textarea"
-                rows="5"
-                placeholder="請在此輸入排班規則..."
-              ></textarea>
+              <ng-container *ngTemplateOutlet="unavailablePanelBody"></ng-container>
             </div>
           </div>
           <div class="panel notes-panel">

@@ -1684,6 +1684,7 @@ router.get('/physicians', authenticate, (req, res) => {
         staffId: p.staff_id,
         phone: p.phone,
         clinicHours: JSON.parse(p.clinic_hours || '[]'),
+        outsideSupport: JSON.parse(p.outside_support || '[]'),
         defaultSchedules: JSON.parse(p.default_schedules || '[]'),
         defaultConsultationSchedules: JSON.parse(p.default_consultation_schedules || '[]'),
         isActive: p.is_active === 1,
@@ -1829,6 +1830,22 @@ router.put('/physician-schedules/:date', ...isContributor, async (req, res) => {
     const scheduleData = req.body
 
     const db = getDatabase()
+
+    // 整包覆寫的保護：尚未重新整理的舊版前端不會送 unavailableDates，
+    // 直接覆寫會把該月的不排班登記抹掉 → 沒帶這個 key 時沿用既有值（新版一律會帶，含空陣列）
+    if (scheduleData && typeof scheduleData === 'object' && !('unavailableDates' in scheduleData)) {
+      const current = db.prepare(`SELECT schedule_data FROM physician_schedules WHERE id = ?`).get(date)
+      if (current) {
+        try {
+          const currentData = JSON.parse(current.schedule_data || '{}')
+          if (Array.isArray(currentData.unavailableDates)) {
+            scheduleData.unavailableDates = currentData.unavailableDates
+          }
+        } catch {
+          // 既有資料解析失敗就照原行為覆寫
+        }
+      }
+    }
 
     db.prepare(
       `

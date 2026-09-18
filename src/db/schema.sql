@@ -341,6 +341,7 @@ CREATE TABLE IF NOT EXISTS physicians (
     clinic_hours TEXT DEFAULT '[]',  -- JSON array
     default_schedules TEXT DEFAULT '[]',  -- JSON array
     default_consultation_schedules TEXT DEFAULT '[]',  -- JSON array
+    outside_support TEXT DEFAULT '[]',  -- JSON array：每週院外支援時段，如 "3-ALL"、"5-AM"（週幾-整天/上午/下午/晚上）
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now', 'localtime')),
     updated_at TEXT DEFAULT (datetime('now', 'localtime'))
