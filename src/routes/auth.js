@@ -543,6 +543,7 @@ router.get('/users/directory', authenticate, (req, res) => {
           result.staffId = p.staff_id
           result.phone = p.phone
           result.clinicHours = JSON.parse(p.clinic_hours || '[]')
+          result.outsideSupport = JSON.parse(p.outside_support || '[]')
           result.defaultSchedules = JSON.parse(p.default_schedules || '[]')
           result.defaultConsultationSchedules = JSON.parse(p.default_consultation_schedules || '[]')
         }
@@ -601,6 +602,7 @@ router.get('/users', ...isAdmin, (req, res) => {
         result.staffId = p.staff_id
         result.phone = p.phone
         result.clinicHours = JSON.parse(p.clinic_hours || '[]')
+        result.outsideSupport = JSON.parse(p.outside_support || '[]')
         result.defaultSchedules = JSON.parse(p.default_schedules || '[]')
         result.defaultConsultationSchedules = JSON.parse(p.default_consultation_schedules || '[]')
       }
@@ -728,9 +730,24 @@ router.put('/users/:id', ...isAdmin, async (req, res) => {
       staffId,
       phone,
       clinicHours,
+      outsideSupport,
       defaultSchedules,
       defaultConsultationSchedules,
     } = req.body
+
+    // 院外支援時段格式："<週幾1-7>-<ALL|AM|PM|NT>"
+    if (
+      outsideSupport !== undefined &&
+      !(
+        Array.isArray(outsideSupport) &&
+        outsideSupport.every((code) => typeof code === 'string' && /^[1-7]-(ALL|AM|PM|NT)$/.test(code))
+      )
+    ) {
+      return res.status(400).json({
+        error: true,
+        message: '院外支援時段格式不正確',
+      })
+    }
 
     const db = getDatabase()
 
@@ -786,6 +803,7 @@ router.put('/users/:id', ...isAdmin, async (req, res) => {
       staffId !== undefined ||
       phone !== undefined ||
       clinicHours !== undefined ||
+      outsideSupport !== undefined ||
       defaultSchedules !== undefined ||
       defaultConsultationSchedules !== undefined
 
@@ -882,6 +900,13 @@ router.put('/users/:id', ...isAdmin, async (req, res) => {
         JSON.stringify(mergedData.defaultSchedules),
         JSON.stringify(mergedData.defaultConsultationSchedules),
       )
+
+      // 院外支援時段：有傳才更新（上面的 upsert 不含此欄，未傳時保留原值）
+      if (outsideSupport !== undefined) {
+        db.prepare(
+          `UPDATE physicians SET outside_support = ?, updated_at = datetime('now', 'localtime') WHERE id = ?`,
+        ).run(JSON.stringify(outsideSupport), id)
+      }
     } else if (existing.title === '主治醫師' && finalTitle !== '主治醫師') {
       // 如果從主治醫師改成其他職稱，設為非啟用
       db.prepare(

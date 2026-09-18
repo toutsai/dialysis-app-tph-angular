@@ -509,6 +509,23 @@
       </div>
     </div>
 
+    <!-- 院外支援（每週固定時段）：接在各醫師門診下拉下方，桌機與手機共用 -->
+    <ng-template #outsideSupportRow let-doc>
+      <div class="outside-support-row" *ngIf="physicianOutsideSupport[doc.id]">
+        <span class="outside-support-label">院外支援</span>
+        <select
+          *ngFor="let slot of [0, 1]"
+          [disabled]="!canManagePhysicianSchedule"
+          [(ngModel)]="physicianOutsideSupport[doc.id][slot]"
+          (ngModelChange)="markUnsaved()"
+          class="clinic-select"
+        >
+          <option value="">{{ slot === 0 ? '支援一' : '支援二' }}</option>
+          <option *ngFor="let option of outsideSupportOptions" [value]="option.value">{{ option.text }}</option>
+        </select>
+      </div>
+    </ng-template>
+
     <!-- 不排班日期／備註：桌機與手機面板共用同一份內容 -->
     <ng-template #unavailablePanelBody>
       <div class="unavailable-form" *ngIf="canManagePhysicianSchedule">
@@ -669,6 +686,7 @@
                           </option>
                         </select>
                       </div>
+                      <ng-container *ngTemplateOutlet="outsideSupportRow; context: { $implicit: doc }"></ng-container>
                     </td>
                   </tr>
                 </ng-container>
@@ -992,6 +1010,7 @@
                               </option>
                             </select>
                           </div>
+                          <ng-container *ngTemplateOutlet="outsideSupportRow; context: { $implicit: doc }"></ng-container>
                         </td>
                       </tr>
                     </ng-container>

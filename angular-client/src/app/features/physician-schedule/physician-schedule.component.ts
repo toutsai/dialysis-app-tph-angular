@@ -51,6 +51,12 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   hasUnsavedChanges = signal(false);
   physicianClinicSelections: Record<string, string[]> = {};
   monthlyPdClinicSelections: Record<string, any[]> = {};
+  // 每週院外支援時段（存在醫師資料 outsideSupport，跨月沿用；每位兩格）
+  // 代碼 "<週幾1-7>-<ALL|AM|PM|NT>"，ALL＝整天；排到該時段比照門診跳提醒
+  physicianOutsideSupport: Record<string, string[]> = {};
+  readonly outsideSupportOptions: { value: string; text: string }[] = ['一', '二', '三', '四', '五', '六', '日'].flatMap(
+    (weekday, i) => [['ALL', '整天'], ['AM', '上'], ['PM', '下'], ['NT', '晚']].map(([code, label]) => ({ value: `${i + 1}-${code}`, text: `週${weekday}${label}` })),
+  );
   statsViewMode = signal<'monthly' | 'ytd'>('monthly');
   // scheduleData 是純物件不是 signal，無法觸發 computed 重算；
   // 用版本號 signal 在資料載入/變更時強制 scheduleStats 重新計算
@@ -520,6 +526,12 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
         clinicSelections[doc.id] = [hours[0] || '', hours[1] || '', hours[2] || '', hours[3] || ''];
       });
       this.physicianClinicSelections = clinicSelections;
+      const outsideSupport: Record<string, string[]> = {};
+      physicians.forEach((doc: any) => {
+        const slots = Array.isArray(doc.outsideSupport) ? doc.outsideSupport : [];
+        outsideSupport[doc.id] = [slots[0] || '', slots[1] || ''];
+      });
+      this.physicianOutsideSupport = outsideSupport;
       this.availablePhysicians.set(physicians);
     } catch (error) {
       console.error('讀取主治醫師列表失敗:', error);
@@ -581,10 +593,15 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
     const clinicUpdatePromises = this.availablePhysicians().map((doc: any) => {
       const selectedHours = this.physicianClinicSelections[doc.id] || [];
       const newClinicHours = selectedHours.filter((hour: string) => hour);
-      if ((doc.clinicHours || []).sort().join(',') !== [...newClinicHours].sort().join(',')) {
-        return this.usersApi.update(doc.id, { clinicHours: newClinicHours }).then(() => {
+      const newOutsideSupport = [...new Set((this.physicianOutsideSupport[doc.id] || []).filter((code: string) => code))];
+      const payload: any = {};
+      if ((doc.clinicHours || []).sort().join(',') !== [...newClinicHours].sort().join(',')) payload.clinicHours = newClinicHours;
+      if ([...(doc.outsideSupport || [])].sort().join(',') !== [...newOutsideSupport].sort().join(',')) payload.outsideSupport = newOutsideSupport;
+      if (Object.keys(payload).length > 0) {
+        return this.usersApi.update(doc.id, payload).then(() => {
           // ✅ 儲存成功後直接更新本地資料，不需重新讀取
-          doc.clinicHours = newClinicHours;
+          if (payload.clinicHours) doc.clinicHours = newClinicHours;
+          if (payload.outsideSupport) doc.outsideSupport = newOutsideSupport;
         });
       }
       return Promise.resolve();
@@ -790,14 +807,19 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
     const regularConflictCode = `${dayOfWeek === 0 ? 7 : dayOfWeek}-${currentShiftCode}`;
     if ((this.physicianClinicSelections[newPhysicianId] || []).includes(regularConflictCode)) conflictType = '常規門診';
     if ((this.monthlyPdClinicSelections[newPhysicianId] || []).some((pd: any) => pd.date === dateStr && pd.shift === currentShiftCode)) conflictType = 'PD 門診';
+    // 每週院外支援：該週幾「整天」或同時段，比照門診只提醒
+    const weekdayCode = dayOfWeek === 0 ? 7 : dayOfWeek;
+    const outsideSupport = (this.physicianOutsideSupport[newPhysicianId] || [])
+      .some((code: string) => code === `${weekdayCode}-ALL` || code === `${weekdayCode}-${currentShiftCode}`);
     // 不排班日期：整日、不分班別，比照門診衝突只提醒、可強制排
     const unavailable = this.unavailableDates.find((u: any) => u.physicianId === newPhysicianId && u.startDate <= dateStr && dateStr <= (u.endDate || u.startDate));
-    if (conflictType || unavailable) {
+    if (conflictType || unavailable || outsideSupport) {
       const targetSchedule = this.activeTab() === 'dialysis' ? this.scheduleData : this.consultationScheduleData;
       const reasons: string[] = [];
       if (unavailable) reasons.push(`已登記 ${this.formatUnavailableRange(unavailable)} 不排班${unavailable.note ? `（${unavailable.note}）` : ''}`);
+      if (outsideSupport) reasons.push(`每週${'一二三四五六日'[weekdayCode - 1]}該時段有院外支援`);
       if (conflictType) reasons.push(`在該時段有${conflictType}`);
-      this.confirmDialogTitle.set(unavailable ? '不排班日期提醒' : '門診時間衝突');
+      this.confirmDialogTitle.set(unavailable ? '不排班日期提醒' : outsideSupport ? '院外支援提醒' : '門診時間衝突');
       this.confirmDialogMessage.set(`提醒：${(physician as any).name} 醫師${reasons.join('，且')}，您確定要排此班嗎？`);
       this.confirmAction.set(() => { this.isConfirmDialogVisible.set(false); });
       this.cancelAction.set(() => {

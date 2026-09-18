@@ -408,6 +408,9 @@ export function runMigrations() {
       addColumnIfNotExists(db, 'physicians', 'default_consultation_schedules', "TEXT DEFAULT '[]'")
     )
       migrationsApplied++
+    // 每週院外支援時段（醫師班表排到該時段會提醒，2026-09-19）
+    if (addColumnIfNotExists(db, 'physicians', 'outside_support', "TEXT DEFAULT '[]'"))
+      migrationsApplied++
 
     // ========================================
     // Users 表格遷移 (B級資安合規 - 登入失敗鎖定)

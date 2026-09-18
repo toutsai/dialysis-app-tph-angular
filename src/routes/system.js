@@ -1684,6 +1684,7 @@ router.get('/physicians', authenticate, (req, res) => {
         staffId: p.staff_id,
         phone: p.phone,
         clinicHours: JSON.parse(p.clinic_hours || '[]'),
+        outsideSupport: JSON.parse(p.outside_support || '[]'),
         defaultSchedules: JSON.parse(p.default_schedules || '[]'),
         defaultConsultationSchedules: JSON.parse(p.default_consultation_schedules || '[]'),
         isActive: p.is_active === 1,
