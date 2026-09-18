@@ -119,9 +119,13 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
     { name: '中秋節', date: '2026-09-25' },
     { name: '國慶日', date: '2026-10-10' },
   ];
+  // 每位醫師一色：顏色依 fetchPhysicians 的 desiredOrder 位置指定，
+  // 8~10 為預留色，醫師超過 10 位才會繞回第 1 色（屆時再加色）
   readonly physicianColorClasses = [
     'physician-color-1', 'physician-color-2', 'physician-color-3',
     'physician-color-4', 'physician-color-5', 'physician-color-6',
+    'physician-color-7', 'physician-color-8', 'physician-color-9',
+    'physician-color-10',
   ];
 
   // Computed
@@ -482,7 +486,9 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
       await this.userDirectory.fetchUsersIfNeeded();
       const physicians = this.userDirectory.allUsers()
         .filter(u => u.title === '主治醫師') as any[];
-      const desiredOrder = ['廖丁瑩', '蔡宜潔', '蘇哲弘', '蔡亨政', '林天佑'];
+      // 順序同時決定底色（physicianColorClasses 依 index 指定）；
+      // 新醫師請加在最後，既有醫師的顏色才不會位移
+      const desiredOrder = ['廖丁瑩', '蔡宜潔', '蘇哲弘', '蔡亨政', '林天佑', '陳怡汝', '賴昱鈞'];
       physicians.sort((a: any, b: any) => {
         const indexA = desiredOrder.indexOf(a.name);
         const indexB = desiredOrder.indexOf(b.name);
