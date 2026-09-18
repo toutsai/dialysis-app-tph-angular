@@ -13,6 +13,9 @@ export interface DashboardMedication {
   dose?: string;
   unit?: string;
   note?: string;
+  /** 後端解讀層：判讀後規則與來源（note / frequency / override） */
+  effectiveRule?: string;
+  ruleSource?: string;
 }
 
 export interface DashboardHandoverItem {

@@ -272,6 +272,37 @@ export function freqToDows(freq: string | null | undefined): number[] {
   return out;
 }
 
+/** 每日應打針劑一列（POST /medications/daily-injections 回傳；規則欄位由後端解讀層算出） */
+export interface DailyInjectionRuleFields {
+  /** HIS 原始備註欄 */
+  note?: string | null;
+  /** 判讀後的正規化規則（如 QW135 / Q2W4 / 0923.0930），空字串 = 無 */
+  effectiveRule?: string | null;
+  /** 規則來源：'note' 備註 / 'frequency' 頻率服法欄 / 'override' 使用者確認 */
+  ruleSource?: string | null;
+}
+
+/**
+ * 應打清單「備註 (規則)」欄的顯示文字。
+ * 2026-09-14 起 HIS 把星期幾寫在「頻率服法」欄、備註留空，只印備註會變空白；
+ * 因此：規則來自備註 → 照舊顯示原備註；來自頻率欄或使用者確認 → 顯示判讀後規則，備註另有文字時附在後面。
+ */
+export function formatInjectionRuleText(inj: DailyInjectionRuleFields): string {
+  const rule = String(inj.effectiveRule || '').trim();
+  const note = String(inj.note || '').trim();
+  if (!rule) return note;
+  if ((inj.ruleSource || 'note') === 'note') return note || rule;
+  return note && note !== rule ? `${rule}（備註：${note}）` : rule;
+}
+
+/** 規則來源的小標籤文字；來自備註（既有行為）不標 */
+export function injectionRuleSourceLabel(inj: DailyInjectionRuleFields): string {
+  if (!String(inj.effectiveRule || '').trim()) return '';
+  if (inj.ruleSource === 'frequency') return '頻率欄';
+  if (inj.ruleSource === 'override') return '已確認';
+  return '';
+}
+
 export const DOW_LABEL: Record<number, string> = { 1: '一', 2: '二', 3: '三', 4: '四', 5: '五', 6: '六', 7: '日', 0: '日' };
 
 export const SHIFT_LABEL: Record<string, string> = { early: '早', noon: '午', late: '晚', '': '-' };

@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '@app/core/services/api.service';
 import { InjectionUncertainListDialogComponent } from '../injection-uncertain-list-dialog/injection-uncertain-list-dialog.component';
+import { formatInjectionRuleText, injectionRuleSourceLabel } from '@app/features/orders/injection-shared';
 
 @Component({
   selector: 'app-daily-injection-list-dialog',
@@ -84,6 +85,15 @@ export class DailyInjectionListDialogComponent implements OnChanges {
 
   getMedicationUnit(injection: any): string {
     return injection.unit || '';
+  }
+
+  /** 「備註 (規則)」欄：備註為來源時顯示原備註；規則來自頻率服法欄／使用者確認時顯示判讀後規則 */
+  ruleText(injection: any): string {
+    return formatInjectionRuleText(injection);
+  }
+
+  ruleSourceLabel(injection: any): string {
+    return injectionRuleSourceLabel(injection);
   }
 
   closeDialog(): void {

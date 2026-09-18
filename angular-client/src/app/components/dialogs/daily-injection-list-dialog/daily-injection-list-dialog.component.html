@@ -61,7 +61,12 @@
                     <td>{{ injection.patientName }}</td>
                     <td>{{ injection.orderName }}</td>
                     <td>{{ injection.dose }} {{ getMedicationUnit(injection) }}</td>
-                    <td>{{ injection.note }}</td>
+                    <td>
+                      {{ ruleText(injection) }}
+                      @if (ruleSourceLabel(injection); as sourceLabel) {
+                        <span class="rule-source-tag" title="規則來源">{{ sourceLabel }}</span>
+                      }
+                    </td>
                   </tr>
                 }
               </tbody>

@@ -153,6 +153,19 @@
   position: sticky;
   top: 0;
 }
+.rule-source-tag {
+  display: inline-block;
+  margin-left: 0.4em;
+  padding: 0 0.45em;
+  border-radius: 999px;
+  border: 1px solid #ced4da;
+  background: #f1f3f5;
+  color: #6c757d;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  vertical-align: middle;
+  white-space: nowrap;
+}
 .panel-loading,
 .panel-empty {
   display: flex;
