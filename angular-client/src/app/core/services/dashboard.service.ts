@@ -154,40 +154,10 @@ export class DashboardService {
     }
   }
 
-  private tokenKey(bedKey: string): string {
-    return `bed_dashboard_token:${bedKey}`;
-  }
-
-  getStoredToken(bedKey: string): string | null {
-    return localStorage.getItem(this.tokenKey(bedKey));
-  }
-
-  hasStoredToken(bedKey: string): boolean {
-    return !!this.getStoredToken(bedKey);
-  }
-
-  clearStoredToken(bedKey: string): void {
-    localStorage.removeItem(this.tokenKey(bedKey));
-  }
-
-  async loginBed(bedKey: string, pin: string): Promise<void> {
-    const res = await fetch(`${this.apiConfig.apiBaseUrl}/dashboard/bed-login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bedKey, pin }),
-    });
-
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.token) {
-      throw new Error(data.message || '床位登入失敗');
-    }
-
-    localStorage.setItem(this.tokenKey(bedKey), data.token);
-    if (data.device?.bedKey && data.device.bedKey !== bedKey) {
-      localStorage.setItem(this.tokenKey(data.device.bedKey), data.token);
-    }
-  }
-
+  /**
+   * 讀取床邊儀表板資料。2026-09-18 起端點免登入（比照 ICU 分享頁），不帶任何 token；
+   * 姓名／病歷號已在後端遮罩。刻意用 raw fetch：ApiService 的 401 攔截會導回登入頁。
+   */
   async getBedDashboard(
     bedKey: string,
     date: string,
@@ -197,25 +167,12 @@ export class DashboardService {
     if (date) params.set('date', date);
     if (shift) params.set('shift', shift);
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    const dashboardToken = this.getStoredToken(bedKey);
-    const staffToken = this.apiConfig.getToken();
-    const token = staffToken || dashboardToken;
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
-
     const res = await fetch(
       `${this.apiConfig.apiBaseUrl}/dashboard/bed/${encodeURIComponent(bedKey)}?${params}`,
-      { headers },
     );
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      if (res.status === 401) this.clearStoredToken(bedKey);
       throw new Error(data.message || '讀取床邊儀表板失敗');
     }
 
