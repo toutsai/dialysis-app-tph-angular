@@ -755,41 +755,66 @@ tr.date-row {
 .is-weekend-text-only {
   color: #dc3545;
 }
+/* 醫師底色：1~6 沿用原色相並加深以提高對比；7 起為新增色（8~10 預留） */
 .physician-info-row.physician-color-1 .legend-char {
   color: #4a148c;
 }
 .physician-color-1 {
-  background-color: #f3e5f5;
+  background-color: #e1bee7;
 }
 .physician-info-row.physician-color-2 .legend-char {
   color: #880e4f;
 }
 .physician-color-2 {
-  background-color: #fce4ec;
+  background-color: #f8bbd0;
 }
 .physician-info-row.physician-color-3 .legend-char {
   color: #0d47a1;
 }
 .physician-color-3 {
-  background-color: #e3f2fd;
+  background-color: #bbdefb;
 }
 .physician-info-row.physician-color-4 .legend-char {
   color: #1b5e20;
 }
 .physician-color-4 {
-  background-color: #e8f5e9;
+  background-color: #c8e6c9;
 }
 .physician-info-row.physician-color-5 .legend-char {
-  color: #ff6f00;
+  color: #e65100;
 }
 .physician-color-5 {
-  background-color: #fff8e1;
+  background-color: #fff2a8;
 }
 .physician-info-row.physician-color-6 .legend-char {
-  color: #bf360a;
+  color: #bf360c;
 }
 .physician-color-6 {
-  background-color: #ffe0d6;
+  background-color: #ffccbc;
+}
+.physician-info-row.physician-color-7 .legend-char {
+  color: #00695c;
+}
+.physician-color-7 {
+  background-color: #80cbc4;
+}
+.physician-info-row.physician-color-8 .legend-char {
+  color: #4e342e;
+}
+.physician-color-8 {
+  background-color: #d7ccc8;
+}
+.physician-info-row.physician-color-9 .legend-char {
+  color: #827717;
+}
+.physician-color-9 {
+  background-color: #e6ee9c;
+}
+.physician-info-row.physician-color-10 .legend-char {
+  color: #283593;
+}
+.physician-color-10 {
+  background-color: #c5cae9;
 }
 .mobile-view-toggle,
 .mobile-day-view,
