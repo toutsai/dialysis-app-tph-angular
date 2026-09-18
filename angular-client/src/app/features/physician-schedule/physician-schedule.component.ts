@@ -84,6 +84,8 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   // 不排班日期（隨當月班表一起存在 schedule_data.unavailableDates；整日、不分班別）
   // 每筆：{ physicianId, physicianName, startDate, endDate, note }，單日時 endDate === startDate
   unavailableDates: any[] = [];
+  // 所有主治醫師 id→姓名（含「不列入排班」者），只供存檔時填 name 用
+  private physicianNameById = new Map<string, string>();
   unavailableForm = { physicianId: '', startDate: '', endDate: '', note: '' };
 
   // 年度假日主檔（後端同步的政府行政機關辦公日曆表；key = 西元年）
@@ -485,7 +487,9 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   }
 
   saveScheduleOnly(): Promise<any> {
-    const physicianMap = new Map(this.availablePhysicians().map((p: any) => [p.id, p.name]));
+    const physicianMap = this.physicianNameById.size > 0
+      ? this.physicianNameById
+      : new Map(this.availablePhysicians().map((p: any) => [p.id, p.name]));
     const dataToSave: any = {
       year: this.selectedYear(), month: this.selectedMonth(),
       schedule: {}, consultationSchedule: {},
@@ -522,8 +526,12 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
     try {
       // ✅ 優化：使用已快取的 UserDirectoryService 而非重新查 Firestore
       await this.userDirectory.fetchUsersIfNeeded();
-      const physicians = this.userDirectory.allUsers()
+      const allPhysicians = this.userDirectory.allUsers()
         .filter(u => u.title === '主治醫師') as any[];
+      // 使用者管理勾「不列入排班」的醫師：本頁完全不顯示（圖例/門診/PD/統計/下拉/不排班登記）；
+      // 但存檔時仍要查得到姓名，避免舊月份裡曾排過的班被存成 name: null
+      this.physicianNameById = new Map(allPhysicians.map((p: any) => [p.id, p.name]));
+      const physicians = allPhysicians.filter((p: any) => !p.excludeFromSchedule);
       // 順序同時決定底色（physicianColorClasses 依 index 指定）；
       // 新醫師請加在最後，既有醫師的顏色才不會位移
       const desiredOrder = ['廖丁瑩', '蔡宜潔', '蘇哲弘', '蔡亨政', '林天佑', '陳怡汝', '賴昱鈞'];

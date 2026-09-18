@@ -544,6 +544,7 @@ router.get('/users/directory', authenticate, (req, res) => {
           result.phone = p.phone
           result.clinicHours = JSON.parse(p.clinic_hours || '[]')
           result.outsideSupport = JSON.parse(p.outside_support || '[]')
+          result.excludeFromSchedule = p.exclude_from_schedule === 1
           result.defaultSchedules = JSON.parse(p.default_schedules || '[]')
           result.defaultConsultationSchedules = JSON.parse(p.default_consultation_schedules || '[]')
         }
@@ -603,6 +604,7 @@ router.get('/users', ...isAdmin, (req, res) => {
         result.phone = p.phone
         result.clinicHours = JSON.parse(p.clinic_hours || '[]')
         result.outsideSupport = JSON.parse(p.outside_support || '[]')
+        result.excludeFromSchedule = p.exclude_from_schedule === 1
         result.defaultSchedules = JSON.parse(p.default_schedules || '[]')
         result.defaultConsultationSchedules = JSON.parse(p.default_consultation_schedules || '[]')
       }
@@ -630,6 +632,7 @@ router.post('/users', ...isAdmin, async (req, res) => {
       clinicHours,
       defaultSchedules,
       defaultConsultationSchedules,
+      excludeFromSchedule,
     } = req.body
 
     if (!username || !password || !name || !role) {
@@ -695,6 +698,9 @@ router.post('/users', ...isAdmin, async (req, res) => {
         JSON.stringify(defaultSchedules || []),
         JSON.stringify(defaultConsultationSchedules || []),
       )
+      if (excludeFromSchedule) {
+        db.prepare(`UPDATE physicians SET exclude_from_schedule = 1 WHERE id = ?`).run(id)
+      }
     }
 
     await logAudit('USER_CREATE', req.user.id, req.user.name, 'users', id, { username, name, role })
@@ -731,6 +737,7 @@ router.put('/users/:id', ...isAdmin, async (req, res) => {
       phone,
       clinicHours,
       outsideSupport,
+      excludeFromSchedule,
       defaultSchedules,
       defaultConsultationSchedules,
     } = req.body
@@ -804,6 +811,7 @@ router.put('/users/:id', ...isAdmin, async (req, res) => {
       phone !== undefined ||
       clinicHours !== undefined ||
       outsideSupport !== undefined ||
+      excludeFromSchedule !== undefined ||
       defaultSchedules !== undefined ||
       defaultConsultationSchedules !== undefined
 
@@ -906,6 +914,13 @@ router.put('/users/:id', ...isAdmin, async (req, res) => {
         db.prepare(
           `UPDATE physicians SET outside_support = ?, updated_at = datetime('now', 'localtime') WHERE id = ?`,
         ).run(JSON.stringify(outsideSupport), id)
+      }
+
+      // 不列入排班：同樣有傳才更新、不併入 upsert
+      if (excludeFromSchedule !== undefined) {
+        db.prepare(
+          `UPDATE physicians SET exclude_from_schedule = ?, updated_at = datetime('now', 'localtime') WHERE id = ?`,
+        ).run(excludeFromSchedule ? 1 : 0, id)
       }
     } else if (existing.title === '主治醫師' && finalTitle !== '主治醫師') {
       // 如果從主治醫師改成其他職稱，設為非啟用

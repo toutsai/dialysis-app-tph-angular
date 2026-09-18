@@ -155,6 +155,22 @@
   margin-bottom: 0; /* 覆蓋掉 .form-group label 的 margin */
   cursor: pointer; /* 增加點擊區域 */
 }
+.exclude-schedule-toggle {
+  margin-top: 12px;
+}
+.exclude-schedule-toggle label {
+  font-weight: 600;
+}
+.exclude-schedule-toggle + .field-hint {
+  margin-bottom: 14px;
+}
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  color: #6c757d;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
 
 /* ================================== */
 /* ‼️        新增的響應式樣式        ‼️ */

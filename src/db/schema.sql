@@ -342,6 +342,7 @@ CREATE TABLE IF NOT EXISTS physicians (
     default_schedules TEXT DEFAULT '[]',  -- JSON array
     default_consultation_schedules TEXT DEFAULT '[]',  -- JSON array
     outside_support TEXT DEFAULT '[]',  -- JSON array：每週院外支援時段，如 "3-ALL"、"5-AM"（週幾-整天/上午/下午/晚上）
+    exclude_from_schedule INTEGER DEFAULT 0,  -- 1＝不列入排班：醫師班表頁不顯示此醫師（姓名/門診/下拉/統計）
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now', 'localtime')),
     updated_at TEXT DEFAULT (datetime('now', 'localtime'))
