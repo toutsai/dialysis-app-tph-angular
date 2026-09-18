@@ -294,6 +294,23 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
     return legacy.length > 0 ? [...available, ...legacy] : available;
   });
 
+  // 不可再排、但本月班表裡出現過的醫師（不列入排班／帳號已刪除）。
+  // 下拉選單一律不能「選」他們；只有原本就排他的那一格會多一個 disabled 選項，讓名字照常顯示
+  private legacyPhysicianMap = computed(() => {
+    const availableIds = new Set(this.availablePhysicians().map((p: any) => p.id));
+    return new Map<string, any>(this.schedulePhysicians().filter((p: any) => !availableIds.has(p.id)).map((p: any) => [p.id, p]));
+  });
+
+  getLegacyPhysicianById(physicianId: string | null | undefined): any | null {
+    return physicianId ? this.legacyPhysicianMap().get(physicianId) || null : null;
+  }
+
+  getLegacyPhysician(day: any, shift: string, scheduleType: string): any | null {
+    if (!day?.day) return null;
+    const data = scheduleType === 'dialysis' ? this.scheduleData : this.consultationScheduleData;
+    return this.getLegacyPhysicianById(data[day.day]?.[shift]?.physicianId);
+  }
+
   physicianClassMap = computed(() => {
     const map = new Map<string, string>();
     // 以全部主治醫師排序指定顏色：勾「不列入排班」不會讓其他醫師的顏色位移，歷史格子也保有原色

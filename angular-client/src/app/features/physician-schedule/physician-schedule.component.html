@@ -107,8 +107,11 @@
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
-                    <option *ngFor="let doc of schedulePhysicians()" [ngValue]="doc.id">
+                    <option *ngFor="let doc of availablePhysicians()" [ngValue]="doc.id">
                       {{ getDisplayName(doc) }}
+                    </option>
+                    <option *ngIf="getLegacyPhysician(day, 'early', 'dialysis') as legacy" [ngValue]="legacy.id" disabled>
+                      {{ getDisplayName(legacy) }}
                     </option>
                   </select>
                   <span class="cell-warning" *ngIf="getCellWarning(day, 'early', 'dialysis')">&#9888;</span>
@@ -133,8 +136,11 @@
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
-                    <option *ngFor="let doc of schedulePhysicians()" [ngValue]="doc.id">
+                    <option *ngFor="let doc of availablePhysicians()" [ngValue]="doc.id">
                       {{ getDisplayName(doc) }}
+                    </option>
+                    <option *ngIf="getLegacyPhysician(day, 'noon', 'dialysis') as legacy" [ngValue]="legacy.id" disabled>
+                      {{ getDisplayName(legacy) }}
                     </option>
                   </select>
                   <span class="cell-warning" *ngIf="getCellWarning(day, 'noon', 'dialysis')">&#9888;</span>
@@ -159,8 +165,11 @@
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
-                    <option *ngFor="let doc of schedulePhysicians()" [ngValue]="doc.id">
+                    <option *ngFor="let doc of availablePhysicians()" [ngValue]="doc.id">
                       {{ getDisplayName(doc) }}
+                    </option>
+                    <option *ngIf="getLegacyPhysician(day, 'late', 'dialysis') as legacy" [ngValue]="legacy.id" disabled>
+                      {{ getDisplayName(legacy) }}
                     </option>
                   </select>
                   <span class="cell-warning" *ngIf="getCellWarning(day, 'late', 'dialysis')">&#9888;</span>
@@ -251,8 +260,11 @@
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
-                    <option *ngFor="let doc of schedulePhysicians()" [ngValue]="doc.id">
+                    <option *ngFor="let doc of availablePhysicians()" [ngValue]="doc.id">
                       {{ getDisplayName(doc) }}
+                    </option>
+                    <option *ngIf="getLegacyPhysician(day, 'morning', 'consultation') as legacy" [ngValue]="legacy.id" disabled>
+                      {{ getDisplayName(legacy) }}
                     </option>
                   </select>
                   <span class="cell-warning" *ngIf="getCellWarning(day, 'morning', 'consultation')">&#9888;</span>
@@ -277,8 +289,11 @@
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
-                    <option *ngFor="let doc of schedulePhysicians()" [ngValue]="doc.id">
+                    <option *ngFor="let doc of availablePhysicians()" [ngValue]="doc.id">
                       {{ getDisplayName(doc) }}
+                    </option>
+                    <option *ngIf="getLegacyPhysician(day, 'afternoon', 'consultation') as legacy" [ngValue]="legacy.id" disabled>
+                      {{ getDisplayName(legacy) }}
                     </option>
                   </select>
                   <span class="cell-warning" *ngIf="getCellWarning(day, 'afternoon', 'consultation')">&#9888;</span>
@@ -303,8 +318,11 @@
                     class="physician-select"
                   >
                     <option [ngValue]="null">--</option>
-                    <option *ngFor="let doc of schedulePhysicians()" [ngValue]="doc.id">
+                    <option *ngFor="let doc of availablePhysicians()" [ngValue]="doc.id">
                       {{ getDisplayName(doc) }}
+                    </option>
+                    <option *ngIf="getLegacyPhysician(day, 'night', 'consultation') as legacy" [ngValue]="legacy.id" disabled>
+                      {{ getDisplayName(legacy) }}
                     </option>
                   </select>
                   <span class="cell-warning" *ngIf="getCellWarning(day, 'night', 'consultation')">&#9888;</span>
@@ -449,8 +467,11 @@
                         class="emergency-input"
                       >
                         <option [ngValue]="null">請選擇</option>
-                        <option *ngFor="let doc of schedulePhysicians()" [ngValue]="doc.id">
+                        <option *ngFor="let doc of availablePhysicians()" [ngValue]="doc.id">
                           {{ doc.name }}
+                        </option>
+                        <option *ngIf="getLegacyPhysicianById(record.physicianId) as legacy" [ngValue]="legacy.id" disabled>
+                          {{ legacy.name }}
                         </option>
                       </select>
                     </td>
