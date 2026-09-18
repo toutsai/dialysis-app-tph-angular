@@ -695,6 +695,20 @@ tr.date-row {
   border-radius: 4px;
   font-size: 0.85rem;
 }
+/* 班表格子撞到不排班／院外支援：右上角 ⚠＋紅色內框（滑鼠停在格子上看原因） */
+td.has-cell-warning {
+  position: relative;
+  box-shadow: inset 0 0 0 2px #d32f2f;
+}
+.cell-warning {
+  position: absolute;
+  top: 1px;
+  right: 3px;
+  font-size: 0.8rem;
+  line-height: 1;
+  color: #c62828;
+  pointer-events: none;
+}
 .outside-support-row {
   display: flex;
   align-items: center;
