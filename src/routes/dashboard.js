@@ -14,7 +14,8 @@ import {
   DASHBOARD_PIN_ROTATION_DAYS,
 } from '../services/dashboardPinService.js'
 import { getTaipeiTodayString, formatDateToTaipeiString } from '../utils/dateUtils.js'
-import { maskName } from '../utils/privacy.js'
+import { maskName, maskMrn } from '../utils/privacy.js'
+import { buildIcuDialysisData } from './aki.js'
 
 const router = Router()
 const JWT_SECRET = process.env.JWT_SECRET || 'dialysis-local-secret-key-change-in-production'
@@ -302,6 +303,27 @@ function buildInpatientRoundsList(db, date, patientsById) {
   })
   return items
 }
+
+// ICU 透析病人唯讀展示頁：免登入公開端點（分享給 ICU 專師／護理長看，2026-09-18 使用者拍板：不建帳號、只唯讀）。
+// 個資保護在後端做：姓名遮罩（林○南）、病歷號只留末 3 碼（****124）、不回傳 patientId 與登錄者姓名。
+router.get('/icu-dialysis-board', (req, res) => {
+  try {
+    const data = buildIcuDialysisData(getDatabase())
+    const units = data.units.map((u) => ({
+      ...u,
+      patients: u.patients.map((p, i) => ({
+        ...p,
+        id: `${u.key}-${p.bedSort}-${i}`,
+        name: maskName(p.name),
+        mrn: maskMrn(p.mrn),
+        statusUpdatedBy: '',
+      })),
+    }))
+    res.json({ units, total: data.total, generatedAt: new Date().toLocaleString('sv-SE') })
+  } catch (error) {
+    res.status(500).json({ error: true, message: error.message || '取得 ICU 透析病人失敗' })
+  }
+})
 
 // 住院趴趴走展示板：免登入公開端點（院內螢幕常駐展示用，固定今天+明天）。
 // 個資保護在後端做：姓名遮罩後才回傳，不回傳病歷號、patientId。

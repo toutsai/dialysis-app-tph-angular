@@ -725,10 +725,11 @@ function getIcuStatus(db, patientId) {
   return db.prepare(`SELECT ${ICU_STATUS_COLUMNS} FROM icu_dialysis_status WHERE patient_id = ?`).get(patientId) || null
 }
 
-// GET /api/aki/icu-dialysis —— 目前在 ICU 的透析病人，依 ICUA / ICUB / ICUD 分區
-router.get('/icu-dialysis', (req, res) => {
-  try {
-    const db = getDatabase()
+/**
+ * 目前在 ICU 的透析病人，依 ICUA / ICUB / ICUD 分區（回 { units, total }）。
+ * 供專師頁籤 GET /aki/icu-dialysis 與免登入唯讀展示頁（dashboard.js，回傳前另做姓名/病歷號遮罩）共用。
+ */
+export function buildIcuDialysisData(db) {
     const rows = db
       .prepare(`SELECT id, medical_record_number AS mrn, name, status, ward_number AS wardNumber,
                        gender, birth_date AS birthDate, physician, vasc_access AS vascAccess,
@@ -793,7 +794,13 @@ router.get('/icu-dialysis', (req, res) => {
     const others = items.filter((i) => !ICU_UNITS.some((u) => u.key === i.unit))
     if (others.length) units.push({ key: 'OTHER', label: '其他加護單位', patients: others })
 
-    res.json({ units, total: items.length })
+    return { units, total: items.length }
+}
+
+// GET /api/aki/icu-dialysis —— 目前在 ICU 的透析病人，依 ICUA / ICUB / ICUD 分區
+router.get('/icu-dialysis', (req, res) => {
+  try {
+    res.json(buildIcuDialysisData(getDatabase()))
   } catch (error) {
     res.status(500).json({ error: true, message: error.message || '取得 ICU 透析病人失敗' })
   }

@@ -33,6 +33,14 @@ export const routes: Routes = [
       ),
   },
   {
+    // ICU 透析病人獨立展示頁：刻意免登入、唯讀（後端遮罩姓名、病歷號只留末 3 碼），分享給 ICU 專師／護理長
+    path: 'icu-dialysis-board',
+    loadComponent: () =>
+      import('./features/icu-dialysis-board/icu-dialysis-board.component').then(
+        (m) => m.IcuDialysisBoardComponent
+      ),
+  },
+  {
     path: '',
     loadComponent: () =>
       import('./layouts/main-layout.component').then(
