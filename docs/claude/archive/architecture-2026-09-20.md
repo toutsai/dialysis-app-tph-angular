@@ -39,19 +39,12 @@ CLAUDE.md 放的是不變式與陷阱；本檔放子系統細節。**動到哪�
 - **調班**：`ADD_SESSION`（臨時加洗）經 `addAutoMovementToDailyLog` 寫動態（type `臨時加洗`），取消時由 `removeAutoMovementFromDailyLog` 移除；其餘調班類型不寫病人動態。
 - **⚠️ 刻意決策 — 「更改模式」不進 KiDit**：由 `kiditSync.js` 的 `KIDIT_EXCLUDED_MOVEMENT_TYPES = Set(['更改模式', '勿動'])`（kiditSync.js:10）過濾，同時影響即時與預約兩條路徑。原因：KiDit 是入院/出院/轉床異動申報，模式變更非申報項目；動態仍留在工作日誌。**勿誤改回。**
 
-## 透析模式：兩個獨立欄位（2026-09-20 使用者裁定脫鉤、互不同步）
+## 透析模式正規化
 
-| | 病人清單模式（組長管） | 醫囑模式（醫師管） |
-|---|---|---|
-| 存放 | `patients.dialysis_mode` | `patients.dialysis_orders` JSON 的 `mode` |
-| API | 病人頂層 `mode` | `dialysisOrders.mode` |
-| 誰寫 | `PUT/POST /patients` 的 `mode`、預約變更 `UPDATE_MODE` | 醫囑視窗 `POST /orders/history`、HIS 醫囑 Excel 上傳 |
-| 誰讀 | 病人清單、排程格（`modeOverride` 優先）、護理分組、當日快照／歸檔 `archivedPatientInfo.mode`、MODE_CHANGE 與工作日誌「更改模式」、CVVHDF 連動、ICU 透析頁、AKI 地圖透析標記、KiDit、初透名單、衛教清單 | ICU 醫囑單列印內容、備物清單（生效醫囑）、醫囑檢視、床邊儀表板醫囑區塊（空值才沿用清單模式） |
+`dialysis_orders.mode` 是自由文字（無 enum）。標準值 = `['HD','SLED','CVVHDF','PP','DFPP','Lipid']`（對齊前端 `patient-form-modal` 的 MODES）。
 
-- 後端讀病人清單模式一律用 `utils/dialysisMode.js` 的 `getPatientListMode(row)`；**SELECT 明列欄位時要選到 `dialysis_mode`，否則靜默回空字串**。
-- `PUT /patients` 一律保留 DB 現有的 `dialysis_orders.mode`（病人表單夾帶的過期整包醫囑、空字串都蓋不到）。**不要再加任何同步兩者的程式**——原本頂層 `mode` 是醫囑 `mode` 的別名，Excel 上傳與醫囑存檔因此會洗掉病人清單模式。
-- 兩者都是自由文字（無 enum）。標準值 = `['HD','SLED','CVVHDF','PP','DFPP','Lipid']`（對齊前端 `patient-form-modal` 的 MODES）。
-- 正規化 helper：`normalizeDialysisMode`（`SLEDD`/`SLEDF`→`SLED`、大小寫不敏感、去空白、未知值保留原樣）與 `normalizeDialysisOrdersMode`。所有寫任一模式的後端路徑都要套用：`patients.js toDbFormat`、`dialysisOrderService.js`、`orders.js` Excel 上傳、`scheduler.js UPDATE_MODE`。
+- 共用 helper：`utils/dialysisMode.js` — `normalizeDialysisMode`（`SLEDD`/`SLEDF`→`SLED`、大小寫不敏感、去空白、未知值保留原樣）與 `normalizeDialysisOrdersMode`。
+- 套用於所有寫 mode 的後端路徑：`patients.js toDbFormat`、`orders.js POST /history`、`scheduler.js UPDATE_*`。新增會寫 mode 的路徑時必須套用同一 helper。
 - **⚠️ 使用者口語的「SLEDD」在資料庫實際存為 `SLED`**（單一 D）。查資料時用 `SLED`。
 
 ## 2026-05 之後新增的子系統（原 CLAUDE.md 未收錄）
