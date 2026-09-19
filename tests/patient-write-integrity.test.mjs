@@ -42,7 +42,7 @@ const api = async(method,path,body,actor=0) => {
 }
 const TODAY='2026-09-14', FUTURE='2026-09-15'
 function patient(id, status='ipd') {
-  db.prepare('INSERT INTO patients(id,medical_record_number,name,status,ward_number,dialysis_orders) VALUES(?,?,?,?,?,?)').run(id,`SYN-${id}`,`Synthetic ${id}`,status,'SYN-ward',JSON.stringify({mode:'HD',freq:'一三五',effectiveDate:'2026-09-01'}))
+  db.prepare('INSERT INTO patients(id,medical_record_number,name,status,ward_number,dialysis_orders,dialysis_mode) VALUES(?,?,?,?,?,?,?)').run(id,`SYN-${id}`,`Synthetic ${id}`,status,'SYN-ward',JSON.stringify({mode:'HD',freq:'一三五',effectiveDate:'2026-09-01'}),'HD')
   return id
 }
 function schedule(date, id, bed=1) {
@@ -95,6 +95,9 @@ try {
   const upload=await api('POST','/orders/dialysis-orders/upload',uploadBody)
   assert.equal(upload.status,200); assert.equal(upload.body.writtenBackCount,1)
   assert.equal(JSON.parse(current('upload').dialysis_orders).mode,'CVVHDF')
+  // 2026-09-20 脫鉤：Excel 只改醫囑模式，病人清單模式（dialysis_mode）不受影響
+  assert.equal(current('upload').dialysis_mode,'HD')
+  assert.equal((await api('GET','/patients/upload')).body.mode,'HD')
   assert.equal(readSchedule(TODAY)['bed-1-early'].archivedPatientInfo,undefined)
   assert.equal(db.prepare('SELECT id FROM schedule_exceptions WHERE id=?').get('upload-exception').id,'upload-exception')
   assert.equal(Object.values(readSchedule(FUTURE)).some(s=>s.patientId==='upload'),true)
@@ -117,6 +120,27 @@ try {
   assert.equal((await api('PUT','/patients/normalize',{dialysisOrders:{freq:'二四六'}})).status,200)
   assert.equal(countMovements(),movementsBefore)
   cases.push('XLSX SLED normalization/empty fields preserved; frequency-only PUT has no movement')
+  // ---- 病人清單模式（dialysis_mode，組長）與醫囑模式（dialysis_orders.mode，醫師）脫鉤（2026-09-20） ----
+  // 此時 normalize：清單模式 HD、醫囑模式 SLED（剛被 Excel 改過）
+  const modeHistory=id=>db.prepare("SELECT count(*) n FROM patient_history WHERE patient_id=? AND event_type='MODE_CHANGE'").get(id).n
+  assert.equal(current('normalize').dialysis_mode,'HD'); assert.equal(modeHistory('normalize'),0)
+  // 病人清單存檔：夾帶整包（過期的）dialysisOrders 也改不到醫囑模式；清單模式寫獨立欄位並正規化、留下 MODE_CHANGE
+  assert.equal((await api('PUT','/patients/normalize',{mode:'lipid',dialysisOrders:{mode:'PP',dryWeight:'70'}})).status,200)
+  assert.equal(current('normalize').dialysis_mode,'Lipid')
+  assert.equal(JSON.parse(current('normalize').dialysis_orders).mode,'SLED'); assert.equal(JSON.parse(current('normalize').dialysis_orders).dryWeight,'70')
+  assert.equal(modeHistory('normalize'),1)
+  // 醫囑視窗存檔的第二條路（PUT 病人只帶 dialysisOrders、mode 為空字串）：不可清掉任何一邊的模式、不算模式變更
+  assert.equal((await api('PUT','/patients/normalize',{dialysisOrders:{mode:'',bloodFlow:250}})).status,200)
+  assert.equal(current('normalize').dialysis_mode,'Lipid'); assert.equal(JSON.parse(current('normalize').dialysis_orders).mode,'SLED'); assert.equal(modeHistory('normalize'),1)
+  // 醫囑存檔改醫囑模式：清單模式不動、不寫 MODE_CHANGE
+  assert.equal((await api('POST','/orders/history',{patientId:'normalize',operationType:'UPDATE',orders:{mode:'CVVHDF',effectiveDate:'2026-09-14'}})).status<300,true)
+  assert.equal(JSON.parse(current('normalize').dialysis_orders).mode,'CVVHDF'); assert.equal(current('normalize').dialysis_mode,'Lipid'); assert.equal(modeHistory('normalize'),1)
+  const decoupled=(await api('GET','/patients/normalize')).body
+  assert.equal(decoupled.mode,'Lipid'); assert.equal(decoupled.dialysisOrders.mode,'CVVHDF')
+  // 新增病人：清單模式進獨立欄位
+  const created=await api('POST','/patients',{medicalRecordNumber:'SYN-created',name:'Synthetic created',status:'opd',mode:'SLEDD'})
+  assert.equal(created.status<300,true,JSON.stringify(created.body)); assert.equal(current(created.body.id).dialysis_mode,'SLED')
+  cases.push('patient-list mode decoupled from order mode: list PUT / order-modal PUT / order history / XLSX / create')
   mock.timers.setTime(Date.parse('2026-09-13T17:00:00Z'))
   const scheduledCases=[['UPDATE_STATUS',{status:'opd'}],['UPDATE_MODE',{mode:'SLEDD'}],['UPDATE_FREQ',{freq:'二四六'}],['UPDATE_BASE_SCHEDULE_RULE',{bedNum:4,shiftIndex:1,freq:'二四六'}],['DELETE_PATIENT',{}],['RESTORE_PATIENT',{status:'opd'}]]
   for(const [type,payload] of scheduledCases) {
@@ -152,7 +176,11 @@ try {
     await applyScheduledPatientUpdates()
     const task=db.prepare('SELECT * FROM scheduled_patient_updates WHERE id=?').get(id)
     assert.equal(task.status,'processed',type); assert.equal(task.error_message,null)
-    if(type==='UPDATE_MODE') assert.equal(JSON.parse(current(id).dialysis_orders).mode,'SLED')
+    if(type==='UPDATE_MODE') {
+      // 預約變更改的是病人清單模式；醫囑模式維持原值
+      assert.equal(current(id).dialysis_mode,'SLED'); assert.equal(JSON.parse(current(id).dialysis_orders).mode,'HD')
+      assert.equal(db.prepare("SELECT count(*) n FROM patient_history WHERE patient_id=? AND event_type='MODE_CHANGE'").get(id).n,1)
+    }
     if(type==='UPDATE_FREQ'||type==='UPDATE_BASE_SCHEDULE_RULE') assert.equal(db.prepare('SELECT count(*) n FROM patient_history WHERE patient_id=?').get(id).n,0)
     if(type==='DELETE_PATIENT') {
       assert.equal(current(id).is_deleted,1); assert.equal(Object.values(readSchedule(TODAY)).some(s=>s.patientId===id),false)

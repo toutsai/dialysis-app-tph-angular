@@ -107,3 +107,16 @@
 @media (max-width: 900px) { .form-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .span-3 { grid-column: span 2; } .infection-grid { grid-template-columns: 1fr; } }
 @media (max-width: 600px) { .form-grid-4 { grid-template-columns: 1fr; } .span-2, .span-3 { grid-column: auto; } }
 @media (max-width: 900px) { .first-plan-grid, .first-plan-controls { grid-template-columns: 1fr; } .freq-with-action { flex-direction: column; } }
+
+/* 醫囑模式／病人清單模式各自維護的說明（2026-09-20 脫鉤） */
+.mode-scope-hint {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: #78909c;
+}
+.mode-scope-hint.differs {
+  color: #b45309;
+  font-weight: 600;
+}

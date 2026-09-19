@@ -7,7 +7,7 @@ import { formatDateToYYYYMMDD, getTaipeiTodayString } from '../utils/dateUtils.j
 import { validate } from '../middleware/validate.js'
 import { addMovementToDailyLog, safeJsonParse, deleteFutureScheduleExceptionsForPatient, snapshotPatientScheduleChange, applyPatientModeChange } from '../services/patientOrderEffects.js'
 import { removeSameDayDeleteMovements } from '../services/dailyLogMovementSync.js'
-import { normalizeDialysisMode, normalizeDialysisOrdersMode } from '../utils/dialysisMode.js'
+import { normalizeDialysisMode, normalizeDialysisOrdersMode, getPatientListMode } from '../utils/dialysisMode.js'
 import { normalizeHepatitisStatus, deriveHepatitisFromTags, syncTagsFromHepatitis, parseHepatitisStatus, upgradeHepatitisStatus } from '../utils/hepatitis.js'
 import { getEducationDialysisDatesBatch } from '../services/patientEducationDates.js'
 import { recordPatientHistory, createPatientSnapshot } from '../services/patientHistory.js'
@@ -128,9 +128,10 @@ function formatPatient(row) {
     dialysisOrders: dialysisOrders,
     firstDialysisPlan: dialysisOrders.firstDialysisPlan || null,
     crrtOrders: crrtOrders,  // ✨ 新增：回傳 CRRT 醫囑
-    // 將 freq 和 mode 也放在頂層，方便前端使用
+    // 將 freq 也放在頂層，方便前端使用
     freq: dialysisOrders.freq || null,
-    mode: dialysisOrders.mode || null,
+    // 病人清單的透析模式（組長管）＝獨立欄位 dialysis_mode；醫囑模式在 dialysisOrders.mode（醫師管），兩者不同步
+    mode: getPatientListMode(row) || null,
     birthDate: row.birth_date,
     gender: row.gender,
     idNumber: row.id_number,
@@ -210,18 +211,28 @@ function toDbFormat(data, existingPatient = null) {
     ? { ...existingDialysisOrders, ...data.dialysisOrders }
     : { ...existingDialysisOrders }
   
+  // 醫囑模式（dialysisOrders.mode）只由醫囑路徑寫（POST /orders/history、HIS 醫囑 Excel 上傳）。
+  // 病人清單表單會夾帶開窗當下的整包 dialysisOrders → 這裡一律保留現值，免得舊值把醫師剛改的醫囑模式蓋回去
+  if (existingPatient) {
+    if (existingDialysisOrders.mode !== undefined) dialysisOrders.mode = existingDialysisOrders.mode
+    else delete dialysisOrders.mode
+  }
+
   if (data.freq !== undefined) dialysisOrders.freq = data.freq
-  if (data.mode !== undefined) dialysisOrders.mode = data.mode
   // 處理 CRRT 醫囑：合併到現有資料
   if (data.crrtOrders !== undefined) dialysisOrders.crrtOrders = data.crrtOrders
 
-  // 正規化透析模式拼法（不論來源是 data.mode 或 data.dialysisOrders）
+  // 正規化醫囑模式拼法
   normalizeDialysisOrdersMode(dialysisOrders)
 
   // 只在有更新時才寫入 dialysis_orders
-  if (data.dialysisOrders !== undefined || data.freq !== undefined || 
-      data.mode !== undefined || data.crrtOrders !== undefined) {
+  if (data.dialysisOrders !== undefined || data.freq !== undefined || data.crrtOrders !== undefined) {
     result.dialysis_orders = JSON.stringify(dialysisOrders)
+  }
+
+  // 病人清單的透析模式：獨立欄位，與醫囑模式脫鉤（2026-09-20）
+  if (data.mode !== undefined) {
+    result.dialysis_mode = typeof data.mode === 'string' ? normalizeDialysisMode(data.mode) : null
   }
 
   if (data.birthDate !== undefined) result.birth_date = data.birthDate
@@ -795,7 +806,7 @@ router.get('/education-list', ...isEditor, (req, res) => {
     const todayStr = getTaipeiTodayString()
     const rows = db.prepare(`
       SELECT p.id, p.name, p.medical_record_number, p.status, p.ward_number,
-             p.first_dialysis_date, p.patient_status, p.dialysis_orders,
+             p.first_dialysis_date, p.patient_status, p.dialysis_orders, p.dialysis_mode,
              e.sessions AS edu_sessions, e.admission_date AS edu_admission, e.updated_at AS edu_updated,
              e.paper_education AS edu_paper, e.paper_completed AS edu_paper_done
       FROM patients p
@@ -830,13 +841,12 @@ router.get('/education-list', ...isEditor, (req, res) => {
         /* patient_status 解析失敗，忽略 */
       }
 
-      // 醫囑 JSON：頻率 fallback（每日/臨時病人不在總表）＋透析模式（供預設排除判斷）
+      // 醫囑 JSON：頻率 fallback（每日/臨時病人不在總表）；透析模式讀病人清單模式（供預設排除判斷）
       let ordersFreq = ''
-      let dialysisMode = ''
+      const dialysisMode = getPatientListMode(r)
       try {
         const orders = JSON.parse(r.dialysis_orders || '{}') || {}
         ordersFreq = orders.freq || ''
-        dialysisMode = normalizeDialysisMode(orders.mode || '') || ''
       } catch {
         /* dialysis_orders 解析失敗，忽略 */
       }

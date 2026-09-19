@@ -102,7 +102,7 @@ try {
     vm.runInNewContext(code, { module, console, Date, JSON, Map, Set, Object, setTimeout: () => 0, window: { confirm: () => false }, ...globals })
     return new module.exports()
   }
-  const p = methods('daily-log/daily-log.component.ts', ['snapshot','hasPendingDraft','saveJustMovements','canLeave','onDateChange','beforeUnload','saveMovement'])
+  const p = methods('daily-log/daily-log.component.ts', ['snapshot','hasPendingDraft','markManuallyEditedAutoRows','stripEditFlags','saveJustMovements','canLeave','onDateChange','beforeUnload','saveMovement'])
   Object.assign(p, { savedFields: ['patientMovements','otherNotes'], dailyLog: { id: date, version: 'v1', patientMovements: [{ id: 'm', name: 'draft' }], otherNotes: 'old' }, isLoading: signal(false), isPageLocked: false, selectedDate: signal(date), hasUnsavedChanges: signal(false), dailyLogCache: new Map(), showAlert() {} })
   p.loadedSnapshot = p.snapshot(); p.dailyLog.otherNotes = 'UNSAVED NOTES'
   p.dailyLogsApi = { save: async (_, body) => { assert.ok(!('otherNotes' in body)); return { version: 'v2' } } }

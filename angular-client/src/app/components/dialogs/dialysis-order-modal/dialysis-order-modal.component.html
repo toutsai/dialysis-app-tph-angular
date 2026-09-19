@@ -49,7 +49,7 @@
 
             <!-- Group 2: 病人基本設定 -->
             <div class="form-group">
-              <label for="mode">透析模式</label>
+              <label for="mode">透析模式（醫囑）</label>
               <select id="mode" [(ngModel)]="localOrderData.mode" name="mode">
                 <option value="">請選擇...</option>
                 <option value="HD">HD</option>
@@ -58,6 +58,10 @@
                 <option value="PP">PP</option>
                 <option value="DFPP">DFPP</option>
               </select>
+              <!-- 醫囑模式（醫師）與病人清單模式（組長）各自維護、互不同步（2026-09-20） -->
+              <small class="mode-scope-hint" [class.differs]="!!patientData?.mode && !!localOrderData.mode && patientData.mode !== localOrderData.mode">
+                用於 ICU 醫囑單、備物清單。病人清單模式：{{ patientData?.mode || '未設定' }}（排程／護理分組顯示用，由組長在病人清單修改）
+              </small>
             </div>
             <!-- 頻次：透析醫囑不再修改頻率，請至病人清單或床位總表設定 -->
 

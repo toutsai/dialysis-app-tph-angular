@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../db/init.js'
 import { isSpecialist, logAuditWithRequest } from '../middleware/auth.js'
 import { getTaipeiTodayString } from '../utils/dateUtils.js'
-import { normalizeDialysisMode } from '../utils/dialysisMode.js'
+import { getPatientListMode } from '../utils/dialysisMode.js'
 import { parseInpatientsRows, parseLabsRows, stageForSeries, analyzeSeries, AKI_CATEGORIES } from '../services/akiService.js'
 
 import { parseFirstSheet } from '../services/spreadsheetParser.js'
@@ -30,18 +30,13 @@ function looseMrn(v) {
 // Map 中有 key = 是本院透析病人；value 為正規化 mode（無 mode 則空字串）。
 function buildDialysisModeMap(db) {
   const rows = db
-    .prepare("SELECT medical_record_number AS mrn, dialysis_orders FROM patients WHERE is_deleted = 0")
+    .prepare("SELECT medical_record_number AS mrn, dialysis_mode FROM patients WHERE is_deleted = 0")
     .all()
   const map = new Map()
   for (const r of rows) {
     const key = looseMrn(r.mrn)
     if (!key) continue
-    let mode = ''
-    try {
-      const o = JSON.parse(r.dialysis_orders || '{}')
-      if (o && o.mode != null && String(o.mode).trim()) mode = normalizeDialysisMode(String(o.mode))
-    } catch {}
-    map.set(key, mode)
+    map.set(key, getPatientListMode(r))
   }
   return map
 }
@@ -797,7 +792,7 @@ export function buildIcuDialysisData(db) {
     const rows = db
       .prepare(`SELECT id, medical_record_number AS mrn, name, status, ward_number AS wardNumber,
                        gender, birth_date AS birthDate, physician, vasc_access AS vascAccess,
-                       dialysis_orders AS dialysisOrders, schedule_rule AS scheduleRule,
+                       dialysis_orders AS dialysisOrders, dialysis_mode, schedule_rule AS scheduleRule,
                        inpatient_reason AS inpatientReason, patient_status AS patientStatus
                 FROM patients
                 WHERE is_deleted = 0 AND status IN ('ipd', 'er') AND UPPER(TRIM(COALESCE(ward_number, ''))) LIKE 'ICU%'`)
@@ -815,7 +810,8 @@ export function buildIcuDialysisData(db) {
       const orders = safeObj(r.dialysisOrders)
       const rule = safeObj(r.scheduleRule)
       const pstatus = safeObj(r.patientStatus)
-      const mode = orders.mode != null && String(orders.mode).trim() ? normalizeDialysisMode(String(orders.mode)) : ''
+      // ICU 透析頁的模式＝病人清單模式（組長管），不是醫囑模式
+      const mode = getPatientListMode(r)
       // AKI 檢驗散點 mrn 為 10 碼補零；patients 病歷號 6~7 碼（偶有前導 0），去 0 再補齊
       const paddedMrn = looseMrn(r.mrn).padStart(10, '0')
       const pts = looseMrn(r.mrn) ? getPointsByMrn(db, paddedMrn) : []
@@ -1020,7 +1016,7 @@ router.put('/icu-status/:patientId', (req, res) => {
     const patientId = String(req.params.patientId || '').trim()
     if (!patientId) return res.status(400).json({ error: true, message: '缺少病人 ID' })
     const patient = db
-      .prepare('SELECT id, medical_record_number AS mrn, dialysis_orders AS dialysisOrders FROM patients WHERE id = ? AND is_deleted = 0')
+      .prepare('SELECT id, medical_record_number AS mrn, dialysis_mode FROM patients WHERE id = ? AND is_deleted = 0')
       .get(patientId)
     if (!patient) return res.status(404).json({ error: true, message: '找不到病人' })
 
@@ -1042,8 +1038,7 @@ router.put('/icu-status/:patientId', (req, res) => {
     db.prepare(`UPDATE icu_dialysis_status SET ${sets.join(', ')} WHERE patient_id = ?`).run(...vals, patientId)
 
     logAuditWithRequest(req, 'ICU_DIALYSIS_STATUS_SAVE', 'icu_dialysis_status', patientId, { mrn: patient.mrn, fields: Object.keys(b) })
-    const orders = safeObj(patient.dialysisOrders)
-    const mode = orders.mode != null && String(orders.mode).trim() ? normalizeDialysisMode(String(orders.mode)) : ''
+    const mode = getPatientListMode(patient)
     const statusFields = icuStatusFields(getIcuStatus(db, patientId))
     res.json({ success: true, status: { ...statusFields, ...computeCrrtRisk(statusFields, mode) } })
   } catch (error) {

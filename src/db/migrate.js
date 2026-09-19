@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { existsSync } from 'fs'
 import { parseHepatitisStatus, upgradeHepatitisStatus, syncTagsFromHepatitis } from '../utils/hepatitis.js'
+import { normalizeDialysisMode } from '../utils/dialysisMode.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -1093,6 +1094,35 @@ export function runMigrations() {
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='aki_care_records'")
       .get()
     if (careTableForConsult && addColumnIfNotExists(db, 'aki_care_records', 'consult_physician', 'TEXT')) migrationsApplied++
+
+    // ========================================
+    // patients.dialysis_mode：病人清單的透析模式（組長管），與透析醫囑 dialysis_orders.mode（醫師管）脫鉤（2026-09-20）
+    // 原本頂層 mode 只是 dialysis_orders.mode 的別名 → 醫囑存檔／HIS 醫囑 Excel 上傳會洗掉病人清單的模式。
+    // 起始值只在「欄位剛加上的這一次」從醫囑複製（同一交易）；之後兩邊各自維護，重啟不再回填。
+    // ========================================
+    if (!columnExists(db, 'patients', 'dialysis_mode')) {
+      db.transaction(() => {
+        addColumnIfNotExists(db, 'patients', 'dialysis_mode', 'TEXT')
+        const rows = db.prepare('SELECT id, dialysis_orders FROM patients').all()
+        const setMode = db.prepare('UPDATE patients SET dialysis_mode = ? WHERE id = ?')
+        let filled = 0
+        for (const row of rows) {
+          let mode = ''
+          try {
+            const raw = JSON.parse(row.dialysis_orders || '{}')?.mode
+            mode = typeof raw === 'string' ? normalizeDialysisMode(raw) : ''
+          } catch {
+            mode = ''
+          }
+          if (mode) {
+            setMode.run(mode, row.id)
+            filled++
+          }
+        }
+        console.log(`  ↪ patients.dialysis_mode 起始值：由現行醫囑模式複製 ${filled}/${rows.length} 位`)
+      })()
+      migrationsApplied++
+    }
 
     // ========================================
     // consumables_reports：report_data 補上 ranges（各上傳區間明細，2026-09-01）
