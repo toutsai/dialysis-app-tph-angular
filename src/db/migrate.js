@@ -1100,7 +1100,7 @@ export function runMigrations() {
     // 原本頂層 mode 只是 dialysis_orders.mode 的別名 → 醫囑存檔／HIS 醫囑 Excel 上傳會洗掉病人清單的模式。
     // 起始值只在「欄位剛加上的這一次」從醫囑複製（同一交易）；之後兩邊各自維護，重啟不再回填。
     // ========================================
-    if (!columnExists(db, 'patients', 'dialysis_mode')) {
+    if (patientsExists && !columnExists(db, 'patients', 'dialysis_mode')) {
       db.transaction(() => {
         addColumnIfNotExists(db, 'patients', 'dialysis_mode', 'TEXT')
         const rows = db.prepare('SELECT id, dialysis_orders FROM patients').all()

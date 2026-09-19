@@ -1147,7 +1147,8 @@ export class PatientsComponent implements OnInit, OnDestroy {
         (obj?.[key] ?? obj?.dialysisOrders?.[key] ?? null) || null;
       const identityChanges: string[] = [];
       if (patientData.status && patientData.status !== originalPatient.status) identityChanges.push('身分');
-      if (pick(patientData, 'mode') !== pick(originalPatient, 'mode')) identityChanges.push('透析模式');
+      // 模式只比病人清單模式（頂層 mode）；dialysisOrders.mode 是醫囑模式，與後端的模式變更判定一致
+      if ((patientData.mode || null) !== (originalPatient.mode || null)) identityChanges.push('透析模式');
       if (pick(patientData, 'freq') !== pick(originalPatient, 'freq')) identityChanges.push('透析頻率');
       // 病房號也走同一條守門（2026-09-15）：表單有帶 wardNumber 且與原值不同才算
       if (

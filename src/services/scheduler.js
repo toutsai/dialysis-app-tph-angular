@@ -463,7 +463,7 @@ async function applyScheduledPatientUpdates() {
               }
             }
             // 更新病人屬性
-            // 分離 DB 欄位與 JSON 欄位 (mode, freq 在 dialysis_orders 中)
+            // 分離 DB 欄位與 JSON 欄位（mode→patients.dialysis_mode 病人清單模式；freq 在 dialysis_orders 中）
             // 先擷取變更前的病人資料，供工作日誌/歷史比對
             const beforePatient = db
               .prepare('SELECT * FROM patients WHERE id = ?')
