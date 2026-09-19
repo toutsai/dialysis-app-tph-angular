@@ -985,8 +985,8 @@ export class PatientsComponent implements OnInit, OnDestroy {
       // 改為 CVVHDF → 頻率改「每日」、自總表移除固定排班（明日起）、後端同步取消未來調班；
       // 改回 HD/SLED → 存檔後比照住院轉回門診，詢問是否恢復改前的長期床位。
       // 只掛病人清單存檔（組長作業）；醫囑視窗改模式（醫師作業）刻意不連動。
-      const pickMode = (obj: any): string =>
-        String(obj?.mode ?? obj?.dialysisOrders?.mode ?? '').trim().toUpperCase();
+      // 只看病人清單模式（頂層 mode）；dialysisOrders.mode 是醫囑模式（醫師管），2026-09-20 起兩者脫鉤
+      const pickMode = (obj: any): string => String(obj?.mode ?? '').trim().toUpperCase();
       const formMode = pickMode(patientData);
       const origMode = pickMode(originalPatient);
       const toCvvhdf = formMode === 'CVVHDF' && origMode !== 'CVVHDF';
@@ -1147,7 +1147,8 @@ export class PatientsComponent implements OnInit, OnDestroy {
         (obj?.[key] ?? obj?.dialysisOrders?.[key] ?? null) || null;
       const identityChanges: string[] = [];
       if (patientData.status && patientData.status !== originalPatient.status) identityChanges.push('身分');
-      if (pick(patientData, 'mode') !== pick(originalPatient, 'mode')) identityChanges.push('透析模式');
+      // 模式只比病人清單模式（頂層 mode）；dialysisOrders.mode 是醫囑模式，與後端的模式變更判定一致
+      if ((patientData.mode || null) !== (originalPatient.mode || null)) identityChanges.push('透析模式');
       if (pick(patientData, 'freq') !== pick(originalPatient, 'freq')) identityChanges.push('透析頻率');
       // 病房號也走同一條守門（2026-09-15）：表單有帶 wardNumber 且與原值不同才算
       if (
@@ -1754,7 +1755,7 @@ export class PatientsComponent implements OnInit, OnDestroy {
   /** 清單標記：已不是 CVVHDF 但仍留有改前長期床位快照（恢復流程被取消/中斷） */
   showCvvhdfRestoreMarker(p: any): boolean {
     if (!p?.patientStatus?.preCvvhdfRule) return false;
-    const mode = String(p.mode ?? p.dialysisOrders?.mode ?? '').trim().toUpperCase();
+    const mode = String(p.mode ?? '').trim().toUpperCase();
     return mode !== 'CVVHDF';
   }
 

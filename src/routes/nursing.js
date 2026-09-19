@@ -12,7 +12,7 @@ import {
   updateKiditEvents,
   listKiditLogbooks,
 } from '../services/kiditSync.js'
-import { normalizeDialysisMode } from '../utils/dialysisMode.js'
+import { getPatientListMode } from '../utils/dialysisMode.js'
 import { dailyLogVersion, preserveMovementMetadata } from '../services/dailyLogVersion.js'
 import { createHash } from 'node:crypto'
 import {
@@ -1654,7 +1654,7 @@ router.get('/kidit-pending-registrations', authenticate, (req, res) => {
 
     // 1. 找出有「本院初透」標記的病人（排除已刪除）
     const patientRows = db
-      .prepare('SELECT id, name, medical_record_number, physician, patient_status, dialysis_orders FROM patients WHERE is_deleted = 0')
+      .prepare('SELECT id, name, medical_record_number, physician, patient_status, dialysis_mode FROM patients WHERE is_deleted = 0')
       .all()
 
     const flagged = []
@@ -1668,11 +1668,7 @@ router.get('/kidit-pending-registrations', authenticate, (req, res) => {
       const hfd = ps?.hospitalFirstDialysis
       const fd = ps?.isFirstDialysis
       if (!hfd?.active) continue
-      let mode = ''
-      try {
-        const orders = JSON.parse(p.dialysis_orders || '{}')
-        if (orders?.mode != null && String(orders.mode).trim()) mode = normalizeDialysisMode(String(orders.mode))
-      } catch {}
+      const mode = getPatientListMode(p)
       flagged.push({
         patientId: p.id,
         name: p.name,

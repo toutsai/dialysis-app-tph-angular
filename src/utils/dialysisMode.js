@@ -28,6 +28,18 @@ export function normalizeDialysisMode(mode) {
 }
 
 /**
+ * 病人清單的透析模式（patients.dialysis_mode，組長管）。2026-09-20 起與透析醫囑的 mode
+ * （patients.dialysis_orders.mode，醫師管；ICU 醫囑單／備物清單用）脫鉤、互不同步。
+ * 排程、護理分組、ICU 透析頁、KiDit、模式變更紀錄等「病人是什麼模式」一律讀這個。
+ * @param {object} row - patients 資料列（需含 dialysis_mode）
+ * @returns {string} 正規化後的模式；未設定回空字串
+ */
+export function getPatientListMode(row) {
+  const mode = row?.dialysis_mode
+  return typeof mode === 'string' ? normalizeDialysisMode(mode) : ''
+}
+
+/**
  * 就地正規化 dialysisOrders 物件的 mode 欄位（若存在）。
  * 回傳同一個物件以便鏈式使用。
  */

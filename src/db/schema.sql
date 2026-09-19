@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS patients (
     deleted_at TEXT,
 
     -- 透析相關欄位 (JSON 格式儲存複雜資料)
-    dialysis_orders TEXT DEFAULT '{}',  -- JSON: 透析醫囑
+    dialysis_orders TEXT DEFAULT '{}',  -- JSON: 透析醫囑（其中 mode＝醫囑模式，醫師管；ICU 醫囑單／備物清單用）
+    dialysis_mode TEXT,                 -- 病人清單的透析模式（組長管）；與醫囑 mode 脫鉤不同步（2026-09-20）
 
     -- 基本資料
     birth_date TEXT,

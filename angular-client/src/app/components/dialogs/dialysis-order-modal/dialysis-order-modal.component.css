@@ -483,3 +483,16 @@ tr.pending-order td:nth-child(2) {
     font-size: 0.7rem;
   }
 }
+
+/* 醫囑模式／病人清單模式各自維護的說明（2026-09-20 脫鉤） */
+.mode-scope-hint {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: #78909c;
+}
+.mode-scope-hint.differs {
+  color: #b45309;
+  font-weight: 600;
+}

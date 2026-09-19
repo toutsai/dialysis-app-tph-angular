@@ -4,7 +4,7 @@
  */
 
 import { getDatabase } from '../db/init.js'
-import { normalizeDialysisMode } from '../utils/dialysisMode.js'
+import { getPatientListMode } from '../utils/dialysisMode.js'
 
 // 不納入 KiDit 申報的病人動態類型。
 // KiDit 日誌本以入院/出院/轉床等異動申報為主；「更改模式」「勿動」只記在工作日誌。
@@ -65,15 +65,11 @@ function buildPatientModeMap(db, patientIds) {
   if (!ids.length) return map
   const placeholders = ids.map(() => '?').join(',')
   const rows = db
-    .prepare(`SELECT id, dialysis_orders FROM patients WHERE id IN (${placeholders})`)
+    .prepare(`SELECT id, dialysis_mode FROM patients WHERE id IN (${placeholders})`)
     .all(...ids)
   for (const row of rows) {
-    try {
-      const orders = JSON.parse(row.dialysis_orders || '{}')
-      if (orders && orders.mode != null && String(orders.mode).trim()) {
-        map.set(row.id, normalizeDialysisMode(String(orders.mode)))
-      }
-    } catch {}
+    const mode = getPatientListMode(row)
+    if (mode) map.set(row.id, mode)
   }
   return map
 }

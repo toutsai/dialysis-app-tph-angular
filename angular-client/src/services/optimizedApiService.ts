@@ -292,6 +292,10 @@ export async function createDialysisOrderAndUpdatePatient(
     },
   };
 
+  // 醫囑模式沒選就不送這個 key：後端合併規則是「有傳就取代（含空字串）」，送 '' 會把現有醫囑模式清空。
+  // （病人清單模式是獨立欄位，醫囑存檔本來就碰不到，2026-09-20 脫鉤）
+  if (!historyRecord.orders.mode) delete (historyRecord.orders as any).mode;
+
   // AK 週欄位（一~六）為資料權威；輪替字串 ak 由 modal 依頻率自動產生
   if (Array.isArray(orderData.akWeekly) && orderData.akWeekly.length === 6) {
     historyRecord.orders.akWeekly = orderData.akWeekly.map((v: any) => String(v || ''));

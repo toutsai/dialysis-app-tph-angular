@@ -59,6 +59,10 @@
                 <option [value]="m">{{ m }}</option>
               }
             </select>
+            <!-- 病人清單模式（組長）與醫囑模式（醫師）各自維護、互不同步（2026-09-20） -->
+            @if (form.dialysisOrders?.mode && form.dialysisOrders.mode !== form.mode) {
+              <small class="mode-scope-hint differs">醫囑模式為 {{ form.dialysisOrders.mode }}（醫師於透析醫囑修改，不會跟著這裡變）</small>
+            }
           </div>
           <div class="form-field span-2">
             <label>病人身份</label>

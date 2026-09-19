@@ -2,6 +2,7 @@ import { generateDailyScheduleFromRules } from './scheduleSync.js'
 import { getDailyInjections } from './dailyInjectionService.js'
 import { getTaipeiDayIndex, getTaipeiTodayString } from '../utils/dateUtils.js'
 import { normalizeAkAliases, resolveDailyRotationValue } from '../utils/scheduleUtils.js'
+import { getPatientListMode } from '../utils/dialysisMode.js'
 
 export const DASHBOARD_SHIFTS = ['early', 'noon', 'late']
 
@@ -282,7 +283,8 @@ function resolveAkForDate(ak, freq, date) {
 
 function normalizeDialysisOrder(orderSource, patient, slotData, freq = '', date = getTaipeiTodayString()) {
   const orders = orderSource.orders || {}
-  const mode = getValue(slotData?.modeOverride, orders.modeOverride, orders.mode, orders.dialysisMode)
+  // 床邊儀表板這格屬於「醫囑」區塊 → 讀醫囑模式；醫師尚未開醫囑模式時才沿用病人清單模式
+  const mode = getValue(slotData?.modeOverride, orders.modeOverride, orders.mode, orders.dialysisMode, getPatientListMode(patient))
   const dialysisTime = parseDialysisTime(orders)
   const heparinDose = splitHeparinDose(orders.heparinLM, orders.heparin)
   const heparinLoading = getValue(orders.heparinInitial, orders.heparinLoading, heparinDose.loading)

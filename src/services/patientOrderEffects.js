@@ -6,7 +6,7 @@ import { emitExceptionChange, emitScheduleSaved } from './eventBus.js'
 import { rebuildAndSaveSchedules, isTodayScheduleFrozen } from './scheduleSync.js'
 import { removeAutoMovementFromDailyLog } from './dailyLogMovementSync.js'
 import { snapshotNurseAssignmentForDate } from './nurseAssignmentRevisions.js'
-import { normalizeDialysisMode } from '../utils/dialysisMode.js'
+import { normalizeDialysisMode, getPatientListMode } from '../utils/dialysisMode.js'
 import { recordPatientHistory, createPatientSnapshot } from './patientHistory.js'
 
 function afterCommit(options, callback) {
@@ -112,9 +112,9 @@ export function safeJsonParse(value, fallback = {}) {
   }
 }
 
+// 病人清單的透析模式（patients.dialysis_mode）。醫囑模式（dialysis_orders.mode）改了不算病人模式變更
 function getDialysisMode(patient) {
-  const dialysisOrders = safeJsonParse(patient?.dialysis_orders, {})
-  return dialysisOrders.mode || null
+  return getPatientListMode(patient) || null
 }
 
 function exceptionBelongsToPatient(exception, patientId) {
@@ -245,7 +245,7 @@ export function snapshotPatientScheduleChange(db, existing, updated, data, user,
     const oldOrders = JSON.parse(existing.dialysis_orders || '{}')
     const newOrders = JSON.parse(updated.dialysis_orders || '{}')
     const statusChanged = updated.status !== existing.status
-    const modeChanged = (newOrders.mode || null) !== (oldOrders.mode || null)
+    const modeChanged = getDialysisMode(updated) !== getDialysisMode(existing)
     const freqChanged = (newOrders.freq || null) !== (oldOrders.freq || null)
     const wardChanged = (updated.ward_number || null) !== (existing.ward_number || null)
     // 病房號單獨變更（2026-09-15，使用者拍板比照身分/模式走「本班一起改／本班維持到下班」守門）：
@@ -333,7 +333,7 @@ export function snapshotPatientScheduleChange(db, existing, updated, data, user,
           if (!slot.archivedPatientInfo) {
             slot.archivedPatientInfo = {
               status: existing.status || 'unknown',
-              mode: oldOrders.mode || null,
+              mode: getDialysisMode(existing),
               wardNumber: existing.ward_number || null,
               medicalRecordNumber: existing.medical_record_number || null,
               freq: oldOrders.freq || null,

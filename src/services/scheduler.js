@@ -10,7 +10,7 @@ import { initializeFutureSchedules, syncMasterScheduleToFutureSync, isTodaySched
 import { cleanupExpiredBlacklist, cleanupExpiredSessions } from '../middleware/auth.js'
 import { getTaipeiTodayString, getTaipeiYesterdayString, formatDateToYYYYMMDD } from '../utils/dateUtils.js'
 import { FREQ_MAP_TO_DAY_INDEX } from '../utils/scheduleUtils.js'
-import { normalizeDialysisMode } from '../utils/dialysisMode.js'
+import { normalizeDialysisMode, getPatientListMode } from '../utils/dialysisMode.js'
 import { addAutoMovementToDailyLog, removeSameDayDeleteMovements } from './dailyLogMovementSync.js'
 import { recordPatientHistory, createPatientSnapshot } from './patientHistory.js'
 import { hourlyNurseAssignmentSnapshot } from './nurseAssignmentRevisions.js'
@@ -21,14 +21,6 @@ import { buildIcuDialysisData } from '../routes/aki.js'
 
 // 狀態碼中文對照（與 routes/patients.js 一致）
 const SCHED_STATUS_MAP = { opd: '門診', ipd: '住院', er: '急診' }
-
-function parseDialysisMode(dialysisOrdersStr) {
-  try {
-    return JSON.parse(dialysisOrdersStr || '{}').mode || null
-  } catch {
-    return null
-  }
-}
 
 /**
  * 預約變更生效時，比照即時操作同步「身分變更」到工作日誌 / KiDit / 病人歷史。
@@ -86,8 +78,8 @@ function syncScheduledStatusChange(db, dateStr, before, after, payload, taskId) 
  */
 function syncScheduledModeChange(db, dateStr, before, after, payload, taskId) {
   if (payload.mode === undefined) return
-  const prevMode = parseDialysisMode(before.dialysis_orders)
-  const curMode = parseDialysisMode(after.dialysis_orders)
+  const prevMode = getPatientListMode(before) || null
+  const curMode = getPatientListMode(after) || null
   if (prevMode === curMode) return
 
   recordPatientHistory(db, before.id, before.name, 'MODE_CHANGE',
@@ -286,7 +278,7 @@ async function archiveDailySchedule() {
           const dialysisOrders = JSON.parse(patient.dialysis_orders || '{}')
           slot.archivedPatientInfo = {
             status: patient.status || 'unknown',
-            mode: dialysisOrders.mode || null,
+            mode: getPatientListMode(patient) || null,
             wardNumber: patient.ward_number || null,
             medicalRecordNumber: patient.medical_record_number || null,
             freq: dialysisOrders.freq || null,
@@ -471,7 +463,7 @@ async function applyScheduledPatientUpdates() {
               }
             }
             // 更新病人屬性
-            // 分離 DB 欄位與 JSON 欄位 (mode, freq 在 dialysis_orders 中)
+            // 分離 DB 欄位與 JSON 欄位（mode→patients.dialysis_mode 病人清單模式；freq 在 dialysis_orders 中）
             // 先擷取變更前的病人資料，供工作日誌/歷史比對
             const beforePatient = db
               .prepare('SELECT * FROM patients WHERE id = ?')
@@ -483,8 +475,12 @@ async function applyScheduledPatientUpdates() {
             let hasJsonUpdates = false
 
             for (const [key, value] of Object.entries(payload)) {
-              if (key === 'mode' || key === 'freq') {
-                jsonUpdates[key] = key === 'mode' ? normalizeDialysisMode(value) : value
+              if (key === 'mode') {
+                // 預約變更「更改模式」改的是病人清單模式（獨立欄位），不動醫囑模式
+                updateFields.push('dialysis_mode = ?')
+                updateValues.push(typeof value === 'string' ? normalizeDialysisMode(value) : null)
+              } else if (key === 'freq') {
+                jsonUpdates[key] = value
                 hasJsonUpdates = true
               } else {
                 // 將 camelCase 轉為 snake_case
