@@ -142,8 +142,9 @@
     }
   </div>
 
-  <!-- 待透析評估（已會診、可能需要 HD／SLED／CVVHDF）：虛線框卡片，與上方「透析中」的實心色卡區分；三欄對齊三個圓 -->
-  <section #candSection class="cand" [hidden]="readOnly && !candidates().length">
+  <!-- 待透析評估（已會診、可能需要 HD／SLED／CVVHDF）：虛線框卡片，與上方「透析中」的實心色卡區分；三欄對齊三個圓。
+       免登入分享頁名單為空時也照常顯示空區塊（2026-09-20 使用者要求：讓看的人知道有這一區、目前 0 人） -->
+  <section #candSection class="cand">
     <div class="cand-head">
       <h3>待透析評估<small>已會診・可能需要 HD／SLED／CVVHDF</small></h3>
       <span class="cand-n">{{ candidates().length }} 人</span>
