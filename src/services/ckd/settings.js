@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   recallGrace: 30,   // 召回清單到期後寬限（天）
   alertWin: 14,      // 近日異常檢驗掃描天數
   rrtEgfr: 20,       // 透析準備管線 eGFR 門檻
+  handoutPhone: '',  // 檢驗報告衛教單頁尾的聯絡電話（本站新增，非判定參數；空白 = 印空白線讓個管師手寫）
 })
 
 const NUMERIC_KEYS = ['preGap', 'earlyNew', 'earlyGap', 'dmGap', 'over', 'labWin', 'recallGrace', 'alertWin', 'rrtEgfr']
@@ -45,6 +46,7 @@ export function sanitize(input) {
   }
   if (typeof input.dept === 'string') out.dept = input.dept.trim()
   if (typeof input.allA === 'boolean') out.allA = input.allA
+  if (typeof input.handoutPhone === 'string') out.handoutPhone = input.handoutPhone.trim().slice(0, 60)
   return out
 }
 

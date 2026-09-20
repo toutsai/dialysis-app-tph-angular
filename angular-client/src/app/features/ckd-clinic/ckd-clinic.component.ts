@@ -166,6 +166,7 @@ export class CkdClinicComponent implements OnInit {
     { key: 'recallGrace', label: '召回寬限', unit: '天', hint: '追蹤到期後幾天內不列入召回待聯絡' },
     { key: 'alertWin', label: '異常檢驗掃描', unit: '天', hint: '近日異常檢驗往回看幾天' },
     { key: 'rrtEgfr', label: '透析準備 eGFR 門檻', hint: 'eGFR 低於此值的已收案者進入透析準備管線' },
+    { key: 'handoutPhone', label: '衛教單聯絡電話', hint: '印在檢驗報告衛教單頁尾；留空會印空白線讓個管師手寫（不影響判讀）' },
   ];
 
   readonly sourceList = computed<CkdSourceSummary[]>(() => {
@@ -311,7 +312,7 @@ export class CkdClinicComponent implements OnInit {
     if (!f) return;
     const next = { ...f } as any;
     if (key === 'allA') next.allA = !!value;
-    else if (key === 'dept') next.dept = String(value);
+    else if (key === 'dept' || key === 'handoutPhone') next[key] = String(value);
     else next[key] = Number(value);
     this.settingsForm.set(next);
     this.settingsSaved.set(false);

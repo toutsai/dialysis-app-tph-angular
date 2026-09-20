@@ -131,6 +131,8 @@
         <button type="button" [class.on]="tab() === 'edu'" (click)="tab.set('edu')">衛教紀錄@if (pcase(); as pc) { <small>{{ pc.edu.length }}</small> }</button>
         <button type="button" [class.on]="tab() === 'records'" (click)="tab.set('records')">個案紀錄@if (summary(); as s) { <small>{{ s.records.length }}</small> }</button>
         <span class="pd-tabs-right">
+          <button type="button" class="btn small" [class.on]="showHandout()" (click)="toggleHandout()" [disabled]="!labs()?.rows?.length"
+                  title="產生給病人帶回家的檢驗報告說明單（Word）：本次／前次檢驗值、需要注意的項目與說明、下次回診">檢驗報告衛教單</button>
           <button type="button" class="btn small ghost" (click)="goFullRecords()" title="關閉視窗並跳到下方個案紀錄區：可編輯／刪除、新增全部八類紀錄">完整個案紀錄 →</button>
         </span>
       </nav>
@@ -142,6 +144,13 @@
             @if (formBusy()) { <span class="pd-form-busy">這張表單還沒存：請先儲存或取消，再新增另一筆</span> }
           </div>
           <app-ckd-quick-form [type]="at" [mrn]="mrn" [defaults]="addDefaults()" (saved)="onSaved()" (cancelled)="addType.set(null)"></app-ckd-quick-form>
+        </div>
+      }
+
+      <!-- 檢驗報告衛教單（第二階段）：同樣放在分頁內容之外，切分頁對照資料時留言不會不見 -->
+      @if (showHandout()) {
+        <div class="pd-handout">
+          <app-ckd-handout-panel [mrn]="mrn" (closed)="showHandout.set(false)" (recorded)="onHandoutRecorded()"></app-ckd-handout-panel>
         </div>
       }
 

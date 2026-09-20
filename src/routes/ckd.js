@@ -11,7 +11,7 @@ import { parseFileInChild, UPLOAD_MAX_BYTES } from '../services/ckd/parseFile.js
 import { ingestPayload, sourceSummary, listBatches } from '../services/ckd/ingest.js'
 import { plain } from '../services/ckd/rows.js'
 import { loadDataset } from '../services/ckd/dataset.js'
-import { analyze, makeCfg, sessionGroups, verdictA, verdictB, OTHER_SESSION } from '../services/ckd/engine.js'
+import { analyze, makeCfg, sessionGroups, verdictA, verdictB, OTHER_SESSION, deptMatch } from '../services/ckd/engine.js'
 import {
   REC_TYPES, listRecords, getRecord, createRecord, updateRecord, deleteRecord, makeHooks, pcodeTimeline,
   recLine, recWhen, lookupName, searchPatients, recordStats,
@@ -24,6 +24,7 @@ import { buildReport } from '../services/ckd/report.js'
 import { buildPcheck, PC_LBL } from '../services/ckd/pcheck.js'
 import { roc, dGap } from '../services/ckd/parsers.js'
 import { evalPatient, eduTimeline, enrollEpisodes } from '../services/ckd/patientCase.js'
+import { buildHandout, handoutReportDates, HANDOUT_HOSPITAL, HANDOUT_TITLE, HANDOUT_FOOTER, HANDOUT_WINDOW_DAYS } from '../services/ckd/handout.js'
 
 const router = Router()
 router.use(...isContributor)
@@ -507,6 +508,47 @@ router.get('/patients/:mrn/case', (req, res) => {
   } catch (error) {
     console.error('❌ GET /ckd/patients/:mrn/case:', error)
     res.status(500).json({ error: true, message: '讀取病人判讀失敗' })
+  }
+})
+
+/**
+ * 檢驗報告衛教單（病人彙整視窗第二階段，2026-09-20）：GET /patients/:mrn/handout?report=YYYY-MM-DD（不帶 = 最近一個報告日）
+ * 回傳組好的內容（本次／前次值、注意事項段落、分期說明、下次回診與評估日），Word 檔由前端產生。
+ * 用語與判定來源見 services/ckd/handout.js（使用者審定的草案）。
+ */
+router.get('/patients/:mrn/handout', (req, res) => {
+  try {
+    const db = getDatabase()
+    const mrn = String(req.params.mrn || '').trim().replace(/^0+/, '') || '0'
+    const reportQ = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.report || '')) ? String(req.query.report) : ''
+    const { settings } = getSettings()
+    const data = loadDataset(db)
+    const C = makeCfg(settings, '')
+    const person = getWide(data).find((p) => p.mrn === mrn) || null
+    const rows = person ? person.rows : []
+    const eps = enrollEpisodes(data.cases, mrn)
+    const ep = eps.find((e) => !e.closed) || null
+    // 下次回診：今天（含）以後、本科別最早的一筆掛號
+    const todayIso = plain(C.date)
+    const next = data.clinic
+      .filter((p) => p.mrn === mrn && p.date && plain(p.date) >= todayIso && deptMatch(p.dept, C.dept))
+      .sort((a, b) => a.date - b.date)[0] || null
+    res.json({
+      mrn,
+      name: (person && person.name) || lookupName(db, mrn),
+      hospital: HANDOUT_HOSPITAL,
+      title: HANDOUT_TITLE,
+      footer: HANDOUT_FOOTER,
+      phone: settings.handoutPhone || '',
+      windowDays: HANDOUT_WINDOW_DAYS,
+      reportDates: handoutReportDates(rows),
+      enroll: ep ? { cat: ep.cat, doctor: ep.doctor, date: ep.enroll, nextDue: ep.nextDue } : null,
+      nextVisit: next ? plain({ date: next.date, half: next.half, doctor: next.doctor, dept: next.dept }) : null,
+      handout: buildHandout(rows, reportQ),
+    })
+  } catch (error) {
+    console.error('❌ GET /ckd/patients/:mrn/handout:', error)
+    res.status(500).json({ error: true, message: '產生衛教單內容失敗' })
   }
 })
 

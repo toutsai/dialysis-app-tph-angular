@@ -5,6 +5,7 @@ import {
 } from '@app/core/services/ckd-api.service';
 import { CkdQuickFormComponent } from '../ckd-quick-form/ckd-quick-form.component';
 import { exportPatientLabsCsv } from '../ckd-export-followup';
+import { CkdHandoutPanelComponent } from '../ckd-handout-panel/ckd-handout-panel.component';
 
 type DialogTab = 'labs' | 'pcode' | 'edu' | 'records';
 
@@ -51,7 +52,7 @@ const LAB_ROWS_COLLAPSED = 6;
 @Component({
   selector: 'app-ckd-patient-dialog',
   standalone: true,
-  imports: [CommonModule, CkdQuickFormComponent],
+  imports: [CommonModule, CkdQuickFormComponent, CkdHandoutPanelComponent],
   templateUrl: './ckd-patient-dialog.component.html',
   styleUrl: './ckd-patient-dialog.component.css',
 })
@@ -88,6 +89,9 @@ export class CkdPatientDialogComponent implements OnChanges {
 
   readonly addLabel = computed(() => QUICK_TYPES.find((q) => q.type === this.addType())?.label || '紀錄');
   readonly age = computed(() => this.rowA()?.age ?? this.rowB()?.age ?? null);
+
+  /** 檢驗報告衛教單面板（第二階段）。開著時 Esc／點遮罩不關視窗，免得留言打到一半不見 */
+  readonly showHandout = signal(false);
 
   private loadSeq = 0;
   private reloadSeq = 0;
@@ -173,6 +177,7 @@ export class CkdPatientDialogComponent implements OnChanges {
       this.tab.set('labs');
       this.showAllLabRows.set(false);
       this.addType.set(null);
+      this.showHandout.set(false);
       void this.load();
     }
   }
@@ -246,6 +251,16 @@ export class CkdPatientDialogComponent implements OnChanges {
     else if (act.rec) this.openRecords.emit({ mrn: this.mrn, type: null });
   }
 
+  toggleHandout(): void {
+    this.showHandout.set(!this.showHandout());
+  }
+
+  /** 衛教單面板存了一筆衛教紀錄 → 同快速表單存檔：先通知外層、再重抓判讀與紀錄 */
+  async onHandoutRecorded(): Promise<void> {
+    this.changed.emit();
+    await this.reloadAfterRecord();
+  }
+
   goFullRecords(): void {
     this.openRecords.emit({ mrn: this.mrn, type: null });
   }
@@ -261,13 +276,13 @@ export class CkdPatientDialogComponent implements OnChanges {
 
   /** 點遮罩關閉；表單開著時不關，避免填到一半不見 */
   onBackdrop(): void {
-    if (!this.addType()) this.close();
+    if (!this.addType() && !this.showHandout()) this.close();
   }
 
   /** Esc 關視窗；表單開著時不動作（與點遮罩一致），填到一半的內容只能由表單的「取消」明確放棄 */
   @HostListener('document:keydown.escape')
   onEsc(): void {
-    if (!this.addType()) this.close();
+    if (!this.addType() && !this.showHandout()) this.close();
   }
 
   // ---------- 顯示輔助 ----------
