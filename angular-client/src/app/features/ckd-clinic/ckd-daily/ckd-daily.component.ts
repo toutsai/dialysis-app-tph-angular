@@ -101,6 +101,24 @@ export class CkdDailyComponent implements OnInit {
     if (others) out.push({ date: cur, doctor: dl.otherSession, label: '他科掛號已收案', n: others, on: !!sel && sel.indexOf(dl.otherSession) === 0 });
     return out;
   });
+  /**
+   * 過去日期的門診預設收合（2026-09-20 使用者要求）：清單會累積好幾週的門診日，個管師平常只看今天以後的。
+   * 收合時仍保留「目前選中的那一天」的按鈕，才看得出現在判讀的是哪一天、也能切同日其他醫師。
+   */
+  readonly today = new Date().toLocaleDateString('sv-SE');
+  readonly showPast = signal(false);
+  /** 收合時實際被藏起來的天數（不含目前選中的那天） */
+  readonly pastDays = computed(() => {
+    const cur = this.daily()?.date;
+    return new Set(this.sessionButtons().filter(b => b.date < this.today && b.date !== cur).map(b => b.date)).size;
+  });
+  readonly visibleButtons = computed(() => {
+    const all = this.sessionButtons();
+    if (this.showPast()) return all;
+    const cur = this.daily()?.date;
+    return all.filter(b => b.date >= this.today || b.date === cur);
+  });
+
   readonly otherSubs = computed(() => {
     const dl = this.daily();
     if (!dl || !dl.doctorSel || dl.doctorSel.indexOf(dl.otherSession) !== 0) return [];

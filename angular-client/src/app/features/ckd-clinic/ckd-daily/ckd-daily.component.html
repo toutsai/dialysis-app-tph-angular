@@ -7,7 +7,11 @@
     <!-- 判讀日 × 醫師 按鈕列（原版 dateBar：日期｜醫師｜人數） -->
     <div class="datebar">
       <span class="db-t">判讀日</span>
-      @for (b of sessionButtons(); track b.date + '|' + b.doctor) {
+      @if (pastDays()) {
+        <button type="button" class="db-btn db-past" [class.open]="showPast()" (click)="showPast.set(!showPast())"
+                [title]="showPast() ? '收合今天以前的門診日' : '展開今天以前的門診日'">{{ showPast() ? '▾ 收合過去日期' : '▸ 過去日期' }}<span class="db-n">{{ pastDays() }} 天</span></button>
+      }
+      @for (b of visibleButtons(); track b.date + '|' + b.doctor) {
         <button type="button" class="db-btn" [class.on]="b.on" (click)="select(b.date, b.doctor)">
           {{ b.date }}<span class="db-d">{{ b.label }}</span><span class="db-n">{{ b.n }} 人</span>
         </button>

@@ -41,6 +41,28 @@ export class CkdPcheckComponent implements OnInit {
     return out;
   });
 
+  /**
+   * 過去日期預設收合（2026-09-20 使用者要求，同 ckd-daily）。
+   * 本頁的用途就是回頭檢核「前一個門診日」，所以最近一個過去門診日不收；更早的才收進「過去日期」。目前選中的那天一律保留。
+   */
+  readonly today = new Date().toLocaleDateString('sv-SE');
+  readonly showPast = signal(false);
+  private readonly lastPastDate = computed(() => this.sessionButtons().map(b => b.date).filter(d => d < this.today).sort().pop() || '');
+  private isFolded(date: string): boolean {
+    return date < this.today && date !== this.lastPastDate();
+  }
+  /** 收合時實際被藏起來的天數（不含目前選中的那天） */
+  readonly pastDays = computed(() => {
+    const cur = this.pcheck()?.date;
+    return new Set(this.sessionButtons().filter(b => this.isFolded(b.date) && b.date !== cur).map(b => b.date)).size;
+  });
+  readonly visibleButtons = computed(() => {
+    const all = this.sessionButtons();
+    if (this.showPast()) return all;
+    const cur = this.pcheck()?.date;
+    return all.filter(b => !this.isFolded(b.date) || b.date === cur);
+  });
+
   readonly otherSubs = computed(() => {
     const p = this.pcheck();
     if (!p || !p.doctorSel || p.doctorSel.indexOf(p.otherSession) !== 0) return [];
