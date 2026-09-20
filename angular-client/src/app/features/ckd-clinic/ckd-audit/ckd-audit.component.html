@@ -52,7 +52,7 @@
                 @let b = stb(r.status);
                 <tr>
                   <td>
-                    <button type="button" class="nmlink" (click)="openRecords.emit(r.mrn)" title="查看/新增此病人的個案紀錄">{{ r.name || '（無姓名）' }}</button>
+                    <button type="button" class="nmlink" (click)="openRecords.emit(r.mrn)" title="開啟病人彙整視窗：收案資料、判讀、檢驗、P 碼、衛教與個案紀錄">{{ r.name || '（無姓名）' }}</button>
                     <div class="mrn">{{ r.mrn }}</div>
                     <div class="dim">{{ r.age == null ? '—' : r.age }} 歲@if (r.isDM) { · DM }</div>
                     @if (r.chips) {

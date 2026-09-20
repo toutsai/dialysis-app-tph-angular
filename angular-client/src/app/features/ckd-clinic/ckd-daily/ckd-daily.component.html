@@ -58,7 +58,7 @@
                   <tr [class.row-miss]="r.ord.length" [class.other]="r.otherDept">
                     <td class="slot">{{ r.p?.no }}<br><small>{{ r.p?.half }}</small>@if (r.otherDept) { <br><small class="oth">{{ r.p?.dept }}</small> }</td>
                     <td>
-                      <button type="button" class="nm nmlink" (click)="openRecords(r.mrn)" title="查看/新增此病人的個案紀錄">{{ r.name || '（無姓名）' }}</button>
+                      <button type="button" class="nm nmlink" (click)="openPatientDialog(r.mrn)" title="開啟病人彙整視窗：收案資料、判讀、檢驗、P 碼、衛教與個案紀錄">{{ r.name || '（無姓名）' }}</button>
                       <div class="mrn">{{ r.mrn }}</div>
                       <div class="dim">{{ r.age == null ? '—' : r.age }} 歲 {{ r.p?.sex }}@if (r.isDM) { · <b>DM</b> }</div>
                       <ng-container *ngTemplateOutlet="chips; context: { $implicit: r.chips }" />
@@ -165,7 +165,7 @@
                   <tr [class.row-miss]="(r.verdict === 'pre' || r.verdict === 'early') && !r.noEn && r.ord.length">
                     <td class="slot">{{ r.p.no }}<br><small>{{ r.p.half }}</small></td>
                     <td>
-                      <button type="button" class="nm nmlink" (click)="openRecords(r.mrn)" title="查看/新增此病人的個案紀錄">{{ r.name || '（無姓名）' }}</button>
+                      <button type="button" class="nm nmlink" (click)="openPatientDialog(r.mrn)" title="開啟病人彙整視窗：收案資料、判讀、檢驗、P 碼、衛教與個案紀錄">{{ r.name || '（無姓名）' }}</button>
                       <div class="mrn">{{ r.mrn }}</div>
                       <div class="dim">{{ r.age == null ? '—' : r.age }} 歲 {{ r.p.sex }}@if (r.p.pDM) { · <b>DM</b> }</div>
                       <ng-container *ngTemplateOutlet="chips; context: { $implicit: r.chips }" />

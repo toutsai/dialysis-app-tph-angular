@@ -194,7 +194,7 @@ export function sessionGroups(data, cfg, doctorSel = '', curDate = '') {
 /* ============================================================
    analyze（app.js:296-731）
    data = { cases, clinic, labs, billing, manual }（日期已是 Date）；C = makeCfg()；
-   opts = { doctorSel, withAudit, hooks }
+   opts = { doctorSel, withAudit, hooks, auditMrn }
    ============================================================ */
 export function analyze(data, C, opts = {}) {
   const hooks = { ...NO_HOOKS, ...(opts.hooks || {}) }
@@ -600,7 +600,9 @@ export function analyze(data, C, opts = {}) {
   let AUD = []
   if (opts.withAudit) {
     const clinicIdx = indexBy(S.clinic)
-    AUD = Object.keys(byMrn).map(m => evalCase(m, (clinicIdx.get(m) || [])[0] || null)).filter(Boolean)
+    /* opts.auditMrn（本站新增，非原版）：病人彙整視窗只要一個人的判讀，不必把全名單 6 千多人都算一遍 */
+    const audKeys = opts.auditMrn ? (byMrn[opts.auditMrn] ? [opts.auditMrn] : []) : Object.keys(byMrn)
+    AUD = audKeys.map(m => evalCase(m, (clinicIdx.get(m) || [])[0] || null)).filter(Boolean)
   }
   const rank = { ok: 0, over: 1, cap: 2, wait: 3, none: 4 }
   A.sort((a, b) => (rank[a.status] - rank[b.status]) || String(a.p.no || '').localeCompare(String(b.p.no || '')))

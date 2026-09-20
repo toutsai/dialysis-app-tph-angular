@@ -178,6 +178,51 @@ export interface CkdPatientSummary {
   noEn: any;
 }
 
+// ---------- 病人彙整視窗（2026-09-20） ----------
+
+/** 登錄簿的一段收案（同人可多段：重收案、轉方案） */
+export interface CkdEnrollEpisode {
+  serial: string;
+  enroll: string | null;
+  /** 登錄簿原文：Pre-ESRD／Early-CKD／DKD／AKD */
+  cat: string;
+  prog: string;
+  doctor: string;
+  reenroll: boolean;
+  nextDue: string | null;
+  closed: boolean;
+  closeDate: string | null;
+  reason: string;
+}
+
+/** 衛教時間軸一列：care = 方案照護就診、p8101 = 治療方式衛教、note = 個案紀錄（追蹤紀錄·衛教） */
+export interface CkdEduRow {
+  date: string;
+  kind: 'care' | 'p8101' | 'note';
+  label: string;
+  code: string;
+  doctor: string;
+  src: string[];
+  text: string;
+  author: string;
+  recordId: string | null;
+}
+
+/** 單一病人判讀：kind A = 已收案（a）、B = 未收案且判讀日有本科掛號（b）、none = 兩者皆無 */
+export interface CkdPatientCase {
+  mrn: string;
+  name: string;
+  date: string;
+  kind: 'A' | 'B' | 'none';
+  /** true = 判讀日在診次清單內（與 A／B 區同一列）；false = 取全名單稽核列 */
+  inSession: boolean;
+  a: CkdRowA | null;
+  b: CkdRowB | null;
+  episodes: CkdEnrollEpisode[];
+  edu: CkdEduRow[];
+  cfg: { preGap: number; earlyGap: number; over: number };
+}
+
 // ---------- 階段 2：判讀 ----------
 
 export interface CkdClinicSlot {
@@ -709,6 +754,13 @@ export class CkdApiService {
 
   getPatientSummary(mrn: string): Promise<CkdPatientSummary> {
     return firstValueFrom(this.api.get<CkdPatientSummary>(`/ckd/patients/${encodeURIComponent(mrn)}/summary`));
+  }
+
+  /** 病人彙整視窗：單一病人判讀＋收案段落＋衛教時間軸（date 不帶 = 今天） */
+  getPatientCase(mrn: string, date?: string): Promise<CkdPatientCase> {
+    const params: Record<string, string> = {};
+    if (date) params['date'] = date;
+    return firstValueFrom(this.api.get<CkdPatientCase>(`/ckd/patients/${encodeURIComponent(mrn)}/case`, params));
   }
 
   searchPatients(q: string): Promise<{ patients: { mrn: string; name: string }[] }> {

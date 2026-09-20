@@ -42,7 +42,7 @@
               @for (v of view(); track v.a.key) {
                 <tr [class.row-miss]="v.a.sev === 'crit' && !v.a.done">
                   <td>
-                    <button type="button" class="nmlink" (click)="openRecords.emit(v.a.mrn)" title="查看/新增此病人的個案紀錄">{{ v.a.name || '（無姓名）' }}</button>
+                    <button type="button" class="nmlink" (click)="openRecords.emit(v.a.mrn)" title="開啟病人彙整視窗：收案資料、判讀、檢驗、P 碼、衛教與個案紀錄">{{ v.a.name || '（無姓名）' }}</button>
                     <div class="mrn">{{ v.a.mrn }}</div>
                   </td>
                   <td class="la-k" [class.on]="flowKey() === v.a.key" (click)="toggleFlow(v.a)" title="點一下展開這位病人的累積報告">

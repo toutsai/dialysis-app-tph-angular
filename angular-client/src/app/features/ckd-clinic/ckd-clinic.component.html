@@ -32,28 +32,28 @@
   }
 
   @if (view() === 'daily') {
-    <app-ckd-daily />
+    <app-ckd-daily (openPatient)="openPatient($event.mrn, $event.date)" />
   }
   @if (view() === 'pcheck') {
-    <app-ckd-pcheck (openRecords)="goRecords($event)" />
+    <app-ckd-pcheck (openRecords)="openPatient($event)" />
   }
   @if (view() === 'recall') {
-    <app-ckd-recall (openRecords)="goRecords($event)" />
+    <app-ckd-recall (openRecords)="openPatient($event)" />
   }
   @if (view() === 'alerts') {
-    <app-ckd-alerts (openRecords)="goRecords($event)" />
+    <app-ckd-alerts (openRecords)="openPatient($event)" />
   }
   @if (view() === 'rrt') {
-    <app-ckd-rrt (openRecords)="goRecords($event)" />
+    <app-ckd-rrt (openRecords)="openPatient($event)" />
   }
   @if (view() === 'report') {
     <app-ckd-report />
   }
   @if (view() === 'audit') {
-    <app-ckd-audit (openRecords)="goRecords($event)" />
+    <app-ckd-audit (openRecords)="openPatient($event)" />
   }
   @if (view() === 'wide') {
-    <app-ckd-wide (openRecords)="goRecords($event)" />
+    <app-ckd-wide (openRecords)="openPatient($event)" />
   }
 
   @if (status(); as st) {
@@ -198,5 +198,11 @@
     }
   } @else if (loading() && view() === 'import') {
     <div class="placeholder">載入中…</div>
+  }
+
+  <!-- 病人彙整視窗：各清單點病人姓名開啟（整頁共用一個） -->
+  @if (patientDialog(); as pd) {
+    <app-ckd-patient-dialog [mrn]="pd.mrn" [date]="pd.date"
+      (closed)="patientDialog.set(null)" (openRecords)="onDialogOpenRecords($event)" (changed)="onDialogChanged()"></app-ckd-patient-dialog>
   }
 </div>

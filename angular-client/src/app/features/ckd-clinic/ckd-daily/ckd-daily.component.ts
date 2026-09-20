@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
+import { Component, EventEmitter, OnInit, Output, ViewChild, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { CkdApiService, CkdDaily, CkdMergedLab, CkdRecType, CkdRowA, CkdRowB } from '@app/core/services/ckd-api.service';
 import { CkdRecordsComponent } from '../ckd-records/ckd-records.component';
@@ -137,6 +137,13 @@ export class CkdDailyComponent implements OnInit {
     const next = new Set(this.expanded());
     if (next.has(mrn)) next.delete(mrn); else next.add(mrn);
     this.expanded.set(next);
+  }
+
+  // ---------- 病人彙整視窗（2026-09-20）：點姓名 → 交給外層開視窗，帶本頁判讀日讓判讀與這一列一致 ----------
+  @Output() openPatient = new EventEmitter<{ mrn: string; date: string }>();
+
+  openPatientDialog(mrn: string): void {
+    this.openPatient.emit({ mrn, date: this.daily()?.date || '' });
   }
 
   // ---------- 個案紀錄（原版 data-gorec / data-vpncheck） ----------
