@@ -479,6 +479,24 @@ export function requireSpecialist(req, res, next) {
 }
 
 /**
+ * 醫師班表編輯守門（2026-09-21 使用者裁定）：只有 admin 與 contributor（醫師／專師）可編輯；viewer（書記）與 editor（護理師）只能看。
+ * ⚠️ 這裡刻意不是階層判斷——editor 階層高於 contributor，但醫師班表是醫師自己的事，護理師不改。
+ * 前端同一條規則在 AuthService.canManagePhysicianSchedule，兩邊要一起改。
+ */
+export function canManagePhysicianSchedule(user) {
+  return !!user && (user.role === 'admin' || user.role === 'contributor')
+}
+export function requirePhysicianScheduleManager(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ error: true, message: '請先登入' })
+  }
+  if (!canManagePhysicianSchedule(req.user)) {
+    return res.status(403).json({ error: true, message: '權限不足：醫師班表僅限管理員與醫師（貢獻者）編輯' })
+  }
+  next()
+}
+
+/**
  * 便捷的權限中介軟體
  */
 export const isViewer = [authenticate]
@@ -486,6 +504,7 @@ export const isContributor = [authenticate, requireRole('contributor')]
 export const isEditor = [authenticate, requireRole('editor')]
 export const isAdmin = [authenticate, requireRole('admin')]
 export const isSpecialist = [authenticate, requireSpecialist]
+export const isPhysicianScheduleManager = [authenticate, requirePhysicianScheduleManager]
 
 // ========================================
 // 稽核日誌

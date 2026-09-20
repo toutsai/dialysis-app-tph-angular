@@ -18,19 +18,22 @@ export type PhysicianHubTab = 'schedule' | 'orders' | 'med' | 'ci' | 'research';
 interface HubTab {
   key: PhysicianHubTab;
   label: string;
-  /** 只有 admin/contributor（醫師/專師）可用 */
-  doctorOnly: boolean;
+  /** 可看到這個頁籤的角色（刻意列舉、不用階層：editor 階層高於 contributor，但這裡多數頁籤不給護理師） */
+  roles: readonly string[];
 }
 
-const TABS: HubTab[] = [
-  { key: 'schedule', label: '醫師班表', doctorOnly: false },
-  { key: 'orders', label: '醫囑藥囑管理', doctorOnly: true },
-  { key: 'med', label: '醫師藥物調整', doctorOnly: true },
-  { key: 'ci', label: '重大傷病申請', doctorOnly: false },
-  { key: 'research', label: '研究專用', doctorOnly: true },
-];
-
 const DOCTOR_ROLES = ['admin', 'contributor'];
+/**
+ * 醫師班表：2026-09-21 使用者裁定「admin／contributor 可編輯，viewer／editor 可看」→ 四種角色都看得到（編輯權限在 AuthService.canManagePhysicianSchedule）。
+ * 重大傷病申請：刻意排除 editor（2026-07-24 起的既有規則，勿順手加進去）。
+ */
+const TABS: HubTab[] = [
+  { key: 'schedule', label: '醫師班表', roles: ['admin', 'contributor', 'viewer', 'editor'] },
+  { key: 'orders', label: '醫囑藥囑管理', roles: DOCTOR_ROLES },
+  { key: 'med', label: '醫師藥物調整', roles: DOCTOR_ROLES },
+  { key: 'ci', label: '重大傷病申請', roles: ['admin', 'contributor', 'viewer'] },
+  { key: 'research', label: '研究專用', roles: DOCTOR_ROLES },
+];
 
 @Component({
   selector: 'app-physician-hub',
@@ -44,8 +47,12 @@ export class PhysicianHubComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
 
-  readonly isDoctor = computed(() => DOCTOR_ROLES.includes(this.auth.currentUser()?.role || ''));
-  readonly tabs = computed(() => TABS.filter((t) => !t.doctorOnly || this.isDoctor()));
+  readonly tabs = computed(() => {
+    const role = this.auth.currentUser()?.role || '';
+    return TABS.filter((t) => t.roles.includes(role));
+  });
+  /** 只看得到醫師班表一個頁籤的人（護理師）：標題直接叫「醫師班表」，不顯示只有一顆的頁籤列 */
+  readonly scheduleOnly = computed(() => this.tabs().length === 1 && this.tabs()[0].key === 'schedule');
   readonly mainTab = signal<PhysicianHubTab>('schedule');
 
   ngOnInit(): void {

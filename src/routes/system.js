@@ -2,7 +2,7 @@
 import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../db/init.js'
-import { authenticate, isAdmin, isEditor, isContributor, logAudit, requireAnyRole } from '../middleware/auth.js'
+import { authenticate, isAdmin, isEditor, isContributor, isPhysicianScheduleManager, logAudit, requireAnyRole } from '../middleware/auth.js'
 import { getTaipeiTodayString } from '../utils/dateUtils.js'
 import { countCurrentCensus, getMonthlyCensus, getMonthlyCensusChanges } from '../services/patientCensus.js'
 
@@ -1822,10 +1822,66 @@ router.get('/physician-schedules/:date', authenticate, (req, res) => {
 })
 
 /**
+ * PUT /api/system/physicians/:id/schedule-settings
+ * 醫師班表頁右欄的「門診時段／院外支援」（2026-09-21）。
+ * 原本這兩欄走 PUT /auth/users/:id（admin 限定）→ 非 admin 在醫師班表按儲存會 403、整頁顯示「儲存失敗」。
+ * 這支只收這兩欄、只動 physicians 表，權限同醫師班表（admin／contributor）。
+ * 兩欄都是「有傳才更新」的獨立 UPDATE（勿併入 upsert：會把沒傳的欄位洗成空值）。
+ */
+router.put('/physicians/:id/schedule-settings', ...isPhysicianScheduleManager, async (req, res) => {
+  try {
+    const { id } = req.params
+    const { clinicHours, outsideSupport } = req.body || {}
+    if (clinicHours === undefined && outsideSupport === undefined) {
+      return res.status(400).json({ error: true, message: '沒有提供要更新的欄位' })
+    }
+    if (clinicHours !== undefined &&
+      !(Array.isArray(clinicHours) && clinicHours.length <= 8 && clinicHours.every((h) => typeof h === 'string' && h.length > 0 && h.length <= 20))) {
+      return res.status(400).json({ error: true, message: '門診時段格式不正確' })
+    }
+    // 院外支援時段格式："<週幾1-7>-<ALL|AM|PM|NT>"（同 PUT /auth/users/:id）
+    if (outsideSupport !== undefined &&
+      !(Array.isArray(outsideSupport) && outsideSupport.length <= 8 && outsideSupport.every((c) => typeof c === 'string' && /^[1-7]-(ALL|AM|PM|NT)$/.test(c)))) {
+      return res.status(400).json({ error: true, message: '院外支援時段格式不正確' })
+    }
+
+    const db = getDatabase()
+    const user = db.prepare(`SELECT id, name, title FROM users WHERE id = ?`).get(id)
+    if (!user || user.title !== '主治醫師') {
+      return res.status(404).json({ error: true, message: '找不到這位醫師' })
+    }
+
+    db.transaction(() => {
+      // 使用者管理沒存過醫師欄位的人還沒有 physicians 列 → 先補一列再更新
+      db.prepare(`INSERT OR IGNORE INTO physicians (id, name, specialty) VALUES (?, ?, ?)`).run(id, user.name, user.title)
+      if (clinicHours !== undefined) {
+        db.prepare(`UPDATE physicians SET clinic_hours = ?, updated_at = datetime('now', 'localtime') WHERE id = ?`).run(JSON.stringify(clinicHours), id)
+      }
+      if (outsideSupport !== undefined) {
+        db.prepare(`UPDATE physicians SET outside_support = ?, updated_at = datetime('now', 'localtime') WHERE id = ?`).run(JSON.stringify(outsideSupport), id)
+      }
+    })()
+
+    await logAudit('PHYSICIAN_SCHEDULE_SETTINGS_UPDATE', req.user.id, req.user.name, 'physicians', id, { clinicHours, outsideSupport })
+
+    const row = db.prepare(`SELECT clinic_hours, outside_support FROM physicians WHERE id = ?`).get(id)
+    res.json({
+      success: true,
+      id,
+      clinicHours: JSON.parse(row.clinic_hours || '[]'),
+      outsideSupport: JSON.parse(row.outside_support || '[]'),
+    })
+  } catch (error) {
+    console.error('更新醫師門診時段／院外支援錯誤:', error)
+    res.status(500).json({ error: true, message: '更新醫師門診時段／院外支援失敗' })
+  }
+})
+
+/**
  * PUT /api/system/physician-schedules/:date
  * 更新特定日期的醫師班表
  */
-router.put('/physician-schedules/:date', ...isContributor, async (req, res) => {
+router.put('/physician-schedules/:date', ...isPhysicianScheduleManager, async (req, res) => {
   try {
     const { date } = req.params
     const scheduleData = req.body
@@ -2004,7 +2060,7 @@ router.get('/holidays/:year', authenticate, (req, res) => {
  * POST /api/system/holidays/:year/sync
  * 從政府資料開放平臺抓取該年度辦公日曆表 CSV，解析後存入主檔
  */
-router.post('/holidays/:year/sync', ...isContributor, async (req, res) => {
+router.post('/holidays/:year/sync', ...isPhysicianScheduleManager, async (req, res) => {
   try {
     const year = Number(req.params.year)
     if (!/^\d{4}$/.test(req.params.year)) {
@@ -2084,7 +2140,7 @@ router.post('/holidays/:year/sync', ...isContributor, async (req, res) => {
  * POST /api/system/holidays/:year/import
  * 手動上傳辦公日曆表 CSV（base64），格式同政府檔案；外網不通時的備援
  */
-router.post('/holidays/:year/import', ...isContributor, async (req, res) => {
+router.post('/holidays/:year/import', ...isPhysicianScheduleManager, async (req, res) => {
   try {
     const year = Number(req.params.year)
     if (!/^\d{4}$/.test(req.params.year)) {

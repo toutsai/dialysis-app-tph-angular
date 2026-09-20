@@ -118,9 +118,14 @@ export class AuthService implements OnDestroy {
   readonly canEditSchedules = computed(() => this.hasPermission('editor'));
   readonly canEditPatients = computed(() => this.hasPermission('editor'));
   readonly canManageOrders = computed(() => this.hasPermission('contributor'));
-  readonly canManagePhysicianSchedule = computed(() =>
-    this.hasPermission('editor'),
-  );
+  /**
+   * 醫師班表編輯（2026-09-21 使用者裁定）：只有 admin 與 contributor（醫師／專師）可編輯；viewer（書記）與 editor（護理師）只能看。
+   * 刻意不是階層判斷（editor 階層高於 contributor）。後端同一條規則在 middleware/auth.js 的 canManagePhysicianSchedule，兩邊要一起改。
+   */
+  readonly canManagePhysicianSchedule = computed(() => {
+    const role = this.currentUser()?.role;
+    return role === 'admin' || role === 'contributor';
+  });
   readonly canEditClinicalNotesAndOrders = computed(() => {
     const role = this.currentUser()?.role;
     return role === 'admin' || role === 'contributor';

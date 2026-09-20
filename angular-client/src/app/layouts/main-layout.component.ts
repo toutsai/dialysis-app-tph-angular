@@ -202,6 +202,11 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     return userCanAccessPage(pageKey, this.authService.currentUser()?.role);
   }
 
+  /** 側欄「醫師專師專用」：護理師（editor）進去只有醫師班表一頁（2026-09-21 開放唯讀），選單直接叫「醫師班表」 */
+  readonly physicianHubNavTitle = computed(() =>
+    this.authService.currentUser()?.role === 'editor' ? '醫師班表' : '醫師專師專用',
+  );
+
   /** 專師專用頁面（admin 或 職稱「專科護理師」） */
   canAccessSpecialist(): boolean {
     return this.authService.isSpecialist();
