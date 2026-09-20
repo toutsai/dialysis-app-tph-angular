@@ -213,7 +213,17 @@ export class CkdPatientDialogComponent implements OnChanges {
 
   // ---------- 操作 ----------
 
+  /** 已有表單開著時又按了「＋」：不取代（換 defaults 會讓 quick-form 重新初始化、清空已填內容），只提示一下 */
+  readonly formBusy = signal(false);
+  private formBusyTimer: ReturnType<typeof setTimeout> | null = null;
+
   startAdd(type: CkdRecType, defaults: Record<string, unknown> = {}): void {
+    if (this.addType()) {
+      this.formBusy.set(true);
+      if (this.formBusyTimer) clearTimeout(this.formBusyTimer);
+      this.formBusyTimer = setTimeout(() => this.formBusy.set(false), 3000);
+      return;
+    }
     this.addDefaults.set({ at: this.today, ...defaults });
     this.addType.set(type);
   }

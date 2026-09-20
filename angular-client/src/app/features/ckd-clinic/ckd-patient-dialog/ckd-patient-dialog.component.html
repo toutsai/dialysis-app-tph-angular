@@ -138,7 +138,9 @@
       <!-- 快速新增表單：放在分頁內容之外，切分頁去查檢驗值時填到一半的內容不會不見 -->
       @if (addType(); as at) {
         <div class="pd-form">
-          <div class="pd-form-title">新增{{ addLabel() }}<span class="dim xs">　可切換下方分頁查資料，表單內容會保留；不存請按表單的取消</span></div>
+          <div class="pd-form-title">新增{{ addLabel() }}<span class="dim xs">　可切換下方分頁查資料，表單內容會保留；不存請按表單的取消</span>
+            @if (formBusy()) { <span class="pd-form-busy">這張表單還沒存：請先儲存或取消，再新增另一筆</span> }
+          </div>
           <app-ckd-quick-form [type]="at" [mrn]="mrn" [defaults]="addDefaults()" (saved)="onSaved()" (cancelled)="addType.set(null)"></app-ckd-quick-form>
         </div>
       }

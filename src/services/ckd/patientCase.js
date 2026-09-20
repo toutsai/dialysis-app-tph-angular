@@ -5,6 +5,7 @@ import { iso } from './parsers.js'
 
 /** 方案照護就診（新收案／追蹤／年度）依給付規定含個管衛教；P8101C 是一次性的「末期腎病治療方式衛教」 */
 const EDU_CARE_CTYPES = { '新收案': 1, '追蹤': 1, '年度': 1 }
+const CARE_ORDER = ['新收案', '追蹤', '年度']
 
 /**
  * 衛教時間軸（新→舊）。系統沒有單一的衛教登記處，合併三個來源（使用者 2026-09-20 同意）：
@@ -25,7 +26,10 @@ export function eduTimeline(pcodeRows, records) {
     const date = iso(r.visit)
     const prev = p8101 ? null : careByDate.get(date)
     if (prev && (!prev.code || !r.code)) {
-      if (!prev.code && r.code) { prev.code = r.code; prev.label = '方案照護（' + r.ctype + '）' }
+      /* 兩列類別不同（例：登錄簿無碼的「新收案」＋入帳的 P3403C「追蹤」）→ 標籤兩個都留，不讓「新收案」消失；順序與資料列先後無關 */
+      if (!prev.ctypes.includes(r.ctype)) prev.ctypes.push(r.ctype)
+      prev.label = '方案照護（' + CARE_ORDER.filter((t) => prev.ctypes.includes(t)).join('・') + '）'
+      if (!prev.code && r.code) prev.code = r.code
       if (!prev.doctor && r.doctor) prev.doctor = r.doctor
       prev.src = [...new Set(prev.src.concat(r.src || []))]
       continue
@@ -35,6 +39,7 @@ export function eduTimeline(pcodeRows, records) {
       label: p8101 ? '末期腎病治療方式衛教' : '方案照護（' + r.ctype + '）',
       code: r.code || '', doctor: r.doctor || '', src: (r.src || []).slice(), text: '', author: '', recordId: null,
     }
+    if (!p8101) Object.defineProperty(row, 'ctypes', { value: [r.ctype], enumerable: false }) // 併列用，不進 JSON
     if (!p8101 && !prev) careByDate.set(date, row)
     out.push(row)
   }

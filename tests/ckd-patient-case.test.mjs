@@ -135,6 +135,17 @@ test('eduTimeline：三來源合併、新→舊；只收衛教類追蹤紀錄；
     ['2026-03-01', 'P3403C', '入帳'], ['2026-03-01', 'P3404C', '入帳'], ['2025-01-10', 'P3402C', '入帳+登錄'],
   ])
   assert.equal(merged[2].doctor, '王')
+  // 併列與資料列先後無關；類別不同時標籤兩個都留；P8101C 同日不參與併列
+  const rowsAB = [
+    { visit: d('2025-01-10'), code: 'P3403C', ctype: '追蹤', doctor: '王', src: ['入帳'] },
+    { visit: d('2025-01-10'), code: '', ctype: '新收案', doctor: '', src: ['登錄'] },
+    { visit: d('2025-01-10'), code: 'P8101C', ctype: '衛教', doctor: '王', src: ['入帳'] },
+  ]
+  const pick = (rows) => eduTimeline(rows, []).map((e) => [e.kind, e.code, e.label, e.src.slice().sort().join('+')]).sort((a, b) => a[0].localeCompare(b[0]))
+  const expected = [['care', 'P3403C', '方案照護（新收案・追蹤）', '入帳+登錄'], ['p8101', 'P8101C', '末期腎病治療方式衛教', '入帳']]
+  assert.deepEqual(pick(rowsAB), expected)
+  assert.deepEqual(pick([rowsAB[1], rowsAB[2], rowsAB[0]]), expected, '順序顛倒結果相同')
+  assert.ok(!JSON.stringify(eduTimeline(rowsAB, [])).includes('ctypes'), '併列用的內部欄位不進 JSON')
   // 已刪除的紀錄即使混進來也不算
   assert.deepEqual(eduTimeline([], [{ id: 'x', type: 'note', cat: '衛教', at: '2026-01-01', deleted: true }]), [])
   // 註銷
