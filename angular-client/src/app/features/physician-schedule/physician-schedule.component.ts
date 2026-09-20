@@ -36,7 +36,6 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   private readonly patientStore = inject(PatientStoreService);
   private readonly userDirectory = inject(UserDirectoryService);
 
-  private usersApi!: ApiManager<any>;
   private physicianSchedulesApi!: ApiManager<any>;
 
   // Page state
@@ -347,8 +346,7 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    this.usersApi = this.apiManagerService.create('users');
-    this.physicianSchedulesApi = this.apiManagerService.create('physician_schedules');
+    this.physicianSchedulesApi =this.apiManagerService.create('physician_schedules');
 
     this.isLoading.set(true);
     this.loadAllData();
@@ -670,7 +668,9 @@ export class PhysicianScheduleComponent implements OnInit, OnDestroy {
       if ((doc.clinicHours || []).sort().join(',') !== [...newClinicHours].sort().join(',')) payload.clinicHours = newClinicHours;
       if ([...(doc.outsideSupport || [])].sort().join(',') !== [...newOutsideSupport].sort().join(',')) payload.outsideSupport = newOutsideSupport;
       if (Object.keys(payload).length > 0) {
-        return this.usersApi.update(doc.id, payload).then(() => {
+        // 專用端點（權限同醫師班表：admin／contributor）。原本走使用者管理的 PUT /auth/users/:id 是 admin 限定，
+        // 非 admin 改了門診時段／院外支援按儲存會 403、整頁顯示「儲存失敗」
+        return firstValueFrom(this.apiService.put<any>(`/system/physicians/${encodeURIComponent(doc.id)}/schedule-settings`, payload)).then(() => {
           // ✅ 儲存成功後直接更新本地資料，不需重新讀取
           if (payload.clinicHours) doc.clinicHours = newClinicHours;
           if (payload.outsideSupport) doc.outsideSupport = newOutsideSupport;

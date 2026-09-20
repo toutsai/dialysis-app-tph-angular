@@ -1,12 +1,14 @@
 <div class="page-container">
   <!-- 標題與主頁籤同一列（比照書記專用） -->
   <header class="page-header">
-    <h1>醫師專師專用</h1>
-    <nav class="main-tabs" aria-label="醫師專師專用功能">
-      @for (t of tabs(); track t.key) {
-        <button [class.active]="mainTab() === t.key" (click)="setTab(t.key)">{{ t.label }}</button>
-      }
-    </nav>
+    <h1>{{ scheduleOnly() ? '醫師班表' : '醫師專師專用' }}</h1>
+    @if (!scheduleOnly()) {
+      <nav class="main-tabs" aria-label="醫師專師專用功能">
+        @for (t of tabs(); track t.key) {
+          <button [class.active]="mainTab() === t.key" (click)="setTab(t.key)">{{ t.label }}</button>
+        }
+      </nav>
+    }
   </header>
 
   @if (mainTab() === 'schedule') {

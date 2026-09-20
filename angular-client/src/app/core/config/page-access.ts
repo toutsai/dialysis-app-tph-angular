@@ -138,16 +138,18 @@ export const PAGE_ACCESS = {
   },
   physicianHub: {
     // 醫師專師專用（2026-09-05）：醫師班表/醫囑藥囑/藥物調整/重大傷病申請/研究 整合為主頁籤；viewer（書記）只看醫師班表與重大傷病申請
+    // 2026-09-21 使用者裁定醫師班表「viewer／editor 可看」→ 頁面開放全部角色；各頁籤誰看得到在 physician-hub.component.ts 的 TABS
+    //（editor 只看得到醫師班表；重大傷病申請仍刻意排除 editor）
     path: '/physician',
     title: '醫師專師專用',
-    roles: DOCTOR_VIEW_ROLES,
-    roleLabel: '管理員、貢獻者、查看者',
+    roles: ALL_ROLES,
+    roleLabel: '所有使用者（護理師僅醫師班表）',
   },
   physicianSchedule: {
     path: '/physician-schedule',
     title: '醫師排班',
-    roles: DOCTOR_VIEW_ROLES,
-    roleLabel: '管理員、貢獻者、查看者',
+    roles: ALL_ROLES,
+    roleLabel: '所有使用者可看；管理員、貢獻者可編輯',
   },
   labReports: {
     path: '/lab-reports',
