@@ -37,7 +37,7 @@
 .hint { font-size: 0.72rem; margin-left: auto; }
 
 /* 表格：病人欄與表頭凍結 */
-.tbox { overflow: auto; max-height: 70vh; border: 1px solid #eceff1; border-radius: 6px; }
+.tbox { overflow: auto; max-height: calc(70vh / var(--ckd-zoom, 1)); border: 1px solid #eceff1; border-radius: 6px; }
 table { border-collapse: separate; border-spacing: 0; min-width: 100%; }
 th { text-align: left; font-size: 0.72rem; color: #78909c; font-weight: 600; padding: 0.25rem 0.4rem; border-bottom: 1px solid #d2d8d0; white-space: nowrap; background: #fff; position: sticky; z-index: 2; }
 tr.grp th { top: 0; text-align: center; font-size: 0.7rem; border-bottom: 1px solid #eceff1; }

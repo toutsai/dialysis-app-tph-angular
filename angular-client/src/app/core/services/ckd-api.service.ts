@@ -19,6 +19,8 @@ export interface CkdSettings {
   recallGrace: number;
   alertWin: number;
   rrtEgfr: number;
+  /** 檢驗報告衛教單頁尾的聯絡電話（空白 = 印空白線） */
+  handoutPhone: string;
 }
 
 export interface CkdPhase {
@@ -221,6 +223,46 @@ export interface CkdPatientCase {
   episodes: CkdEnrollEpisode[];
   edu: CkdEduRow[];
   cfg: { preGap: number; earlyGap: number; over: number };
+}
+
+/** 檢驗報告衛教單的一個檢驗項目（本次／前次；dir = 偏高 H／偏低 L；by = 判定來源：HIS 標記或既有 9 條門檻） */
+export interface CkdHandoutItem {
+  key: string;
+  label: string;
+  /** 衛教單上給病人看的名稱 */
+  name: string;
+  unit: string;
+  group: string;
+  groupLabel: string;
+  v: number | string;
+  q: string;
+  date: string;
+  dir: 'H' | 'L' | '';
+  by: 'his' | 'rule' | '';
+  prev: { v: number | string; q: string; date: string } | null;
+}
+
+export interface CkdHandoutCaution { keys: string[]; title: string; dir: 'H' | 'L'; text: string }
+
+/** 衛教單內容（用語由使用者審定，組裝在後端 services/ckd/handout.js；前端只負責排版成 Word） */
+export interface CkdHandout {
+  mrn: string;
+  name: string;
+  hospital: string;
+  title: string;
+  footer: string;
+  phone: string;
+  windowDays: number;
+  reportDates: string[];
+  enroll: { cat: string; doctor: string; date: string | null; nextDue: string | null } | null;
+  nextVisit: { date: string; half: string; doctor: string; dept: string } | null;
+  handout: {
+    reportDate: string;
+    windowFrom: string;
+    items: CkdHandoutItem[];
+    cautions: CkdHandoutCaution[];
+    stage: { code: string; label: string; text: string; egfr: number; date: string } | null;
+  } | null;
 }
 
 // ---------- 階段 2：判讀 ----------
@@ -761,6 +803,13 @@ export class CkdApiService {
     const params: Record<string, string> = {};
     if (date) params['date'] = date;
     return firstValueFrom(this.api.get<CkdPatientCase>(`/ckd/patients/${encodeURIComponent(mrn)}/case`, params));
+  }
+
+  /** 檢驗報告衛教單內容（report 不帶 = 最近一個報告日） */
+  getPatientHandout(mrn: string, report?: string): Promise<CkdHandout> {
+    const params: Record<string, string> = {};
+    if (report) params['report'] = report;
+    return firstValueFrom(this.api.get<CkdHandout>(`/ckd/patients/${encodeURIComponent(mrn)}/handout`, params));
   }
 
   searchPatients(q: string): Promise<{ patients: { mrn: string; name: string }[] }> {

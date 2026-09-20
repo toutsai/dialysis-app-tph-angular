@@ -50,7 +50,10 @@ interface UploadItem {
   message?: string;
 }
 
-const NUMERIC_SETTING_KEYS = ['preGap', 'earlyNew', 'earlyGap', 'dmGap', 'over', 'labWin', 'recallGrace', 'alertWin', 'rrtEgfr'] as const;
+const ZOOM_KEY = 'ckdClinicZoom';
+const DEFAULT_ZOOM = 1.15;
+
+const NUMERIC_SETTING_KEYS =['preGap', 'earlyNew', 'earlyGap', 'dmGap', 'over', 'labWin', 'recallGrace', 'alertWin', 'rrtEgfr'] as const;
 
 /**
  * 門診 CKD 收案追蹤（Angular 重寫版）
@@ -79,6 +82,30 @@ export class CkdClinicComponent implements OnInit {
   @ViewChild(CkdAuditComponent) auditView?: CkdAuditComponent;
 
   readonly view = signal<CkdView>('daily');
+
+  /**
+   * 整頁字體放大（2026-09-21 使用者要求：「整個門診 CKD 頁面字體都稍微放大，大家眼睛都不太好」）。
+   * 各子頁字級都是 rem 寫死的，逐一改會散在十幾個檔 → 用 CSS zoom 整頁等比放大（含病人彙整視窗）。
+   * 預設 115%；頁首 A−／A＋ 可調，記在這台電腦的瀏覽器（localStorage），不進資料庫。
+   * ⚠️ zoom 底下 vh 也會被放大：頁內用到 vh 的高度要除以 --ckd-zoom（見 ckd-patient-dialog／ckd-wide 的 css）。
+   */
+  readonly zoomSteps = [1, 1.1, 1.15, 1.25, 1.35, 1.5];
+  readonly zoom = signal(this.loadZoom());
+  readonly zoomPct = computed(() => Math.round(this.zoom() * 100));
+
+  private loadZoom(): number {
+    try {
+      const v = Number(localStorage.getItem(ZOOM_KEY));
+      return this.zoomSteps.includes(v) ? v : DEFAULT_ZOOM;
+    } catch { return DEFAULT_ZOOM; }
+  }
+
+  stepZoom(delta: 1 | -1): void {
+    const i = this.zoomSteps.indexOf(this.zoom());
+    const next = this.zoomSteps[Math.max(0, Math.min(this.zoomSteps.length - 1, (i < 0 ? this.zoomSteps.indexOf(DEFAULT_ZOOM) : i) + delta))];
+    this.zoom.set(next);
+    try { localStorage.setItem(ZOOM_KEY, String(next)); } catch { /* 無痕模式等存不了就算了，這次有效即可 */ }
+  }
 
   /**
    * 病人彙整視窗（2026-09-20 使用者拍板）：各清單點病人姓名 → 開視窗，不再直接跳個案紀錄區。
@@ -166,6 +193,7 @@ export class CkdClinicComponent implements OnInit {
     { key: 'recallGrace', label: '召回寬限', unit: '天', hint: '追蹤到期後幾天內不列入召回待聯絡' },
     { key: 'alertWin', label: '異常檢驗掃描', unit: '天', hint: '近日異常檢驗往回看幾天' },
     { key: 'rrtEgfr', label: '透析準備 eGFR 門檻', hint: 'eGFR 低於此值的已收案者進入透析準備管線' },
+    { key: 'handoutPhone', label: '衛教單聯絡電話', hint: '印在檢驗報告衛教單頁尾；留空會印空白線讓個管師手寫（不影響判讀）' },
   ];
 
   readonly sourceList = computed<CkdSourceSummary[]>(() => {
@@ -311,7 +339,7 @@ export class CkdClinicComponent implements OnInit {
     if (!f) return;
     const next = { ...f } as any;
     if (key === 'allA') next.allA = !!value;
-    else if (key === 'dept') next.dept = String(value);
+    else if (key === 'dept' || key === 'handoutPhone') next[key] = String(value);
     else next[key] = Number(value);
     this.settingsForm.set(next);
     this.settingsSaved.set(false);

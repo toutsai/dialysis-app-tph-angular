@@ -1,0 +1,49 @@
+<div class="ho">
+  <div class="ho-head">
+    <b>檢驗報告衛教單</b>
+    <span class="dim xs">給病人帶回家的說明單：本次／前次檢驗值、需要注意的項目與說明、下次回診。下方預覽就是 Word 印出來的內容，下載後仍可在 Word 修改。</span>
+    <button type="button" class="btn small ghost ho-x" (click)="closed.emit()">收起</button>
+  </div>
+
+  @if (error(); as err) { <div class="banner error">{{ err }}</div> }
+  @if (loading() && !data()) { <div class="dim">產生中…</div> }
+
+  @if (data(); as d) {
+    @if (!d.handout) {
+      <div class="empty">這位病人沒有檢驗報告，無法產生衛教單。</div>
+    } @else {
+      <div class="ho-ctl">
+        <label class="f">
+          <span>報告日</span>
+          <select [ngModel]="report()" (ngModelChange)="onReportChange($event)" [disabled]="loading()">
+            @for (r of d.reportDates; track r) { <option [value]="r">{{ roc(r) }}</option> }
+          </select>
+          <small class="dim">同一次抽血的血液單與尿液單可能差幾天：報告日往前 {{ d.windowDays }} 天內的報告一併列入</small>
+        </label>
+        <label class="f wide">
+          <span>個管師的話<small class="dim">（可空；會印在單子上）</small></span>
+          <textarea rows="2" [ngModel]="message()" (ngModelChange)="message.set($event); done.set(null)" placeholder="例：這次鉀離子偏高，青菜請先燙過再吃，下次回診前一週記得來抽血。"></textarea>
+        </label>
+        <div class="ho-act">
+          <label class="ck" title="在個案紀錄存一筆「追蹤紀錄·衛教」：哪一天的報告、提醒了哪些項目、留言。衛教紀錄時間軸就會看到這次衛教。">
+            <input type="checkbox" [ngModel]="saveRecord()" (ngModelChange)="saveRecord.set($event)" /> 同時存成一筆衛教紀錄
+          </label>
+          <button type="button" class="btn primary" (click)="download()" [disabled]="busy() || loading()">{{ busy() ? '處理中…' : '下載 Word' }}</button>
+          @if (done(); as ok) { <span class="ok">{{ ok }}</span> }
+        </div>
+      </div>
+
+      <div class="ho-sum">
+        需要注意的項目：
+        @if (d.handout.cautions.length) {
+          @for (c of d.handout.cautions; track c.title + c.dir) { <span class="fl" [class.h]="c.dir === 'H'" [class.l]="c.dir === 'L'">{{ c.title }} {{ c.dir === 'H' ? '偏高' : '偏低' }}</span> }
+        } @else { <span class="dim">本次沒有</span> }
+        @if (!d.phone) { <span class="dim xs">｜頁尾聯絡電話尚未設定（「匯入與設定 → 判定參數 → 衛教單聯絡電話」），目前會印空白線</span> }
+      </div>
+
+      <div class="ho-paper" [class.stale]="loading()">
+        <div class="ho-preview" [innerHTML]="previewHtml()"></div>
+      </div>
+    }
+  }
+</div>

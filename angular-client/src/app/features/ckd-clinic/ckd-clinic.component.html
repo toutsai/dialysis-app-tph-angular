@@ -1,4 +1,4 @@
-<div class="ckd-page">
+<div class="ckd-page" [style.zoom]="zoom()" [style.--ckd-zoom]="zoom()">
   <header class="ckd-header">
     <div class="title-block">
       <h1>門診CKD收案</h1>
@@ -9,6 +9,12 @@
       </span>
     </div>
     <div class="toolbar">
+      <span class="zoomctl" title="整頁字體大小（含病人彙整視窗）；設定記在這台電腦的瀏覽器">
+        <span class="zl">字體</span>
+        <button type="button" class="zbtn" (click)="stepZoom(-1)" [disabled]="zoom() === zoomSteps[0]" aria-label="字體縮小">A−</button>
+        <span class="zv">{{ zoomPct() }}%</span>
+        <button type="button" class="zbtn big" (click)="stepZoom(1)" [disabled]="zoom() === zoomSteps[zoomSteps.length - 1]" aria-label="字體放大">A＋</button>
+      </span>
       <button class="btn ghost" (click)="showPhases.set(!showPhases())">建置進度</button>
       <button class="btn ghost" (click)="load()" [disabled]="loading()">{{ loading() ? '載入中…' : '重新整理' }}</button>
     </div>

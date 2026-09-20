@@ -4,7 +4,7 @@
   --pre: #a8322d; --pre-bg: #fbeceb; --ok: #1a6b66; --ok-bg: #e6f2f1; --wait: #8a5e05; --wait-bg: #fbf3dc; --none: #8b95a0; --acc: #1c5fa8; }
 
 .pd-backdrop { position: fixed; inset: 0; z-index: 1200; background: rgba(22, 32, 43, 0.5); display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
-.pd-panel { background: #fff; border-radius: 10px; width: min(1180px, 100%); max-height: 92vh; display: flex; flex-direction: column; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.3); overflow: hidden; }
+.pd-panel { background: #fff; border-radius: 10px; width: min(1180px, 100%); max-height: calc(92vh / var(--ckd-zoom, 1)); display: flex; flex-direction: column; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.3); overflow: hidden; }
 
 .pd-head { flex-shrink: 0; display: flex; align-items: center; gap: 0.75rem; padding: 0.7rem 1rem; background: #16202b; color: #fff; }
 .pd-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.55rem; flex: 1; min-width: 0; }
@@ -94,6 +94,8 @@
 .pd-tabs-right { margin-left: auto; }
 .pd-tab { padding-top: 0.7rem; }
 .pd-form { border: 1px solid #b9cbe4; border-radius: 6px; padding: 0.5rem 0.6rem; margin-top: 0.7rem; background: #f4f8fd; }
+.pd-handout { margin-top: 0.7rem; }
+.pd-tabs-right { display: flex; gap: 0.35rem; }
 .pd-form-title { font-weight: 700; margin-bottom: 0.35rem; }
 .pd-form-busy { margin-left: 0.6rem; font-weight: 700; font-size: 0.78rem; color: var(--pre); background: var(--pre-bg); border-radius: 4px; padding: 0.1rem 0.45rem; }
 
@@ -149,6 +151,6 @@ tr.voided td { text-decoration: line-through; color: #a0adb5; }
 
 @media (max-width: 720px) {
   .pd-backdrop { padding: 0; }
-  .pd-panel { max-height: 100vh; border-radius: 0; }
+  .pd-panel { max-height: calc(100vh / var(--ckd-zoom, 1)); border-radius: 0; }
   .lab-group { flex-direction: column; gap: 0.2rem; }
 }
