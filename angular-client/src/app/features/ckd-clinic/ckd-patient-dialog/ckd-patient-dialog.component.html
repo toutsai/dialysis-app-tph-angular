@@ -1,0 +1,312 @@
+<div class="pd-backdrop" (click)="onBackdrop()">
+  <div class="pd-panel" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+
+    <!-- 標頭：病人與收案基本資料 -->
+    <header class="pd-head">
+      <div class="pd-title">
+        <span class="pd-name">{{ name() || '（無姓名）' }}</span>
+        <span class="mrn">{{ mrn }}</span>
+        @if (age() != null) { <span class="dim">{{ age() }} 歲</span> }
+        @if (rowA()?.isDM) { <span class="badge b-wait">糖尿病</span> }
+        @if (statusBadge(); as sb) { <span [class]="'badge ' + sb[0]">{{ sb[1] }}</span> }
+        <span class="pd-date dim">判讀日 {{ roc(pcase()?.date) }}</span>
+      </div>
+      <button type="button" class="pd-close" (click)="close()" title="關閉（Esc）">✕</button>
+    </header>
+
+    <div class="pd-body">
+      @if (loading()) { <div class="dim pd-loading">載入中…</div> }
+      @if (caseError(); as ce) { <div class="banner error">{{ ce }}</div> }
+
+      @if (pcase(); as pc) {
+        <!-- 收案資料 -->
+        <section class="pd-facts">
+          @if (pc.kind === 'A' || currentEpisode()) {
+            <div class="fact"><div class="fk">收案類別</div><div class="fv"><span class="badge" [class.b-pre]="enrollCat() === 'Pre-ESRD'" [class.b-ok]="enrollCat() !== 'Pre-ESRD'">{{ enrollCat() || '—' }}</span>@if (currentEpisode()?.reenroll) { <span class="dim xs"> 重收案</span> }</div></div>
+            <div class="fact"><div class="fk">收案醫師</div><div class="fv">{{ enrollDoctor() || '—' }}</div></div>
+            <div class="fact"><div class="fk">收案日期</div><div class="fv">{{ roc(enrollDate()) }}@if (rowA()?.tenure != null) { <span class="dim xs"> （{{ years(rowA()!.tenure) }}）</span> }</div></div>
+            @if (currentEpisode()?.closed) {
+              <div class="fact"><div class="fk">結案</div><div class="fv">{{ roc(currentEpisode()!.closeDate) }} <span class="dim xs">{{ currentEpisode()!.reason }}</span></div></div>
+            }
+          } @else {
+            <div class="fact"><div class="fk">收案狀態</div><div class="fv">本院尚未收案</div></div>
+          }
+          @if (rowA(); as a) {
+            <div class="fact"><div class="fk">分期 / eGFR</div><div class="fv">{{ stageText(a.stage) || '—' }} <span class="dim xs">eGFR {{ fmt1(a.egfr) }}</span></div></div>
+            <div class="fact"><div class="fk">上次照護</div><div class="fv">{{ roc(a.last?.visit) }} <span class="dim xs">{{ a.last?.code }}</span></div></div>
+            <div class="fact"><div class="fk">下次可申報</div><div class="fv">{{ roc(a.nextApp) }}</div></div>
+            <div class="fact"><div class="fk">登錄簿下次評估日</div><div class="fv">{{ roc(a.nextDue) }}</div></div>
+            <div class="fact"><div class="fk">本年度 / 近 12 月追蹤</div><div class="fv">{{ a.nYear }} 次 / {{ a.n12 }} 次</div></div>
+          }
+          @if (rowB(); as b) {
+            <div class="fact"><div class="fk">分期 / eGFR</div><div class="fv">{{ stageText(b.stage) || '—' }} <span class="dim xs">eGFR {{ fmt1(b.egfr) }}（{{ b.from }}）</span></div></div>
+            <div class="fact"><div class="fk">UPCR / UACR</div><div class="fv">{{ b.upcr ?? '—' }} / {{ b.uacr ?? '—' }}</div></div>
+            @if (b.p) { <div class="fact"><div class="fk">本次掛號</div><div class="fv">{{ roc(b.p.date) }} {{ b.p.doctor }} <span class="dim xs">{{ b.p.no }} 號</span></div></div> }
+          }
+        </section>
+
+        @if (pastEpisodes().length) {
+          <div class="pd-past dim xs">
+            過去收案：
+            @for (e of pastEpisodes(); track $index) {
+              <span>{{ roc(e.enroll) }} {{ e.cat }} {{ e.doctor }}@if (e.closed) { →{{ roc(e.closeDate) }} 結案@if (e.reason) {（{{ e.reason }}）} }</span>@if (!$last) { ； }
+            }
+          </div>
+        }
+
+        <!-- 現況判讀與建議（後端引擎的結果，與清單上的判定欄同一套） -->
+        <section class="pd-verdict">
+          <h3>現況判讀與建議
+            @if (pc.kind === 'A' && !pc.inSession) { <small>判讀日沒有掛號 → 以「若當日就診」的全名單稽核角度判讀</small> }
+          </h3>
+          @if (box(); as bx) {
+            <div [class]="'vbox tone-' + bx.tone">
+              <div class="vd-a">{{ bx.head }}</div>
+              <div class="vd-b">{{ bx.sub }}</div>
+              @if (bx.act; as act) {
+                @if (act.vpn || act.rec) {
+                  <button type="button" [class]="'vd-x clickable ' + act.cls" (click)="onAct(act)"><b>{{ act.lab }}</b>{{ act.txt }}</button>
+                } @else {
+                  <div [class]="'vd-x ' + act.cls"><b>{{ act.lab }}</b>{{ act.txt }}</div>
+                }
+              }
+            </div>
+          } @else if (pc.kind === 'none') {
+            <div class="vbox tone-q">
+              <div class="vd-a">未收案，且判讀日沒有本科掛號</div>
+              <div class="vd-b">收案評估以門診掛號為單位；這位病人在判讀日 {{ roc(pc.date) }} 沒有掛號，無法評估。下方仍可查看檢驗與紀錄。</div>
+            </div>
+          }
+
+          @if (rowA(); as a) {
+            <div class="pd-row">
+              @if (a.gap != null) { <span class="pill">距上次 <b>{{ a.gap }}</b> 天（需 {{ a.need }} 天）</span> }
+              @if (a.ann.code) { <span class="pill" [class.good]="a.ann.ok">年度評估 {{ a.ann.ok ? '可申報 ' + a.ann.code : '未到' }}</span> }
+              @if (a.slope) { <span class="pill" [class.bad]="a.slope.v < -5">eGFR 斜率 {{ a.slope.v >= 0 ? '+' : '' }}{{ fmt1(a.slope.v) }}/年（{{ a.slope.mo }} 個月）</span> }
+              @for (i of a.inds; track i.n) { <span class="pill" [class.good]="i.ok" [class.bad]="!i.ok">{{ i.n }} {{ i.v }}</span> }
+            </div>
+            @if (a.recon && (a.recon.misses.length || a.recon.shortBilled.length)) {
+              <div class="alert al-warn"><b>對帳</b>
+                @if (a.recon.misses.length) { 登錄有、入帳沒有：@for (m of a.recon.misses; track $index) { {{ roc(m.visit) }} {{ m.code }}@if (!$last) {、} } }
+                @if (a.recon.shortBilled.length) { 間隔不足仍入帳：@for (m of a.recon.shortBilled; track $index) { {{ roc(m.at) }} {{ m.code }}（{{ m.gap }}/{{ m.need }} 天）@if (!$last) {、} } }
+              </div>
+            }
+            @for (al of a.alerts; track $index) { <div [class]="'alert ' + alertCls(al.t)"><b>{{ al.t }}</b> {{ al.m }}</div> }
+          }
+
+          <!-- 判讀框的行動列已經列出「須開單」時不重複（box.act.cls = miss） -->
+          @if (showOrd() || showBed() || unk().length) {
+            <div class="pd-miss">
+              @if (showOrd()) { <div><b>須開單</b>{{ ord().join('、') }}</div> }
+              @if (showBed()) { <div><b>診間登錄</b>{{ bed().join('、') }}</div> }
+              @if (unk().length) { <div><b>待核對</b>{{ unk().join('、') }}</div> }
+            </div>
+          }
+
+          @if (labFlagged().length) {
+            <div class="pd-flagged">
+              <b>近期異常</b><span class="dim xs">（HIS 報告的 H／L 標記，各項取最近一次）</span>
+              @for (x of labFlagged(); track x.key) {
+                <span class="fl" [class.h]="x.f === 'H'" [class.l]="x.f === 'L'">{{ x.label }} {{ x.q }}{{ x.v }} {{ x.f === 'H' ? '↑' : '↓' }} <span class="fl-d">{{ roc(x.date) }}</span></span>
+              }
+            </div>
+          }
+
+          @if (why().length) {
+            <button type="button" class="linkbtn" (click)="showWhy.set(!showWhy())">{{ showWhy() ? '▾' : '▸' }} 判定依據（{{ why().length }}）</button>
+            @if (showWhy()) {
+              <div class="why">
+                @for (w of why(); track $index) { <div>{{ w }}</div> }
+                @if (rowA()?.ann?.why?.length) { @for (w of rowA()!.ann.why; track $index) { <div class="dim">年度：{{ w }}</div> } }
+              </div>
+            }
+          }
+        </section>
+      }
+
+      <!-- 分頁 -->
+      <nav class="pd-tabs">
+        <button type="button" [class.on]="tab() === 'labs'" (click)="tab.set('labs')">檢驗彙整@if (labs(); as l) { <small>{{ l.rows.length }}</small> }</button>
+        <button type="button" [class.on]="tab() === 'pcode'" (click)="tab.set('pcode')">P 碼紀錄@if (summary(); as s) { <small>{{ s.pcode.stat.total }}</small> }</button>
+        <button type="button" [class.on]="tab() === 'edu'" (click)="tab.set('edu')">衛教紀錄@if (pcase(); as pc) { <small>{{ pc.edu.length }}</small> }</button>
+        <button type="button" [class.on]="tab() === 'records'" (click)="tab.set('records')">個案紀錄@if (summary(); as s) { <small>{{ s.records.length }}</small> }</button>
+        <span class="pd-tabs-right">
+          <button type="button" class="btn small ghost" (click)="goFullRecords()" title="關閉視窗並跳到下方個案紀錄區：可編輯／刪除、新增全部八類紀錄">完整個案紀錄 →</button>
+        </span>
+      </nav>
+
+      <!-- 快速新增表單：放在分頁內容之外，切分頁去查檢驗值時填到一半的內容不會不見 -->
+      @if (addType(); as at) {
+        <div class="pd-form">
+          <div class="pd-form-title">新增{{ addLabel() }}<span class="dim xs">　可切換下方分頁查資料，表單內容會保留；不存請按表單的取消</span>
+            @if (formBusy()) { <span class="pd-form-busy">這張表單還沒存：請先儲存或取消，再新增另一筆</span> }
+          </div>
+          <app-ckd-quick-form [type]="at" [mrn]="mrn" [defaults]="addDefaults()" (saved)="onSaved()" (cancelled)="addType.set(null)"></app-ckd-quick-form>
+        </div>
+      }
+
+      <!-- 檢驗彙整 -->
+      @if (tab() === 'labs') {
+        <section class="pd-tab">
+          @if (labsError(); as le) { <div class="banner error">{{ le }}</div> }
+          @if (labs(); as l) {
+            @if (!l.rows.length) {
+              <div class="empty">這位病人沒有檢驗報告。</div>
+            } @else {
+              <div class="lab-groups">
+                @for (g of labGroups(); track g.key) {
+                  <div class="lab-group">
+                    <div class="lg-title">{{ g.label }}</div>
+                    <div class="lg-items">
+                      @for (x of g.items; track x.key) {
+                        <div class="lab-card" [class.h]="x.f === 'H'" [class.l]="x.f === 'L'">
+                          <div class="lc-k">{{ x.label }}@if (x.unit) { <span class="unit">{{ x.unit }}</span> }</div>
+                          <div class="lc-v">{{ x.q }}{{ x.v }}@if (x.f) { <span class="flag">{{ x.f }}</span> }@if (x.dir) { <span class="dir">{{ x.dir > 0 ? '▲' : '▼' }}</span> }</div>
+                          <div class="lc-d">{{ roc(x.date) }}@if (x.prev != null) { <span> · 前次 {{ x.prev }}（{{ roc(x.prevDate) }}）</span> }</div>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+
+              <div class="flow-head">
+                <b>累積報告</b><span class="dim">共 {{ l.rows.length }} 份（報告日新→舊）</span>
+                <button type="button" class="btn small ghost" (click)="exportLabsCsv()">匯出 CSV</button>
+              </div>
+              <div class="tbox">
+                <table class="flow">
+                  <thead>
+                    <tr>
+                      <th class="sticky">報告日</th>
+                      @for (x of l.labs; track x[0]) { <th [class]="'g-' + x[3]">{{ x[1] }}<div class="unit">{{ x[2] }}</div></th> }
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (row of labRows(); track $index) {
+                      <tr>
+                        <td class="sticky">{{ roc(row.date) }}</td>
+                        @for (x of l.labs; track x[0]) {
+                          <td class="num">
+                            @if (row[x[0]] != null) {
+                              @if (row[x[0] + '_f']) { <span class="flag" [class.h]="row[x[0] + '_f'] === 'H'" [class.l]="row[x[0] + '_f'] === 'L'">{{ row[x[0] + '_f'] }}</span> }{{ row[x[0] + '_q'] || '' }}{{ row[x[0]] }}
+                            } @else { <span class="dim">·</span> }
+                          </td>
+                        }
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+              @if (labRowsHidden()) {
+                <button type="button" class="linkbtn" (click)="showAllLabRows.set(!showAllLabRows())">{{ showAllLabRows() ? '只顯示最近 6 份' : '顯示全部（還有 ' + labRowsHidden() + ' 份）' }}</button>
+              }
+            }
+          }
+        </section>
+      }
+
+      <!-- P 碼紀錄 -->
+      @if (tab() === 'pcode') {
+        <section class="pd-tab">
+          @if (summaryError(); as se) { <div class="banner error">{{ se }}</div> }
+          @if (summary(); as s) {
+            <div class="pd-row">
+              <span class="pill">共 <b>{{ s.pcode.stat.total }}</b> 筆</span>
+              <span class="pill">已入帳 {{ s.pcode.stat.billed }}</span>
+              <span class="pill" [class.bad]="s.pcode.stat.unbilled > 0">登錄未入帳 {{ s.pcode.stat.unbilled }}</span>
+              <span class="pill">本年度追蹤 {{ s.pcode.stat.thisYear }}・年度評估 {{ s.pcode.stat.annThisYear }}</span>
+              <span class="pill" [class.bad]="s.pcode.stat.short > 0">間隔不足 {{ s.pcode.stat.short }}</span>
+              <span class="pill">入帳點數 {{ s.pcode.stat.points | number }}</span>
+            </div>
+            @if (!s.pcode.rows.length) {
+              <div class="empty">沒有 P 碼紀錄。</div>
+            } @else {
+              <div class="tbox">
+                <table class="grid">
+                  <thead><tr><th>日期</th><th>P 碼</th><th>類別</th><th>醫師</th><th class="num">點數</th><th>來源</th><th>與前次追蹤間隔</th></tr></thead>
+                  <tbody>
+                    @for (r of s.pcode.rows; track $index) {
+                      <tr [class.voided]="r.voided">
+                        <td class="num">{{ roc(r.visit) }}</td>
+                        <td><b>{{ r.code || '—' }}</b></td>
+                        <td>{{ r.ctype }}</td>
+                        <td>{{ r.doctor }}</td>
+                        <td class="num">{{ r.price ?? '' }}</td>
+                        <td>@for (x of r.src; track x) { <span class="src" [class.bill]="x === '入帳'" [class.fix]="x === '手動補登'">{{ x }}</span> }@if (r.voided) { <span class="src void">已註銷</span> }</td>
+                        <td>@if (r.gapPrev != null) { <span [class.short]="r.gapPrev < (r.needPrev || 0)">{{ r.gapPrev }} 天</span><span class="dim xs">（需 {{ r.needPrev }}）</span> }</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          }
+        </section>
+      }
+
+      <!-- 衛教紀錄 -->
+      @if (tab() === 'edu') {
+        <section class="pd-tab">
+          <div class="flow-head">
+            <span class="dim xs">合併三個來源：方案照護就診（登錄簿最後衛教日／入帳／手動補登）、P8101C 治療方式衛教、個案紀錄「追蹤紀錄·衛教」。</span>
+            <button type="button" class="btn small" (click)="startAddEdu()">＋ 新增衛教紀錄</button>
+          </div>
+          @if (pcase(); as pc) {
+            @if (!pc.edu.length) {
+              <div class="empty">沒有衛教紀錄。</div>
+            } @else {
+              <ul class="timeline">
+                @for (e of pc.edu; track $index) {
+                  <li [class]="'tl tl-' + e.kind">
+                    <span class="tl-date">{{ roc(e.date) }}</span>
+                    <span class="tl-main">
+                      <b>{{ e.label }}</b>
+                      @if (e.code) { <span class="code">{{ e.code }}</span> }
+                      @if (e.doctor) { <span class="dim">{{ e.doctor }}</span> }
+                      @if (e.author) { <span class="dim">記錄：{{ e.author }}</span> }
+                      @for (x of e.src; track x) { <span class="src" [class.bill]="x === '入帳'" [class.fix]="x === '手動補登' || x === '個案紀錄'">{{ x }}</span> }
+                      @if (e.text) { <div class="tl-text">{{ e.text }}</div> }
+                    </span>
+                  </li>
+                }
+              </ul>
+            }
+          }
+        </section>
+      }
+
+      <!-- 個案紀錄 -->
+      @if (tab() === 'records') {
+        <section class="pd-tab">
+          @if (summaryError(); as se) { <div class="banner error">{{ se }}</div> }
+          <div class="flow-head">
+            <span class="dim xs">快速新增：</span>
+            @for (q of quickTypes; track q.type) {
+              <button type="button" class="btn small" [class.on]="addType() === q.type" (click)="startAdd(q.type)">＋ {{ q.label }}</button>
+            }
+          </div>
+          @if (summary(); as s) {
+            @if (!s.records.length) {
+              <div class="empty">尚無個案紀錄。</div>
+            } @else {
+              <ul class="timeline">
+                @for (r of s.records; track r.id) {
+                  <li class="tl">
+                    <span class="tl-date">{{ roc(r.when) }}</span>
+                    <span class="tl-main">
+                      <span [class]="'rtag rt-' + r.type">{{ r.typeLabel }}</span>
+                      <b>{{ r.line }}</b>
+                      @if (r['author'] || r.createdBy?.name) { <span class="dim">{{ r['author'] || r.createdBy?.name }}</span> }
+                      @if (r['content'] || r['note'] || r['reason']) { <div class="tl-text">{{ r['content'] || r['note'] || r['reason'] }}</div> }
+                    </span>
+                  </li>
+                }
+              </ul>
+            }
+          }
+        </section>
+      }
+    </div>
+  </div>
+</div>

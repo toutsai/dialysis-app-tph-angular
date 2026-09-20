@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
+import { Component, EventEmitter, OnInit, Output, ViewChild, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { CkdApiService, CkdDaily, CkdMergedLab, CkdRecType, CkdRowA, CkdRowB } from '@app/core/services/ckd-api.service';
 import { CkdRecordsComponent } from '../ckd-records/ckd-records.component';
@@ -101,6 +101,24 @@ export class CkdDailyComponent implements OnInit {
     if (others) out.push({ date: cur, doctor: dl.otherSession, label: '他科掛號已收案', n: others, on: !!sel && sel.indexOf(dl.otherSession) === 0 });
     return out;
   });
+  /**
+   * 過去日期的門診預設收合（2026-09-20 使用者要求）：清單會累積好幾週的門診日，個管師平常只看今天以後的。
+   * 收合時仍保留「目前選中的那一天」的按鈕，才看得出現在判讀的是哪一天、也能切同日其他醫師。
+   */
+  readonly today = new Date().toLocaleDateString('sv-SE');
+  readonly showPast = signal(false);
+  /** 收合時實際被藏起來的天數（不含目前選中的那天） */
+  readonly pastDays = computed(() => {
+    const cur = this.daily()?.date;
+    return new Set(this.sessionButtons().filter(b => b.date < this.today && b.date !== cur).map(b => b.date)).size;
+  });
+  readonly visibleButtons = computed(() => {
+    const all = this.sessionButtons();
+    if (this.showPast()) return all;
+    const cur = this.daily()?.date;
+    return all.filter(b => b.date >= this.today || b.date === cur);
+  });
+
   readonly otherSubs = computed(() => {
     const dl = this.daily();
     if (!dl || !dl.doctorSel || dl.doctorSel.indexOf(dl.otherSession) !== 0) return [];
@@ -137,6 +155,13 @@ export class CkdDailyComponent implements OnInit {
     const next = new Set(this.expanded());
     if (next.has(mrn)) next.delete(mrn); else next.add(mrn);
     this.expanded.set(next);
+  }
+
+  // ---------- 病人彙整視窗（2026-09-20）：點姓名 → 交給外層開視窗，帶本頁判讀日讓判讀與這一列一致 ----------
+  @Output() openPatient = new EventEmitter<{ mrn: string; date: string }>();
+
+  openPatientDialog(mrn: string): void {
+    this.openPatient.emit({ mrn, date: this.daily()?.date || '' });
   }
 
   // ---------- 個案紀錄（原版 data-gorec / data-vpncheck） ----------

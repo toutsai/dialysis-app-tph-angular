@@ -23,6 +23,7 @@ import { buildRrt, RRT_STAGE } from '../services/ckd/rrt.js'
 import { buildReport } from '../services/ckd/report.js'
 import { buildPcheck, PC_LBL } from '../services/ckd/pcheck.js'
 import { roc, dGap } from '../services/ckd/parsers.js'
+import { evalPatient, eduTimeline, enrollEpisodes } from '../services/ckd/patientCase.js'
 
 const router = Router()
 router.use(...isContributor)
@@ -470,6 +471,42 @@ router.get('/patients/:mrn/summary', (req, res) => {
   } catch (error) {
     console.error('❌ GET /ckd/patients/:mrn/summary:', error)
     res.status(500).json({ error: true, message: '讀取病人摘要失敗' })
+  }
+})
+
+/**
+ * 病人彙整視窗（本站新增，2026-09-20）：單一病人的判讀＋收案段落＋衛教時間軸。
+ * GET /patients/:mrn/case?date=YYYY-MM-DD（不帶 = 今天）。判讀沿用引擎結果：
+ * 判讀日在診次清單內 → A／B 區同一列；否則已收案者取稽核列；都沒有 → kind 'none'。
+ * 檢驗與 P 碼／個案紀錄仍走 /patients/:mrn/labs 與 /summary（前端三支並行）。
+ */
+router.get('/patients/:mrn/case', (req, res) => {
+  try {
+    const db = getDatabase()
+    const mrn = String(req.params.mrn || '').trim().replace(/^0+/, '') || '0'
+    const dateQ = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || '')) ? String(req.query.date) : ''
+    const { settings } = getSettings()
+    const data = loadDataset(db)
+    const hooks = makeHooks(data.records)
+    const t0 = Date.now()
+    const ev = evalPatient(data, settings, hooks, mrn, dateQ)
+    const pc = pcodeTimeline(data, mrn, ev.C, hooks)
+    res.json({
+      mrn,
+      name: lookupName(db, mrn),
+      date: plain(ev.C.date),
+      kind: ev.kind,
+      inSession: ev.inSession,
+      a: ev.kind === 'A' ? slimA(ev.row, ev.C, hooks) : null,
+      b: ev.kind === 'B' ? slimB(ev.row, hooks) : null,
+      episodes: enrollEpisodes(data.cases, mrn),
+      edu: eduTimeline(pc.rows, data.records.filter((r) => r.mrn === mrn)),
+      cfg: { preGap: ev.C.preGap, earlyGap: ev.C.earlyGap, over: ev.C.over },
+      timing: { loadMs: data.loadMs, analyzeMs: Date.now() - t0 },
+    })
+  } catch (error) {
+    console.error('❌ GET /ckd/patients/:mrn/case:', error)
+    res.status(500).json({ error: true, message: '讀取病人判讀失敗' })
   }
 })
 

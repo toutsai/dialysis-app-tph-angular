@@ -20,6 +20,9 @@
 .db-btn.small { flex-direction: row; gap: 0.35rem; padding: 0.2rem 0.55rem; font-size: 0.8rem; }
 .db-btn:hover { background: #f5f7f8; }
 .db-btn.on { background: #1565c0; border-color: #1565c0; color: #fff; }
+/* 過去日期收合鈕：虛線框，與一般診次按鈕區分 */
+.db-btn.db-past { border-style: dashed; color: #607d8b; background: #fafbfc; justify-content: center; }
+.db-btn.db-past.open { background: #eceff1; }
 .db-d { font-size: 0.78rem; font-weight: 700; }
 .db-n { font-size: 0.72rem; opacity: 0.85; }
 .timing { font-size: 0.72rem; margin-left: auto; }

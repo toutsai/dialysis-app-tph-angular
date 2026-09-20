@@ -57,7 +57,7 @@
                 @for (o of w.rows || []; track o.mrn + '|' + (o.row.date || '') + '|' + $index) {
                   <tr>
                     <td class="sticky">
-                      <button type="button" class="nmlink" (click)="openRecords.emit(o.mrn)" title="查看/新增此病人的個案紀錄">{{ o.name || '（無姓名）' }}</button>
+                      <button type="button" class="nmlink" (click)="openRecords.emit(o.mrn)" title="開啟病人彙整視窗：收案資料、判讀、檢驗、P 碼、衛教與個案紀錄">{{ o.name || '（無姓名）' }}</button>
                       <div class="mrn">{{ o.mrn }}</div>
                       @if (o.inClinic) { <div class="dim xs">明日 {{ o.clinicNo }}</div> }
                     </td>
@@ -79,7 +79,7 @@
                 @for (p of w.persons || []; track p.mrn) {
                   <tr>
                     <td class="sticky">
-                      <button type="button" class="nmlink" (click)="openRecords.emit(p.mrn)" title="查看/新增此病人的個案紀錄">{{ p.name || '（無姓名）' }}</button>
+                      <button type="button" class="nmlink" (click)="openRecords.emit(p.mrn)" title="開啟病人彙整視窗：收案資料、判讀、檢驗、P 碼、衛教與個案紀錄">{{ p.name || '（無姓名）' }}</button>
                       <div class="mrn">{{ p.mrn }}</div>
                       @if (p.inClinic) { <div class="dim xs">明日 {{ p.clinicNo }}</div> }
                     </td>

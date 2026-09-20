@@ -41,7 +41,7 @@
               @for (v of view(); track v.r.mrn) {
                 <tr [class]="'pp-' + v.r.station">
                   <td>
-                    <button type="button" class="nmlink" (click)="openRecords.emit(v.r.mrn)" title="查看/新增此病人的個案紀錄">{{ v.r.name || '（無姓名）' }}</button>@if (v.r.manual) { <span class="manchip">手動</span> }
+                    <button type="button" class="nmlink" (click)="openRecords.emit(v.r.mrn)" title="開啟病人彙整視窗：收案資料、判讀、檢驗、P 碼、衛教與個案紀錄">{{ v.r.name || '（無姓名）' }}</button>@if (v.r.manual) { <span class="manchip">手動</span> }
                     <div class="mrn">{{ v.r.mrn }}</div>
                     <div class="dim">{{ v.ageProg }}</div>
                   </td>
