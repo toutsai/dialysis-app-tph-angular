@@ -86,7 +86,11 @@ export class CkdPatientDialogComponent implements OnChanges {
   readonly addType = signal<CkdRecType | null>(null);
   readonly addDefaults = signal<Record<string, unknown>>({});
 
+  readonly addLabel = computed(() => QUICK_TYPES.find((q) => q.type === this.addType())?.label || '紀錄');
+  readonly age = computed(() => this.rowA()?.age ?? this.rowB()?.age ?? null);
+
   private loadSeq = 0;
+  private reloadSeq = 0;
 
   // ---------- 衍生資料 ----------
 
@@ -196,12 +200,13 @@ export class CkdPatientDialogComponent implements OnChanges {
 
   /** 新增紀錄後：判讀（紀錄會經 hooks 影響判讀與衛教時間軸）與摘要重抓；檢驗不受影響不必重抓 */
   private async reloadAfterRecord(): Promise<void> {
-    const mrn = this.mrn, seq = this.loadSeq;
+    const mrn = this.mrn, seq = this.loadSeq, rseq = ++this.reloadSeq;
     const [c, s] = await Promise.allSettled([
       this.ckdApi.getPatientCase(mrn, this.date || undefined),
       this.ckdApi.getPatientSummary(mrn),
     ]);
-    if (seq !== this.loadSeq) return;
+    // 換了病人（loadSeq）或又存了一筆（reloadSeq）→ 這次的結果已過時
+    if (seq !== this.loadSeq || rseq !== this.reloadSeq) return;
     if (c.status === 'fulfilled') this.pcase.set(c.value);
     if (s.status === 'fulfilled') this.summary.set(s.value);
   }
@@ -219,8 +224,9 @@ export class CkdPatientDialogComponent implements OnChanges {
 
   async onSaved(): Promise<void> {
     this.addType.set(null);
-    await this.reloadAfterRecord();
+    // 先通知外層再重抓：使用者存完馬上關視窗時，元件已銷毀、晚發的事件外層收不到，底下清單就不會重載
     this.changed.emit();
+    await this.reloadAfterRecord();
   }
 
   /** 判讀框的行動列：外院查核（vpn）直接到完整個案紀錄開表單；rec = 到該病人的個案紀錄 */
@@ -248,9 +254,10 @@ export class CkdPatientDialogComponent implements OnChanges {
     if (!this.addType()) this.close();
   }
 
+  /** Esc 關視窗；表單開著時不動作（與點遮罩一致），填到一半的內容只能由表單的「取消」明確放棄 */
   @HostListener('document:keydown.escape')
   onEsc(): void {
-    if (this.addType()) this.addType.set(null); else this.close();
+    if (!this.addType()) this.close();
   }
 
   // ---------- 顯示輔助 ----------

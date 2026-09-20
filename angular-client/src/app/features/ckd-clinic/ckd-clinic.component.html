@@ -35,7 +35,7 @@
     <app-ckd-daily (openPatient)="openPatient($event.mrn, $event.date)" />
   }
   @if (view() === 'pcheck') {
-    <app-ckd-pcheck (openRecords)="openPatient($event)" />
+    <app-ckd-pcheck (openRecords)="openPatientFromPcheck($event)" />
   }
   @if (view() === 'recall') {
     <app-ckd-recall (openRecords)="openPatient($event)" />
@@ -203,6 +203,6 @@
   <!-- 病人彙整視窗：各清單點病人姓名開啟（整頁共用一個） -->
   @if (patientDialog(); as pd) {
     <app-ckd-patient-dialog [mrn]="pd.mrn" [date]="pd.date"
-      (closed)="patientDialog.set(null)" (openRecords)="onDialogOpenRecords($event)" (changed)="onDialogChanged()"></app-ckd-patient-dialog>
+      (closed)="closePatient()" (openRecords)="onDialogOpenRecords($event)" (changed)="onDialogChanged()"></app-ckd-patient-dialog>
   }
 </div>

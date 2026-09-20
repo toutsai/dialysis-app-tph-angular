@@ -6,7 +6,7 @@
       <div class="pd-title">
         <span class="pd-name">{{ name() || '（無姓名）' }}</span>
         <span class="mrn">{{ mrn }}</span>
-        @if (rowA()?.age ?? rowB()?.age; as age) { <span class="dim">{{ age }} 歲</span> }
+        @if (age() != null) { <span class="dim">{{ age() }} 歲</span> }
         @if (rowA()?.isDM) { <span class="badge b-wait">糖尿病</span> }
         @if (statusBadge(); as sb) { <span [class]="'badge ' + sb[0]">{{ sb[1] }}</span> }
         <span class="pd-date dim">判讀日 {{ roc(pcase()?.date) }}</span>
@@ -135,6 +135,14 @@
         </span>
       </nav>
 
+      <!-- 快速新增表單：放在分頁內容之外，切分頁去查檢驗值時填到一半的內容不會不見 -->
+      @if (addType(); as at) {
+        <div class="pd-form">
+          <div class="pd-form-title">新增{{ addLabel() }}<span class="dim xs">　可切換下方分頁查資料，表單內容會保留；不存請按表單的取消</span></div>
+          <app-ckd-quick-form [type]="at" [mrn]="mrn" [defaults]="addDefaults()" (saved)="onSaved()" (cancelled)="addType.set(null)"></app-ckd-quick-form>
+        </div>
+      }
+
       <!-- 檢驗彙整 -->
       @if (tab() === 'labs') {
         <section class="pd-tab">
@@ -242,9 +250,6 @@
             <span class="dim xs">合併三個來源：方案照護就診（登錄簿最後衛教日／入帳／手動補登）、P8101C 治療方式衛教、個案紀錄「追蹤紀錄·衛教」。</span>
             <button type="button" class="btn small" (click)="startAddEdu()">＋ 新增衛教紀錄</button>
           </div>
-          @if (addType() === 'note' && tab() === 'edu') {
-            <div class="pd-form"><app-ckd-quick-form type="note" [mrn]="mrn" [defaults]="addDefaults()" (saved)="onSaved()" (cancelled)="addType.set(null)"></app-ckd-quick-form></div>
-          }
           @if (pcase(); as pc) {
             @if (!pc.edu.length) {
               <div class="empty">沒有衛教紀錄。</div>
@@ -279,9 +284,6 @@
               <button type="button" class="btn small" [class.on]="addType() === q.type" (click)="startAdd(q.type)">＋ {{ q.label }}</button>
             }
           </div>
-          @if (addType(); as at) {
-            <div class="pd-form"><app-ckd-quick-form [type]="at" [mrn]="mrn" [defaults]="addDefaults()" (saved)="onSaved()" (cancelled)="addType.set(null)"></app-ckd-quick-form></div>
-          }
           @if (summary(); as s) {
             @if (!s.records.length) {
               <div class="empty">尚無個案紀錄。</div>

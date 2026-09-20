@@ -1,6 +1,6 @@
 // 門診 CKD：病人彙整視窗用的單人資料（本站新增，非原版單機版功能；2026-09-20 使用者拍板）
 // 判讀沿用 engine.js 的結果，這裡只做「挑出這個人」與「衛教時間軸合併」，不新增任何臨床規則。
-import { analyze, makeCfg } from './engine.js'
+import { analyze, makeCfg, OTHER_SESSION } from './engine.js'
 import { iso } from './parsers.js'
 
 /** 方案照護就診（新收案／追蹤／年度）依給付規定含個管衛教；P8101C 是一次性的「末期腎病治療方式衛教」 */
@@ -15,15 +15,28 @@ const EDU_CARE_CTYPES = { '新收案': 1, '追蹤': 1, '年度': 1 }
  */
 export function eduTimeline(pcodeRows, records) {
   const out = []
+  /* 同一天「沒有 P 碼的登錄列」併進「有 P 碼的那一列」：登錄簿的新收案列沒有碼，入帳的 P3402C／P4301C 是同一次就診
+     （pcodeTimeline 以 日期|碼 去重，碼不同併不起來）。兩列都有碼（例如同日追蹤＋年度）是兩筆申報，各留一列。 */
+  const careByDate = new Map()
   for (const r of pcodeRows || []) {
     if (r.voided || !r.visit) continue
     const p8101 = r.ctype === '衛教'
     if (!p8101 && !EDU_CARE_CTYPES[r.ctype]) continue
-    out.push({
-      date: iso(r.visit), kind: p8101 ? 'p8101' : 'care',
+    const date = iso(r.visit)
+    const prev = p8101 ? null : careByDate.get(date)
+    if (prev && (!prev.code || !r.code)) {
+      if (!prev.code && r.code) { prev.code = r.code; prev.label = '方案照護（' + r.ctype + '）' }
+      if (!prev.doctor && r.doctor) prev.doctor = r.doctor
+      prev.src = [...new Set(prev.src.concat(r.src || []))]
+      continue
+    }
+    const row = {
+      date, kind: p8101 ? 'p8101' : 'care',
       label: p8101 ? '末期腎病治療方式衛教' : '方案照護（' + r.ctype + '）',
       code: r.code || '', doctor: r.doctor || '', src: (r.src || []).slice(), text: '', author: '', recordId: null,
-    })
+    }
+    if (!p8101 && !prev) careByDate.set(date, row)
+    out.push(row)
   }
   for (const r of records || []) {
     if (r.type !== 'note' || r.cat !== '衛教' || r.deleted) continue
@@ -69,6 +82,12 @@ export function evalPatient(data, settings, hooks, mrn, dateStr) {
   if (a) return { kind: 'A', row: a, inSession: true, C }
   const b = R.B.find((r) => r.p && r.p.mrn === mrn)
   if (b) return { kind: 'B', row: b, inSession: true, C }
+  /* 「他科掛號已收案」診次（settings.allA）：doctorSel='' 只跑本科清單，這些人要另外用 OTHER_SESSION 再跑一次，
+     否則會落到稽核列——掛號列可能抓到別天的、也少了「他科」提醒（fresh-context 驗收 2026-09-20 抓到，真資料約 88 人／日） */
+  if (C.allA && C.dept) { // 與 sessionGroups 產生「他科」診次的條件相同
+    const o = analyze(data, C, { doctorSel: OTHER_SESSION, withAudit: false, hooks }).A.find((r) => r.mrn === mrn)
+    if (o) return { kind: 'A', row: o, inSession: true, C }
+  }
   const aud = R.AUD[0] || null
   if (aud) return { kind: 'A', row: aud, inSession: false, C }
   return { kind: 'none', row: null, inSession: false, C }

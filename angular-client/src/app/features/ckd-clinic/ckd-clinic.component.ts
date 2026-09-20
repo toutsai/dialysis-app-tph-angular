@@ -72,6 +72,11 @@ const NUMERIC_SETTING_KEYS = ['preGap', 'earlyNew', 'earlyGap', 'dmGap', 'over',
 export class CkdClinicComponent implements OnInit {
   private readonly ckdApi = inject(CkdApiService);
   @ViewChild(CkdDailyComponent) daily?: CkdDailyComponent;
+  @ViewChild(CkdPcheckComponent) pcheckView?: CkdPcheckComponent;
+  @ViewChild(CkdRecallComponent) recallView?: CkdRecallComponent;
+  @ViewChild(CkdAlertsComponent) alertsView?: CkdAlertsComponent;
+  @ViewChild(CkdRrtComponent) rrtView?: CkdRrtComponent;
+  @ViewChild(CkdAuditComponent) auditView?: CkdAuditComponent;
 
   readonly view = signal<CkdView>('daily');
 
@@ -85,15 +90,42 @@ export class CkdClinicComponent implements OnInit {
     if (mrn) this.patientDialog.set({ mrn, date });
   }
 
-  /** 視窗內「完整個案紀錄」／判讀框的外院查核 → 關視窗，走原本的跳轉 */
+  /** 檢核 P 碼頁有自己的診次日期：帶過去，判讀才是那個診次的（其餘清單以今天判讀） */
+  openPatientFromPcheck(mrn: string): void {
+    this.openPatient(mrn, this.pcheckView?.pcheck()?.date || '');
+  }
+
+  /** 視窗內「完整個案紀錄」／判讀框的外院查核 → 關視窗，走原本的跳轉（會切到主線檢視重新載入，不必另外刷新） */
   onDialogOpenRecords(e: { mrn: string; type: CkdRecType | null }): void {
     this.patientDialog.set(null);
+    this.dialogDirty = false;
     this.goRecords(e.mrn, e.type);
   }
 
-  /** 視窗內新增了紀錄 → 明日追蹤／收案評估在畫面上時重判讀（紀錄會影響判讀） */
+  /** 視窗內新增過紀錄、但底下清單還沒刷新 */
+  private dialogDirty = false;
+
+  /**
+   * 視窗內新增了紀錄：紀錄會影響判讀與清單（召回的暫緩／已約、管線站別、小標記）。
+   * 主線檢視照舊立刻重判讀；其他清單等視窗關閉再重載，免得使用者還在看視窗時底下清單跳動。
+   */
   onDialogChanged(): void {
     if (this.view() === 'daily') this.daily?.onRecordsChanged();
+    else this.dialogDirty = true;
+  }
+
+  closePatient(): void {
+    this.patientDialog.set(null);
+    if (!this.dialogDirty) return;
+    this.dialogDirty = false;
+    switch (this.view()) {
+      case 'recall': void this.recallView?.load(); break;
+      case 'alerts': void this.alertsView?.load(); break;
+      case 'rrt': void this.rrtView?.load(); break;
+      case 'audit': void this.auditView?.load(); break;
+      case 'pcheck': { const p = this.pcheckView?.pcheck(); void this.pcheckView?.load(p?.date, p?.doctorSel); break; }
+      default: break; // wide（檢驗總表）不受個案紀錄影響
+    }
   }
 
   /** 切到主線檢視並跳到該病人的個案紀錄（原版 gotoRecords 跨區）；type 有值 = 直接開該類型的新增表單 */

@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { evalPatient, eduTimeline, enrollEpisodes } from '../src/services/ckd/patientCase.js'
-import { analyze, makeCfg } from '../src/services/ckd/engine.js'
+import { analyze, makeCfg, OTHER_SESSION } from '../src/services/ckd/engine.js'
 import { makeHooks, pcodeTimeline } from '../src/services/ckd/records.js'
 import { DEFAULT_SETTINGS } from '../src/services/ckd/settings.js'
 
@@ -84,6 +84,25 @@ test('analyze 的 auditMrn：只稽核一人，且不影響 A／B 區與未帶�
   assert.deepEqual(analyze(data, C, { doctorSel: '', withAudit: true, auditMrn: '404', hooks }).AUD, [])
 })
 
+test('evalPatient：「他科掛號已收案」診次的病人 → 與該診次 A 區同一列（inSession、當日掛號列、他科提醒都在）', () => {
+  const data = dataset(), hooks = makeHooks(data.records)
+  // 3 號（已收案）今天掛心臟內科；另有一筆別天的掛號，稽核列會抓到它（clinicIdx 第一筆）
+  data.clinic.unshift(clinicRow({ mrn: '3', name: 'C', date: d('2026-08-01'), dept: '心臟內科', doctor: '趙', no: '9' }))
+  data.clinic.push(clinicRow({ mrn: '3', name: 'C', dept: '心臟內科', doctor: '趙', no: '12' }))
+  const S = { ...DEFAULT_SETTINGS, allA: true }
+  const C = makeCfg(S, TODAY)
+  const other = analyze(data, C, { doctorSel: OTHER_SESSION, withAudit: false, hooks }).A.find((r) => r.mrn === '3')
+  assert.ok(other, '基準：他科診次應有這位病人')
+  const ev = evalPatient(data, S, hooks, '3', TODAY)
+  assert.equal(ev.kind, 'A'); assert.equal(ev.inSession, true)
+  assert.equal(ev.row.otherDept, true)
+  assert.equal(ev.row.p.no, '12', '要是判讀日當天的掛號列，不是別天的')
+  assert.deepEqual(ev.row.alerts, other.alerts)
+  // allA 關閉 → 沒有他科診次，回到稽核列
+  const off = evalPatient(data, { ...DEFAULT_SETTINGS, allA: false }, hooks, '3', TODAY)
+  assert.equal(off.kind, 'A'); assert.equal(off.inSession, false)
+})
+
 test('enrollEpisodes：事件列收回成一段一列、新→舊、保留登錄簿原文類別', () => {
   const eps = enrollEpisodes(dataset().cases, '1')
   assert.equal(eps.length, 2)
@@ -105,7 +124,20 @@ test('eduTimeline：三來源合併、新→舊；只收衛教類追蹤紀錄；
   assert.equal(note.text, '低蛋白飲食衛教'); assert.equal(note.author, '個管師'); assert.equal(note.recordId, 'r1')
   assert.ok(!edu.some((e) => e.text === '提醒回診'), '電話追蹤不是衛教')
   assert.ok(!edu.some((e) => e.label.includes('結案')), '結案列不是衛教')
+  // 同日：登錄簿無碼的新收案列 ＋ 入帳的新收案碼 → 併成一列；同日兩個都有碼（追蹤＋年度）→ 各留一列
+  const merged = eduTimeline([
+    { visit: d('2025-01-10'), code: '', ctype: '新收案', doctor: '', src: ['登錄'] },
+    { visit: d('2025-01-10'), code: 'P3402C', ctype: '新收案', doctor: '王', src: ['入帳'] },
+    { visit: d('2026-03-01'), code: 'P3403C', ctype: '追蹤', doctor: '王', src: ['入帳'] },
+    { visit: d('2026-03-01'), code: 'P3404C', ctype: '年度', doctor: '王', src: ['入帳'] },
+  ], [])
+  assert.deepEqual(merged.map((e) => [e.date, e.code, e.src.slice().sort().join('+')]), [
+    ['2026-03-01', 'P3403C', '入帳'], ['2026-03-01', 'P3404C', '入帳'], ['2025-01-10', 'P3402C', '入帳+登錄'],
+  ])
+  assert.equal(merged[2].doctor, '王')
+  // 已刪除的紀錄即使混進來也不算
+  assert.deepEqual(eduTimeline([], [{ id: 'x', type: 'note', cat: '衛教', at: '2026-01-01', deleted: true }]), [])
   // 註銷
-  const voided = eduTimeline([{ visit: d('2026-05-01'), code: 'P3403C', ctype: '追蹤', src: ['登錄'], voided: true }], [])
+  const voided =eduTimeline([{ visit: d('2026-05-01'), code: 'P3403C', ctype: '追蹤', src: ['登錄'], voided: true }], [])
   assert.deepEqual(voided, [])
 })
