@@ -26,7 +26,7 @@ export const HANDOUT_ITEMS = {
   hb: { name: '血色素（貧血指標）', high: '', low: '有貧血情形，可能會容易疲倦、頭暈、喘。醫師會評估是否需要補充鐵劑或施打造血針，請勿自行購買補血產品。' },
   alb: { name: '白蛋白（營養指標）', high: '', low: '營養狀態需要加強。低蛋白飲食不等於吃不夠，請與營養師討論足夠熱量與優質蛋白質的吃法。' },
   a1c: { name: '糖化血色素（近三個月血糖平均）', high: '血糖控制需要加強。請按時用藥、注意飲食與運動，並與糖尿病照護團隊討論。', low: '' },
-  glu: { name: '血糖', high: '血糖控制需要加強。請按時用藥、注意飲食與運動，並與糖尿病照護團隊討論。', low: '若有冒冷汗、手抖、心悸、飢餓感，可能是低血糖，請立即補充含糖食物並告知醫師。' },
+  glu: { name: '血糖', high: '', /* 使用者 2026-09-21 裁定：血糖只看偏低；血糖控制看 HbA1c */ low: '若有冒冷汗、手抖、心悸、飢餓感，可能是低血糖，請立即補充含糖食物並告知醫師。' },
   ldl: { name: '低密度膽固醇（壞膽固醇）', high: '少吃油炸、肥肉、奶油與糕餅類，規律運動；若醫師有開降血脂藥請按時服用。', low: '' },
   tg: { name: '三酸甘油酯', high: '少喝含糖飲料與酒，減少精緻澱粉與甜食，規律運動。', low: '' },
   chol: { name: '總膽固醇', high: '少吃油炸、肥肉、奶油與糕餅類，規律運動；若醫師有開降血脂藥請按時服用。', low: '' },
@@ -58,8 +58,19 @@ function ruleDir(key, v) {
   return ''
 }
 
-/** 同一句話只講一次：有 HbA1c 偏高就不再列血糖偏高、有 LDL 偏高就不再列總膽固醇偏高（草案第三節） */
-const SUPPRESSED_BY = { glu: { H: 'a1c' }, chol: { H: 'ldl' } }
+/**
+ * ★ 使用者（醫師）2026-09-21 裁定：HbA1c「≥7 才列」、血糖「只看偏低」，這兩項不採用 HIS 的 H 標記。
+ * 原因：HIS 的 H 門檻很低，正式資料試算 19,773 張單有 9,881 張會印「血糖控制需要加強」，其中 57% HbA1c <6.5；血糖被標 H 的 62% <126。
+ * 表格的「偏高」標示與注意事項用同一個判定，免得表上標紅卻沒有說明。勿改回看 HIS 標記；要調數字請先問使用者。
+ */
+export const HBA1C_LIST_FROM = 7
+const DIR_OVERRIDE = {
+  a1c: (v, q, his) => (typeof v === 'number' && q !== '<' && v >= HBA1C_LIST_FROM ? { dir: 'H', by: 'rule' } : { dir: his === 'L' ? 'L' : '', by: his === 'L' ? 'his' : '' }),
+  glu: (v, q, his) => (his === 'L' ? { dir: 'L', by: 'his' } : { dir: '', by: '' }),
+}
+
+/** 同一句話只講一次：有 LDL 偏高就不再列總膽固醇偏高（草案第三節；血糖偏高已改為一律不列） */
+const SUPPRESSED_BY = { chol: { H: 'ldl' } }
 
 /** 可選的報告日（新→舊）：該日至少有一項檢驗值、且不是只有登錄簿帶進來的值 */
 export function handoutReportDates(rows) {
@@ -92,7 +103,8 @@ export function buildHandout(rows, reportDate) {
     const prevRow = desc.slice(i + 1).find((r) => r[key] != null) || null
     const v = cur[key], q = cur[key + '_q'] || '', his = cur[key + '_f'] || ''
     let dir = his === 'H' || his === 'L' ? his : '', by = dir ? 'his' : ''
-    if (!dir && !q && typeof v === 'number') { dir = ruleDir(key, v); if (dir) by = 'rule' }
+    if (DIR_OVERRIDE[key]) ({ dir, by } = DIR_OVERRIDE[key](v, q, his))
+    else if (!dir && !q && typeof v === 'number') { dir = ruleDir(key, v); if (dir) by = 'rule' }
     items.push({
       key, label, name: (HANDOUT_ITEMS[key] || {}).name || label, unit, group, groupLabel: groupLabel[group] || '',
       v, q, date: iso(cur.date), dir, by,

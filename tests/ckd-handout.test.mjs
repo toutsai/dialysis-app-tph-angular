@@ -79,9 +79,33 @@ test('不列的方向不進注意事項（但表格仍標示）；同一句話�
   assert.equal(h.items.find((i) => i.key === 'hb').dir, 'H')
   assert.deepEqual(h.cautions.map((c) => c.title), ['尿蛋白', '糖化血色素（近三個月血糖平均）', '低密度膽固醇（壞膽固醇）'])
   assert.deepEqual(h.cautions[0].keys, ['upcr', 'uacr'])
-  // 只有血糖、沒有 HbA1c → 血糖那段要出現；血糖偏低一律列
-  assert.deepEqual(buildHandout([row('2026-07-20', { glu: 210, glu_f: 'H' })], '').cautions.map((c) => c.title), ['血糖'])
+  // 血糖偏低一律列
   assert.deepEqual(buildHandout([row('2026-07-20', { a1c: 9.5, a1c_f: 'H', glu: 55, glu_f: 'L' })], '').cautions.map((c) => [c.title, c.dir]), [['糖化血色素（近三個月血糖平均）', 'H'], ['血糖', 'L']])
+})
+
+test('使用者 2026-09-21 裁定：HbA1c ≥7 才列（不看 HIS 的 H）、血糖只看偏低；表格標示與注意事項一致', () => {
+  const one = (vals) => buildHandout([row('2026-07-20', vals)], '')
+  const a1c = (h) => h.items.find((i) => i.key === 'a1c')
+  // HIS 標 H 但 <7 → 不標、不列
+  for (const v of [5.8, 6.4, 6.9]) {
+    const h = one({ a1c: v, a1c_f: 'H' })
+    assert.deepEqual([a1c(h).dir, a1c(h).by], ['', ''], String(v)); assert.deepEqual(h.cautions, [], String(v))
+  }
+  // ≥7 → 列，不管 HIS 有沒有標
+  for (const vals of [{ a1c: 7 }, { a1c: 7.0, a1c_f: 'H' }, { a1c: 8.3 }, { a1c: 14, a1c_q: '>' }]) {
+    const h = one(vals)
+    assert.deepEqual([a1c(h).dir, a1c(h).by], ['H', 'rule'], JSON.stringify(vals))
+    assert.deepEqual(h.cautions.map((c) => c.title), ['糖化血色素（近三個月血糖平均）'])
+  }
+  assert.equal(a1c(one({ a1c: 7.5, a1c_q: '<' })).dir, '', '帶 < 的值不算 ≥7')
+  // 血糖偏高：再高、HIS 有標 H 都不標不列；偏低照列
+  for (const vals of [{ glu: 130, glu_f: 'H' }, { glu: 320, glu_f: 'H' }, { glu: 400 }]) {
+    const h = one(vals)
+    assert.equal(h.items.find((i) => i.key === 'glu').dir, '', JSON.stringify(vals)); assert.deepEqual(h.cautions, [])
+  }
+  const low = one({ glu: 52, glu_f: 'L' })
+  assert.deepEqual(low.cautions.map((c) => [c.title, c.dir]), [['血糖', 'L']])
+  assert.ok(low.cautions[0].text.includes('低血糖'))
 })
 
 test('分期說明：依本次 eGFR；沒有 eGFR 就不寫', () => {

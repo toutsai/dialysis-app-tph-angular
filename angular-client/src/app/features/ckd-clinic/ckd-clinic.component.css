@@ -25,6 +25,15 @@
 }
 .subtitle { color: #78909c; font-size: 0.85rem; }
 
+/* 字體大小控制（整頁 CSS zoom，見 ckd-clinic.component.ts） */
+.zoomctl { display: inline-flex; align-items: center; gap: 0.3rem; margin-right: 0.4rem; color: #546e7a; }
+.zoomctl .zl { font-size: 0.85rem; }
+.zoomctl .zv { min-width: 3rem; text-align: center; font-variant-numeric: tabular-nums; font-weight: 700; }
+.zbtn { border: 1px solid #cfd8dc; background: #fff; border-radius: 6px; padding: 0.2rem 0.55rem; cursor: pointer; font-weight: 700; color: #37474f; font-size: 0.85rem; line-height: 1.3; }
+.zbtn.big { font-size: 1.05rem; }
+.zbtn:hover:not(:disabled) { background: #f5f7f8; }
+.zbtn:disabled { opacity: 0.4; cursor: default; }
+
 /* 頁內檢視切換 */
 .views { display: flex; flex-wrap: wrap; gap: 0.3rem; border-bottom: 1px solid #dee2e6; }
 .view-tab {
