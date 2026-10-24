@@ -87,6 +87,7 @@ angular-client/              # Angular 19 前端原始碼（頁面清單見 docs
 7. **`data/dialysis.db` 已 gitignore**；`dist/` 是建置產出，改前端要改 `angular-client/` 原始碼再 build。
 8. **DB 時間戳一律存本地時間字串**（`datetime('now','localtime')` 或 `toLocaleString('sv-SE')`），讀取端 `new Date(str)` 以本地時區解析。**勿用 `toISOString()` 存**——帳號鎖定曾因存 UTC 字串被解讀成 8 小時前而形同虛設（2026-07-08 修復）。
 9. **病人清單模式與醫囑模式是兩個欄位、刻意不同步**（2026-09-20 使用者裁定）：`patients.dialysis_mode`（組長；排程/分組/ICU 頁/KiDit，讀取用 `getPatientListMode`）≠ `dialysis_orders.mode`（醫師；ICU 醫囑單/備物）。勿加同步程式——曾因共用欄位，醫囑 Excel 上傳把 SLED 病人洗回 HD。對照表見 `docs/claude/architecture.md`「透析模式」節。
+10. **登入鎖定的失敗計數必須在鎖定到期後歸零並清掉 `locked_until`**（`routes/auth.js` `/login`、`routes/dashboard.js` `/bed-login`，2026-10-24 修）：只重算不清 `locked_until` 會變「永不鎖」（每次都被當剛過期）；不重算會變「錯 1 次就再鎖 30 分」（53929 曾累積 25 次連鎖五天）。動 `LOGIN_LOCKOUT_CONFIG`/`BED_LOGIN_LOCKOUT` 任何邏輯，smoke 不涵蓋，必跑三段針對性測試：過期後重算→連錯 5 次會再鎖→`POST /auth/users/:id/unlock` 解開。查「無法登入」先看 `logs/out-3*.log` 的 `[HIS API] 驗證結果 (00員編)` 是不是「密碼錯誤」——那是使用者側問題，系統解不了。
 
 ## 工作方式（每個 session 適用）
 
