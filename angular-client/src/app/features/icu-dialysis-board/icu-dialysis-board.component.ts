@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { IcuDialysisPanelComponent } from '../aki-map/icu-dialysis-panel/icu-dialysis-panel.component';
+import { CreditMarkComponent } from '@app/components/credit-mark/credit-mark.component';
 
 /**
  * ICU 透析病人獨立展示頁（免登入、唯讀，掛在 main layout 之外；2026-09-18 使用者拍板）。
@@ -11,7 +12,7 @@ import { IcuDialysisPanelComponent } from '../aki-map/icu-dialysis-panel/icu-dia
 @Component({
   selector: 'app-icu-dialysis-board',
   standalone: true,
-  imports: [CommonModule, IcuDialysisPanelComponent],
+  imports: [CommonModule, IcuDialysisPanelComponent, CreditMarkComponent],
   templateUrl: './icu-dialysis-board.component.html',
   styleUrl: './icu-dialysis-board.component.css',
 })

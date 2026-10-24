@@ -5,6 +5,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { DashboardData, DashboardHandoverItem, DashboardService, DashboardShift } from '@services/dashboard.service';
 import { formatDateToYYYYMMDD } from '@/utils/dateUtils';
 import { formatInjectionRuleText, type DailyInjectionRuleFields } from '@app/features/orders/injection-shared';
+import { CreditMarkComponent } from '@app/components/credit-mark/credit-mark.component';
 
 /** Screen Wake Lock 的最小型別（避免依賴各版 TS lib.dom 是否內建）。 */
 interface WakeLockSentinelLike {
@@ -19,7 +20,7 @@ type NavigatorWithWakeLock = Navigator & {
 @Component({
   selector: 'app-bed-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, CreditMarkComponent],
   templateUrl: './bed-dashboard.component.html',
   styleUrl: './bed-dashboard.component.css',
 })

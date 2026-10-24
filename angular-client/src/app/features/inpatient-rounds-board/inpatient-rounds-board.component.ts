@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { ApiConfigService } from '@services/api-config.service';
+import { CreditMarkComponent } from '@app/components/credit-mark/credit-mark.component';
 
 interface RoundsPatient {
   id: string;
@@ -38,7 +39,7 @@ const SHIFT_DEFS = [
 @Component({
   selector: 'app-inpatient-rounds-board',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, CreditMarkComponent],
   templateUrl: './inpatient-rounds-board.component.html',
   styleUrl: './inpatient-rounds-board.component.css',
 })

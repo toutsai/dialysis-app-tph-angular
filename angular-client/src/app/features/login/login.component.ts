@@ -4,11 +4,12 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '@app/core/services/auth.service';
+import { CreditMarkComponent } from '@app/components/credit-mark/credit-mark.component';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, CreditMarkComponent],
   templateUrl: './login.component.html',
   styleUrl: './login.component.css',
 })

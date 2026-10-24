@@ -6,6 +6,10 @@
   color: #212529;
 }
 
+.board-credit {
+  margin-top: 1.5rem;
+}
+
 .board-header {
   display: flex;
   justify-content: space-between;

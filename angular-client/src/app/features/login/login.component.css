@@ -165,6 +165,10 @@
   color: #888;
 }
 
+.login-credit {
+  margin-top: 18px;
+}
+
 /* Loading overlay styles */
 .loading-overlay {
   position: fixed;
