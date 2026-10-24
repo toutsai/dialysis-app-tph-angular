@@ -152,8 +152,11 @@ router.post('/login', loginRateLimit, validate({
     }
 
     if (!isValidPassword) {
-      // 增加失敗次數
-      const newFailedCount = (user.failed_login_count || 0) + 1
+      // 增加失敗次數。
+      // 鎖定到期後失敗次數要從 0 重算：鎖定時 count 已 ≥ MAX_ATTEMPTS 且解鎖不會歸零，
+      // 若沿用舊值，到期後只要再錯 1 次就立刻重新鎖 30 分鐘（53929 曾累積到 25 次、連鎖五天，2026-10-24 修）。
+      const lockExpired = !!user.locked_until && !isAccountLocked(user)
+      const newFailedCount = (lockExpired ? 0 : user.failed_login_count || 0) + 1
 
       // 判斷是否要鎖定帳號
       if (newFailedCount >= LOGIN_LOCKOUT_CONFIG.MAX_ATTEMPTS) {
@@ -192,11 +195,11 @@ router.post('/login', loginRateLimit, validate({
           remainingMinutes: LOGIN_LOCKOUT_CONFIG.LOCKOUT_MINUTES,
         })
       } else {
-        // 只增加失敗次數
+        // 只增加失敗次數；順手清掉已過期的 locked_until，之後的失敗才會正常累積（否則每次都被當成剛過期而重算成 1）
         db.prepare(
           `
           UPDATE users
-          SET failed_login_count = ?, updated_at = datetime('now', 'localtime')
+          SET failed_login_count = ?, locked_until = NULL, updated_at = datetime('now', 'localtime')
           WHERE id = ?
         `,
         ).run(newFailedCount, user.id)
@@ -942,6 +945,53 @@ router.put('/users/:id', ...isAdmin, async (req, res) => {
     res.status(500).json({
       error: true,
       message: '更新使用者失敗',
+    })
+  }
+})
+
+/**
+ * POST /api/auth/users/:id/unlock
+ * 解除帳號登入鎖定、歸零失敗次數 (僅管理員)
+ */
+router.post('/users/:id/unlock', ...isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params
+    const db = getDatabase()
+
+    const existing = db
+      .prepare(`SELECT id, name, failed_login_count, locked_until FROM users WHERE id = ?`)
+      .get(id)
+
+    if (!existing) {
+      return res.status(404).json({
+        error: true,
+        message: '使用者不存在',
+      })
+    }
+
+    db.prepare(
+      `
+      UPDATE users
+      SET failed_login_count = 0, locked_until = NULL, updated_at = datetime('now', 'localtime')
+      WHERE id = ?
+    `,
+    ).run(id)
+
+    await logAudit('ACCOUNT_UNLOCKED', req.user.id, req.user.name, 'users', id, {
+      targetUser: existing.name,
+      previousFailedCount: existing.failed_login_count || 0,
+      previousLockedUntil: existing.locked_until,
+    })
+
+    res.json({
+      success: true,
+      message: '帳號鎖定已解除',
+    })
+  } catch (error) {
+    console.error('解除帳號鎖定錯誤:', error)
+    res.status(500).json({
+      error: true,
+      message: '解除帳號鎖定失敗',
     })
   }
 })

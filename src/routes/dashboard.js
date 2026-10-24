@@ -155,7 +155,9 @@ router.post('/bed-login', loginRateLimit, async (req, res) => {
 
     if (!device || !isValidDashboardPin(device, bedKey, pin)) {
       if (device) {
-        const newFailedCount = (device.failed_login_count || 0) + 1
+        // 鎖定到期後從 0 重算，否則到期後錯 1 次就立刻再鎖（同 auth.js 登入鎖定的修正）
+        const lockExpired = !!device.locked_until && !isDeviceLocked(device)
+        const newFailedCount = (lockExpired ? 0 : device.failed_login_count || 0) + 1
         if (newFailedCount >= BED_LOGIN_LOCKOUT.MAX_ATTEMPTS) {
           const lockUntilStr = localDateTimeString(BED_LOGIN_LOCKOUT.LOCKOUT_MINUTES * 60000)
           db.prepare(
@@ -179,9 +181,10 @@ router.post('/bed-login', loginRateLimit, async (req, res) => {
             remainingMinutes: BED_LOGIN_LOCKOUT.LOCKOUT_MINUTES,
           })
         }
+        // 同時清掉已過期的 locked_until，之後的失敗才會正常累積
         db.prepare(
           `UPDATE bed_dashboard_devices
-           SET failed_login_count = ?, updated_at = datetime('now', 'localtime')
+           SET failed_login_count = ?, locked_until = NULL, updated_at = datetime('now', 'localtime')
            WHERE id = ?`,
         ).run(newFailedCount, device.id)
       }
