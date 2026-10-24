@@ -430,6 +430,41 @@
 .role-contributor { background-color: #28a745; }
 .role-viewer { background-color: #6c757d; }
 
+/* 登入鎖定狀態（鎖定中=紅；僅有失敗紀錄=黃） */
+.lock-badge {
+  padding: 0.2em 0.6em;
+  border-radius: 12px;
+  font-size: 0.78em;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  background-color: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeeba;
+}
+.lock-badge.locked {
+  background-color: #f8d7da;
+  color: #721c24;
+  border-color: #f5c6cb;
+}
+.btn-unlock:hover:not(:disabled) {
+  background-color: #d4edda;
+}
+.lock-detail {
+  color: #856404;
+  font-weight: 600;
+  text-align: right;
+}
+.lock-detail.locked {
+  color: #b02a37;
+}
+.lock-until {
+  display: block;
+  font-size: 0.78em;
+  font-weight: 400;
+  color: #6c757d;
+}
+
 /* ================================== */
 /*       Dashboard PIN Lookup         */
 /* ================================== */

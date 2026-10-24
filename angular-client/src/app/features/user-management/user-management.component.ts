@@ -21,6 +21,10 @@ interface UserRecord extends FirestoreRecord {
   role?: string;
   createdAt?: any;
   updatedAt?: any;
+  // 登入鎖定狀態（GET /auth/users 回傳；isLocked 由伺服器判定）
+  failedLoginCount?: number;
+  lockedUntil?: string | null;
+  isLocked?: boolean;
 }
 
 interface DashboardPinRecord {
@@ -87,6 +91,7 @@ export class UserManagementComponent implements OnInit {
   sortOrder = signal<'asc' | 'desc'>('asc');
   isSubmitting = signal(false);
   isDeletingUser = signal<string | null>(null);
+  isUnlockingUser = signal<string | null>(null);
   isPinPanelVisible = signal(false);
   isCareListVisible = signal(false);
   isLoadingDashboardPins = signal(false);
@@ -361,6 +366,63 @@ export class UserManagementComponent implements OnInit {
           this.isDeletingUser.set(null);
         }
       },
+    );
+  }
+
+  // --- 登入鎖定 ---
+  /** 鎖定中或有失敗紀錄才顯示狀態與「解除鎖定」鈕 */
+  hasLockState(user: UserRecord): boolean {
+    return !!user.isLocked || (user.failedLoginCount ?? 0) > 0;
+  }
+
+  /** 識別列用的短標籤（避免把姓名擠掉）；完整說明見 lockStatusLabel 放在明細列 */
+  lockBadgeLabel(user: UserRecord): string {
+    return user.isLocked ? '鎖定中' : `失敗 ${user.failedLoginCount ?? 0} 次`;
+  }
+
+  lockStatusLabel(user: UserRecord): string {
+    const count = user.failedLoginCount ?? 0;
+    if (user.isLocked) {
+      const until = user.lockedUntil ? new Date(user.lockedUntil) : null;
+      const remaining = until && !isNaN(until.getTime())
+        ? Math.max(1, Math.ceil((until.getTime() - Date.now()) / 60000))
+        : null;
+      return remaining != null ? `鎖定中（約 ${remaining} 分鐘後解除）` : '鎖定中';
+    }
+    return `登入失敗 ${count} 次`;
+  }
+
+  async handleUnlockUser(user: UserRecord): Promise<void> {
+    if (!this.isAdmin || !user.id) return;
+    const name = user.name || user.username || '';
+    this.showConfirm(
+      '解除登入鎖定',
+      `要解除「${name}」的登入鎖定並將失敗次數歸零嗎？`,
+      async () => {
+        this.isUnlockingUser.set(user.id!);
+        try {
+          const res = await fetch(`${this.firebase.apiBaseUrl}/auth/users/${user.id}/unlock`, {
+            method: 'POST',
+            headers: this.firebase.getHeaders(),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            throw new Error(data.message || `HTTP ${res.status}`);
+          }
+          this.users.update((list) =>
+            list.map((u) =>
+              u.id === user.id ? { ...u, failedLoginCount: 0, lockedUntil: null, isLocked: false } : u,
+            ),
+          );
+          this.showAlert('已解除鎖定', `「${name}」現在可以重新登入（失敗次數已歸零）。`);
+        } catch (error: any) {
+          console.error('解除鎖定失敗:', error);
+          this.showAlert('解除鎖定失敗', error?.message || '解除鎖定時發生錯誤，請稍後再試。');
+        } finally {
+          this.isUnlockingUser.set(null);
+        }
+      },
+      { confirmText: '解除鎖定' },
     );
   }
 

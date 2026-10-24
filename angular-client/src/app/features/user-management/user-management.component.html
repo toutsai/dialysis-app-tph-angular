@@ -168,8 +168,26 @@
         <div class="card-identity">
           <span class="card-name">{{ user.name }}</span>
           <span class="role-badge" [ngClass]="'role-' + user.role" [title]="user.role">{{ roleLabel(user.role) }}</span>
+          <span
+            *ngIf="hasLockState(user)"
+            class="lock-badge"
+            [class.locked]="user.isLocked"
+            [title]="lockStatusLabel(user)"
+          >
+            {{ user.isLocked ? '🔒' : '⚠️' }} {{ lockBadgeLabel(user) }}
+          </span>
         </div>
         <div *ngIf="isAdmin" class="card-actions">
+          <button
+            *ngIf="hasLockState(user)"
+            class="btn-icon btn-unlock"
+            (click)="handleUnlockUser(user)"
+            title="解除鎖定（失敗次數歸零）"
+            [disabled]="isSubmitting() || isDeletingUser() === user.id || isUnlockingUser() === user.id"
+          >
+            <span *ngIf="isUnlockingUser() === user.id" class="deleting-spinner">⏳</span>
+            <span *ngIf="isUnlockingUser() !== user.id">🔓</span>
+          </button>
           <button
             *ngIf="user.email"
             class="btn-icon"
@@ -210,6 +228,13 @@
         <div class="detail-item">
           <span class="detail-label">異動</span>
           <span class="detail-value date-value">{{ formatDate(user.updatedAt || user.createdAt) }}</span>
+        </div>
+        <div *ngIf="hasLockState(user)" class="detail-item">
+          <span class="detail-label">登入</span>
+          <span class="detail-value lock-detail" [class.locked]="user.isLocked">
+            {{ lockStatusLabel(user) }}
+            <span *ngIf="user.lockedUntil" class="lock-until">鎖定至 {{ user.lockedUntil }}</span>
+          </span>
         </div>
       </div>
     </div>

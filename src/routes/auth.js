@@ -571,7 +571,8 @@ router.get('/users', ...isAdmin, (req, res) => {
   const users = db
     .prepare(
       `
-    SELECT id, username, name, title, role, email, is_active, last_login, created_at, updated_at
+    SELECT id, username, name, title, role, email, is_active, last_login, created_at, updated_at,
+           failed_login_count, locked_until
     FROM users ORDER BY created_at DESC
   `,
     )
@@ -598,6 +599,10 @@ router.get('/users', ...isAdmin, (req, res) => {
         lastLogin: u.last_login,
         createdAt: u.created_at,
         updatedAt: u.updated_at,
+        // 登入鎖定狀態（供使用者管理頁顯示與「解除鎖定」按鈕）；isLocked 以伺服器時間判定，與 /login 同一把尺
+        failedLoginCount: u.failed_login_count || 0,
+        lockedUntil: u.locked_until || null,
+        isLocked: isAccountLocked(u),
       }
 
       // 如果是主治醫師，合併 physician 資料
